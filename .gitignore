@@ -1,0 +1,23 @@
+# KiCad
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.bak
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.net
+_autosave-*
+
+# KiCad 出力（生成物。必要なら release/ に手動でコピーする）
+gerbers/
+*.gbr
+*.drl
+*.zip
+
+# CAD
+*.f3d~
+*.step~
+
+# OS
+.DS_Store
+Thumbs.db
