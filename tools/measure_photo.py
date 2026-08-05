@@ -152,4 +152,10 @@ def annotate(im, left, right, results, out_png):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(BUILD / "photos" / "HHKB_Pro_Hybrid_Type-S.jpg"))
+    default = BUILD / "photos" / "commons" / "HHKB_Pro_Hybrid_Type-S.jpg"
+    if not default.exists():
+        sys.exit(
+            "参照画像がない。先に取得すること:\n"
+            "  .venv/bin/python tools/fetch_references.py"
+        )
+    main(sys.argv[1] if len(sys.argv) > 1 else str(default))
