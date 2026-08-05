@@ -73,6 +73,8 @@ PDWEB = {
     "range": [f"{i:02d}" for i in range(12)],
     "dir": "pdweb",
     "license": "pdweb.jp (c) — 私的な採寸参照のみ。再配布しない",
+    "model_note": "HHKB Professional BT (PD-KB600系)。電池搭載機で奥行120mm。"
+                  "端子は micro USB でベース機(USB-C)と異なる",
     "key_images": {
         "97_03": "★ 背面。電池ボックス(単三×2)・電源スイッチ・USB 端子の位置と注釈",
         "97_07": "底面。チルト脚の機構",
@@ -90,10 +92,15 @@ COMMONS_TITLES = {
         "★ 実機 HYBRID Type-S をほぼ真上から撮影(3829x1565)。鍵盤面の幅の検証に使用",
     "HHKB Pro 2 - keyboard layout editor - final.png":
         "★ HHKB Pro 2 の KLE 図(刻印つき)。キー配置と Fn 面の対応表の一次情報",
-    "Happy Hacking Keyboard Professional 2.jpg": "俯瞰写真。配列の目視確認",
-    "HHKB Pro JP Type-S keyboard case.jpg": "分解写真。ケース上半分とプレート",
-    "HHKB Pro JP Type-S keyboard case reverse side.jpg": "分解写真。ケース内側",
-    "HHKB Pro JP Type-S PCB.jpg": "分解写真。基板",
+    "Happy Hacking Keyboard Professional 2.jpg":
+        "俯瞰写真。配列の目視確認。【Professional 2 = 電池なし・奥行110mm】"
+        "奥行方向と背面の寸法には使用禁止",
+    "HHKB Pro JP Type-S keyboard case.jpg":
+        "分解写真。ケース上半分とプレート。【日本語配列】配列の根拠には使用禁止",
+    "HHKB Pro JP Type-S keyboard case reverse side.jpg":
+        "分解写真。ケース内側。【日本語配列】配列の根拠には使用禁止",
+    "HHKB Pro JP Type-S PCB.jpg":
+        "分解写真。基板。【日本語配列】配列の根拠には使用禁止",
 }
 COMMONS_LICENSE = "Wikimedia Commons — 個々のファイルのライセンス表記に従うこと"
 
