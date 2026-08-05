@@ -18,6 +18,14 @@ gerbers/
 *.f3d~
 *.step~
 
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+
+# 生成物（スクリプトから再生成できるため管理しない）
+build/
+
 # OS
 .DS_Store
 Thumbs.db
