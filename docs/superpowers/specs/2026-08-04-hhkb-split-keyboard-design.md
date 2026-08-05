@@ -37,8 +37,10 @@ Esc  1   2   3   4   5                    6   7   8   9   0   -   =   \   `
 [Tab 1.5u] Q  W  E  R  T                    Y   U   I   O   P   [   ]  [Del 1.5u]
 [Ctrl 1.75u]  A  S  D  F  G                   H   J   K   L   ;   '  [Enter 2.25u]
 [Shift 2.25u]   Z  X  C  V  B                   N   M   ,   .   /  [Shift 1.75u] Fn
- [◇1.5u][Alt 1u][ L-Space 3u ]              [ R-Space 3u ][Alt 1u][◇1.5u]
+ [Alt 1u][◇1.5u][ L-Space 3u ]              [ R-Space 3u ][◇1.5u][Alt 1u]
 ```
+
+最下段の並びは、ベース機の実測（[dimensions.md](../../hardware/dimensions.md) §3）に合わせて **外側が 1u、スペース寄りが 1.5u** とする。当初「◇1.5u / Alt 1u」と想定していたが逆だった。どちらのキーを Alt / ◇ に割り当てるかは DIP SW4 相当の設定であり、物理配置とは独立。
 
 ### 分割方針
 
@@ -93,7 +95,9 @@ Esc  1   2   3   4   5                    6   7   8   9   0   -   =   \   `
 - `Fn + Tab` → Caps Lock
 - `Fn + [` `;` `'` `/` → ↑ ← → ↓
 
-**未確定**: Home / End / PageUp / PageDown、音量・メディアキー等の残りの割り当て。無刻印のため実機の刻印からは読み取れない。→ **PD-KB800WNS の Keymap Tool から現行設定を書き出し、それを正として移植する**（推測で埋めない）。
+**Fn 面の完全な対応表は [dimensions.md](../../hardware/dimensions.md) §4 に確定済み。** Wikimedia Commons の KLE 図（刻印つき）から読み取り、実機写真の前面刻印とも照合した。Home / End / PageUp / PageDown / 音量 / Eject / Print Screen 等をすべて含む。
+
+残る確認事項は 1 点のみ: **ユーザーが Keymap Tool で標準から変更していないか**。実装前に Keymap Tool の書き出しと突き合わせる。
 
 ### Bluetooth / OS モード切替
 
