@@ -54,6 +54,24 @@ KEYCAP_TOP_W = 11.5      # topre_key: Top base width
 # --------------------------------------------------------------------------
 FRONT_BEZEL = (DEPTH_BODY - 5 * UNIT) / 2   # 前後ベゼルの配分は不明。とりあえず等分
 
+# --------------------------------------------------------------------------
+# 実機写真から読み取った形状（PHOTO = 定性的に確認、数値は目測）
+#
+# 出典: pdweb.jp の HHKB Professional BT レビュー 97_11.jpg（前縁の接写）
+# 当初この断面を「垂直な前後面をもつ台形」としていたが、実機は違った:
+#   - 前面は垂直でなく、下へ行くほど奥へ傾く（最前点は上端付近）
+#   - ベゼル上面から前面への移行は大きな R で丸い
+#   - 側面の中ほどに上下シェルの合わせ目が走る
+#   - 合わせ目より下は内側にさらに絞られ、底は一回り小さい
+#   - キーは窪んだトレイの中にあり、ベゼルのリムがキー面より上に立つ
+# 数値は写真からの目測。角度・R とも実測ではない。
+# --------------------------------------------------------------------------
+FRONT_LEAN_DEG = 12.0     # 前面の傾き（垂直から。下ほど奥へ）
+FRONT_TOP_R = 6.0         # ベゼル上面 → 前面 の丸み
+SEAM_RATIO = 0.45         # 合わせ目の高さ（前縁高さに対する比）。断面には現れないため図示しない
+BOTTOM_INSET = 2.0        # 合わせ目より下の絞り込み量（表面特徴。断面には現れない）
+BEZEL_RIM_H = 1.5         # キー面に対してベゼルのリムが立ち上がる高さ
+
 
 @dataclass
 class Geometry:
@@ -117,10 +135,29 @@ def check():
 
 def draw_section(g, ax, annotate=True):
     """側面断面を実寸で描く。手前が左、奥が右。"""
-    # ケース外形（本体部）＋ 電池コブ
-    case = [
-        (0, 0), (0, H_FRONT), (DEPTH_BODY, H_REAR), (DEPTH_BODY, 0),
-    ]
+    # ケース外形（本体部）。写真から読み取った形状を反映する。
+    #
+    # 前縁の作り方: ベゼル上面は前縁で高さ H_FRONT を保つ。そこから半径
+    # FRONT_TOP_R の円弧で前面へ回り込み、前面は垂直から FRONT_LEAN_DEG だけ
+    # 傾いて（下ほど奥へ）底に達する。円弧の接点で前面と滑らかに繋がるよう、
+    # 円弧の中心を (FRONT_TOP_R, H_FRONT - FRONT_TOP_R) に置く。
+    #
+    # 上下シェルの合わせ目は「表面上の線」であって断面の形状ではないため、
+    # 断面図には描かない（実機写真では側面にはっきり見える）。
+    lean_rad = radians(FRONT_LEAN_DEG)
+    cy, cz = FRONT_TOP_R, H_FRONT - FRONT_TOP_R
+    arc = []
+    for k in range(13):                     # ベゼル上面 → 前面 への 1/4 弱の円弧
+        a = radians(90) * k / 12 - lean_rad * (k / 12)
+        arc.append((cy - FRONT_TOP_R * __import__("math").sin(a),
+                    cz + FRONT_TOP_R * __import__("math").cos(a)))
+    y_face_top, z_face_top = arc[-1]
+    y_bottom_front = y_face_top + z_face_top * tan(lean_rad)
+    case = (
+        [(y_bottom_front, 0)]                           # 底の前端
+        + arc[::-1]                                     # 前面 → 丸み → ベゼル上面
+        + [(DEPTH_BODY, H_REAR), (DEPTH_BODY, 0)]       # 上面 → 後縁 → 底
+    )
     ax.add_patch(Polygon(case, closed=True, fill=False, lw=1.6, ec="black"))
     bump = [
         (DEPTH_BODY, 0), (DEPTH_BODY, H_REAR),
