@@ -1,0 +1,9 @@
+[
+  { "name": "HHKB Professional (US 60) - reference layout",
+    "notes": "出典: QMK keyboards/hhkb/ansi/info.json と Wikimedia Commons の KLE 図（一致）。docs/hardware/dimensions.md §3 参照。" },
+  ["Esc","1","2","3","4","5","6","7","8","9","0","-","=","\\","`"],
+  [{"w":1.5},"Tab","Q","W","E","R","T","Y","U","I","O","P","[","]",{"w":1.5},"Del"],
+  [{"w":1.75},"Ctrl","A","S","D","F","G","H","J","K","L",";","'",{"w":2.25},"Enter"],
+  [{"w":2.25},"Shift","Z","X","C","V","B","N","M",",",".","/",{"w":1.75},"Shift","Fn"],
+  [{"x":1.5},"Alt",{"w":1.5},"Meta",{"w":6},"Space",{"w":1.5},"Meta","Alt"]
+]
