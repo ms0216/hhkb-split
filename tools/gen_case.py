@@ -11,6 +11,15 @@
   基板には影響しない。
 
 電池は単3×2 を奥側に寝かせる。実機も同じ配置（背面の電池コブ）。
+
+3Dプリント向け CAD ではまった落とし穴（同じ轍を踏まないこと）:
+  - BuildPart のコンテキスト内で Box() 等を作ると、その時点で部品に合体される。
+    切削用の立体はコンテキストに入る前に作ること。
+  - builder.part への直接代入はビルダーの内部状態を更新しない。
+    add(..., mode=Mode.SUBTRACT) を使うこと。
+  - 既に空洞の中を削っても何も起きない。仕切りは「壁を立てる」操作。
+  - **形状どうしをちょうど接する位置に置かない。** 接線接触や同一平面は
+    非多様体メッシュ（印刷不能）になる。1mm 程度めり込ませるか離すこと。
 """
 
 import sys
@@ -30,6 +39,7 @@ from build123d import (
     add,
     Plane,
     RectangleRounded,
+    RegularPolygon,
     extrude,
 )
 
@@ -63,6 +73,45 @@ SOCKET_DROP = 3.2                # ホットスワップソケットが基板下
 
 M2_BOSS_D = 5.0                  # ネジボスの外径
 M2_PILOT_D = 1.7                 # タッピング用の下穴
+
+# --------------------------------------------------------------------------
+# 電池蓋（底面のスライド蓋）
+#
+# 実機と同じく底面から電池を出し入れする。蓋は奥へスライドして抜ける。
+# レールは 1.2mm の段。K1 Max ならサポート無しでブリッジできる。
+# --------------------------------------------------------------------------
+LID_T = 1.6              # 蓋の厚み（0.4mm の 4 倍）
+RAIL_W = 2.0             # レールの掛かり幅
+RAIL_H = 1.2             # レールの段の深さ
+LID_STOP = 2.0           # 手前側のストッパー
+
+# --------------------------------------------------------------------------
+# チルト脚
+#
+# 実機はヒンジ式の折りたたみ脚が 2 組。3Dプリントでヒンジを作ると壊れやすいので、
+# 高さの違う差し込み脚を 2 組用意して 0° / 3° / 6° を作る。機能は同じ。
+# 脚は前縁を支点に後縁を持ち上げるので、必要な高さは支点からの距離で決まる。
+# --------------------------------------------------------------------------
+FOOT_INSET_REAR = 10.0   # 後縁から脚中心までの距離
+FOOT_D = 12.0            # 脚の直径
+FOOT_PEG_D = 4.0         # 差し込みピンの径
+FOOT_PEG_H = 4.0
+TILT_STEPS = [3.0, 6.0]  # 追加する傾斜（0° は脚なし）
+
+# --------------------------------------------------------------------------
+# 三脚ネジ穴（テンティング用。普段は使わない）
+# 1/4-20 の六角ナットを埋め込む。二面幅 11.1mm / 厚み 5.5mm
+# --------------------------------------------------------------------------
+NUT_AF = 11.1 + 0.3      # 二面幅＋逃げ
+NUT_T = 5.5 + 0.2
+NUT_BOSS_D = 18.0
+NUT_BOSS_H = 9.0
+NUT_THRU_D = 7.0
+
+# ゴム足（市販 Φ10 × 厚 2mm を想定）
+RUBBER_D = 10.0
+RUBBER_RECESS = 0.6      # 座ぐりの深さ
+RUBBER_INSET = 12.0      # 縁からの距離
 
 
 def case_heights(depth):
@@ -118,7 +167,105 @@ def build_case(keys):
                 Cylinder(M2_PILOT_D / 2, z_max, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
 
+        # 6. 電池蓋の開口とレール（底面）
+        ox, oy, ow, oh = _lid_opening(w, h)
+        with Locations((ox, oy, 0)):
+            Box(ow, oh, FLOOR * 3, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 長辺 2 本に蓋が乗る段を作る（開口より内側へ RAIL_W だけ残す）
+        with Locations((ox, oy, FLOOR - RAIL_H)):
+            Box(ow - RAIL_W * 2, oh, RAIL_H * 3, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 手前側のストッパー（蓋は奥へ抜ける）
+        with Locations((ox, oy - oh / 2 + LID_STOP / 2, FLOOR - RAIL_H)):
+            Box(ow, LID_STOP, RAIL_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+        # 7. 三脚ネジ穴（1/4-20 の六角ナットを底面から埋め込む）
+        with Locations((0, 0, FLOOR)):
+            Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with Locations((0, 0, 0)):
+            Cylinder(NUT_THRU_D / 2, NUT_BOSS_H + FLOOR * 2, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with BuildSketch(Plane.XY):
+            RegularPolygon(NUT_AF / 2 / __import__("math").cos(radians(30)), 6)
+        extrude(amount=NUT_T, mode=Mode.SUBTRACT)
+
+        # 8. ゴム足の座ぐりと、チルト脚の差し込み穴（いずれも底面）
+        for fx, fy in _rubber_positions(w, h):
+            with Locations((fx, fy, 0)):
+                Cylinder(RUBBER_D / 2, RUBBER_RECESS, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for fx, fy in _foot_positions(w, h):
+            with Locations((fx, fy, 0)):
+                Cylinder(FOOT_PEG_D / 2 + CLEARANCE / 2, FOOT_PEG_H,
+                         mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+
     return case.part, (w, h), (z_front, z_rear)
+
+
+def _lid_opening(w, h):
+    """電池蓋の開口（中心 x, y と 大きさ）。電池室の真下に開ける。"""
+    y_batt = h / 2 - WALL - BATT_MARGIN_REAR - BATT_W / 2
+    return (0.0, y_batt, AA_L + 6.0, BATT_W)
+
+
+def _rubber_positions(w, h):
+    ix, iy = w / 2 - RUBBER_INSET, h / 2 - RUBBER_INSET
+    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy)]
+
+
+def _foot_positions(w, h):
+    """チルト脚の位置。後縁寄りの左右 2 箇所。
+
+    隅はゴム足に使うので、脚は内側へ寄せる。隅に両方を置くと座ぐりと
+    ピン穴が重なる（底面図で発覚）。
+    """
+    y = h / 2 - FOOT_INSET_REAR
+    x = w / 2 - RUBBER_INSET - RUBBER_D / 2 - FOOT_D
+    return [(-x, y), (x, y)]
+
+
+def foot_height(h, add_deg):
+    """後縁を add_deg だけ持ち上げるのに要る脚の高さ。
+
+    支点は前縁。脚は後縁から FOOT_INSET_REAR の位置にあるので、
+    支点からの距離はケース奥行から FOOT_INSET_REAR を引いた値になる。
+    """
+    lever = h - FOOT_INSET_REAR
+    return lever * tan(radians(add_deg))
+
+
+def build_battery_lid(keys):
+    """電池蓋。ケースのレールに差し込んで奥へスライドさせる。"""
+    _, (w, h) = plate_positions(keys)
+    _, _, ow, oh = _lid_opening(w, h)
+    lw = ow - CLEARANCE                      # 開口より少し小さく
+    lh = oh - LID_STOP - CLEARANCE
+    with BuildPart() as lid:
+        with BuildSketch():
+            RectangleRounded(lw, lh, 1.5)
+        extrude(amount=LID_T)
+        # 指掛かりの窪み。切削用の立体は上面より外へ突き出させる。
+        # 上面とちょうど同一平面にすると境界が縮退し、水密でないメッシュになる。
+        with Locations((0, -lh / 2 + 6.5, LID_T + 1.0)):
+            Cylinder(4.0, 1.8, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.MAX))
+    return lid.part, (lw, lh)
+
+
+def build_tilt_foot(add_deg, h):
+    """差し込み式のチルト脚。add_deg だけ後縁を持ち上げる。"""
+    z = foot_height(h, add_deg)
+    with BuildPart() as foot:
+        with BuildSketch():
+            RectangleRounded(FOOT_D, FOOT_D, 3.0)
+        extrude(amount=z)
+        with Locations((0, 0, z)):
+            Cylinder(FOOT_PEG_D / 2, FOOT_PEG_H,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return foot.part, z
 
 
 def tilted_cutter(w, h, rim_front):
@@ -151,6 +298,17 @@ def main():
         part, (w, h), (z_front, z_rear) = build_case(keys)
         mesh, stl = to_mesh(part, f"case_{name}")
         assert_watertight(mesh, stl.name)
+
+        lid, (lw, lh) = build_battery_lid(keys)
+        lmesh, lstl = to_mesh(lid, f"battery_lid_{name}")
+        assert_watertight(lmesh, lstl.name)
+        print(f"      電池蓋 {lw:.1f} x {lh:.1f} x {LID_T}mm -> {lstl.name}")
+
+        for deg in TILT_STEPS:
+            foot, fz = build_tilt_foot(deg, h)
+            fmesh, fstl = to_mesh(foot, f"tilt_foot_{int(deg)}deg_{name}")
+            assert_watertight(fmesh, fstl.name)
+            print(f"      チルト脚 +{deg:.0f}° 高さ {fz:.2f}mm -> {fstl.name}")
         render_outline_2d(part, BUILD / f"case_{name}_section.png", axis="X",
                           title=f"case {name} - side section", annotate_count=False)
         bb = part.bounding_box()

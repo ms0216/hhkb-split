@@ -56,3 +56,61 @@ def test_tilt_matches_the_measured_value():
     zf, zr = case_heights(100.0)
     import math
     assert math.degrees(math.atan((zr - zf) / 100.0)) == pytest.approx(7.3, abs=1e-6)
+
+
+# --------------------------------------------------------------------------
+# 電池蓋・チルト脚・三脚ナット・ゴム足
+# --------------------------------------------------------------------------
+
+def _dist(a, b):
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_battery_lid_is_printable_and_fits_the_opening(name):
+    from gen_case import CLEARANCE, LID_STOP, _lid_opening, build_battery_lid
+    from gen_plate import plate_positions
+    lid, (lw, lh) = build_battery_lid(HALVES[name])
+    mesh, _ = to_mesh(lid, f"battery_lid_{name}")
+    assert_watertight(mesh, f"battery_lid_{name}")
+    _, (w, h) = plate_positions(HALVES[name])
+    _, _, ow, oh = _lid_opening(w, h)
+    assert lw < ow, "蓋が開口より大きい"
+    assert lh < oh - LID_STOP, "蓋がストッパーに当たって入らない"
+    assert ow - lw == pytest.approx(CLEARANCE), "嵌合の逃げが設計値と違う"
+
+
+@pytest.mark.parametrize("deg", [3.0, 6.0])
+def test_tilt_foot_height_gives_the_intended_angle(deg):
+    """脚の高さが、後縁を deg だけ持ち上げる値になっていること。"""
+    import math
+    from gen_case import FOOT_INSET_REAR, build_tilt_foot, foot_height
+    from gen_plate import plate_positions
+    _, (w, h) = plate_positions(HALVES["left"])
+    z = foot_height(h, deg)
+    lever = h - FOOT_INSET_REAR
+    assert math.degrees(math.atan(z / lever)) == pytest.approx(deg, abs=1e-9)
+    foot, fz = build_tilt_foot(deg, h)
+    mesh, _ = to_mesh(foot, f"tilt_foot_{int(deg)}")
+    assert_watertight(mesh, f"tilt_foot_{int(deg)}")
+    assert fz == pytest.approx(z)
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_bottom_features_do_not_overlap(name):
+    """底面の座ぐり・ピン穴・三脚ボスが互いに干渉しないこと。
+
+    ゴム足の隅にチルト脚を置いて重なった実例があるので、必ず数値で見る。
+    """
+    from gen_case import (
+        FOOT_D, FOOT_PEG_D, NUT_BOSS_D, RUBBER_D, _foot_positions,
+        _rubber_positions,
+    )
+    from gen_plate import plate_positions
+    _, (w, h) = plate_positions(HALVES[name])
+    items = ([(p, RUBBER_D / 2) for p in _rubber_positions(w, h)]
+             + [(p, FOOT_D / 2) for p in _foot_positions(w, h)]
+             + [((0.0, 0.0), NUT_BOSS_D / 2)])
+    for i, (pa, ra) in enumerate(items):
+        for pb, rb in items[i + 1:]:
+            assert _dist(pa, pb) > ra + rb, f"{name}: {pa} と {pb} が重なる"
