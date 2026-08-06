@@ -196,6 +196,12 @@ def build_case(keys):
             with Locations((fx, fy, 0)):
                 Cylinder(RUBBER_D / 2, RUBBER_RECESS, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # ピン穴は床(2.0mm)より深い(4.0mm)ので、そのまま開けると内部へ貫通する。
+        # メッシュの種数が 4 になって発覚した。内側にボスを立てて盲穴にする。
+        for fx, fy in _foot_positions(w, h):
+            with Locations((fx, fy, 0)):
+                Cylinder(FOOT_PEG_D / 2 + 2.0, FOOT_PEG_H + 1.6,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
         for fx, fy in _foot_positions(w, h):
             with Locations((fx, fy, 0)):
                 Cylinder(FOOT_PEG_D / 2 + CLEARANCE / 2, FOOT_PEG_H,
