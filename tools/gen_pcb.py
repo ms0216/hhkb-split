@@ -429,11 +429,14 @@ def _route_electronics(board, half, net):
         if name.startswith("COL"):
             continue                      # 列は 3 で別に扱う
         for a, b in zip(group, group[1:]):
-            _link(board, a, b, lane=1.2 + (i % 6) * 0.45)
+            # **レーンはネットごとに固有にする。**6 本で使い回していて
+            # 重なっていた（違反 29/49 件）。帯は 9.25mm あるので足りる。
+            _link(board, a, b, lane=1.2 + i * 0.45)
 
     # 3. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
     #    In2 で近くまで運んでからビアで表へ上げる。
-    for fp in board.GetFootprints():
+    k = 0
+    for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
         if not fp.GetReference().startswith("U"):
             continue
         for pad in fp.Pads():
@@ -442,7 +445,8 @@ def _route_electronics(board, half, net):
                 continue
             target = _nearest_via(board, n, pad.GetPosition())
             if target is not None:
-                _link(board, pad, target, lane=2.4, to_via=True)
+                _link(board, pad, target, lane=-1.2 - k * 0.45, to_via=True)
+                k += 1
 
 
 def _nearest_via(board, netname, pos):
@@ -465,11 +469,19 @@ def _link(board, a, b, lane, to_via=False):
     netitem = a.GetNet()
     ax, ay = pcbnew.ToMM(pa.x), pcbnew.ToMM(pa.y)
     bx, by = pcbnew.ToMM(pb.x), pcbnew.ToMM(pb.y)
-    _via(board, pa, netitem)
+    # **ビアはパッドの真上に置かない。**穴が重なって
+    # 「穴のクリアランス 0.00mm」になる。少しずらして引き出す。
+    d = 1.4 if lane > 0 else -1.4
+    va, vb = (ax, ay + d), (bx, by + d)
+    _track(board, mm(ax, ay), mm(*va), pcbnew.B_Cu, netitem)
+    _via(board, mm(*va), netitem)
     if not to_via:
-        _via(board, pb, netitem)
+        _track(board, mm(bx, by), mm(*vb), pcbnew.B_Cu, netitem)
+        _via(board, mm(*vb), netitem)
+    else:
+        vb = (bx, by)
     y = ay + lane
-    for p, q in (((ax, ay), (ax, y)), ((ax, y), (bx, y)), ((bx, y), (bx, by))):
+    for p, q in ((va, (va[0], y)), ((va[0], y), (vb[0], y)), ((vb[0], y), vb)):
         if p != q:
             _track(board, mm(*p), mm(*q), pcbnew.In2_Cu, netitem)
 
