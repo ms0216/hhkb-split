@@ -239,3 +239,25 @@ def test_fn_layer_puts_the_system_layer_on_ctrl():
     binds = re.findall(r"&\w+(?:\s+\w+)*", body)
     assert binds[idx].split()[0:2] == ["&mo", "SYS"], \
         f"FN レイヤーの Ctrl の位置（{idx}）が {binds[idx]!r} になっている"
+
+
+def test_the_bootloader_is_reachable_from_the_keymap():
+    """キーからブートローダへ入れること。**左右それぞれに。**
+
+    XIAO のリセットボタンは組み上げると押せない（上を向いており、真上に
+    本体基板が来る）。ファームを更新するたびに分解するのは現実的でない。
+
+    左右それぞれに置くのは、ZMK の &bootloader が押した側で効くのか
+    中央側でしか効かないのかを実機で確かめるため。片方しか無いと、
+    もう片方を更新する手段が無くなる。
+    """
+    text = _strip(KEYMAP.read_text())
+    body = re.search(r"\bsys\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S).group(1)
+    binds = re.findall(r"&\w+(?:\s+\w+)*", body)
+    assert len(binds) == LEFT_KEYS + RIGHT_KEYS
+    left, right = binds[:LEFT_KEYS], binds[LEFT_KEYS:]
+    for side, part in (("左", left), ("右", right)):
+        assert any(b.startswith("&bootloader") for b in part), \
+            f"{side}半分にブートローダへ入るキーが無い"
+        assert any(b.startswith("&sys_reset") for b in part), \
+            f"{side}半分に再起動のキーが無い"
