@@ -64,7 +64,10 @@ def boss_positions(w, h):
     """
     ix = w / 2 - CASE_WALL - M2_BOSS_D / 2 + BOSS_WALL_OVERLAP
     iy = h / 2 - CASE_WALL - M2_BOSS_D / 2 + BOSS_WALL_OVERLAP
-    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy), (0.0, -iy), (0.0, iy)]
+    # 後ろ側の中央にはボスを立てられない。電池室がそこにあるため
+    # （中央に置いて 231mm^3 の食い込みとして検出された）。左右に分ける。
+    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy),
+            (0.0, -iy), (-w / 4, iy), (w / 4, iy)]
 
 
 def boss_positions_plan(w, plate_depth):
