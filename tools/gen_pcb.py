@@ -30,7 +30,7 @@ from interface import (
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
-from bands import BAND_H, BAND_Y                                   # noqa: E402
+from bands import BAND_Y                                           # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -337,7 +337,10 @@ def _apply_jlcpcb_rules(board):
 # 定義は bands.py（BAND_H, BAND_Y）。生成側と検査側で共有する。
 
 ELEC_FP = {
-    "74HC595": ("Package_SO", "SOIC-16_3.9x9.9mm_P1.27mm"),
+    # SOIC-16 はコートヤード 10.49mm で、帯 9.25mm に**入らない**。
+    # 位置の微調整で逃がそうとしていたが、どちら側にはみ出すかを
+    # 選んでいるだけだった。TSSOP-16 は 5.59mm で 3.66mm 余る。
+    "74HC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm"),
     "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric"),
     "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric"),
     "res_1M": ("Resistor_SMD", "R_0805_2012Metric"),
@@ -373,17 +376,32 @@ PLACE = {
         "R_HI": (0, -32.0), "R_LO": (0, -27.0),
         "J_DB": (0, -16.0),
         "C_BULK": (0, -2.0), "C_MCU": (0, 6.0),
-        "U1": (0, 13.0, -1.8), "C_U1": (0, 26.0),
+        "U1": (0, 13.0), "C_U1": (0, 26.0),
     },
     "right": {
         "BT1": (0, -78.0), "SW_PWR": (0, -66.0), "D_PWR": (0, -56.0),
         "R_HI": (0, -48.0), "R_LO": (0, -43.0),
         "J_DB": (0, -32.0),
         "C_BULK": (0, -18.0), "C_MCU": (0, -10.0),
-        "U1": (0, 4.0, -1.8), "C_U1": (0, 16.0),
-        "U2": (0, 30.0, -1.8), "C_U2": (0, 42.0),
+        "U1": (0, 4.0), "C_U1": (0, 16.0),
+        "U2": (0, 30.0), "C_U2": (0, 42.0),
     },
 }
+
+
+def _center_courtyard_in_band(fp, band):
+    """コートヤードの中心が帯の中心へ来るよう、フットプリントを縦にずらす。"""
+    for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+        shape = fp.GetCourtyard(layer)
+        if not shape.IsEmpty():
+            break
+    else:
+        raise RuntimeError(f"{fp.GetReference()}: コートヤードが無い")
+    bb = shape.BBox()
+    mid = (bb.GetTop() + bb.GetBottom()) / 2
+    want = pcbnew.FromMM(ORIGIN[1] - BAND_Y[band])
+    pos = fp.GetPosition()
+    fp.SetPosition(pcbnew.VECTOR2I(pos.x, int(pos.y + want - mid)))
 
 
 def _place_electronics(board, half, net):
@@ -391,23 +409,25 @@ def _place_electronics(board, half, net):
     from circuit import netlist
     decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
     for ref, spec in PLACE[half].items():
-        # 3 つ目は帯の中での y の微調整（省略可）。
-        # **SOIC-16 は縦 10.4mm あり、帯 9.25mm からはみ出して
-        # 行のバスに寄る。**回転させると配線の順序が崩れて悪化したので
-        # （24→144 件）、位置で逃がす。
         band, x = spec[0], spec[1]
-        dy = spec[2] if len(spec) > 2 else 0.0
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
         # 電池線は 2 箇所のランドとして置く
         n = 2 if kind == "battery_holder" else 1
         for k in range(n):
             fp = _load(KICAD_FP / f"{lib}.pretty", name)
-            fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band] + dy))
+            fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band]))
             fp.SetReference(ref if n == 1 else f"{ref}_{'+-'[k]}")
             fp.SetValue(kind)
             board.Add(fp)
             fp.Flip(fp.GetPosition(), False)
+            # **原点ではなくコートヤードを帯の中心に合わせる。**
+            #
+            # フットプリントのコートヤードは原点に対して対称とは限らない
+            # （FFC コネクタは 0.95mm ずれていて、帯から 0.275mm はみ出していた）。
+            # 原点を中心に置くと、部品ごとに違う量だけずれる。
+            # ここで揃えておけば、部品ごとの手当て（dy）が要らなくなる。
+            _center_courtyard_in_band(fp, band)
             if n == 2:
                 pad = fp.Pads()[0]
                 pad.SetNet(net(pins["+" if k == 0 else "-"]))
