@@ -302,15 +302,21 @@ def test_no_two_parts_share_a_reference(board):
 
 
 def test_the_firmware_can_be_recovered_without_opening_the_case():
-    """RESET のボタンが子基板にあり、XIAO の RST に繋がっていること。
+    """復旧手段が存在すること。
 
-    **XIAO 自身のリセットボタンは上を向いており、真上に本体基板が来るので
-    押せない。** ブートローダに入るには RESET を素早く 2 回押す必要があり
-    （Task C1 で実際に使った）、これが無いとファームを壊したとき
-    ケースを開けるまで復旧できない。
+    **XIAO nRF52840 は RST を外に出していない。**裏面のパッドは
+    VUSB/GND/3V3/10/9/8/7・0〜6（側面ピンの複製）と BAT +/−、NFC だけ
+    （実機の写真で確認）。押しボタンを載せることはできない。
+
+    そこで復旧はキー操作で行う。Fn+Ctrl+Esc（左）／Fn+Ctrl+6（右）。
+    それも効かないほど壊れたときは上ケースの 3 本のネジを外す
+    （キーキャップを外す必要は無い ＝ 上ケース方式にした効果）。
     """
-    parts = {ref: (kind, pins) for ref, kind, pins in daughterboard_netlist()}
-    assert "SW_RST" in parts, "子基板に RESET のボタンが無い"
-    kind, pins = parts["SW_RST"]
-    assert set(pins.values()) == {"RESET", "GND"}, f"RESET のボタンの結線が違う: {pins}"
-    assert parts["U_MCU"][1].get("RST") == "RESET", "XIAO の RST に繋がっていない"
+    from pathlib import Path as _P
+    keymap = (_P(__file__).resolve().parent.parent
+              / "config/boards/shields/hhkb_split/hhkb_split.keymap").read_text()
+    assert "&bootloader" in keymap, "キーからブートローダへ入れない"
+    # RST が出ていない以上、子基板に押しボタンは載せない
+    for ref, kind, pins in daughterboard_netlist():
+        assert kind != "tact_switch", \
+            "XIAO は RST を出していないので、押しボタンは繋げられない"

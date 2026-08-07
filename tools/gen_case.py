@@ -56,6 +56,7 @@ from interface import (  # noqa: E402
     plan_depth,
     M2_BOSS_D,
     M2_CLEAR_D,
+    M2_INSERT_D,
     M2_PILOT_D,
     PLATE_T,
     boss_positions,
@@ -167,21 +168,11 @@ DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
 USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
 USB_H = 6.0
 USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
-RESET_D = 2.5            # RESET を突くクリップ用の穴。
-                         # **XIAO のリセットボタンは上を向いており、真上に
-                         # 本体基板が来るので押せない。**子基板の裏に
-                         # 押しボタンを載せ、**ケースの底**の穴から突く。
-                         #
-                         # 当初は奥の壁に開けていたが、横へ 16.0mm ずらす
-                         # 設計になっており、子基板の幅 20mm（±10）の外だった。
-                         # 「壁を貫通しているか」しか見ておらず、
-                         # **その先にボタンがあるか**を見ていなかった。
-                         # 底なら高さ合わせも要らず、キーボードを裏返すだけ。
-# **取付ボス（±7.5, ±7.0 / φ5）を避ける位置。**
-# (6, 6) に置いたらボスと 7.18mm^3 重なり、穴が貫通しなかった。
-# x=0 ならボスが無く、XIAO のパッド列（±7.62）の間にも収まる。
-RESET_DX = 0.0
-RESET_DY = 6.0
+# RESET のボタンは**載せられない。**
+# XIAO nRF52840 の裏面に出ているパッドは VUSB/GND/3V3/10/9/8/7・0〜6（側面ピンの
+# 複製）と BAT +/−、NFC だけで、**RST は出ていない**（実機の写真で確認）。
+# 復旧はキー操作（Fn+Ctrl+Esc）で行う。それも効かないほど壊れたときは
+# 上ケースの 3 本のネジを外す。キーキャップを外す必要は無い。
 
 # 上ケースを奥で留める方法は**未解決**（docs/hardware/open-gaps.md #12）。
 #
@@ -296,6 +287,13 @@ def build_case(keys, half):
     # 以前は基板の下面で止めていた（基板をボスに載せる設計だったため）。
     # 上ケース方式ではネジは上ケースから入り、プレートはボスの上に載る。
     bosses = _b.part - cutter
+    # コブの天井（傾いた板）。コンテキストの外で作る。
+    with BuildPart() as _bl:
+        with Locations((0, h_body / 2 + BUMP_DEPTH / 2, 0)):
+            Box(w - WALL * 2, BUMP_DEPTH, z_max * 2,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    bump_lid = ((_bl.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT))
+                .intersect(tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)))
     # 電池室の仕切り壁。**基板の下面（ソケットの先端）で頭を切る。**
     #
     # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
@@ -333,6 +331,14 @@ def build_case(keys, half):
                                  max(CORNER_R - WALL, 0.5))
         extrude(amount=z_max, mode=Mode.SUBTRACT)
 
+        # 3-2. **コブに天井を張る。**
+        #
+        # 内側のくり抜きは奥まで通しているので、コブが上に開いたままだった
+        # （電池が上から露出する）。本体側はプレートと上ケースが覆うが、
+        # コブの上には何も載らないので、ケース自身が塞ぐ必要がある。
+        # 「メッシュが水密」は「箱として閉じている」を意味しない。
+        add(bump_lid, mode=Mode.ADD)
+
         # 4. 電池室。後壁ぎわ（コブの中）に置き、仕切り壁と天井を作る。
         #    天井を張らないと、傾いた基板が電池室の上に落ちてきて衝突する。
         # 仕切り壁は電池からわずかに離す。ちょうど接する位置に置くと
@@ -351,7 +357,7 @@ def build_case(keys, half):
         add(bosses, mode=Mode.ADD)
         for bx, by in _boss_positions(half):
             with Locations((bx, by, FLOOR)):
-                Cylinder(M2_PILOT_D / 2, z_max, mode=Mode.SUBTRACT,
+                Cylinder(M2_INSERT_D / 2, z_max, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
 
         # 6. 電池蓋の開口とレール（底面）
@@ -373,7 +379,7 @@ def build_case(keys, half):
                 Cylinder(M2_BOSS_D / 2, DB_BOSS_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((db_x + dx, db_y + dy, FLOOR)):
-                Cylinder(M2_PILOT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
+                Cylinder(M2_INSERT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥の壁を貫く。壁の厚みより長い立体で切らないと薄皮が残る。
         with Locations((db_x, y_rear_outer, usb_center_z())):
@@ -381,10 +387,6 @@ def build_case(keys, half):
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
 
-        # RESET の穴（底面）。子基板の裏の押しボタンを、裏返してクリップで突く。
-        with Locations((db_x + RESET_DX, db_y + RESET_DY, 0)):
-            Cylinder(RESET_D / 2, FLOOR * 3, mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
         ox, oy, ow, oh = _lid_opening(half, w, h_body)
         # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）

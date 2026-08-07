@@ -227,42 +227,6 @@ def test_the_antenna_is_kept_away_from_the_battery(name):
 
 
 
-@pytest.mark.parametrize("name", ["left", "right"])
-def test_a_clip_can_reach_the_reset_button(name):
-    """RESET の穴が底を貫通し、**その先が子基板の上にある**こと。
-
-    XIAO のリセットボタンは上を向いており、真上に本体基板が来るので押せない。
-    子基板の裏に押しボタンを載せ、キーボードを裏返してクリップで突く。
-
-    以前は奥の壁に開けており、しかも横へ 16.0mm ずらしていた。
-    子基板の幅は 20mm（±10）なので**穴の先に基板が無かった**。
-    「壁を貫通しているか」しか見ておらず、その先を見ていなかった。
-    """
-    from build123d import Align, BuildPart, Cylinder, Locations
-    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, DB_W, RESET_D,
-                          RESET_DX, RESET_DY, WALL, build_case,
-                          daughterboard_x_center)
-    from gen_plate import plate_positions
-    from verify import intersection_volume
-
-    case, (w, h_body), _ = build_case(HALVES[name], name)
-    db_x = daughterboard_x_center(name, w)
-    db_y = h_body / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
-    x, y = db_x + RESET_DX, db_y + RESET_DY
-
-    # 1. 底を貫通しているか
-    with BuildPart() as clip:
-        with Locations((x, y, -5)):
-            Cylinder(RESET_D / 2 - 0.3, 12.0,
-                     align=(Align.CENTER, Align.CENTER, Align.MIN))
-    v = intersection_volume(clip.part, case)
-    assert v < 1e-3, f"{name}: RESET の穴が貫通していない（{v:.2f}mm^3）"
-
-    # 2. **その先が子基板の上にあるか**
-    assert abs(RESET_DX) + RESET_D / 2 <= DB_W / 2 - 0.5, \
-        f"{name}: 穴が子基板の幅（±{DB_W/2}）から外れる"
-    assert abs(RESET_DY) + RESET_D / 2 <= DB_D / 2 - 0.5, \
-        f"{name}: 穴が子基板の奥行（±{DB_D/2}）から外れる"
 
 
 # --------------------------------------------------------------------------
@@ -330,3 +294,44 @@ def test_the_daughterboard_can_carry_both_the_mcu_and_its_screws():
     assert len(DB_BOSS_POS) >= 2, "ネジが 1 本では回る"
     assert DB_BOSS_POS[0][0] != DB_BOSS_POS[1][0], \
         "ネジが中心線上に並んでいる。回り止めにならない"
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_battery_bump_has_a_lid(name):
+    """コブに天井があること（電池が上から露出しないこと）。
+
+    **「メッシュが水密」は「箱として閉じている」を意味しない。**
+    内側のくり抜きを奥まで通していたため、コブが上に開いたままだった。
+    本体側はプレートと上ケースが覆うが、コブの上には何も載らない。
+    干渉検査も水密検査もこれを見つけられなかった。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+    from gen_case import battery_center, battery_x_center, build_case
+    from gen_plate import plate_positions
+    from verify import intersection_volume
+
+    case, (w, h_body), _ = build_case(HALVES[name], name)
+    bx = battery_x_center(name, w)
+    by = battery_center(h_body)
+    found = False
+    for z in range(18, 34):
+        with BuildPart() as probe:
+            with Locations((bx, by, float(z))):
+                Box(60.0, 8.0, 1.0, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        if intersection_volume(probe.part, case) > 1.0:
+            found = True
+            break
+    assert found, f"{name}: 電池の真上にケースの材料が無い（コブが開いている）"
+
+
+def test_the_bosses_take_heat_set_inserts():
+    """ボスが熱圧入インサートを受ける寸法であること。
+
+    **PLA に M2 を直接タッピングすると、数回の開け閉めで舐める。**
+    インサート外径 3.2mm に対して肉厚 1.2mm 以上を確保する。
+    """
+    from interface import M2_BOSS_D, M2_INSERT_D, M2_PILOT_D
+    wall = (M2_BOSS_D - M2_INSERT_D) / 2
+    assert wall >= 1.2 - 1e-9, f"ボスの肉厚が {wall:.2f}mm しかない（インサートが割る）"
+    assert M2_PILOT_D == M2_INSERT_D, \
+        "ケース側の下穴がインサート外径になっていない（タッピング用のまま）"
