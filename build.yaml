@@ -8,6 +8,8 @@ include:
   - board: xiao_ble//zmk
     shield: proto_direct        # 疎通確認用（XIAO 1個・キー2個）
   - board: xiao_ble//zmk
+    shield: proto_charlie       # Task C2 用（XIAO 1個・チャープレックス30箇所の判定治具）
+  - board: xiao_ble//zmk
     shield: hhkb_split_left
   - board: xiao_ble//zmk
     shield: hhkb_split_right
