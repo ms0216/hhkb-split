@@ -1,0 +1,269 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 800" width="1010" height="800" font-family="Helvetica, Arial, sans-serif">
+<rect width="1010" height="800" fill="#ffffff"/>
+<text x="24" y="32" font-size="18" font-weight="bold" fill="#111">Task C2-b — 74HC595 の配線（2 枚目のブレッドボード）</text>
+<text x="24" y="54" font-size="12.5" fill="#666">1 枚目（C2-a の配線）はそのまま。XIAO から列バスへ引いていたジャンパ 2 本だけを外し、ここからつなぎ替える。</text>
+<text x="24" y="76" font-size="12.5" fill="#666">595 は DIP-16（幅 0.3 インチ）なので、中央の溝をまたいでちょうど挿さる。切り欠きを左に向けること。</text>
+<rect x="86" y="122" width="458" height="308" rx="9" fill="#f7f8f9" stroke="#ccd2d8" stroke-width="2"/>
+<rect x="86" y="267" width="458" height="20" fill="#e6eaee"/>
+<circle cx="120" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="120" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="146" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="172" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="198" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="224" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="250" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="276" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="302" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="328" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="354" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="380" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="406" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="432" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="458" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="484" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="150" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="176" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="202" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="228" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="254" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="300" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="326" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="352" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="378" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<circle cx="510" cy="404" r="4" fill="none" stroke="#bcc3ca" stroke-width="1.2"/>
+<text x="120" y="112" text-anchor="middle" font-size="11" fill="#8c959d">1</text>
+<text x="224" y="112" text-anchor="middle" font-size="11" fill="#8c959d">5</text>
+<text x="354" y="112" text-anchor="middle" font-size="11" fill="#8c959d">10</text>
+<text x="484" y="112" text-anchor="middle" font-size="11" fill="#8c959d">15</text>
+<text x="70" y="154" text-anchor="middle" font-size="12" fill="#8c959d">j</text>
+<text x="70" y="180" text-anchor="middle" font-size="12" fill="#8c959d">i</text>
+<text x="70" y="206" text-anchor="middle" font-size="12" fill="#8c959d">h</text>
+<text x="70" y="232" text-anchor="middle" font-size="12" fill="#8c959d">g</text>
+<text x="70" y="258" text-anchor="middle" font-size="12" fill="#8c959d">f</text>
+<text x="70" y="304" text-anchor="middle" font-size="12" fill="#8c959d">e</text>
+<text x="70" y="330" text-anchor="middle" font-size="12" fill="#8c959d">d</text>
+<text x="70" y="356" text-anchor="middle" font-size="12" fill="#8c959d">c</text>
+<text x="70" y="382" text-anchor="middle" font-size="12" fill="#8c959d">b</text>
+<text x="70" y="408" text-anchor="middle" font-size="12" fill="#8c959d">a</text>
+<rect x="161" y="262" width="204" height="30" rx="4" fill="#2b3138" stroke="#12161a" stroke-width="1.5"/>
+<path d="M 161 266 a 11 11 0 0 0 0 22" fill="#12161a"/>
+<text x="263" y="282" text-anchor="middle" font-size="13" font-weight="bold" fill="#e6ebef">74HC595</text>
+<circle cx="172" cy="300" r="4.6" fill="#c0392b"/>
+<text x="172" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#c0392b">Q1/QB</text>
+<text x="172" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">1</text>
+<circle cx="198" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="198" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q2</text>
+<text x="198" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">2</text>
+<circle cx="224" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="224" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q3</text>
+<text x="224" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">3</text>
+<circle cx="250" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="250" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q4</text>
+<text x="250" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">4</text>
+<circle cx="276" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="276" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q5</text>
+<text x="276" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">5</text>
+<circle cx="302" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="302" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q6</text>
+<text x="302" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">6</text>
+<circle cx="328" cy="300" r="4.6" fill="#bcc3ca"/>
+<text x="328" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q7</text>
+<text x="328" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">7</text>
+<circle cx="354" cy="300" r="4.6" fill="#333a40"/>
+<text x="354" y="320" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#333a40">GND</text>
+<text x="354" y="331" text-anchor="middle" font-size="7.5" fill="#8c959d">8</text>
+<circle cx="172" cy="254" r="4.6" fill="#b03030"/>
+<text x="172" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#b03030">VCC</text>
+<text x="172" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">16</text>
+<circle cx="198" cy="254" r="4.6" fill="#c0392b"/>
+<text x="198" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#c0392b">Q0/QA</text>
+<text x="198" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">15</text>
+<circle cx="224" cy="254" r="4.6" fill="#2b4a97"/>
+<text x="224" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#2b4a97">DS</text>
+<text x="224" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">14</text>
+<circle cx="250" cy="254" r="4.6" fill="#333a40"/>
+<text x="250" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#333a40">OE</text>
+<text x="250" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">13</text>
+<circle cx="276" cy="254" r="4.6" fill="#2b4a97"/>
+<text x="276" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#2b4a97">STCP</text>
+<text x="276" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">12</text>
+<circle cx="302" cy="254" r="4.6" fill="#2b4a97"/>
+<text x="302" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#2b4a97">SHCP</text>
+<text x="302" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">11</text>
+<circle cx="328" cy="254" r="4.6" fill="#b03030"/>
+<text x="328" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#b03030">MR</text>
+<text x="328" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">10</text>
+<circle cx="354" cy="254" r="4.6" fill="#bcc3ca"/>
+<text x="354" y="240" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#bcc3ca">Q7S</text>
+<text x="354" y="230" text-anchor="middle" font-size="7.5" fill="#8c959d">9</text>
+<text x="580" y="128" font-size="13" font-weight="bold" fill="#111">つなぐ先</text>
+<rect x="580" y="140" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#b03030" stroke-width="1.3"/>
+<text x="623" y="154" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b03030">VCC (16)</text>
+<text x="674" y="154" font-size="11" fill="#3c4147">→ XIAO 3V3</text>
+<rect x="580" y="166" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#b03030" stroke-width="1.3"/>
+<text x="623" y="180" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#b03030">MR  (10)</text>
+<text x="674" y="180" font-size="11" fill="#3c4147">→ XIAO 3V3（同じ列へ）</text>
+<rect x="580" y="192" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#333a40" stroke-width="1.3"/>
+<text x="623" y="206" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#333a40">GND (8)</text>
+<text x="674" y="206" font-size="11" fill="#3c4147">→ XIAO GND</text>
+<rect x="580" y="218" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#333a40" stroke-width="1.3"/>
+<text x="623" y="232" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#333a40">OE  (13)</text>
+<text x="674" y="232" font-size="11" fill="#3c4147">→ XIAO GND（同じ列へ）</text>
+<rect x="580" y="244" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#2b4a97" stroke-width="1.3"/>
+<text x="623" y="258" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#2b4a97">DS  (14)</text>
+<text x="674" y="258" font-size="11" fill="#3c4147">→ XIAO D10（MOSI）</text>
+<rect x="580" y="270" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#2b4a97" stroke-width="1.3"/>
+<text x="623" y="284" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#2b4a97">SHCP(11)</text>
+<text x="674" y="284" font-size="11" fill="#3c4147">→ XIAO D8（SCK）</text>
+<rect x="580" y="296" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#2b4a97" stroke-width="1.3"/>
+<text x="623" y="310" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#2b4a97">STCP(12)</text>
+<text x="674" y="310" font-size="11" fill="#3c4147">→ XIAO D7（CS）</text>
+<rect x="580" y="322" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#c0392b" stroke-width="1.3"/>
+<text x="623" y="336" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">Q0/QA(15)</text>
+<text x="674" y="336" font-size="11" fill="#3c4147">→ 1 枚目の 8 列（C0）</text>
+<rect x="580" y="348" width="86" height="21" rx="3" fill="#f2f4f6" stroke="#c0392b" stroke-width="1.3"/>
+<text x="623" y="362" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">Q1/QB(1)</text>
+<text x="674" y="362" font-size="11" fill="#3c4147">→ 1 枚目の 9 列（C1）</text>
+<rect x="24" y="460" width="962" height="176" rx="6" fill="#fafbfc" stroke="#dde1e5" stroke-width="1.2"/>
+<text x="44" y="487" font-size="14" font-weight="bold" fill="#111">組むときの要点</text>
+<text x="44" y="514" font-size="12.5" fill="#3c4147">① 1 枚目のブレッドボード（C2-a の配線）はそのまま使う。外すのは XIAO の D6・D5 から 8 列・9 列へ引いた 2 本だけ。</text>
+<text x="44" y="537" font-size="12.5" fill="#3c4147">② 74HC595 は切り欠き（半円のくぼみ）を左に向けて挿す。向きを間違えると全ピンがずれる。</text>
+<text x="44" y="560" font-size="12.5" fill="#3c4147">③ VCC と MR は両方 3V3 へ、GND と OE は両方 GND へつなぐ。MR と OE を浮かせると動かない。</text>
+<text x="44" y="583" font-size="12.5" fill="#3c4147">④ 2 枚のブレッドボードは GND を必ず共通にする。これを忘れるのが最も多い失敗。</text>
+<text x="44" y="606" font-size="12.5" fill="#3c4147">⑤ 期待する文字は C2-a とまったく同じ（a b / c d）。同じ結果が出れば 595 経由でも問題なしと判定できる。</text>
+<text x="44" y="629" font-size="12.5" fill="#3c4147">⑥ 速い打鍵で取りこぼさないかを重点的に見る。ZMK 公式が「数珠つなぎだと取りこぼす例がある」と注意している。</text>
+</svg>

@@ -1,0 +1,6 @@
+/* 右（ペリフェラル）。基板上は列 0・1 だが、全体では列 2・3 に当たる。 */
+#include "proto_split.dtsi"
+
+&default_transform {
+	col-offset = <2>;
+};

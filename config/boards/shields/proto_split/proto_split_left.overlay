@@ -1,0 +1,2 @@
+/* 左（セントラル）。列 0・1 を使うので col-offset は不要。 */
+#include "proto_split.dtsi"

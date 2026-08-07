@@ -1,0 +1,20 @@
+/*
+ * 左 2 キー（a b）＋ 右 2 キー（c d）。
+ *
+ * 左だけ押して a・b が出れば、セントラルは動いている。
+ * **右を押して c・d が出れば、BLE 分割が成立している。**
+ */
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+
+		default_layer {
+			bindings = <
+			&kp A &kp B   &kp C &kp D
+			>;
+		};
+	};
+};

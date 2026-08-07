@@ -12,6 +12,10 @@ include:
   - board: xiao_ble//zmk
     shield: proto_shift         # Task C2-b 用（同じ行列を 74HC595 で駆動）
   - board: xiao_ble//zmk
+    shield: proto_split_left    # Task C3 用（BLE 分割だけを切り出した治具・左）
+  - board: xiao_ble//zmk
+    shield: proto_split_right   # Task C3 用（同・右）
+  - board: xiao_ble//zmk
     shield: hhkb_split_left
   - board: xiao_ble//zmk
     shield: hhkb_split_right
