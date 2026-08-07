@@ -24,19 +24,37 @@ BEZEL_IN = KEYS_HALF_H + BEZEL_OPENING_GAP
 CAP_EDGE = KEYS_HALF_H - (U - CAP) / 2
 
 
-def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
-    """ベゼルがプレートの縁に十分かぶること。
+def _axes():
+    """左右（X）と前後（Y）の両方を返す。
 
-    上ケースの壁を 2.4mm にすると重なりが 0.23mm しか取れず、押さえられない。
+    **効くのは余白の小さい左右（4.125mm）の方。** 最初この検査を前後
+    （6.375mm）だけで書いており、壁を 2.4mm にしても通ってしまった
+    （＝実際に効く軸を見ていなかった）。負のテストで発覚した。
     """
-    overlap = PLATE_HALF - BEZEL_IN
-    assert overlap >= 1.0, f"ベゼルとプレートの重なりが {overlap:.2f}mm しかない"
+    from gen_plate import halves
+    from layout import Key  # noqa: F401
+    keys = halves()["left"]
+    half_w = (max(k.x_mm + k.w_u * U / 2 for k in keys)
+              - min(k.x_mm - k.w_u * U / 2 for k in keys)) / 2
+    return [
+        ("左右", half_w, PLATE_MARGIN_X),
+        ("前後", KEYS_HALF_H, PLATE_MARGIN_Y),
+    ]
+
+
+def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
+    """ベゼルがプレートの縁に十分かぶること。**左右と前後の両方**で見る。"""
+    for name, keys_half, margin in _axes():
+        overlap = (keys_half + margin - BEZEL_WALL) - (keys_half + BEZEL_OPENING_GAP)
+        assert overlap >= 1.0, \
+            f"{name}: ベゼルとプレートの重なりが {overlap:.2f}mm しかない"
 
 
 def test_the_bezel_opening_clears_the_keycaps():
-    """開口がキーキャップに当たらないこと。"""
-    gap = BEZEL_IN - CAP_EDGE
-    assert gap >= 1.5, f"開口とキャップの隙間が {gap:.2f}mm しかない"
+    """開口がキーキャップに当たらないこと。**左右と前後の両方**で見る。"""
+    for name, keys_half, _ in _axes():
+        gap = (keys_half + BEZEL_OPENING_GAP) - (keys_half - (U - CAP) / 2)
+        assert gap >= 1.5, f"{name}: 開口とキャップの隙間が {gap:.2f}mm しかない"
 
 
 def test_the_screw_head_fits_inside_the_bezel():
