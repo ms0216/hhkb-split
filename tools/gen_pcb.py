@@ -322,6 +322,22 @@ def _apply_jlcpcb_rules(board):
     return board
 
 
+def _pour(board, netitem, layer, w, h):
+    """その層いっぱいにベタを敷く。"""
+    zone = pcbnew.ZONE(board)
+    zone.SetNet(netitem)
+    zone.SetLayer(layer)
+    zone.SetLocalClearance(pcbnew.FromMM(0.25))
+    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+    pts = pcbnew.VECTOR_VECTOR2I()
+    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,
+                                      ORIGIN[1] + dy * h / 2))
+    zone.AddPolygon(pts)
+    board.Add(zone)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+
+
 def build(half, keys):
     """片側ぶんの基板を作る。"""
     # **キーマップ順に並べ替えてから使う。**
@@ -335,6 +351,13 @@ def build(half, keys):
 
     board = pcbnew.CreateEmptyBoard()
     _apply_jlcpcb_rules(board)
+    # **4 層。**行の引き回しが 2 層では通らない（通路が 1.65mm しかない）。
+    # 経緯は docs/hardware/decisions/2026-08-07-four-layer.md。
+    #   F.Cu   列のバス・信号
+    #   In1.Cu GND ベタ（全面）
+    #   In2.Cu 行の引き回し・電源
+    #   B.Cu   ソケット・ダイオード・行のバス・部品
+    board.SetCopperLayerCount(4)
     _rounded_rect_outline(board, pcb_w, pcb_h, CORNER_R)
 
     # スイッチ
@@ -453,6 +476,10 @@ def build(half, keys):
     label.SetTextThickness(pcbnew.FromMM(0.3))
     board.Add(label)
 
+
+    # GND ベタ（内層 1）。**分割の左右で 2.4GHz を至近距離で動かすので、
+    # 基準電位が連続していることの価値が大きい。**
+    _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
 
     OUT.mkdir(exist_ok=True)
     path = OUT / f"hhkb_split_{half}.kicad_pcb"

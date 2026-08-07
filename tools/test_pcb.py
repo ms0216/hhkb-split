@@ -414,3 +414,24 @@ def test_the_board_says_which_half_it_is(half):
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
     assert f"HHKB Split  {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_main_board_is_four_layers_with_a_ground_plane(half):
+    """本体基板が 4 層で、内層 1 に GND のベタがあること。
+
+    2 層では行の引き回しが通らない（通路が 1.65mm しかない）。
+    連続した GND 面は、分割の左右で 2.4GHz を至近距離で動かすこの設計では
+    配線の都合以上に効く。
+
+    **「層を 4 に設定した」だけでは足りない。**ベタが実際に塗られている
+    （filled_polygon がある）ことまで見る。
+    """
+    txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
+    m = re.search(r"\(layers\s*\n(.*?)\n\t\)", txt, re.S)
+    assert m, f"{half}: 層の定義が読めない"
+    cu = re.findall(r'"(\w+\.Cu)"', m.group(1))
+    assert cu == ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"], f"{half}: 層構成が {cu}"
+    zone = re.search(r"\(zone\b[\s\S]{0,400}?\(layer \"In1\.Cu\"", txt)
+    assert zone, f"{half}: 内層 1 に GND のベタが無い"
+    assert "filled_polygon" in txt, f"{half}: ベタが塗られていない"
