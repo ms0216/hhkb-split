@@ -15,7 +15,7 @@ M2 のネジ穴・φ5 のボス・基板の縁が並ばないことが分かっ�
 import re
 from pathlib import Path
 
-from interface import CASE_WALL, M2_BOSS_D, M2_CLEAR_D, PLATE_MARGIN, stab_offset_for
+from interface import CASE_WALL, M2_BOSS_D, M2_CLEAR_D, plate_size, stab_offset_for
 from layout import bounds_mm, load_layout, split_halves  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,7 +49,7 @@ def keepout_boxes(keys):
     スイッチのフットプリントとプレート開口の和に、スタビライザーがあれば
     それも足す。KiCad は Y 下向きなので符号を反転して取り込む。
     """
-    from gen_plate import plate_positions   # キー中心の座標変換は 1 箇所に任せる
+    from gen_plate import plate_positions, stab_polygon  # 座標変換と開口の定義は 1 箇所に任せる
 
     positions, _ = plate_positions(keys)
     sw = _footprint_extent("SW_Hotswap_Kailh_MX_1.00u")
@@ -61,12 +61,18 @@ def keepout_boxes(keys):
         by0 = min(-sw[3], -SWITCH_CUTOUT_HALF)   # Y 反転
         by1 = max(-sw[2], SWITCH_CUTOUT_HALF)
         boxes.append((kx + bx0, ky + by0, kx + bx1, ky + by1))
-        # スタビライザー
+        # スタビライザー。基板のフットプリントと、プレートの開口の**両方**を見る。
+        # プレートの開口（stab_polygon）はフットプリントより広い（±16.14 対 ±13.93）。
+        # 狭い方だけで判定して、ネジ穴を Enter の開口に重ねかけた。
         s = stab_offset_for(k.w_u)
         if s is not None:
             name = "Stabilizer_Cherry_MX_3.00u" if s > 15 else "Stabilizer_Cherry_MX_2.00u"
             e = _footprint_extent(name)
-            boxes.append((kx + e[0], ky - e[3], kx + e[1], ky - e[2]))
+            poly = stab_polygon(s)                 # プレート側の開口（Y 上向き）
+            px = [q[0] for q in poly]
+            py = [q[1] for q in poly]
+            boxes.append((kx + min(e[0], min(px)), ky + min(-e[3], min(py)),
+                          kx + max(e[1], max(px)), ky + max(-e[2], max(py))))
     return boxes
 
 
@@ -84,7 +90,7 @@ def candidates(keys, step=0.5):
     """ボスを置ける点を総当たりで探す。"""
     x0, y0, x1, y1 = bounds_mm(keys)
     kw, kh = x1 - x0, y1 - y0
-    plate_w, plate_h = kw + PLATE_MARGIN * 2, kh + PLATE_MARGIN * 2
+    plate_w, plate_h = plate_size(kw, kh)
     pcb_hw = plate_w / 2 - CASE_WALL - PCB_WALL_GAP
     pcb_hh = plate_h / 2 - CASE_WALL - PCB_WALL_GAP
     lim_x = pcb_hw - M2_CLEAR_D / 2 - HOLE_EDGE_MARGIN
@@ -124,5 +130,72 @@ def main():
         print()
 
 
+
+
+# --------------------------------------------------------------------------
+# 選定
+# --------------------------------------------------------------------------
+# 電池は左右方向に 2 本寝かせるので幅 109mm を占める。後ろ側のボスはその外へ
+# 出す必要がある（中に立てると電池室を貫く。実際に 231mm^3 の食い込みを出した）。
+BATTERY_HALF_W = (50.5 * 2 + 8.0) / 2      # envelopes.AA_L / gen_case.BATT_X と同じ値
+BATTERY_CLEAR = M2_BOSS_D / 2 + 0.5
+
+
+def select(keys, n_corner_frac=0.92):
+    """候補から取付位置を 7 箇所選ぶ。
+
+    四隅・手前中央・後ろ 2 箇所。後ろは電池室の外側へ出す。
+    プレートを支えるため、なるべく外周に近い点を選ぶ。
+    """
+    pts, (pw, ph), (hw, hh) = candidates(keys)
+    if not pts:
+        raise RuntimeError("ボスを置ける点が無い")
+    f = n_corner_frac
+    # 奥の中央にはボスを立てられない。電池室（幅 109mm）が横断しているため。
+    # 電池を奥へ置いたのは傾いた基板の下へ収めるためで、これはその代償。
+    # 代わりに長辺の中央を支える。
+    targets = [
+        (-hw * f, -hh * f), (hw * f, -hh * f),      # 手前の左右
+        (-hw * f, hh * f), (hw * f, hh * f),        # 奥の左右
+        (0.0, -hh * f),                             # 手前の中央
+        (-hw * f, 0.0), (hw * f, 0.0),              # 長辺の中央
+    ]
+    chosen = []
+    for i, (tx, ty) in enumerate(targets):
+        rear = ty > 0
+        best = None
+        for px, py in pts:
+            if (px, py) in chosen:
+                continue
+            if rear and abs(px) < BATTERY_HALF_W + BATTERY_CLEAR:
+                continue                            # 電池室の上は避ける
+            if any((px - cx) ** 2 + (py - cy) ** 2 < 15.0 ** 2 for cx, cy in chosen):
+                continue                            # 近すぎる点は選ばない
+            d = (px - tx) ** 2 + (py - ty) ** 2
+            if best is None or d < best[0]:
+                best = (d, px, py)
+        if best is None:
+            raise RuntimeError(f"{i} 番目の取付位置が見つからない")
+        chosen.append((best[1], best[2]))
+    return chosen, (pw, ph), (hw, hh)
+
+
+def report():
+    keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
+    result = {}
+    for name, keys in (("left", keys_l), ("right", keys_r)):
+        sel, (pw, ph), (hw, hh) = select(keys)
+        result[name] = sel
+        print(f'    "{name}": [')
+        for x, y in sel:
+            print(f"        ({x:7.2f}, {y:7.2f}),")
+        print("    ],")
+    return result
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--select" in sys.argv:
+        report()
+    else:
+        main()

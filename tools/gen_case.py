@@ -145,7 +145,7 @@ def case_heights(depth):
     return PLATE_TOP_FRONT, PLATE_TOP_FRONT + rise
 
 
-def build_case(keys):
+def build_case(keys, half):
     """トレイ型ボトムケースを作る。
 
     奥行はプレートの平面図での長さ（傾けたぶん cos(TILT) 倍に縮む）に合わせる。
@@ -175,7 +175,7 @@ def build_case(keys):
     # ボスも外で作って外で切る。基板はボスの上に載り、ネジはプレート→基板→
     # ボスの順に通るので、ボスの頭は基板の下面で止める。
     with BuildPart() as _b:
-        for bx, by in _boss_positions(w, h_plate):
+        for bx, by in _boss_positions(half):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_BOSS_D / 2, z_max,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -215,7 +215,7 @@ def build_case(keys):
         #    ケースに合体してから切ると、平面がケース全体に効いてリムまで
         #    5.1mm 下がる（プレートが沈む）。高さのテストで検出された。
         add(bosses, mode=Mode.ADD)
-        for bx, by in _boss_positions(w, h_plate):
+        for bx, by in _boss_positions(half):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_PILOT_D / 2, z_max, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -370,7 +370,7 @@ def tilted_cutter(w, h, rim_front, y_offset=0.0):
     return Location((0, 0, mid_z), (TILT_DEG, 0, 0)) * box
 
 
-def _boss_positions(w, h_plate):
+def _boss_positions(half):
     """ネジボスの位置。**必ず** tools/interface.py の共有定義から導く。
 
     ここに独自の実装を持っていたせいで、プレートの穴（共有定義）と
@@ -378,7 +378,7 @@ def _boss_positions(w, h_plate):
     立っていた。テストが「プレートの穴 vs 共有定義」しか見ておらず、
     ケースの実物と照合していなかったため長く気づけなかった。
     """
-    return boss_positions_plan(w, h_plate)
+    return boss_positions_plan(half)
 
 
 def main():
@@ -386,7 +386,7 @@ def main():
 
     BUILD.mkdir(exist_ok=True)
     for name, keys in halves().items():
-        part, (w, h), (z_front, z_rear) = build_case(keys)
+        part, (w, h), (z_front, z_rear) = build_case(keys, name)
         mesh, stl = to_mesh(part, f"case_{name}")
         assert_watertight(mesh, stl.name)
 

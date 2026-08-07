@@ -33,7 +33,7 @@ from layout import bounds_mm, load_layout, split_halves  # noqa: E402
 from interface import (  # noqa: E402
     CORNER_R,
     M2_CLEAR_D,
-    PLATE_MARGIN,
+    plate_size,
     PLATE_T,
     SWITCH_CUTOUT,
     boss_positions,
@@ -90,12 +90,15 @@ def plate_positions(keys):
     """キー中心を CAD 座標（原点中心・Y 上向き）に直す。"""
     x0, y0, x1, y1 = bounds_mm(keys)
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    size = (x1 - x0 + PLATE_MARGIN * 2, y1 - y0 + PLATE_MARGIN * 2)
+    size = plate_size(x1 - x0, y1 - y0)
     return [(k.x_mm - cx, cy - k.y_mm) for k in keys], size
 
 
-def build_plate(keys):
-    """キーの並びから 1 枚のプレートを作る。"""
+def build_plate(keys, half):
+    """キーの並びから 1 枚のプレートを作る。
+
+    half は "left" / "right"。取付ネジの位置が左右で違うため必須。
+    """
     positions, (w, h) = plate_positions(keys)
     stabs = [(pos, stab_offset_for(k.w_u)) for pos, k in zip(positions, keys)]
     stabs = [(pos, s) for pos, s in stabs if s is not None]
@@ -111,7 +114,7 @@ def build_plate(keys):
                 make_face(mode=Mode.SUBTRACT)
             # 取付ネジのバカ穴。ケース側のボスと同じ位置に開ける。
             # これが無いとプレートとケースを締結できない（当初開け忘れていた）。
-            with Locations(*boss_positions(w, h)):
+            with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)
     return plate.part, (w, h), positions
@@ -128,7 +131,7 @@ def main():
 
     BUILD.mkdir(exist_ok=True)
     for name, keys in halves().items():
-        part, (w, h), _ = build_plate(keys)
+        part, (w, h), _ = build_plate(keys, name)
         mesh, stl = to_mesh(part, f"plate_{name}")
         png = render_outline_2d(
             part, BUILD / f"plate_{name}.png",

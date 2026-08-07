@@ -15,7 +15,7 @@
 from math import radians, tan
 
 from build123d import Align, Box, BuildPart, BuildSketch, Circle, Location, \
-    Locations, Mode, Plane, RectangleRounded, extrude
+    Locations, Mode, Plane, Rectangle, RectangleRounded, extrude
 
 from interface import CORNER_R, M2_CLEAR_D, PLATE_T, TILT_DEG, boss_positions
 
@@ -44,24 +44,39 @@ AA_TERMINAL = 8.0        # [暫定] 電極バネと配線に要る長手方向�
 XIAO_L, XIAO_W, XIAO_H = 21.0, 17.5, 5.0   # [暫定] ピンソケット込みの概略
 
 
-def pcb_envelope(w, h_plate):
+# ホットスワップソケットが基板の裏へ張り出す範囲（キー中心から mm）。
+# 実際のフットプリント pcb/lib/keyswitch.pretty の実測値に、はんだ付けの
+# 余裕を少し足したもの。KiCad は Y 下向きなので符号を反転済み。
+#
+# 当初は「キー領域全体を覆う一枚の板」として粗く見積もっていたが、
+# 取付ネジをキーの隙間へ移したところ、その粗さがボスとの干渉として出た。
+# ソケットは各キーの下にしか無いので、実物どおりキーごとに置く。
+SOCKET_X0, SOCKET_X1 = -9.0, 7.8
+SOCKET_Y0, SOCKET_Y1 = -2.6, 7.2
+
+
+def pcb_envelope(w, h_plate, half, keys):
     """基板とソケットが占有する空間（プレート座標系、原点は板の中心）。
 
     基板はプレートと平行に、その下へ入る。取付ネジの位置には穴が要る
-    （ケースのボスが貫くため）。
+    （ケースのボスが貫くため）。ソケットはキーごとに置く。
     """
+    from gen_plate import plate_positions
+
+    positions, _ = plate_positions(keys)
     with BuildPart() as env:
         # 基板そのもの
         with BuildSketch():
             RectangleRounded(w - PCB_INSET * 2, h_plate - PCB_INSET * 2, CORNER_R)
-            with Locations(*boss_positions(w, h_plate)):
+            with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=-PCB_T)
-        # ソケットが下へ出る範囲はキーの下だけ。基板の縁まで広げると
-        # 外周のネジボスと衝突する（9,300mm^3 の食い込みとして検出された）。
+        # ソケットはキーの下だけ。まとめて 1 つのスケッチにして一度に押し出す。
         with BuildSketch(Plane.XY.offset(-PCB_T)):
-            RectangleRounded(w - SOCKET_INSET * 2, h_plate - SOCKET_INSET * 2,
-                             CORNER_R)
+            for kx, ky in positions:
+                with Locations((kx + (SOCKET_X0 + SOCKET_X1) / 2,
+                                ky + (SOCKET_Y0 + SOCKET_Y1) / 2)):
+                    Rectangle(SOCKET_X1 - SOCKET_X0, SOCKET_Y1 - SOCKET_Y0)
         extrude(amount=-SOCKET_DROP)
     return env.part
 

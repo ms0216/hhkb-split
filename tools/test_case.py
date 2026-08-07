@@ -20,7 +20,7 @@ def test_outer_size_matches_the_tilted_plate(name):
     """
     from gen_plate import plate_positions
     from interface import plan_depth
-    part, (w, h_body), _ = build_case(HALVES[name])
+    part, (w, h_body), _ = build_case(HALVES[name], name)
     _, (pw, h_plate) = plate_positions(HALVES[name])
     bb = part.bounding_box().size
     assert bb.X == pytest.approx(pw, abs=0.01)
@@ -31,14 +31,14 @@ def test_outer_size_matches_the_tilted_plate(name):
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_rim_height_gives_the_intended_plate_top(name):
     """リムの高さ + 板厚 = 狙ったプレート上面高さ。"""
-    part, _, (z_front, z_rear) = build_case(HALVES[name])
+    part, _, (z_front, z_rear) = build_case(HALVES[name], name)
     assert part.bounding_box().size.Z == pytest.approx(z_rear - PLATE_T, abs=0.05)
     assert z_front == pytest.approx(PLATE_TOP_FRONT)
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_printable(name):
-    part, _, _ = build_case(HALVES[name])
+    part, _, _ = build_case(HALVES[name], name)
     mesh, _ = to_mesh(part, f"case_{name}")
     assert_watertight(mesh, f"case_{name}")
 
@@ -52,7 +52,7 @@ def test_two_aa_batteries_fit(name):
     """
     from envelopes import battery_envelope
     from gen_case import battery_center
-    part, (_, h_body), _ = build_case(HALVES[name])
+    part, (_, h_body), _ = build_case(HALVES[name], name)
     batt = battery_envelope((0, battery_center(h_body), FLOOR + AA_D / 2))
     v = intersection_volume(batt, part)
     assert v < 1e-3, f"{name}: 電池がケースと干渉している ({v:.2f}mm^3)"
@@ -152,7 +152,7 @@ def test_case_bosses_come_from_the_shared_definition(name):
     from gen_plate import plate_positions
     from interface import boss_positions_plan
     _, (w, h_plate) = plate_positions(HALVES[name])
-    assert _boss_positions(w, h_plate) == boss_positions_plan(w, h_plate)
+    assert _boss_positions(name) == boss_positions_plan(name)
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
@@ -172,7 +172,7 @@ def test_bosses_do_not_stand_inside_the_battery_compartment(name):
     _, (w, h_plate) = plate_positions(HALVES[name])
     batt = battery_envelope((0, battery_center(plan_depth(h_plate)),
                              FLOOR + AA_D / 2))
-    for bx, by in _boss_positions(w, h_plate):
+    for bx, by in _boss_positions(name):
         with BuildPart() as b:
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_BOSS_D / 2, 40,

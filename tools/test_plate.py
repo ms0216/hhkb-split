@@ -8,13 +8,13 @@ import pytest
 from build123d import Axis
 from gen_plate import (
     CORNER_R,
-    PLATE_MARGIN,
     PLATE_T,
     SWITCH_CUTOUT,
     build_plate,
     halves,
     stab_offset_for,
 )
+from interface import PLATE_MARGIN_X, PLATE_MARGIN_Y
 from layout import UNIT
 from verify import assert_bbox, assert_watertight, to_mesh
 
@@ -36,23 +36,23 @@ def cutouts(part):
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_thickness(name):
-    part, _, _ = build_plate(HALVES[name])
+    part, _, _ = build_plate(HALVES[name], name)
     assert_bbox(part, expect_z=PLATE_T, label=f"{name}: ")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_outline_size_matches_keys_plus_margin(name):
     keys = HALVES[name]
-    part, (w, h), _ = build_plate(keys)
+    part, (w, h), _ = build_plate(keys, name)
     span_x = max(k.right_u for k in keys) - min(k.left_u for k in keys)
-    assert w == pytest.approx(span_x * UNIT + 2 * PLATE_MARGIN)
-    assert h == pytest.approx(5 * UNIT + 2 * PLATE_MARGIN)
+    assert w == pytest.approx(span_x * UNIT + 2 * PLATE_MARGIN_X)
+    assert h == pytest.approx(5 * UNIT + 2 * PLATE_MARGIN_Y)
     assert_bbox(part, expect_x=w, expect_y=h, label=f"{name}: ")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_is_printable(name):
-    part, _, _ = build_plate(HALVES[name])
+    part, _, _ = build_plate(HALVES[name], name)
     mesh, _ = to_mesh(part, f"plate_{name}")
     assert_watertight(mesh, f"plate_{name}")
 
@@ -66,8 +66,8 @@ def test_cutout_count_matches_keys_plus_screws(name, keys_n):
     ネジ穴はケース側のボスと同じ位置に開ける（開け忘れると締結できない）。
     """
     from interface import boss_positions
-    part, (w, h), _ = build_plate(HALVES[name])
-    expect = keys_n + len(boss_positions(w, h))
+    part, (w, h), _ = build_plate(HALVES[name], name)
+    expect = keys_n + len(boss_positions(name))
     assert len(cutouts(part)) == expect
 
 
@@ -78,10 +78,10 @@ def test_screw_holes_align_with_case_bosses(name):
     両者が別々に位置を計算していると、いつかずれる。共有定義から導く。
     """
     from interface import M2_CLEAR_D, boss_positions
-    part, (w, h), _ = build_plate(HALVES[name])
+    part, (w, h), _ = build_plate(HALVES[name], name)
     holes = [c for c in cutouts(part)
              if c[2] == pytest.approx(M2_CLEAR_D, abs=0.01)]
-    want = boss_positions(w, h)
+    want = boss_positions(name)
     assert len(holes) == len(want)
     for wx, wy in want:
         assert any(h[0] == pytest.approx(wx, abs=0.01)
@@ -94,7 +94,7 @@ def test_plain_cutouts_are_14mm(name):
     """スタビライザーの無いキーの開口は 14.0mm 角ちょうど。"""
     keys = HALVES[name]
     n_plain = sum(1 for k in keys if stab_offset_for(k.w_u) is None)
-    part, _, _ = build_plate(keys)
+    part, _, _ = build_plate(keys, name)
     plain = [c for c in cutouts(part)
              if c[2] == pytest.approx(SWITCH_CUTOUT, abs=1e-6)]
     assert len(plain) == n_plain
@@ -114,7 +114,7 @@ def test_stab_cutouts_are_where_the_wide_keys_are(name):
     左右方向は対称なので X はキー中心と厳密に一致する。
     """
     keys = HALVES[name]
-    part, (w, h), positions = build_plate(keys)
+    part, (w, h), positions = build_plate(keys, name)
     wide = [(pos, stab_offset_for(k.w_u))
             for pos, k in zip(positions, keys) if stab_offset_for(k.w_u)]
     assert wide, f"{name}: 2u 以上のキーが 1 つも無いのはおかしい"
@@ -144,7 +144,7 @@ def test_stab_cutouts_are_where_the_wide_keys_are(name):
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_no_cutout_reaches_the_edge(name):
     """どの開口も外形から離れていること。角丸ぶんを見て 1mm 以上の余裕を要求する。"""
-    part, (w, h), _ = build_plate(HALVES[name])
+    part, (w, h), _ = build_plate(HALVES[name], name)
     for cx, cy, cw, ch in cutouts(part):
         assert w / 2 - (abs(cx) + cw / 2) > 1.0, f"{name}: 開口が左右端に近すぎる"
         assert h / 2 - (abs(cy) + ch / 2) > 1.0, f"{name}: 開口が上下端に近すぎる"
@@ -158,7 +158,7 @@ def test_stab_offset_rejects_unknown_width():
 
 def test_corner_radius_is_applied():
     """外形の角が丸められていること（直角なら頂点が 4 つのはず）。"""
-    part, _, _ = build_plate(HALVES["left"])
+    part, _, _ = build_plate(HALVES["left"], "left")
     outer = top_face(part).outer_wire()
     assert len(outer.edges()) > 4, "角丸が適用されていない"
     assert CORNER_R > 0

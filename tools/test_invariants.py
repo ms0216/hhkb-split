@@ -116,3 +116,33 @@ def test_power_is_two_aa_cells():
     """単3×2。リポに逃げない。"""
     from gen_case import AA_D, AA_L
     assert (AA_D, AA_L) == (14.5, 50.5)
+
+
+def test_plate_margins_come_from_the_real_machine():
+    """縁の余白は実機の外形から導いた値であること。左右と前後で違う。
+
+    幅   294mm − キー 15u(285.75mm) → 片側 4.125mm
+    奥行 108mm − キー  5u( 95.25mm) → 片側 6.375mm
+
+    一律 4.0mm にしていたことがあり、前後が実機より 2.4mm 狭かった。
+    そのせいで取付ネジを置く余地が無くなり、取付穴が基板の外形を
+    0.3mm はみ出していた。**実機に合わせると設計上の詰まりも解けた。**
+    """
+    from interface import PLATE_MARGIN_X, PLATE_MARGIN_Y
+    assert PLATE_MARGIN_X == pytest.approx((294.0 - 15 * UNIT) / 2, abs=0.01)
+    assert PLATE_MARGIN_Y == pytest.approx((108.0 - 5 * UNIT) / 2, abs=0.01)
+
+
+def test_plate_depth_matches_the_real_machine():
+    """プレートの奥行が実機の本体奥行 108mm と一致すること。
+
+    120mm は電池の出っ張り込み、108mm が本体部分。
+    ここが変わると、机に置いたときの占有面積が実機とずれる。
+    """
+    from gen_plate import halves
+    from interface import plate_size
+    from layout import bounds_mm
+    for keys in halves().values():
+        x0, y0, x1, y1 = bounds_mm(keys)
+        _, h = plate_size(x1 - x0, y1 - y0)
+        assert h == pytest.approx(108.0, abs=0.01)

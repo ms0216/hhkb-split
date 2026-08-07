@@ -44,7 +44,7 @@ def plate_placement(w, h):
     return Location((0, 0, mid_z), (TILT_DEG, 0, 0))
 
 
-def build_assembly(keys):
+def build_assembly(keys, half):
     """組み上げた各部品を、名前つきで返す。
 
     奥行には 2 種類あるので取り違えないこと。
@@ -54,8 +54,8 @@ def build_assembly(keys):
     当初 h_plate を渡しており、蓋が 0.42mm ずれてケースに食い込んだ。
     """
     _, (w, h_plate) = plate_positions(keys)
-    case, (_, h_case), _ = build_case(keys)
-    plate, _, _ = build_plate(keys)
+    case, (_, h_case), _ = build_case(keys, half)
+    plate, _, _ = build_plate(keys, half)
     lid, (lw, lh) = build_battery_lid(keys)
 
     parts = {"case": case, "plate": plate_placement(w, h_plate) * plate}
@@ -63,7 +63,7 @@ def build_assembly(keys):
     # まだ設計していない基板の占有空間。単体では見えない衝突を捕まえるため、
     # 検査には常に含める（電池を基板の真下に置いて 4,000mm^3 衝突させた反省）。
     rim_front = PLATE_TOP_FRONT - PLATE_T
-    parts["pcb"] = place_pcb(pcb_envelope(w, h_plate), h_plate, rim_front)
+    parts["pcb"] = place_pcb(pcb_envelope(w, h_plate, half, keys), h_plate, rim_front)
 
     # 電池蓋はレールの段に載る。開口の中心へ、レールの高さに置く。
     ox, oy, _, oh = _lid_opening(w, h_case)
@@ -82,11 +82,11 @@ def build_assembly(keys):
     return parts, (w, h_case)
 
 
-def check(keys, label=""):
+def check(keys, half, label=""):
     """組み立て状態を検査し、問題の一覧を返す。"""
     from verify import intersection_volume
 
-    parts, (w, h_case) = build_assembly(keys)
+    parts, (w, h_case) = build_assembly(keys, half)
     problems, notes = [], []
 
     # 1. 干渉。**設計上の接触**は許し、食い込みは許さない。
@@ -136,7 +136,7 @@ def check(keys, label=""):
 def main():
     ok = True
     for name, keys in halves().items():
-        problems, notes, parts = check(keys, name)
+        problems, notes, parts = check(keys, name, name)
         print(f"{'OK ' if not problems else 'NG '}{name}  部品 {len(parts)} 個")
         for n in notes:
             print(f"      {n}")
