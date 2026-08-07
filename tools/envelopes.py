@@ -17,13 +17,14 @@ from math import radians, tan
 from build123d import Align, Box, BuildPart, BuildSketch, Circle, Location, \
     Locations, Mode, Plane, Rectangle, RectangleRounded, extrude
 
-from interface import CORNER_R, M2_CLEAR_D, PLATE_T, TILT_DEG, boss_positions
+from interface import (CORNER_R, M2_CLEAR_D, PCB_INSET, PLATE_T, TILT_DEG,
+                       boss_positions)
 
 # --------------------------------------------------------------------------
 # 基板とその実装部品
 # --------------------------------------------------------------------------
 PCB_T = 1.6              # [確定] FR4 の標準厚
-PCB_INSET = 3.0          # [確定] プレート外形より内側へ引く量。
+# PCB_INSET は interface.py（凍結境界）から読む。基板生成と共有するため。
                          #        ケースの側壁 2.4mm の内側に収める必要がある。
                          #        1.0mm にしていて壁と 17,000mm^3 衝突した
 SOCKET_DROP = 3.2        # [暫定] Kailh ホットスワップソケットが基板下へ出る量

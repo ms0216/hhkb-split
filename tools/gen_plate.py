@@ -33,7 +33,7 @@ from layout import bounds_mm, load_layout, split_halves  # noqa: E402
 from interface import (  # noqa: E402
     CORNER_R,
     M2_CLEAR_D,
-    plate_size,
+    plate_positions,
     PLATE_T,
     SWITCH_CUTOUT,
     boss_positions,
@@ -84,14 +84,6 @@ def stab_polygon(s, at=(0.0, 0.0)):
     return [(ax + x, ay - y) for x, y in pts]
 
 
-
-
-def plate_positions(keys):
-    """キー中心を CAD 座標（原点中心・Y 上向き）に直す。"""
-    x0, y0, x1, y1 = bounds_mm(keys)
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    size = plate_size(x1 - x0, y1 - y0)
-    return [(k.x_mm - cx, cy - k.y_mm) for k in keys], size
 
 
 def build_plate(keys, half):

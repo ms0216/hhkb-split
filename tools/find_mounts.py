@@ -49,7 +49,8 @@ def keepout_boxes(keys):
     スイッチのフットプリントとプレート開口の和に、スタビライザーがあれば
     それも足す。KiCad は Y 下向きなので符号を反転して取り込む。
     """
-    from gen_plate import plate_positions, stab_polygon  # 座標変換と開口の定義は 1 箇所に任せる
+    from gen_plate import stab_polygon        # プレートの開口の定義
+    from interface import plate_positions     # 座標変換
 
     positions, _ = plate_positions(keys)
     sw = _footprint_extent("SW_Hotswap_Kailh_MX_1.00u")
