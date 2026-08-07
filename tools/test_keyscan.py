@@ -161,3 +161,81 @@ def test_matrix_rows_follow_the_physical_rows():
         counts[r] = counts.get(r, 0) + 1
     assert counts == {0: 9, 1: 8, 2: 7, 3: 7, 4: 3}, \
         f"右の各段のキー数が物理配列と違う: {counts}"
+
+
+# --------------------------------------------------------------------------
+# キーマップと配列の対応（最も強い検証）
+# --------------------------------------------------------------------------
+
+# ラベル → 期待される ZMK のキーコード。複数ありうるものはリストで許す。
+_EXPECT = {
+    "Esc": "ESC", "Tab": "TAB", "Ctrl": "LCTRL",
+    "Shift": ["LSHFT", "RSHFT"], "Alt": ["LALT", "RALT"],
+    "Meta": ["LGUI", "RGUI"], "L-Space": "SPACE", "R-Space": "SPACE",
+    "Del": "BSPC", "Enter": "RET", "-": "MINUS", "=": "EQUAL", "\\": "BSLH",
+    "`": "GRAVE", "[": "LBKT", "]": "RBKT", ";": "SEMI", "'": "SQT",
+    ",": "COMMA", ".": "DOT", "/": "SLASH", "Fn": "mo FN",
+}
+
+
+def _base_bindings():
+    text = _strip(KEYMAP.read_text())
+    body = re.search(r"base_mac\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;",
+                     text, re.S).group(1)
+    found = re.findall(r"&kp (\w+)|&(\w+)\s+(\w+)", body)
+    return [a or f"{b} {c}" for a, b, c in found]
+
+
+def test_keymap_bindings_match_the_physical_layout():
+    """キーマップの各バインディングが、配列上のそのキーと一致すること。
+
+    **これが最も強い検証。** 他のテストは個数や範囲しか見ておらず、
+    「Esc の位置に Q が割り当たっている」ような取り違えを見逃す。
+    配列 JSON のキー名（外部の事実）と突き合わせる。
+
+    実際に一度、キーの並び順を取り違えたまま基板を生成し、
+    テストが揃って通ったことがある。個数の一致は正しさの証明にならない。
+    """
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))
+    from layout import load_layout, split_halves
+    from matrix import keymap_order
+
+    left, right = split_halves(load_layout(
+        str(_P(__file__).resolve().parent.parent / "layout/hhkb_split.json")))
+    labels = ([k.label for k in keymap_order(left)]
+              + [k.label for k in keymap_order(right)])
+    binds = _base_bindings()
+    assert len(binds) == len(labels) == LEFT_KEYS + RIGHT_KEYS
+
+    bad = []
+    for i, (label, bind) in enumerate(zip(labels, binds)):
+        exp = _EXPECT.get(label, f"N{label}" if label.isdigit() else label.upper())
+        ok = bind in exp if isinstance(exp, list) else bind == exp
+        if not ok:
+            bad.append(f"[{i}] 配列の {label!r} にバインド {bind!r}（期待 {exp!r}）")
+    assert not bad, "キーマップと配列がずれている:\n  " + "\n  ".join(bad)
+
+
+def test_fn_layer_puts_the_system_layer_on_ctrl():
+    """FN レイヤーの Ctrl の位置に &mo SYS があること。
+
+    HHKB の Fn+Ctrl を再現する仕掛け。位置がずれると、意図しないキーで
+    Bluetooth 切替に入ってしまう。
+    """
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))
+    from layout import load_layout, split_halves
+    from matrix import keymap_order
+
+    left, _ = split_halves(load_layout(
+        str(_P(__file__).resolve().parent.parent / "layout/hhkb_split.json")))
+    idx = [k.label for k in keymap_order(left)].index("Ctrl")
+
+    text = _strip(KEYMAP.read_text())
+    body = re.search(r"\bfn\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S).group(1)
+    binds = re.findall(r"&\w+(?:\s+\w+)*", body)
+    assert binds[idx].split()[0:2] == ["&mo", "SYS"], \
+        f"FN レイヤーの Ctrl の位置（{idx}）が {binds[idx]!r} になっている"
