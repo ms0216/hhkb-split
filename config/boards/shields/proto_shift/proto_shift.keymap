@@ -1,0 +1,22 @@
+/*
+ * proto_matrix と同じ 4 キー。列の供給元が 74HC595 になっただけなので、
+ * 期待する文字も同じにしてある。C2-a の結果とそのまま比べられる。
+ *
+ *   a b
+ *   c d
+ */
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+
+		default_layer {
+			bindings = <
+			&kp A &kp B
+			&kp C &kp D
+			>;
+		};
+	};
+};

@@ -1,0 +1,67 @@
+/*
+ * Task C2-b: 列をシフトレジスタ 74HC595 で駆動できることを確かめる治具。
+ *
+ * 行列の構成は proto_matrix とまったく同じ 2 行 × 2 列 = 4 キー。
+ * **違いは列の供給元だけ** で、proto_matrix が XIAO のピン（D6・D5）で
+ * 直接駆動していたところを、74HC595 の QA・QB に差し替えてある。
+ *
+ * そのため C2-a で組んだ配線をほぼそのまま流用できる。外すのは
+ * 「XIAO の D6・D5 から列バスへ引いていたジャンパ 2 本」だけで、
+ * 代わりに 595 の QA・QB から同じ列バスへ引く。
+ * 配線は docs/hardware/task-c2-keyscan.md の C2-b の節を参照。
+ *
+ * ここで確かめたいのは 1 点だけ:
+ *   **SPI 経由でも取りこぼさずに列を駆動できるか。**
+ * ダイオードの向き・ゴーストの有無は C2-a で確認済みで、列の駆動方法を
+ * 変えても変わらない性質なので、ここでは問わない。
+ *
+ *            列 C0 (QA)      列 C1 (QB)
+ *   行 R0     a               b          ← D1
+ *   行 R1     c               d          ← D2
+ *
+ * ピン割り当ては本番と同じにしてある（SCK=D8 / MOSI=D10 / CS=D7）。
+ * ここで動けば、本番の配線もそのまま通る。
+ */
+
+/ {
+	chosen {
+		zmk,kscan = &kscan0;
+	};
+
+	kscan0: kscan_0 {
+		compatible = "zmk,kscan-gpio-matrix";
+		wakeup-source;
+		diode-direction = "col2row";
+
+		/* 行は MCU 直結のまま。割り込みで起こせるようにするため。 */
+		row-gpios
+			= <&xiao_d 1 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			;
+
+		/*
+		 * 列はシフトレジスタから。
+		 * &shifter 0 が QA（DIP-16 の 15 番ピン）、&shifter 1 が QB（1 番ピン）。
+		 * ZMK のドライバは値の下位ビットから順に QA へ載せる。
+		 */
+		col-gpios
+			= <&shifter 0 GPIO_ACTIVE_HIGH>
+			, <&shifter 1 GPIO_ACTIVE_HIGH>
+			;
+	};
+};
+
+&xiao_spi {
+	status = "okay";
+	cs-gpios = <&xiao_d 7 GPIO_ACTIVE_LOW>;
+
+	shifter: 595@0 {
+		compatible = "zmk,gpio-595";
+		status = "okay";
+		gpio-controller;
+		spi-max-frequency = <200000>;
+		reg = <0>;
+		#gpio-cells = <2>;
+		ngpios = <8>;
+	};
+};

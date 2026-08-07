@@ -8,7 +8,9 @@ include:
   - board: xiao_ble//zmk
     shield: proto_direct        # 疎通確認用（XIAO 1個・キー2個）
   - board: xiao_ble//zmk
-    shield: proto_matrix        # Task C2 用（XIAO 1個・3行×2列マトリクスとゴースト試験）
+    shield: proto_matrix        # Task C2-a 用（XIAO 1個・2行×2列マトリクスとゴースト試験）
+  - board: xiao_ble//zmk
+    shield: proto_shift         # Task C2-b 用（同じ行列を 74HC595 で駆動）
   - board: xiao_ble//zmk
     shield: hhkb_split_left
   - board: xiao_ble//zmk

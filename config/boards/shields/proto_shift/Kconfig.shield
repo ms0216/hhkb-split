@@ -1,0 +1,4 @@
+# シールド名はディレクトリ名と完全に一致させること。
+# 一致していないとビルド時に無言で無視される。
+config SHIELD_PROTO_SHIFT
+	def_bool $(shields_list_contains,proto_shift)
