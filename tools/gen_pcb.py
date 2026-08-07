@@ -509,7 +509,9 @@ def _route_electronics(board, half, net):
         for a, b in zip(group, group[1:]):
             # **レーンはネットごとに固有にする。**6 本で使い回していて
             # 重なっていた（違反 29/49 件）。帯は 9.25mm あるので足りる。
-            _link(board, a, b, lane=1.2 + i * 0.45)
+            # **帯の中（±3.4mm）に均等に配る。**上限で頭打ちにすると
+            # 複数のネットが同じ y に重なる（V3V3 と VBATT_SENSE が 10 件）。
+            _link(board, a, b, lane=-3.0 + (i % 11) * 0.6)
 
     # 4. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
     #    In2 で近くまで運んでからビアで表へ上げる。
@@ -523,7 +525,8 @@ def _route_electronics(board, half, net):
                 continue
             target = _nearest_via(board, n, pad.GetPosition())
             if target is not None:
-                _link(board, pad, target, lane=-1.2 - k * 0.45, to_via=True)
+                _link(board, pad, target, lane=3.2 - (k % 9) * 0.7,
+                      to_via=True)
                 k += 1
 
 
@@ -549,7 +552,10 @@ def _link(board, a, b, lane, to_via=False):
     bx, by = pcbnew.ToMM(pb.x), pcbnew.ToMM(pb.y)
     # **ビアはパッドの真上に置かない。**穴が重なって
     # 「穴のクリアランス 0.00mm」になる。少しずらして引き出す。
-    d = 1.4 if lane > 0 else -1.4
+    # **引き出す距離もレーンに応じてずらす。**FFC のパッドは 0.5mm ピッチ
+    # なので、同じ距離で引き出すとビアが横並びで当たる（V3V3 と
+    # VBATT_SENSE が 10 件）。レーンと同じ順に離せば重ならない。
+    d = 1.4 + (lane + 3.4) * 0.4
     va, vb = (ax, ay + d), (bx, by + d)
     _track(board, mm(ax, ay), mm(*va), pcbnew.B_Cu, netitem)
     _via(board, mm(*va), netitem)
