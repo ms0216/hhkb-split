@@ -35,8 +35,8 @@ OUT = ROOT / "pcb"
 from gen_pcb import ORIGIN  # noqa: E402
 
 # 外形はケース側の造作と一致させる（tools/gen_case.py の DB_W / DB_D）。
-DB_W, DB_D = 22.0, 30.0
-DB_BOSS_POS = [(-8.0, -12.5), (8.0, 12.5)]
+DB_W, DB_D = 21.0, 32.0
+DB_BOSS_POS = [(-8.0, -13.5), (8.0, 13.5)]
 
 XIAO_FP = (ROOT / "pcb/lib/hhkb_split.pretty", "XIAO_nRF52840")
 FFC_FP = ("Connector_FFC-FPC", "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal")
@@ -77,7 +77,7 @@ def build():
     # 1.0mm ピッチ（幅 15mm）だと XIAO の THT パッド（x=±7.62）と重なる。
     # 0.5mm ピッチなら幅 9.3mm で、列の間の 13.5mm に収まる。
     j = _load(KICAD_FP / f"{FFC_FP[0]}.pretty", FFC_FP[1])
-    j.SetPosition(to_kicad(0, -11.5))
+    j.SetPosition(to_kicad(0, -11.0))
     j.SetReference("J_MAIN")
     j.SetValue("FFC 12P 0.5mm")
     board.Add(j)
@@ -85,7 +85,7 @@ def build():
 
     # パスコン（裏面）
     c = _load(KICAD_FP / f"{CAP_FP[0]}.pretty", CAP_FP[1])
-    c.SetPosition(to_kicad(0, 10.5))
+    c.SetPosition(to_kicad(0, 11.0))
     c.SetReference("C_DB")
     c.SetValue("0.1uF")
     board.Add(c)
@@ -131,6 +131,11 @@ def _pour_ground(board, gnd):
     zone.SetNet(gnd)
     zone.SetLayer(pcbnew.B_Cu)
     zone.SetLocalClearance(pcbnew.FromMM(0.25))
+    # **サーマルリリーフを使わずベタ付けにする。**
+    # GND は放熱より接続の確実さと低インピーダンスを優先する。
+    # リリーフのままだと FFC の GND パッドでスポークが 1 本しか取れず、
+    # DRC が「接続が不完全」と出た。
+    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
     pts = pcbnew.VECTOR_VECTOR2I()
     for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * DB_W / 2,
@@ -165,7 +170,11 @@ def _route(board):
         if n:
             xiao.setdefault(n, []).append(pad)
 
-    LANE0, LANE_STEP = 6.9, 0.55        # 外側のレーンの x と間隔
+    # 外側のレーンの x と間隔。
+    # **6.9 だと XIAO のパッド列（原点から 7.62）に 0.72mm まで寄り、
+    # ビアがパッドに当たる。**間隔 0.55 もビアの対角が 0.778mm で、
+    # φ0.6 のビアどうしが 0.178mm しか離れない（規則は 0.2）。
+    LANE0, LANE_STEP = 6.0, 0.7
     used = []
 
     for sign in (-1, +1):               # 左の列 / 右の列
@@ -177,17 +186,22 @@ def _route(board):
             if not n or n == "GND" or n not in xiao:
                 continue
             for xp in xiao[n]:
-                if (pcbnew.ToMM(xp.GetPosition().x) < 0) == (sign < 0):
+                # **原点と比べる。**0 と比べていて、絶対座標の x は常に
+                # 正なので全ネットが右の群に入っていた。
+                if (pcbnew.ToMM(xp.GetPosition().x) < ORIGIN[0]) == (sign < 0):
                     targets.append((pcbnew.ToMM(xp.GetPosition().y), pad, xp))
         # FFC は手前（KiCad の +y）にある。手前に近いパッドから順に外側へ。
         targets.sort(key=lambda t: -t[0])
         for i, (ty, fpad, xpad) in enumerate(targets):
-            lane = sign * (LANE0 - i * LANE_STEP)
+            # **絶対座標にする。**相対値のまま fx/ty（絶対）と混ぜていて、
+            # 145.9mm の配線ができていた。DRC の「配線の長さ」が異常値だった
+            # ことで気づいた。
+            lane = ORIGIN[0] + sign * (LANE0 - i * LANE_STEP)
             fx = pcbnew.ToMM(fpad.GetPosition().x)
             fy = pcbnew.ToMM(fpad.GetPosition().y)
             tx = pcbnew.ToMM(xpad.GetPosition().x)
             net = fpad.GetNet()
-            row = fy - (1.4 + i * 0.55)      # 外側へ行くものほど手前で曲げる
+            row = fy - (1.4 + i * LANE_STEP)  # 外側へ行くものほど手前で曲げる
 
             # 1. 裏面でファンアウト（縦 → 横）。**順序のおかげで交差しない。**
             #    先に曲がるのは外側のレーンへ行くもので、その横枝は
@@ -206,14 +220,25 @@ def _route(board):
             _track(board, mm(lane, ty), mm(tx, ty), pcbnew.B_Cu, net)
             used.append(net.GetNetname())
 
-    # パスコンは最寄りの XIAO パッドへ裏面で結ぶ
+    # GND のパッドはベタへ短く引き出す。**ベタの上にあるだけでは
+    # 繋がったことにならない**（DRC が「未接続」と出た）。
+    for pad in j.Pads():
+        if pad.GetNetname() == "GND":
+            pos = pad.GetPosition()
+            out = pcbnew.VECTOR2I(pos.x, pos.y + pcbnew.FromMM(2.0))
+            _track(board, pos, out, pcbnew.B_Cu, pad.GetNet())
+
+    # パスコン。**GND 側はベタで受けるので配線しない。**
+    # 両方を配線すると、GND の枝が基板を横断して他のネットと交差した。
     for pad in c.Pads():
         n = pad.GetNetname()
-        if n not in xiao:
+        if n == "GND" or n not in xiao:
             continue
         near = min(xiao[n], key=lambda p: (p.GetPosition() - pad.GetPosition()).EuclideanNorm())
         pa, pb = pad.GetPosition(), near.GetPosition()
-        corner = pcbnew.VECTOR2I(pb.x, pa.y)
+        # **縦から曲げる。**横から曲げると、パッド列に沿って降りる途中で
+        # 別の（ネットの無い）パッドを貫く。5V のパッドを貫いて短絡していた。
+        corner = pcbnew.VECTOR2I(pa.x, pb.y)
         _track(board, pa, corner, pcbnew.B_Cu, pad.GetNet())
         _track(board, corner, pb, pcbnew.B_Cu, pad.GetNet())
 

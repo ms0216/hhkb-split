@@ -321,7 +321,7 @@ def test_matrix_columns_follow_physical_position(name):
 # 記録を更新するには python3 tools/drc.py を走らせる。
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("half", ["left", "right"])
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_drc_report_matches_the_current_board(half):
     import hashlib
     import json
@@ -335,7 +335,7 @@ def test_the_drc_report_matches_the_current_board(half):
         f"python3 tools/drc.py を実行すること")
 
 
-@pytest.mark.parametrize("half", ["left", "right"])
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_board_has_no_drc_violations(half):
     import json
     rec = json.loads((ROOT / f"pcb/drc_{half}.json").read_text())
