@@ -525,6 +525,25 @@ def _courtyard_bbox(blk):
 ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR|J_DB|BT1_[+-]")
 
 
+def _expected_electronics(half):
+    """回路の宣言から、帯に置かれる部品の参照名を導く。
+
+    **走査の正解を、走査するコード自身から作らない。**
+    circuit.py は基板の生成側も読んでいる宣言なので、部品が増えれば
+    検査も自動で追従する。個数の下限を手で書くと、そこが嘘になる。
+    """
+    from circuit import netlist
+    refs = set()
+    for ref, kind, _pins in netlist(half):
+        if kind in ("keyswitch", "diode"):
+            continue          # マトリクスの 61 個は帯の外
+        if kind == "battery_holder":
+            refs |= {f"{ref}_+", f"{ref}_-"}   # ランド 2 箇所として置かれる
+        else:
+            refs.add(ref)
+    return refs
+
+
 @pytest.mark.parametrize("half", NAMES)
 def test_the_electronics_fit_inside_their_band(half):
     """電子部品のコートヤードが帯 9.25mm の内側にあること。
@@ -536,13 +555,13 @@ def test_the_electronics_fit_inside_their_band(half):
     from bands import BAND_H, band_bounds_kicad
     txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
     bad = []
-    seen = 0
+    seen = set()
     for ref, blk in _footprint_blocks(txt):
         if not ELEC_REF.fullmatch(ref):
             continue
         bb = _courtyard_bbox(blk)
         assert bb is not None, f"{half}: {ref} にコートヤードが無い"
-        seen += 1
+        seen.add(ref)
         # どの帯に属するかは、部品の中心がいちばん近い帯で決める。
         mid = (bb[1] + bb[3]) / 2
         i = min(range(4), key=lambda k: abs(sum(band_bounds_kicad(k)) / 2 - mid))
@@ -551,5 +570,9 @@ def test_the_electronics_fit_inside_their_band(half):
             bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} "
                        f"(高さ {bb[3] - bb[1]:.3f}) が帯 {i} "
                        f"{lo:.3f}..{hi:.3f} からはみ出す")
-    assert seen >= 10, f"{half}: 電子部品を {seen} 個しか見ていない。走査が壊れている"
+    want = _expected_electronics(half)
+    assert seen == want, (
+        f"{half}: 走査できた部品が回路の宣言と一致しない。\n"
+        f"  拾えなかった: {sorted(want - seen)}\n"
+        f"  余計に拾った: {sorted(seen - want)}")
     assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
