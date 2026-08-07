@@ -300,3 +300,35 @@ def test_matrix_columns_follow_physical_position(name):
         spread = max(xs) - min(xs)
         assert spread <= 19.05 * 1.5, \
             f"{name}: 列 {c} のキーが x 方向に {spread:.1f}mm 散らばっている"
+
+
+# --------------------------------------------------------------------------
+# DRC の記録が最新かどうか
+#
+# DRC は kicad-cli が要るので CI では走らせられない。代わりに
+# 「記録が現在の基板から作られたものか」を検査する。**基板を直したのに
+# DRC をかけ直していない状態**を、これが捕まえる。
+# 記録を更新するには python3 tools/drc.py を走らせる。
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_drc_report_matches_the_current_board(half):
+    import hashlib
+    import json
+    report = ROOT / f"pcb/drc_{half}.json"
+    board = ROOT / f"pcb/hhkb_split_{half}.kicad_pcb"
+    assert report.exists(), f"{half}: DRC の記録が無い。python3 tools/drc.py を実行すること"
+    rec = json.loads(report.read_text())
+    now = hashlib.sha256(board.read_bytes()).hexdigest()
+    assert rec["sha256"] == now, (
+        f"{half}: 基板が変わったのに DRC をかけ直していない。"
+        f"python3 tools/drc.py を実行すること")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_board_has_no_drc_violations(half):
+    import json
+    rec = json.loads((ROOT / f"pcb/drc_{half}.json").read_text())
+    assert rec["violations"] == 0, f"{half}: DRC 違反 {rec['violations']} 件\n" + \
+        "\n".join(rec.get("details", []))
+    assert rec["unconnected"] == 0, f"{half}: 未配線 {rec['unconnected']} 件"

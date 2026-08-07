@@ -1,0 +1,288 @@
+"""回路の電気的な規則を機械で検査する（KiCad の ERC の代わり）。
+
+**この案件で最も高くついた見落としは、すべて回路の側にあった。**
+幾何には DRC と干渉検査があるのに、回路には検査が 1 つも無かった。
+ここにある規則は、実際に見落とした 3 件をそれぞれ捕まえる。
+
+  test_every_ic_has_a_decoupling_capacitor  ← パスコンの欠落
+  test_there_is_a_bulk_capacitor            ← バルクの欠落
+  test_the_shift_register_control_pins_are_tied ← MR/OE の浮き
+
+規則を足すときは、**その規則が捕まえるはずの誤りを故意に作って
+検出できることを確かめてから**足すこと（test_the_rules_actually_bite）。
+"""
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from circuit import (  # noqa: E402
+    BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
+    MCU_MARGIN, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF, daughterboard_netlist,
+    netlist,
+)
+
+BOARDS = {
+    "left": lambda: netlist("left"),
+    "right": lambda: netlist("right"),
+    "daughterboard": daughterboard_netlist,
+}
+
+
+def nets_of(parts):
+    """ネット名 → [(参照名, 端子名), ...]"""
+    out = {}
+    for ref, _, pins in parts:
+        for pin, net in pins.items():
+            if net != "NC":
+                out.setdefault(net, []).append((ref, pin))
+    return out
+
+
+# --------------------------------------------------------------------------
+# 見落とした 3 件を、それぞれ捕まえる規則
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("board", list(BOARDS))
+def test_every_ic_has_a_decoupling_capacitor(board):
+    """IC の数だけ 0.1µF がある。
+
+    74HC595 は出力が同時に切り替わるとき電源へノイズを返す。パスコンが
+    無いとそのノイズが行の入力へ回り込み、誤検出やチャタリングになる。
+    ブレッドボードでは症状が出にくく、基板にしてから気づく類のもの。
+    """
+    parts = BOARDS[board]()
+    n_ic = len([p for p in parts if p[1] in ICS])
+    n_cap = len([p for p in parts if p[1] == "cap_100n"])
+    assert n_cap >= n_ic, \
+        f"{board}: IC が {n_ic} 個に対して 0.1µF が {n_cap} 個しかない"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_there_is_a_bulk_capacitor(board):
+    """電源にバルク容量がある。
+
+    アルカリ乾電池は消耗すると内部抵抗が上がる。BLE の送信は 10〜15mA の
+    パルスなので、内部抵抗が上がった電池では電圧降下として現れる。
+    バルクが無いと**電池を使い切る前にブラウンアウトする**。
+    """
+    parts = BOARDS[board]()
+    assert any(p[1] == "cap_100u" for p in parts), \
+        f"{board}: バルクコンデンサが無い"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_the_shift_register_control_pins_are_tied(board):
+    """74HC595 の MR が VCC、OE が GND に固定されている。
+
+    浮かせると、MR はノイズで中身が消え、OE は出力が High-Z になって
+    全キーが反応しない。**繋ぎ忘れても回路図上は見た目が変わらない。**
+    """
+    for ref, kind, pins in BOARDS[board]():
+        if kind != "74HC595":
+            continue
+        assert pins.get("MR") == "V3V3", f"{board} {ref}: MR が VCC に固定されていない"
+        assert pins.get("OE") == "GND", f"{board} {ref}: OE が GND に固定されていない"
+
+
+# --------------------------------------------------------------------------
+# 安全
+# --------------------------------------------------------------------------
+
+def test_the_battery_never_reaches_the_bat_pin():
+    """XIAO の BAT 端子に何も繋がっていないこと。
+
+    **BAT 端子はリポ用充電回路に直結している。**乾電池を繋ぐと USB 接続時に
+    一次電池を充電しようとして液漏れ・破裂の危険がある。
+    """
+    for ref, kind, pins in daughterboard_netlist():
+        if kind == "xiao_nrf52840":
+            assert pins.get("BAT") == "NC", f"{ref}: BAT 端子に {pins['BAT']} が繋がっている"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_the_battery_reaches_the_rail_only_through_the_diode(board):
+    """電池が 3V3 へ直結していないこと。
+
+    ショットキー経由でなければ、USB を挿したときに電池へ充電電流が流れる。
+    """
+    nets = nets_of(BOARDS[board]())
+    on_rail = {ref for ref, _ in nets["V3V3"]}
+    assert "D_PWR" in on_rail, f"{board}: 3V3 がショットキー経由になっていない"
+    assert "BT1" not in on_rail, f"{board}: 電池が 3V3 へ直結している"
+    assert "SW1" not in on_rail, f"{board}: スイッチが 3V3 へ直結している"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_the_divider_sits_behind_the_power_switch(board):
+    """電池電圧の分圧がスライドスイッチの後ろにあること。
+
+    前に置くと、電源を切っても分圧に電流が流れ続けて電池が減る。
+    """
+    for ref, _, pins in BOARDS[board]():
+        if ref == "R_HI":
+            assert pins["1"] == "VBATT_SW", \
+                f"{board}: 分圧がスイッチの手前にある（{pins['1']}）"
+            return
+    pytest.fail(f"{board}: 分圧抵抗が無い")
+
+
+def test_the_adc_input_stays_below_the_supply():
+    """分圧後の電圧が、そのときの電源電圧を超えないこと。
+
+    超えると ADC の入力保護ダイオードに電流が流れ、測定値が狂う。
+    新品の電池（1.65V/本）で最悪を見る。
+    """
+    v_in = BATT_V_MAX * DIVIDER_R_LOW / (DIVIDER_R_HIGH + DIVIDER_R_LOW)
+    v_supply = BATT_V_MAX - SCHOTTKY_VF
+    assert v_in < v_supply, f"分圧後 {v_in:.2f}V が電源 {v_supply:.2f}V を超える"
+
+
+def test_the_mcu_still_runs_down_to_the_declared_cutoff():
+    """打ち止めと決めた電圧まで、マイコンが動くこと。
+
+    **この規則は初回に本物の不具合を見つけた。**当初 0.9V/本まで使い切る
+    つもりで書いていたが、直列のショットキーが降下するぶん、マイコンには
+    1.40V しか届かない（下限 1.7V）。打ち止めは回路で決まる。
+    """
+    v = BATT_V_MIN - SCHOTTKY_VF
+    assert v >= MCU_V_MIN + MCU_MARGIN * 0.99, (
+        f"電池 {BATT_V_MIN:.2f}V まで使うと マイコンへ {v:.2f}V しか届かない"
+        f"（下限 {MCU_V_MIN}V）")
+
+
+def test_the_cutoff_is_not_quietly_optimistic():
+    """打ち止めが、乾電池として妥当な範囲にあること。
+
+    ショットキーを高降下のものに替えると、気づかないうちに打ち止めが
+    上がって電池がすぐ切れる。1N4007（0.7〜1.1V）に替えると 1.25V/本 で
+    止まり、容量の半分近くを捨てることになる。
+    """
+    per_cell = BATT_V_MIN / BATT_CELLS
+    assert per_cell <= 1.15, (
+        f"打ち止めが {per_cell:.2f}V/本 と高すぎる。電池の容量を捨てている。"
+        f"ショットキーの降下 {SCHOTTKY_VF}V を見直すこと")
+
+
+def test_the_divider_current_is_negligible_against_sleep():
+    """分圧に流れる電流が、スリープ電流に対して無視できること。"""
+    i = BATT_V_MAX / (DIVIDER_R_HIGH + DIVIDER_R_LOW) * 1e6      # µA
+    assert i < 5.0, f"分圧に {i:.1f}µA 流れる。抵抗を大きくすること"
+
+
+# --------------------------------------------------------------------------
+# 繋ぎ忘れ・繋ぎすぎ
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("board", list(BOARDS))
+def test_no_net_is_left_with_a_single_pin(board):
+    """1 本しか繋がっていないネットが無いこと。
+
+    **これが繋ぎ忘れの主な現れ方。**名前を書いたのにどこにも行っていない。
+    """
+    lonely = {n: p for n, p in nets_of(BOARDS[board]()).items() if len(p) < 2}
+    assert not lonely, f"{board}: 行き先の無いネット {lonely}"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_every_column_is_driven_by_exactly_one_output(board):
+    """列がシフトレジスタの出力とちょうど 1 対 1 で対応すること。
+
+    2 つの出力が同じ列に繋がると出力どうしがぶつかる（片方が High、
+    もう片方が Low のとき短絡する）。
+    """
+    drivers = {}
+    for ref, kind, pins in BOARDS[board]():
+        if kind != "74HC595":
+            continue
+        for pin, net in pins.items():
+            if net.startswith("COL"):
+                drivers.setdefault(net, []).append(f"{ref}.{pin}")
+    dup = {n: d for n, d in drivers.items() if len(d) > 1}
+    assert not dup, f"{board}: 同じ列を複数の出力が駆動している {dup}"
+
+    from matrix import shape
+    _, n_cols = shape(board)
+    assert len(drivers) == n_cols, \
+        f"{board}: 列 {n_cols} 本に対して駆動されているのは {len(drivers)} 本"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_the_cable_and_the_shift_registers_agree_on_the_spi_pins(board):
+    """ケーブルで来る SPI が、そのままシフトレジスタへ届いていること。"""
+    nets = nets_of(BOARDS[board]())
+    for net in ("SPI_SCK", "SPI_MOSI", "CS"):
+        refs = {ref for ref, _ in nets[net]}
+        assert "J_DB" in refs, f"{board}: {net} がケーブルに来ていない"
+        assert any(r.startswith("U") for r in refs), \
+            f"{board}: {net} がシフトレジスタに届いていない"
+
+
+@pytest.mark.parametrize("board", ["left", "right"])
+def test_the_chained_shift_registers_are_actually_chained(board):
+    """右半分の 2 個目が、1 個目の Q7' から受けていること。"""
+    parts = {ref: pins for ref, kind, pins in BOARDS[board]() if kind == "74HC595"}
+    if len(parts) < 2:
+        pytest.skip("この半分はシフトレジスタが 1 個")
+    assert parts["U2"]["DS"] == parts["U1"]["Q7S"] != "NC", \
+        "2 個目が 1 個目の Q7' から受けていない"
+
+
+def test_the_two_boards_agree_on_the_cable():
+    """本体基板と子基板で、ケーブルの各線の行き先が一致すること。
+
+    **別々に書いた表どうしを突き合わせる。**片方だけ直すと必ずここで落ちる。
+    """
+    main = next(p for r, k, p in netlist("left") if r == "J_DB")
+    db = next(p for r, k, p in daughterboard_netlist() if r == "J_MAIN")
+    assert main == db, f"ケーブルの結線が食い違っている\n本体 {main}\n子基板 {db}"
+
+
+# --------------------------------------------------------------------------
+# 規則そのものが効いているか
+# --------------------------------------------------------------------------
+
+def test_the_rules_actually_bite():
+    """**故意に壊して、規則が検出することを確かめる。**
+
+    通ったことは調べた証拠にならない。この案件では、誤った並び順どうしを
+    突き合わせてテストが全部通ってしまった前科がある。
+    """
+    import circuit
+
+    original = circuit.netlist
+    checks = [
+        ("パスコンを消す",
+         lambda ps: [p for p in ps if p[1] != "cap_100n"],
+         test_every_ic_has_a_decoupling_capacitor),
+        ("バルクを消す",
+         lambda ps: [p for p in ps if p[1] != "cap_100u"],
+         test_there_is_a_bulk_capacitor),
+        ("MR を浮かせる",
+         lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74HC595" else p)
+                     for r, k, p in ps],
+         test_the_shift_register_control_pins_are_tied),
+        ("電池を 3V3 へ直結する",
+         lambda ps: [(r, k, {**p, "2": "V3V3"} if r == "SW1" else p)
+                     for r, k, p in ps],
+         test_the_battery_reaches_the_rail_only_through_the_diode),
+        ("分圧をスイッチの手前へ移す",
+         lambda ps: [(r, k, {**p, "1": "VBATT_RAW"} if r == "R_HI" else p)
+                     for r, k, p in ps],
+         test_the_divider_sits_behind_the_power_switch),
+    ]
+    missed = []
+    for label, break_it, rule in checks:
+        circuit.netlist = lambda half, _b=break_it: _b(original(half))
+        BOARDS["left"] = lambda: circuit.netlist("left")
+        try:
+            rule("left")
+            missed.append(label)
+        except AssertionError:
+            pass
+        finally:
+            circuit.netlist = original
+            BOARDS["left"] = lambda: netlist("left")
+    assert not missed, f"故意に壊しても検出できない規則がある: {missed}"
