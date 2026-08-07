@@ -76,6 +76,19 @@ XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りな�
 ビルドは GitHub Actions（ZMK 公式の再利用ワークフロー）。Actions の成果物から
 `.uf2` をダウンロードして書き込む。
 
+### 検証タスクの手順書
+
+実機で確かめる作業は、配置図と判定基準つきの手順書にしてある。
+
+| タスク | 内容 | 状態 |
+|---|---|---|
+| [C1](docs/hardware/task-c1-smoke-test.md) | 疎通確認（XIAO・書き込み・ZMK が実機で動くか） | ✅ 合格 |
+| [C2](docs/hardware/task-c2-keyscan.md) | キースキャン（マトリクス・ゴースト・74HC595） | ✅ C2-a 合格 / ⬜ C2-b |
+| [C3](docs/hardware/task-c3-ble-split.md) | BLE 分割（左右同時押しが崩れないか） | ⬜ |
+| [C4・C5](docs/hardware/task-c4-c5-power.md) | 乾電池給電・逆流の測定・電池残量 | ⬜ |
+
+書き込みでつまずいたときは [xiao-flash-recovery.md](docs/hardware/xiao-flash-recovery.md)。
+
 ### docs/hardware/
 
 実機を分解せず、公開情報だけから寸法を確定させた記録。

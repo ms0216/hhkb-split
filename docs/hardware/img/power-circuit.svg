@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 640" width="1010" height="640" font-family="Helvetica, Arial, sans-serif">
+<rect width="1010" height="640" fill="#ffffff"/>
+<text x="24" y="32" font-size="18" font-weight="bold" fill="#111">乾電池給電の回路（Task C4・C5）</text>
+<text x="24" y="54" font-size="12.5" fill="#666">単3×2 を XIAO の 3V3 ピンへ入れる。BAT 端子には絶対につながない（充電回路に直結しているため）。</text>
+<rect x="50" y="124" width="104" height="342" rx="6" fill="#f2f4f6" stroke="#8c959d" stroke-width="1.6"/>
+<text x="102" y="148" text-anchor="middle" font-size="13" font-weight="bold" fill="#111">単3 × 2</text>
+<text x="102" y="166" text-anchor="middle" font-size="11" fill="#666">直列 3.0V</text>
+<text x="140" y="163" text-anchor="middle" font-size="15" font-weight="bold" fill="#c0392b">＋</text>
+<text x="140" y="413" text-anchor="middle" font-size="15" font-weight="bold" fill="#333">−</text>
+<text x="102" y="460" text-anchor="middle" font-size="11" fill="#666">新品 3.2V</text>
+<text x="102" y="476" text-anchor="middle" font-size="11" fill="#666">終止 2.0V</text>
+<line x1="154" y1="170" x2="230" y2="170" stroke="#222" stroke-width="2.4"/>
+<rect x="230" y="154" width="72" height="32" rx="4" fill="#fff8e6" stroke="#c9821f" stroke-width="2" stroke-dasharray="5,3"/>
+<text x="266" y="175" text-anchor="middle" font-size="11" font-weight="bold" fill="#8a6410">シャント</text>
+<text x="266" y="144" text-anchor="middle" font-size="10.5" fill="#8a6410">測定のときだけ入れる</text>
+<text x="266" y="204" text-anchor="middle" font-size="10.5" fill="#8a6410">1kΩ（微小電流）</text>
+<text x="266" y="218" text-anchor="middle" font-size="10.5" fill="#8a6410">10Ω（動作電流）</text>
+<line x1="302" y1="170" x2="370" y2="170" stroke="#222" stroke-width="2.4"/>
+<circle cx="370" cy="170" r="4.5" fill="#222"/>
+<line x1="370" y1="170" x2="410" y2="152" stroke="#222" stroke-width="2.4"/>
+<circle cx="414" cy="170" r="4.5" fill="#222"/>
+<text x="392" y="138" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">電源スイッチ</text>
+<line x1="414" y1="170" x2="500" y2="170" stroke="#222" stroke-width="2.4"/>
+<circle cx="470" cy="170" r="4.5" fill="#2b4a97"/>
+<line x1="470" y1="170" x2="470" y2="240" stroke="#2b4a97" stroke-width="2.4"/>
+<polygon points="500,156 500,184 530,170" fill="#222"/>
+<line x1="530" y1="154" x2="530" y2="186" stroke="#222" stroke-width="5"/>
+<path d="M 530 154 l -8 -6 M 530 186 l 8 6" stroke="#222" stroke-width="2.5" fill="none"/>
+<text x="515" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">SB240LES</text>
+<text x="515" y="216" text-anchor="middle" font-size="10.5" fill="#666">ショットキー Vf≈0.4V</text>
+<line x1="530" y1="170" x2="700" y2="170" stroke="#222" stroke-width="2.4"/>
+<rect x="700" y="100" width="180" height="390" rx="8" fill="#1f2933" stroke="#0d1216" stroke-width="2"/>
+<text x="790" y="285" text-anchor="middle" font-size="15" fill="#c9d3dc">XIAO</text>
+<text x="790" y="305" text-anchor="middle" font-size="12" fill="#8b97a3">nRF52840</text>
+<circle cx="700" cy="170" r="4.5" fill="#e06060"/>
+<text x="716" y="175" font-size="12.5" font-weight="bold" fill="#e06060">3V3</text>
+<circle cx="700" cy="240" r="4.5" fill="#7fa8ff"/>
+<text x="716" y="245" font-size="12.5" font-weight="bold" fill="#7fa8ff">D0</text>
+<circle cx="700" cy="420" r="4.5" fill="#c9d3dc"/>
+<text x="716" y="425" font-size="12.5" font-weight="bold" fill="#c9d3dc">GND</text>
+<rect x="716" y="112" width="150" height="26" rx="4" fill="#3a2226" stroke="#8a3a3a" stroke-width="1.4"/>
+<text x="791" y="130" text-anchor="middle" font-size="11" font-weight="bold" fill="#f0a0a0">BAT 端子は使わない</text>
+<line x1="470" y1="240" x2="640" y2="240" stroke="#2b4a97" stroke-width="2.4"/>
+<line x1="640" y1="240" x2="700" y2="240" stroke="#2b4a97" stroke-width="2.4"/>
+<rect x="530" y="227" width="60" height="26" rx="3" fill="#fff" stroke="#2b4a97" stroke-width="2"/>
+<text x="560" y="218" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#2b4a97">R1 1MΩ</text>
+<circle cx="640" cy="240" r="4.5" fill="#2b4a97"/>
+<line x1="640" y1="240" x2="640" y2="310" stroke="#2b4a97" stroke-width="2.4"/>
+<rect x="627" y="325" width="26" height="60" rx="3" fill="#fff" stroke="#2b4a97" stroke-width="2"/>
+<text x="662" y="359" font-size="11.5" font-weight="bold" fill="#2b4a97">R2 1MΩ</text>
+<line x1="640" y1="385" x2="640" y2="420" stroke="#2b4a97" stroke-width="2.4"/>
+<circle cx="640" cy="420" r="4.5" fill="#2b4a97"/>
+<text x="470" y="266" font-size="11" fill="#2b4a97">電池電圧の測定（分圧して 1/2 にする）</text>
+<text x="470" y="282" font-size="11" fill="#2b4a97">3.0V → 1.5V。消費は 1.5µA で無視できる</text>
+<line x1="102" y1="420" x2="700" y2="420" stroke="#222" stroke-width="2.4"/>
+<circle cx="102" cy="420" r="4.5" fill="#222"/>
+<circle cx="700" cy="420" r="4.5" fill="#222"/>
+<text x="400" y="410" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">GND</text>
+<rect x="24" y="500" width="962" height="122" rx="6" fill="#fafbfc" stroke="#dde1e5" stroke-width="1.2"/>
+<text x="44" y="526" font-size="14" font-weight="bold" fill="#111">ショットキーが 2 つの役目を兼ねている</text>
+<text x="44" y="550" font-size="12.5" fill="#3c4147">① 電池へ充電電流が流れ込むのを止める。USB 接続時は 3V3 が 3.3V になり、電池側 3.0V より高くなるため。</text>
+<text x="44" y="572" font-size="12.5" fill="#3c4147">② USB を挿すと自動で電池が切り離される。①と同じ理屈で逆バイアスになり、電池は一切消費されない。</text>
+<text x="44" y="594" font-size="12.5" fill="#3c4147">→ 仕様書では P-MOSFET での自動切離しを想定していたが、ショットキー 1 個で同じ挙動が得られる。部品が減る。</text>
+<text x="44" y="616" font-size="12.5" fill="#3c4147">※ ただし「3V3 から XIAO のレギュレータへ電流が逆流しないか」は別問題。これを Task C4 で実測する。</text>
+</svg>
