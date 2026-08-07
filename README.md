@@ -86,6 +86,8 @@ XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りな�
 | [C2](docs/hardware/task-c2-keyscan.md) | キースキャン（マトリクス・ゴースト・74HC595） | ✅ C2-a 合格 / ⬜ C2-b |
 | [C3](docs/hardware/task-c3-ble-split.md) | BLE 分割（左右同時押しが崩れないか） | ⬜ |
 | [C4・C5](docs/hardware/task-c4-c5-power.md) | 乾電池給電・逆流の測定・電池残量 | ⬜ |
+| [C6](docs/hardware/task-c6-confirm-on-real-hhkb.md) | 実機の DIP スイッチとキーマップを確認 | ⬜ **部品不要** |
+| [B3](docs/hardware/task-b3-print-and-compare.md) | 3Dプリントして実機と比べる | ⬜ **部品不要** |
 
 書き込みでつまずいたときは [xiao-flash-recovery.md](docs/hardware/xiao-flash-recovery.md)。
 
@@ -101,9 +103,9 @@ MX 軸のキーボードだった）。同じ穴に落ちないため。
 | フェーズ | 状態 |
 |---|---|
 | A. 実機寸法の確定 | ✅ 完了 |
-| B. 機構設計（プレート・ケース） | ✅ STL 生成・検証済み / ⬜ 未印刷 |
+| B. 機構設計（プレート・ケース） | ✅ STL 生成・検証済み / ⬜ 未印刷（[B3](docs/hardware/task-b3-print-and-compare.md)） |
 | C. 電気・ファームウェア検証 | 🔶 進行中（**C1・C2-a 合格**。C2-b は 74HC595 待ち、C3〜C5 は部品待ち） |
-| D. 基板設計（KiCad → JLCPCB） | ⬜ 未着手 |
+| D. 基板設計（KiCad → JLCPCB） | 🔶 D1・D2a 完了（外形・キー配置・マトリクス）。[詳細](pcb/README.md) |
 | E. 組み立て・実機調整 | ⬜ 未着手 |
 
 ## ライセンス
