@@ -180,6 +180,45 @@ def test_the_electronics_fit_inside_their_band(half):
     assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
 ```
 
+**Task 1 完了後に強化した（レビュー指摘）。** `seen >= 10` は、左の部品が
+11 個しかないため余裕が 1 しかなく、**1 種類だけ拾えなくなっても素通り
+する。** `tools/circuit.py` は import が一切無く pcbnew に依存しないので、
+そこから正解の集合を導いて突き合わせる。
+
+```python
+def _expected_electronics(half):
+    """回路の宣言から、帯に置かれる部品の参照名を導く。
+
+    **走査の正解を、走査するコード自身から作らない。**
+    circuit.py は基板の生成側も読んでいる宣言なので、部品が増えれば
+    検査も自動で追従する。個数の下限を手で書くと、そこが嘘になる。
+    """
+    from circuit import netlist
+    refs = set()
+    for ref, kind, _pins in netlist(half):
+        if kind in ("keyswitch", "diode"):
+            continue          # マトリクスの 61 個は帯の外
+        if kind == "battery_holder":
+            refs |= {f"{ref}_+", f"{ref}_-"}   # ランド 2 箇所として置かれる
+        else:
+            refs.add(ref)
+    return refs
+```
+
+検査の末尾 2 行を、この集合との照合に置き換える。
+
+```python
+    want = _expected_electronics(half)
+    assert seen == want, (
+        f"{half}: 走査できた部品が回路の宣言と一致しない。\n"
+        f"  拾えなかった: {sorted(want - seen)}\n"
+        f"  余計に拾った: {sorted(seen - want)}")
+    assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
+```
+
+`seen` は個数ではなく**参照名の集合**に変える（`seen = set()` にして
+`seen.add(ref)`）。実測での期待値は左 11 個・右 13 個。
+
 - [ ] **Step 4: 落ちることを確認する**
 
 ```bash
@@ -464,12 +503,14 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **なぜ手書きルータを消さないか:** 先に消すと、Freerouting が期待どおり動かなかったときに戻る先が無くなる。**この Task が終わるまで、手書きルータは既定のまま残す。**
 
 **Files:**
+- Create: `tools/boardhash.py`
 - Create: `tools/autoroute.py`
 - Modify: `tools/gen_pcb.py`（`build()` に `route=True` 引数、`main()` に `--no-route` オプション）
 
 **Interfaces:**
 - Consumes: `gen_pcb.build(half, keys, route=False)`
-- Produces: `autoroute.run(half) -> dict`。キーは `board` / `unrouted` / `unrouted_sha256` / `freerouting` / `passes` の 5 つ。**DRC の件数は含まない**（それは `drc.py` の仕事）。同じ内容を `pcb/route_{half}.json` に書く
+- Produces: `boardhash.fingerprint(path) -> str`（64 桁の hex）
+- Produces: `autoroute.run(half) -> dict`。キーは `board` / `unrouted` / `unrouted_fingerprint` / `freerouting` / `passes` の 5 つ。**DRC の件数は含まない**（それは `drc.py` の仕事）。同じ内容を `pcb/route_{half}.json` に書く
 
 **`.gitignore` について:** `pcb/unrouted/*.kicad_pcb` は既存の除外規則
 （`*.kicad_prl` / `*.kicad_pcb-bak` / `*-backups/` ほか）に**該当しない**ので、
@@ -528,6 +569,107 @@ git status --short pcb/unrouted/
 
 期待: `?? pcb/unrouted/` が出る（`.gitignore` に食われていない）。
 
+- [ ] **Step 2.5: `tools/boardhash.py` を書く**
+
+**なぜバイト列の sha256 では駄目か（実測で判明）。** KiCad は保存のたびに
+UUID を振り直し、**フットプリントを書き出す順序も変わる**。設計が
+1mm も動いていなくても、`.kicad_pcb` のバイト列は毎回変わる。
+（実測: 同じスクリプトを 2 回走らせて 11632 行の差。ただし正規化して
+比べると設計は完全に一致した）
+
+バイトのハッシュで陳腐化を見ると、`gen_pcb.py` を走らせただけで検査が
+落ち、何も変わっていないのに Freerouting（数分）を回し直すことになる。
+
+```python
+"""基板の「設計としての中身」を指紋にする。
+
+**バイト列の sha256 は使えない。** KiCad は保存のたびに UUID を振り直し、
+フットプリントの書き出し順も変える。設計が同じでもバイト列は毎回変わる
+（実測で確認）。
+
+ここでは並び順と UUID を落とし、**配置と結線だけ**を取り出して
+ハッシュする。同じ設計なら何度保存しても同じ値になり、部品が 0.1mm
+動けば変わる。
+
+pcbnew を使わない（S 式のテキストとして読む）ので、通常の venv から走る。
+"""
+
+import hashlib
+import re
+
+FP = re.compile(r'\n\t\(footprint "([^"]+)"')
+AT = re.compile(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)")
+REF = re.compile(r'\(property "Reference" "([^"]+)"')
+PAD = re.compile(r'\(pad "([^"]*)"[\s\S]{0,400}?\(net \d+ "([^"]*)"\)')
+EDGE = re.compile(r'\(gr_(line|arc)\b([\s\S]{0,300}?)\(layer "Edge\.Cuts"\)')
+XY = re.compile(r"\((?:start|mid|end) ([-\d.]+) ([-\d.]+)\)")
+
+
+def _blocks(txt):
+    """フットプリントを括弧の対応で切り出す。"""
+    for m in FP.finditer(txt):
+        i = m.start() + 1
+        depth, j = 0, i
+        while True:
+            if txt[j] == "(":
+                depth += 1
+            elif txt[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        yield m.group(1), txt[i:j + 1]
+
+
+def canonical(txt):
+    """並び順と UUID を落とした、設計の正規形。"""
+    rows = []
+    for name, blk in _blocks(txt):
+        r, a = REF.search(blk), AT.search(blk)
+        if not (r and a):
+            continue
+        pads = sorted((n, net) for n, net in PAD.findall(blk))
+        rows.append((r.group(1), name,
+                     f"{float(a.group(1)):.4f}", f"{float(a.group(2)):.4f}",
+                     f"{float(a.group(3) or 0):.2f}", tuple(pads)))
+    edges = sorted(
+        (kind,) + tuple(f"{float(x):.4f},{float(y):.4f}"
+                        for x, y in XY.findall(body))
+        for kind, body in EDGE.findall(txt))
+    return repr((sorted(rows), edges))
+
+
+def fingerprint(path):
+    """配置・結線・外形から決まる 64 桁の指紋。"""
+    with open(path) as f:
+        return hashlib.sha256(canonical(f.read()).encode()).hexdigest()
+```
+
+効いていることを確かめる。**「同じなら同じ」と「違えば違う」の両方を見る。**
+
+```bash
+"$KPY" tools/gen_pcb.py --no-route
+cp pcb/unrouted/hhkb_split_left.kicad_pcb /tmp/a.kicad_pcb
+"$KPY" tools/gen_pcb.py --no-route
+cp pcb/unrouted/hhkb_split_left.kicad_pcb /tmp/b.kicad_pcb
+# 部品をひとつ 0.1mm 動かしたものを作る
+.venv/bin/python3 -c "
+s=open('/tmp/b.kicad_pcb').read()
+import re
+m=re.search(r'\(at ([-\d.]+) ([-\d.]+) 180\)', s)
+s=s.replace(m.group(0), f'(at {m.group(1)} {float(m.group(2))+0.1} 180)', 1)
+open('/tmp/c.kicad_pcb','w').write(s)"
+.venv/bin/python3 -c "
+import sys; sys.path.insert(0,'tools')
+from boardhash import fingerprint
+a,b,c = (fingerprint(p) for p in ('/tmp/a.kicad_pcb','/tmp/b.kicad_pcb','/tmp/c.kicad_pcb'))
+print('2 回生成が一致:', a == b)
+print('0.1mm 動かすと変わる:', b != c)
+assert a == b and b != c"
+```
+
+期待: **両方 True。**（バイト列の sha256 だと 1 つ目が False になる）
+
 - [ ] **Step 3: `tools/autoroute.py` を書く**
 
 ```python
@@ -546,7 +688,6 @@ DSN が 4 層・クリアランス規則・NPTH の keepout・GND ベタ（面�
 運ぶことは実測で確認済み。
 """
 
-import hashlib
 import json
 import os
 import shutil
@@ -555,6 +696,8 @@ import sys
 from pathlib import Path
 
 import pcbnew
+
+import boardhash
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
@@ -654,10 +797,14 @@ def run(half):
 
     # **どの未配線基板から作られたかを残す。**
     # これが無いと「配置を変えたのに配線し直していない」が検出できない。
+    #
+    # バイト列ではなく指紋を使う。KiCad は保存のたびに UUID と
+    # フットプリントの並び順を変えるので、バイトのハッシュは
+    # 「再生成しただけ」でも変わってしまう（boardhash.py の説明を見る）。
     rec = {
         "board": out.name,
         "unrouted": src.name,
-        "unrouted_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
+        "unrouted_fingerprint": boardhash.fingerprint(src),
         "freerouting": JAR.name,
         "passes": PASSES,
     }
@@ -751,17 +898,21 @@ def test_the_routing_was_made_from_the_current_placement(half):
     同じ型を、一段手前に置いたもの。
 
     これが無いと、部品を動かしたあと古い配線のまま発注しかねない。
+
+    **バイト列ではなく指紋で比べる。** KiCad は保存のたびに UUID と
+    フットプリントの並び順を変えるので、バイトの sha256 だと
+    「再生成しただけ」で落ちてしまい、何も変わっていないのに
+    Freerouting を回し直すことになる（boardhash.py の説明を見る）。
     """
-    import hashlib
     import json
+    from boardhash import fingerprint
     rec_path = PCB / f"route_{half}.json"
     assert rec_path.exists(), \
         f"{half}: 配線の記録が無い。tools/autoroute.py を実行すること"
     rec = json.loads(rec_path.read_text())
     src = PCB / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
     assert src.exists(), f"{half}: 未配線の基板が無い: {src}"
-    now = hashlib.sha256(src.read_bytes()).hexdigest()
-    assert rec["unrouted_sha256"] == now, (
+    assert rec["unrouted_fingerprint"] == fingerprint(src), (
         f"{half}: 配置が変わったのに配線し直していない。"
         'KiCad の Python で "tools/gen_pcb.py --no-route" のあと '
         '"tools/autoroute.py" を実行すること')
@@ -777,18 +928,35 @@ def test_the_routing_was_made_from_the_current_placement(half):
 
 - [ ] **Step 3: 効いていることを確認する（故意に壊す）**
 
+**改行を足すだけでは駄目。**指紋は空白や UUID を無視するので変わらない
+（それが指紋の狙い）。**部品を実際に動かす。**
+
 ```bash
-printf '\n' >> pcb/unrouted/hhkb_split_left.kicad_pcb
+.venv/bin/python3 - <<'PY'
+import re, pathlib
+p = pathlib.Path("pcb/unrouted/hhkb_split_left.kicad_pcb")
+s = p.read_text()
+m = re.search(r"\(at ([-\d.]+) ([-\d.]+) 180\)", s)
+p.write_text(s.replace(m.group(0),
+    f"(at {m.group(1)} {float(m.group(2)) + 0.1} 180)", 1))
+print("動かした:", m.group(0))
+PY
 .venv/bin/pytest tools/test_pcb.py -k routing_was_made_from -q
 ```
 
 期待: `left: 配置が変わったのに配線し直していない` で **FAIL**。
 
-戻す:
+**逆向きも確かめる（こちらのほうが大事）。**再生成しただけでは
+落ちないこと。バイトのハッシュならここで落ちる。
 
 ```bash
 git checkout pcb/unrouted/hhkb_split_left.kicad_pcb
+"$KPY" tools/gen_pcb.py --no-route     # 配置は変えずに作り直すだけ
+.venv/bin/pytest tools/test_pcb.py -k routing_was_made_from -q
 ```
+
+期待: **PASS**（`.kicad_pcb` のバイト列は変わっているが、指紋は同じ）。
+ここで落ちるなら `boardhash.py` が並び順か UUID を拾ってしまっている。
 
 - [ ] **Step 4: 手書きルータを削除する**
 
