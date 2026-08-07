@@ -1,5 +1,14 @@
 # 設計の自己検証に使う。CI（.github/workflows/checks.yml）と同じものを入れる。
+#
+# **手で並べない。** tools/ が実際に import している外部モジュールから導く。
+# 最初 grep で並べたら matplotlib が抜けており、CI だけが落ちた
+# （ローカルには入っていたので気づけなかった）。
+#
+#   .venv/bin/python3 -c "..."  で import を走査して更新する
 build123d==0.11.1
 trimesh==5.0.0
 numpy==2.5.1
+matplotlib==3.11.1
+pillow==12.3.0
+PyYAML==6.0.3
 pytest==9.1.1
