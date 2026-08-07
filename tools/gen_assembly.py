@@ -23,9 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_case import (  # noqa: E402
     AA_D, AA_L, BATT_MARGIN_REAR, BATT_W, CLEARANCE, FLOOR, FOOT_PEG_H,
     LID_STOP, LID_T, PLATE_TOP_FRONT, RAIL_H, TILT_DEG, WALL, _foot_positions,
-    _lid_opening, build_battery_lid, build_case, build_tilt_foot, case_heights,
+    _lid_opening, battery_center, build_battery_lid, build_case,
+    build_tilt_foot, case_heights,
 )
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
+from envelopes import (  # noqa: E402
+    battery_envelope, pcb_bottom_at, pcb_envelope, place_pcb,
+)
 from interface import PLATE_T  # noqa: E402
 
 
@@ -56,6 +60,11 @@ def build_assembly(keys):
 
     parts = {"case": case, "plate": plate_placement(w, h_plate) * plate}
 
+    # まだ設計していない基板の占有空間。単体では見えない衝突を捕まえるため、
+    # 検査には常に含める（電池を基板の真下に置いて 4,000mm^3 衝突させた反省）。
+    rim_front = PLATE_TOP_FRONT - PLATE_T
+    parts["pcb"] = place_pcb(pcb_envelope(w, h_plate), h_plate, rim_front)
+
     # 電池蓋はレールの段に載る。開口の中心へ、レールの高さに置く。
     ox, oy, _, oh = _lid_opening(w, h_case)
     # 蓋の手前端はストッパーの奥に来る
@@ -67,13 +76,8 @@ def build_assembly(keys):
         foot, fz = build_tilt_foot(3.0, h_case)
         parts[f"foot{i}"] = Location((fx, fy, -fz), (180, 0, 0)) * foot
 
-    # 単3電池 2 本
-    y_batt = h_case / 2 - WALL - BATT_MARGIN_REAR - BATT_W / 2
-    for i, dx in enumerate((-(AA_D + 0.5) / 2, (AA_D + 0.5) / 2)):
-        with BuildPart() as b:
-            with Locations((0, y_batt + dx, FLOOR + AA_D / 2)):
-                Box(AA_L, AA_D, AA_D)
-        parts[f"aa{i}"] = b.part
+    # 単3電池 2 本（電極と配線の余裕を含めた占有空間として扱う）
+    parts["batt"] = battery_envelope((0, battery_center(h_case), FLOOR + AA_D / 2))
 
     return parts, (w, h_case)
 
@@ -85,21 +89,35 @@ def check(keys, label=""):
     parts, (w, h_case) = build_assembly(keys)
     problems, notes = [], []
 
-    # 1. 干渉。接触は許すが、食い込みは許さない
+    # 1. 干渉。**設計上の接触**は許し、食い込みは許さない。
+    #
+    #    面どうしが接すると、ブーリアン演算とテッセレーションの誤差で
+    #    わずかな重なりとして出る。支え合う関係にある組は許容量を広げる。
+    #    許容を広げるのは「接触が設計意図である」と言える組だけにする。
+    CONTACT = {
+        frozenset({"case", "pcb"}): 30.0,    # 基板はネジボスの上に載る
+        frozenset({"case", "plate"}): 30.0,  # プレートはリムに載る
+        frozenset({"case", "lid"}): 30.0,    # 蓋はレールの段に載る
+        frozenset({"pcb", "batt"}): 30.0,    # 電池は基板の下面に触れうる
+    }
     names = list(parts)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
             v = intersection_volume(parts[a], parts[b])
-            if v > 1.0:                      # 1mm^3 を超える食い込み
-                problems.append(f"{a} と {b} が {v:.1f}mm^3 食い込んでいる")
+            limit = CONTACT.get(frozenset({a, b}), 1.0)
+            if v > limit:
+                kind = "接触の域を超えて" if limit > 1.0 else ""
+                problems.append(f"{a} と {b} が {kind}{v:.1f}mm^3 食い込んでいる")
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。
     case_bb = parts["case"].bounding_box()
     plate_bb = parts["plate"].bounding_box()
-    gap_y = case_bb.size.Y - plate_bb.size.Y
+    # ケースはコブぶん長いので、プレートが覆うべきは**本体部分**だけ。
+    gap_y = h_case - plate_bb.size.Y
     gap_x = case_bb.size.X - plate_bb.size.X
-    notes.append(f"ケース {case_bb.size.X:.2f}x{case_bb.size.Y:.2f} / "
+    notes.append(f"ケース全体 {case_bb.size.X:.2f}x{case_bb.size.Y:.2f} "
+                 f"(本体 {h_case:.2f} + コブ) / "
                  f"プレート(傾斜後) {plate_bb.size.X:.2f}x{plate_bb.size.Y:.2f}mm")
     for axis, gap in (("X", gap_x), ("Y", gap_y)):
         if gap > 0.3:

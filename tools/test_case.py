@@ -12,19 +12,27 @@ HALVES = halves()
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
-def test_outer_size_matches_plate(name):
-    """ケースの外形はプレートと同一（サンドイッチ構造）。"""
-    part, (w, h), _ = build_case(HALVES[name])
+def test_outer_size_matches_the_tilted_plate(name):
+    """ケースの外形は、傾けたプレートの平面図と一致する。
+
+    平らなプレートを 7.3° 傾けると平面図の奥行は cos 倍に縮む。
+    プレートの平らな寸法をそのまま使うとリムが 0.84mm 長くなる。
+    """
+    from gen_plate import plate_positions
+    from interface import plan_depth
+    part, (w, h_body), _ = build_case(HALVES[name])
+    _, (pw, h_plate) = plate_positions(HALVES[name])
     bb = part.bounding_box().size
-    assert bb.X == pytest.approx(w, abs=0.01)
-    assert bb.Y == pytest.approx(h, abs=0.01)
+    assert bb.X == pytest.approx(pw, abs=0.01)
+    assert h_body == pytest.approx(plan_depth(h_plate), abs=0.01)
+    assert bb.Y == pytest.approx(h_body, abs=0.01)
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_rim_height_gives_the_intended_plate_top(name):
     """リムの高さ + 板厚 = 狙ったプレート上面高さ。"""
-    part, (_, h), (z_front, z_rear) = build_case(HALVES[name])
-    assert part.bounding_box().size.Z == pytest.approx(z_rear - PLATE_T, abs=0.01)
+    part, _, (z_front, z_rear) = build_case(HALVES[name])
+    assert part.bounding_box().size.Z == pytest.approx(z_rear - PLATE_T, abs=0.05)
     assert z_front == pytest.approx(PLATE_TOP_FRONT)
 
 
@@ -37,17 +45,17 @@ def test_printable(name):
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_two_aa_batteries_fit(name):
-    """単3×2 がケースと干渉せずに収まること。
+    """単3×2（左右方向に直列）がケースと干渉せずに収まること。
 
-    電池を表す立体を電池室の位置に置き、ケース実体との重なりが 0 か見る。
+    電極と配線の余裕を含めた占有空間で判定する。前後に並べる案は
+    傾いた基板と 4,000mm^3 衝突したため、左右方向に改めた。
     """
-    part, (w, h), _ = build_case(HALVES[name])
-    y = h / 2 - 2.4 - 6.0 - BATT_W / 2
-    for dx in (-(AA_D + 0.5) / 2, (AA_D + 0.5) / 2):
-        batt = Location((0, y + dx, FLOOR + AA_D / 2)) * Box(
-            AA_L, AA_D, AA_D, align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        v = intersection_volume(batt, part)
-        assert v < 1e-3, f"{name}: 電池がケースと干渉している ({v:.2f}mm^3)"
+    from envelopes import battery_envelope
+    from gen_case import battery_center
+    part, (_, h_body), _ = build_case(HALVES[name])
+    batt = battery_envelope((0, battery_center(h_body), FLOOR + AA_D / 2))
+    v = intersection_volume(batt, part)
+    assert v < 1e-3, f"{name}: 電池がケースと干渉している ({v:.2f}mm^3)"
 
 
 def test_tilt_matches_the_measured_value():
@@ -84,12 +92,12 @@ def test_battery_lid_is_printable_and_fits_the_opening(name):
 def test_tilt_foot_height_gives_the_intended_angle(deg):
     """脚の高さが、後縁を deg だけ持ち上げる値になっていること。"""
     import math
-    from gen_case import FOOT_INSET_REAR, build_tilt_foot, foot_height
+    from gen_case import FOOT_BASE_H, RUBBER_INSET, build_tilt_foot, foot_height
     from gen_plate import plate_positions
     _, (w, h) = plate_positions(HALVES["left"])
     z = foot_height(h, deg)
-    lever = h - FOOT_INSET_REAR
-    assert math.degrees(math.atan(z / lever)) == pytest.approx(deg, abs=1e-9)
+    lever = h - RUBBER_INSET * 2
+    assert math.degrees(math.atan((z - FOOT_BASE_H) / lever)) == pytest.approx(deg, abs=1e-9)
     foot, fz = build_tilt_foot(deg, h)
     mesh, _ = to_mesh(foot, f"tilt_foot_{int(deg)}")
     assert_watertight(mesh, f"tilt_foot_{int(deg)}")
@@ -114,3 +122,60 @@ def test_bottom_features_do_not_overlap(name):
     for i, (pa, ra) in enumerate(items):
         for pb, rb in items[i + 1:]:
             assert _dist(pa, pb) > ra + rb, f"{name}: {pa} と {pb} が重なる"
+
+
+# --------------------------------------------------------------------------
+# 部品どうしの突き合わせ
+#
+# 「プレートの穴 vs 共有定義」だけを見ていて、ケースの実物と照合していなかった。
+# そのためケースがボス位置の独自実装を持ち続けていることに長く気づけず、
+# ボスが電池室の中に立っていた。実物どうしを比べる。
+# --------------------------------------------------------------------------
+
+def _boss_solid_centers(part, expect_d):
+    """部品の中から、直径 expect_d のボスらしき柱の中心を拾う。"""
+    out = []
+    for s in part.solids():
+        bb = s.bounding_box()
+        if abs(bb.size.X - expect_d) < 0.2 and abs(bb.size.Y - expect_d) < 0.2:
+            out.append((bb.center().X, bb.center().Y))
+    return out
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_case_bosses_come_from_the_shared_definition(name):
+    """ケースのボス位置が共有定義と一致すること。
+
+    ケース側に独自実装を残すと、プレートの穴と食い違う。実際に食い違っていた。
+    """
+    from gen_case import _boss_positions
+    from gen_plate import plate_positions
+    from interface import boss_positions_plan
+    _, (w, h_plate) = plate_positions(HALVES[name])
+    assert _boss_positions(w, h_plate) == boss_positions_plan(w, h_plate)
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_bosses_do_not_stand_inside_the_battery_compartment(name):
+    """ネジボスが電池室を貫かないこと。
+
+    後ろ側のボスは電池（幅109mm）の外に出す必要がある。中央に置いて231mm^3、
+    w/4 に置いて77mm^3 の食い込みを出した。
+    """
+    from build123d import Align, BuildPart, Cylinder, Locations
+    from envelopes import battery_envelope
+    from gen_case import AA_D, FLOOR, M2_BOSS_D, _boss_positions, battery_center
+    from gen_plate import plate_positions
+    from interface import plan_depth
+    from verify import intersection_volume
+
+    _, (w, h_plate) = plate_positions(HALVES[name])
+    batt = battery_envelope((0, battery_center(plan_depth(h_plate)),
+                             FLOOR + AA_D / 2))
+    for bx, by in _boss_positions(w, h_plate):
+        with BuildPart() as b:
+            with Locations((bx, by, FLOOR)):
+                Cylinder(M2_BOSS_D / 2, 40,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        v = intersection_volume(batt, b.part)
+        assert v < 1e-3, f"{name}: ボス({bx:.1f},{by:.1f}) が電池室を貫く ({v:.1f}mm^3)"

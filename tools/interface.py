@@ -53,6 +53,9 @@ M2_BOSS_D = 5.0          # ボス外径
 M2_PILOT_D = 1.7         # ケース側の下穴（タッピング）
 M2_CLEAR_D = 2.4         # プレート側のバカ穴（M2 に 0.4mm の逃げ）
 BOSS_WALL_OVERLAP = 1.0  # ボスを壁にめり込ませる量。接線接触を避けるため
+REAR_BOSS_INSET = 9.0    # 後ろ側の中間ボスを、隅のボスからどれだけ内側へ置くか。
+                         # 電池室（幅109mm）の外に出す必要がある。小さくしすぎると
+                         # ボスが電池に食い込む
 CASE_WALL = 2.4          # ボス位置の算出に要るのでここに置く
 
 
@@ -64,7 +67,13 @@ def boss_positions(w, h):
     """
     ix = w / 2 - CASE_WALL - M2_BOSS_D / 2 + BOSS_WALL_OVERLAP
     iy = h / 2 - CASE_WALL - M2_BOSS_D / 2 + BOSS_WALL_OVERLAP
-    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy), (0.0, -iy), (0.0, iy)]
+    # 後ろ側は中央にボスを立てられない。電池室が横断しているため。
+    # 中央に置いて 231mm^3、w/4 に置いて 77mm^3 の食い込みを出した。
+    # 電池は幅 109mm（=単3を2本直列＋電極）なので、その外側へ出す。
+    # tools/test_case.py がボスと電池の干渉を検査している。
+    rear_x = ix - REAR_BOSS_INSET
+    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy),
+            (0.0, -iy), (-rear_x, iy), (rear_x, iy)]
 
 
 def boss_positions_plan(w, plate_depth):
