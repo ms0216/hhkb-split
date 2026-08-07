@@ -44,7 +44,16 @@ from build123d import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gen_plate import CORNER_R, PLATE_T, build_plate, halves, plate_positions  # noqa: E402
+from gen_plate import build_plate, halves, plate_positions  # noqa: E402
+from interface import (  # noqa: E402
+    CORNER_R,
+    boss_positions_plan,
+    plan_depth,
+    M2_BOSS_D,
+    M2_PILOT_D,
+    PLATE_T,
+    boss_positions,
+)
 
 # --------------------------------------------------------------------------
 # 実機から確定した値（docs/hardware/dimensions.md §4.5）
@@ -57,7 +66,9 @@ PLATE_TOP_FRONT = 17.5   # 前縁でのプレート上面高さ。実機の手�
 # 3Dプリント（K1 Max / PLA / ノズル 0.4mm）に合わせた値
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
-FLOOR = 2.0              # 底板。0.4mm の 5 倍
+FLOOR = 2.4              # 底板。0.4mm の 6 倍。
+                         # 当初 2.0mm にしていたが、蓋(1.6mm)をレールに落とし込むと
+                         # 床の内面より上に出て電池に食い込んだため厚くした。
 CLEARANCE = 0.2          # 収縮を見込んだ嵌合の逃げ
 
 # --------------------------------------------------------------------------
@@ -71,8 +82,6 @@ BATT_MARGIN_REAR = 6.0           # 電池室と後壁の間隔（配線と端子
 PCB_T = 1.6                      # 基板
 SOCKET_DROP = 3.2                # ホットスワップソケットが基板下へ出る量
 
-M2_BOSS_D = 5.0                  # ネジボスの外径
-M2_PILOT_D = 1.7                 # タッピング用の下穴
 
 # --------------------------------------------------------------------------
 # 電池蓋（底面のスライド蓋）
@@ -82,7 +91,9 @@ M2_PILOT_D = 1.7                 # タッピング用の下穴
 # --------------------------------------------------------------------------
 LID_T = 1.6              # 蓋の厚み（0.4mm の 4 倍）
 RAIL_W = 2.0             # レールの掛かり幅
-RAIL_H = 1.2             # レールの段の深さ
+RAIL_H = LID_T           # 段の深さ＝蓋の厚み。こうすると蓋が床の内面と面一になる。
+                         # 段を蓋より浅くすると蓋が内側へ出っ張り、電池と干渉する
+                         # （組み立て検査で 233mm^3 の食い込みとして検出された）。
 LID_STOP = 2.0           # 手前側のストッパー
 
 # --------------------------------------------------------------------------
@@ -121,8 +132,14 @@ def case_heights(depth):
 
 
 def build_case(keys):
-    """プレートと同じ輪郭のトレイ型ボトムケースを作る。"""
-    positions, (w, h) = plate_positions(keys)
+    """トレイ型ボトムケースを作る。
+
+    奥行はプレートの平面図での長さ（傾けたぶん cos(TILT) 倍に縮む）に合わせる。
+    プレートの平らな寸法をそのまま使うと、リムがプレートより 0.84mm 長くなり
+    覆いきれない（組み立て検査で検出）。
+    """
+    positions, (w, h_plate) = plate_positions(keys)
+    h = plan_depth(h_plate)
     z_front, z_rear = case_heights(h)
     rim_front = z_front - PLATE_T          # プレートを載せるリムの高さ（前縁）
     rim_rear = z_rear - PLATE_T
@@ -158,25 +175,31 @@ def build_case(keys):
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
 
         # 5. ネジボス。四隅と長辺の中央に立てる
-        for bx, by in _boss_positions(w, h):
+        for bx, by in _boss_positions(w, h_plate):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_BOSS_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
         add(cutter, mode=Mode.SUBTRACT)   # ボスの頭も揃える
-        for bx, by in _boss_positions(w, h):
+        for bx, by in _boss_positions(w, h_plate):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_PILOT_D / 2, z_max, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
 
         # 6. 電池蓋の開口とレール（底面）
+        #
+        # 順序が肝心。**狭い方を貫通させ、広い方を上側だけ削る**。
+        # 逆にすると（広い開口を先に貫通させてから狭い座ぐりを削ると）、
+        # 蓋を受ける段が一切できない。当初これを間違えており、組み立て検査で
+        # ケースと蓋が食い込むという形で発覚した。
         ox, oy, ow, oh = _lid_opening(w, h)
+        # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）
         with Locations((ox, oy, 0)):
-            Box(ow, oh, FLOOR * 3, mode=Mode.SUBTRACT,
+            Box(ow - RAIL_W * 2, oh, FLOOR * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 長辺 2 本に蓋が乗る段を作る（開口より内側へ RAIL_W だけ残す）
+        # 6-2. 蓋が落ち込む座ぐりは広い方。床の上側 RAIL_H だけ削る
         with Locations((ox, oy, FLOOR - RAIL_H)):
-            Box(ow - RAIL_W * 2, oh, RAIL_H * 3, mode=Mode.SUBTRACT,
+            Box(ow, oh, RAIL_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 手前側のストッパー（蓋は奥へ抜ける）
+        # 6-3. 手前側のストッパー（蓋は奥へ抜ける）
         with Locations((ox, oy - oh / 2 + LID_STOP / 2, FLOOR - RAIL_H)):
             Box(ow, LID_STOP, RAIL_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
@@ -244,9 +267,13 @@ def foot_height(h, add_deg):
 
 
 def build_battery_lid(keys):
-    """電池蓋。ケースのレールに差し込んで奥へスライドさせる。"""
-    _, (w, h) = plate_positions(keys)
-    _, _, ow, oh = _lid_opening(w, h)
+    """電池蓋。ケースのレールに差し込んで奥へスライドさせる。
+
+    開口の位置と大きさはケース側の造作なので、平面図の奥行で計算する。
+    プレートの平らな奥行を渡すと 0.42mm ずれる。
+    """
+    _, (w, h_plate) = plate_positions(keys)
+    _, _, ow, oh = _lid_opening(w, plan_depth(h_plate))
     lw = ow - CLEARANCE                      # 開口より少し小さく
     lh = oh - LID_STOP - CLEARANCE
     with BuildPart() as lid:

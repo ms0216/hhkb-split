@@ -57,12 +57,36 @@ def test_is_printable(name):
     assert_watertight(mesh, f"plate_{name}")
 
 
-@pytest.mark.parametrize("name,expect", [("left", 27), ("right", 34)])
-def test_cutout_count_matches_key_count(name, expect):
-    """スタビライザー開口はそれぞれのスイッチ開口と繋がって 1 つになるので、
-    開口の総数はキー数と一致するはず。隣のキーを飲み込むと数が減る。"""
-    part, _, _ = build_plate(HALVES[name])
+@pytest.mark.parametrize("name,keys_n", [("left", 27), ("right", 34)])
+def test_cutout_count_matches_keys_plus_screws(name, keys_n):
+    """開口の総数 = キー数 + 取付ネジ穴の数。
+
+    スタビライザー開口はそれぞれのスイッチ開口と繋がって 1 つになるので、
+    キーの分はキー数と一致する。隣のキーを飲み込むと数が減る。
+    ネジ穴はケース側のボスと同じ位置に開ける（開け忘れると締結できない）。
+    """
+    from interface import boss_positions
+    part, (w, h), _ = build_plate(HALVES[name])
+    expect = keys_n + len(boss_positions(w, h))
     assert len(cutouts(part)) == expect
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_screw_holes_align_with_case_bosses(name):
+    """プレートのネジ穴が、ケース側のボスと同じ位置にあること。
+
+    両者が別々に位置を計算していると、いつかずれる。共有定義から導く。
+    """
+    from interface import M2_CLEAR_D, boss_positions
+    part, (w, h), _ = build_plate(HALVES[name])
+    holes = [c for c in cutouts(part)
+             if c[2] == pytest.approx(M2_CLEAR_D, abs=0.01)]
+    want = boss_positions(w, h)
+    assert len(holes) == len(want)
+    for wx, wy in want:
+        assert any(h[0] == pytest.approx(wx, abs=0.01)
+                   and h[1] == pytest.approx(wy, abs=0.01) for h in holes), \
+            f"{name}: ({wx:.2f}, {wy:.2f}) にネジ穴が無い"
 
 
 @pytest.mark.parametrize("name", ["left", "right"])

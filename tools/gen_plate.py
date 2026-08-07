@@ -15,6 +15,7 @@ from pathlib import Path
 
 from build123d import (
     BuildLine,
+    Circle,
     BuildPart,
     BuildSketch,
     Locations,
@@ -29,17 +30,19 @@ from build123d import (
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from layout import bounds_mm, load_layout, split_halves  # noqa: E402
 
+from interface import (  # noqa: E402
+    CORNER_R,
+    M2_CLEAR_D,
+    PLATE_MARGIN,
+    PLATE_T,
+    SWITCH_CUTOUT,
+    boss_positions,
+)
+
 SPLIT = "layout/hhkb_split.json"
 
-# --------------------------------------------------------------------------
-# 設計値
-# --------------------------------------------------------------------------
-SWITCH_CUTOUT = 14.0     # MX 軸の標準開口
-PLATE_T = 1.5            # 板厚。FR4 1.6mm でも成立する寸法にしてある
-PLATE_MARGIN = 4.0       # キー外形からプレート外形までの余白。
-                         # 原機のベゼルが左右合計 8.25mm（片側 4.125mm）なので、
-                         # ほぼ同じ見え方になる
-CORNER_R = 3.0
+# 設計値は tools/interface.py（プレートとケースと基板が共有する境界）に置く。
+# ここで独自に定義するとケース側とずれる。
 
 # --------------------------------------------------------------------------
 # Cherry 規格のスタビライザー開口
@@ -115,6 +118,10 @@ def build_plate(keys):
                 with BuildLine():
                     Polyline(*stab_polygon(s, at=pos), close=True)
                 make_face(mode=Mode.SUBTRACT)
+            # 取付ネジのバカ穴。ケース側のボスと同じ位置に開ける。
+            # これが無いとプレートとケースを締結できない（当初開け忘れていた）。
+            with Locations(*boss_positions(w, h)):
+                Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)
     return plate.part, (w, h), positions
 
