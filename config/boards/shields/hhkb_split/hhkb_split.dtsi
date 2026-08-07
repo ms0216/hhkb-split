@@ -1,15 +1,123 @@
 /*
  * 左右で共通の土台。
  *
- * キースキャンはチャープレックス（ZMK 公式サポート）。ピン割り当ては
- * docs/superpowers/specs の仕様書どおり:
- *   左 6ピン D3..D8 / 右 7ピン D2..D8 / 電池電圧 D0
- * XIAO nRF52840 で ADC が使えるのは D0..D5 だけなので、電池測定用に D0 を空ける。
+ * キースキャンは「ごく普通の行×列マトリクス＋キーごとにダイオード1個」。
+ * 列を駆動するピンが足りないぶんはシフトレジスタ 74HC595 で作る。
+ * ZMK 公式が「標準マトリクスでピンが足りない場合の推奨手段」としている方式。
+ *   https://zmk.dev/docs/development/hardware-integration/shift-registers
+ *
+ * 【重要】当初はチャープレックス（zmk,kscan-gpio-charlieplex）で設計していたが、
+ * 基板発注前に破棄した。理由は docs/hardware/decisions/2026-08-07-keyscan.md。
+ * 要点だけ書くと、nRF52840 の 3.3V ではダイオードの電圧降下だけで
+ * ゴースト（2キー同時押しで押していないキーが誤検出される現象）を消せない。
+ * 入力の閾値が VDD の 0.7 倍と 0.3 倍なので、
+ *   本物のキー（ダイオード1個）を HIGH と読ませるには Vf <= 0.99V
+ *   ゴースト（ダイオード2個）を LOW と読ませるには Vf >= 1.155V
+ * となり両立しない。乾電池で VDD が下がるとさらに条件が動く。
+ * Shift・Ctrl・Fn との同時押しは常用するので、この方式は採れない。
+ *
+ * ------------------------------------------------------------------
+ * ピンの割り当て（XIAO nRF52840、使えるのは D0..D10 の 11 本）
+ *
+ *   D0        電池電圧の測定（ADC が使えるのは D0..D5 だけなので D0 を空ける）
+ *   D1..D5    行 5 本。MCU に直結した「入力」
+ *   D6        予備
+ *   D7        シフトレジスタの CS（ラッチ）
+ *   D8        SPI SCK   ─┐ xiao_spi (= spi2) が使う
+ *   D9        SPI MISO  ─┤ 595 は出力専用なので MISO は使わないが、
+ *   D10       SPI MOSI  ─┘ ボードの pinctrl が確保するため他用途にできない
+ *
+ * ZMK の公式サンプルは CS に D9（MISO）を充てているが、xiao_ble の pinctrl は
+ * P1.14 を MISO として確保している（zephyr の xiao_ble-pinctrl.dtsi）。
+ * 競合を避けるため、こちらは D7 を CS にした。予備が D6 の 1 本残る。
+ *
+ * ------------------------------------------------------------------
+ * 行と列は物理配列そのまま。5 段 × 左 6 列 / 右 8 列。
+ *
+ * 右半分の最上段だけは 9 キーあるので 8 列に収まらない。
+ * ` （バッククォート）1 つだけを最下段の空き（row4, col3）へ回した。
+ * これで右も 8 列に収まり、595 が 1 個で足りる（左右で同じ部品構成）。
+ * 配線は基板の右端を縦に 1 本通すだけで、追加の部品は要らない。
  */
 #include <dt-bindings/zmk/matrix_transform.h>
 
 / {
 	chosen {
 		zmk,kscan = &kscan0;
+		zmk,matrix-transform = &default_transform;
+	};
+
+	/*
+	 * 左右で「1 つの」transform を共有する。これが ZMK の分割の標準的な書き方で、
+	 * 右半分は overlay で col-offset = <6> を足して、この表の右側へ写す。
+	 *
+	 * 当初は左右で別々の transform を定義していたが、これは非標準で、
+	 * 右半分のキー位置がずれる恐れがあった。corne など公式シールドの
+	 * 書き方に合わせて作り直した。
+	 *
+	 * 全体は 5 行 × 14 列。左が列 0..5、右が列 6..13。
+	 *
+	 * 並び順はキーマップの 61 バインディングと一対一で対応する
+	 * （左 27 を上段左から、続いて右 34 を上段左から）。
+	 */
+	default_transform: keymap_transform_0 {
+		compatible = "zmk,matrix-transform";
+		columns = <14>;
+		rows = <5>;
+		map = <
+		/* --- 左 27 --- */
+		/* Esc 1 2 3 4 5      */ RC(0,0) RC(0,1) RC(0,2) RC(0,3) RC(0,4) RC(0,5)
+		/* Tab Q W E R T      */ RC(1,0) RC(1,1) RC(1,2) RC(1,3) RC(1,4) RC(1,5)
+		/* Ctrl A S D F G     */ RC(2,0) RC(2,1) RC(2,2) RC(2,3) RC(2,4) RC(2,5)
+		/* Shift Z X C V B    */ RC(3,0) RC(3,1) RC(3,2) RC(3,3) RC(3,4) RC(3,5)
+		/* Alt Meta L-Space   */ RC(4,0) RC(4,1) RC(4,2)
+
+		/* --- 右 34 --- */
+		/* 6 7 8 9 0 - = \    */ RC(0,6) RC(0,7) RC(0,8) RC(0,9) RC(0,10) RC(0,11) RC(0,12) RC(0,13)
+		/* `（最下段へ回した）*/ RC(4,9)
+		/* Y U I O P [ ] Del  */ RC(1,6) RC(1,7) RC(1,8) RC(1,9) RC(1,10) RC(1,11) RC(1,12) RC(1,13)
+		/* H J K L ; ' Enter  */ RC(2,6) RC(2,7) RC(2,8) RC(2,9) RC(2,10) RC(2,11) RC(2,12)
+		/* N M , . / Shift Fn */ RC(3,6) RC(3,7) RC(3,8) RC(3,9) RC(3,10) RC(3,11) RC(3,12)
+		/* R-Space Meta Alt   */ RC(4,6) RC(4,7) RC(4,8)
+		>;
+	};
+
+	/*
+	 * 行は MCU のピンに直結した入力にする。これは公式ドキュメントの指示で、
+	 * 「入力を MCU 直結にしておくと割り込みで起こせる ＝ 常時スキャンせずに済み、
+	 * 電池が持つ」ため。シフトレジスタは列（出力）側にだけ使う。
+	 *
+	 * col2row はダイオードのアノードが列側、カソードが行側という意味。
+	 */
+	kscan0: kscan_0 {
+		compatible = "zmk,kscan-gpio-matrix";
+		wakeup-source;
+		diode-direction = "col2row";
+		row-gpios
+			= <&xiao_d 1 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			;
+	};
+};
+
+/*
+ * シフトレジスタ。SPI 経由で列を駆動する。
+ * ngpios は 595 の出力本数。1 個なので 8。
+ */
+&xiao_spi {
+	status = "okay";
+	cs-gpios = <&xiao_d 7 GPIO_ACTIVE_LOW>;
+
+	shifter: 595@0 {
+		compatible = "zmk,gpio-595";
+		status = "okay";
+		gpio-controller;
+		spi-max-frequency = <200000>;
+		reg = <0>;
+		#gpio-cells = <2>;
+		ngpios = <8>;
 	};
 };

@@ -1,0 +1,50 @@
+/*
+ * Task C2: 本番と同じ「行×列マトリクス＋キーごとにダイオード1個」を
+ * 最小構成で確かめる治具。3 行 × 2 列 = 6 キー。
+ *
+ * 本番との違いは、列をシフトレジスタではなく MCU のピンで直接駆動している
+ * ところだけ。ダイオードの向き・ゴーストの有無・同時押しといった、
+ * **配線の正しさに関わる性質はすべて同じ**なので、74HC595 が手元に無くても
+ * ここまでは確かめられる。シフトレジスタ自体の確認は部品が届いてから
+ * proto_shift で行う。
+ *
+ * col2row = ダイオードのアノードが列側、カソード（帯）が行側。
+ * 列が出力（駆動）、行が入力（プルダウン付き）。
+ *
+ * 配線（キーごとに スイッチ＋ダイオード を直列）:
+ *
+ *            列 C0 (D6)      列 C1 (D7)
+ *   行 R0     a               b          ← D1
+ *   行 R1     c               d          ← D2
+ *   行 R2     e               f          ← D3
+ *
+ * 押すと出る文字が名前のとおりなら配線は正しい。
+ *
+ * ゴースト試験:
+ *   a・b・c を同時に押しても d が出なければ、ダイオードが抜け道を
+ *   止めている＝この方式でゴーストは起きない、と確認できる。
+ *   （ダイオードを省いた場合はここで d が出る）
+ */
+
+/ {
+	chosen {
+		zmk,kscan = &kscan0;
+	};
+
+	kscan0: kscan_0 {
+		compatible = "zmk,kscan-gpio-matrix";
+		wakeup-source;
+		diode-direction = "col2row";
+
+		row-gpios
+			= <&xiao_d 1 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			;
+
+		col-gpios
+			= <&xiao_d 6 GPIO_ACTIVE_HIGH>
+			, <&xiao_d 7 GPIO_ACTIVE_HIGH>
+			;
+	};
+};

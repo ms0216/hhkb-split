@@ -46,11 +46,38 @@ def find_shield_dir(name):
     return None
 
 
-def count_map_entries(overlay):
-    """overlay の matrix-transform の map に並んだ RC(...) の数。"""
-    text = overlay.read_text(encoding="utf-8")
+def count_map_entries(path):
+    """matrix-transform の map に並んだ RC(...) の数。
+
+    左右で 1 つの transform を共有する書き方（ZMK 分割の標準）では、
+    map は .dtsi 側にある。overlay だけを見ると 0 件になり、検査が
+    素通りしてしまうので、呼び出し側で .dtsi も渡すこと。
+    """
+    text = path.read_text(encoding="utf-8")
     m = re.search(r"map\s*=\s*<(.*?)>\s*;", text, re.S)
     return len(re.findall(r"RC\s*\(", m.group(1))) if m else 0
+
+
+def _count_gpio_entries(text, prop):
+    """<...> が何個並んでいるかを数える。row-gpios などのピン本数。"""
+    m = re.search(rf"\b{prop}\s*=?\s*(.*?);", text, re.S)
+    return len(re.findall(r"<[^>]*>", m.group(1))) if m else 0
+
+
+def implied_positions(files):
+    """transform を書いていないときに ZMK が既定で作るキー位置の数。
+
+    matrix なら 行 × 列、direct なら input-gpios の本数。
+    ここを検査しないと、治具シールドのバインディング数の取り違えを
+    見逃す（実際に proto 系で起きうる）。
+    """
+    text = "\n".join(f.read_text(encoding="utf-8") for f in files)
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    rows = _count_gpio_entries(text, "row-gpios")
+    cols = _count_gpio_entries(text, "col-gpios")
+    if rows and cols:
+        return rows * cols
+    return _count_gpio_entries(text, "input-gpios")
 
 
 def count_bindings(keymap):
@@ -137,15 +164,24 @@ def main():
         km = list(d.glob("*.keymap"))
         if not km:
             continue
-        n_map = sum(count_map_entries(f) for f in sorted(d.glob("*.overlay")))
+        srcs = sorted(d.glob("*.overlay")) + sorted(d.glob("*.dtsi"))
+        n_map = sum(count_map_entries(f) for f in srcs)
+        if n_map:
+            source = "transform の map"
+        else:
+            # transform を書いていない治具シールド。ZMK が kscan のピン数から
+            # 既定の並びを作るので、そちらと突き合わせる。
+            n_map = implied_positions(srcs)
+            source = "kscan のピン数から決まるキー位置"
         if n_map == 0:
+            problems.append(f"{d.name}: キー位置の数を判定できなかった")
             continue
         for layer, n in count_bindings(km[0]):
             if n != n_map:
                 problems.append(
                     f"{d.name}: レイヤー '{layer}' のバインディングが {n} 個。"
-                    f"transform の map は合計 {n_map} 箇所（{n - n_map:+d}）")
-        notes.append(f"  {d.name}: map {n_map} 箇所 / "
+                    f"{source}は {n_map} 箇所（{n - n_map:+d}）")
+        notes.append(f"  {d.name}: {source} {n_map} 箇所 / "
                      f"レイヤー {len(count_bindings(km[0]))} 枚すべて一致")
 
     for n in notes:
