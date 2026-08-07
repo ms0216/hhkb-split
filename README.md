@@ -70,7 +70,7 @@ XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りな�
 | シールド | 用途 |
 |---|---|
 | `hhkb_split_left` / `hhkb_split_right` | 本番。4レイヤー × 61キー |
-| `proto_direct` | 疎通確認（XIAO 1個・キー2個） |
+| `proto_direct` | 疎通確認（XIAO 1個・キー2個）（[手順書](docs/hardware/task-c1-smoke-test.md)） |
 | `proto_matrix` | マトリクス配線とゴースト試験の治具（[手順書](docs/hardware/task-c2-keyscan.md)） |
 
 ビルドは GitHub Actions（ZMK 公式の再利用ワークフロー）。Actions の成果物から
