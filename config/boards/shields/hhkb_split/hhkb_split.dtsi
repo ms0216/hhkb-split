@@ -118,9 +118,42 @@
 		compatible = "zmk,gpio-595";
 		status = "okay";
 		gpio-controller;
-		spi-max-frequency = <200000>;
+		/* 200kHz は保守的すぎた。**数珠つなぎの 595 は速い打鍵を
+		 * 取りこぼす例が ZMK 公式に報告されている。**
+		 * 74HC595 は 3.3V でも 20MHz 級まで動く。4MHz なら
+		 * 16bit の転送が 4µs で終わり、スキャン周期に対して無視できる。
+		 * Task C2-b で実測して詰める。 */
+		spi-max-frequency = <4000000>;
 		reg = <0>;
 		#gpio-cells = <2>;
 		ngpios = <8>;
 	};
+};
+
+/ {
+	/* 電池電圧の測定。分圧 1MΩ + 1MΩ を D0 (P0.02 = AIN0) で読む。
+	 *
+	 * 回路は tools/circuit.py が唯一の出所。分圧は**スライドスイッチの後ろ・
+	 * ショットキーの手前**に置いてあるので、USB 接続中も電池そのものの
+	 * 電圧が読める。
+	 *
+	 * **注意: ZMK の残量%はリチウムイオンの放電曲線で計算される。**
+	 * 乾電池 2 本（2.2〜3.2V）では正しい%にならない。
+	 * docs/hardware/open-gaps.md #13 参照。電圧は読めるので、
+	 * 曲線を差し替えるまでの土台としては成立する。
+	 */
+	vbatt: vbatt {
+		compatible = "zmk,battery-voltage-divider";
+		io-channels = <&adc 0>;
+		output-ohms = <1000000>;
+		full-ohms = <2000000>;
+	};
+
+	chosen {
+		zmk,battery = &vbatt;
+	};
+};
+
+&adc {
+	status = "okay";
 };

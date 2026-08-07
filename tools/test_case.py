@@ -250,3 +250,49 @@ def test_a_clip_can_reach_the_reset_button(name):
                      align=(Align.CENTER, Align.CENTER, Align.CENTER))
     v = intersection_volume(clip.part, case)
     assert v < 1e-3, f"{name}: RESET の穴が貫通していない（{v:.2f}mm^3 塞がれている）"
+
+
+# --------------------------------------------------------------------------
+# プリンタの制約（Creality K1 Max / PLA / ノズル 0.4mm）
+# --------------------------------------------------------------------------
+K1MAX_BED = (300.0, 300.0, 300.0)
+NOZZLE = 0.4
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_every_part_fits_the_printer(name):
+    """全部品が K1 Max の造形範囲に収まること。
+
+    **造形できない部品を設計しても意味がない。**寸法を大きくしたときに
+    黙って超えることを防ぐ。
+    """
+    from gen_case import build_case, build_topcase, build_battery_lid
+    from gen_plate import build_plate
+    parts = {
+        "case": build_case(HALVES[name], name)[0],
+        "topcase": build_topcase(HALVES[name], name)[0],
+        "lid": build_battery_lid(name, HALVES[name])[0],
+        "plate": build_plate(HALVES[name], name)[0],
+    }
+    for label, part in parts.items():
+        s = part.bounding_box().size
+        fits = (min(s.X, s.Y) <= min(K1MAX_BED[0], K1MAX_BED[1])
+                and max(s.X, s.Y) <= max(K1MAX_BED[0], K1MAX_BED[1])
+                and s.Z <= K1MAX_BED[2])
+        assert fits, (f"{name} の {label} が造形範囲を超える "
+                      f"({s.X:.1f}x{s.Y:.1f}x{s.Z:.1f} > {K1MAX_BED})")
+
+
+def test_wall_thicknesses_are_multiples_of_the_nozzle():
+    """壁と床がノズル径の整数倍であること。
+
+    半端な厚みにすると、スライサが埋めきれず隙間が残る。
+    **上ケースの壁 1.6mm はノズル 4 本ぶん**で、これは意図した値。
+    """
+    from gen_case import FLOOR, LID_T, WALL
+    from interface import BEZEL_WALL
+    for label, t in (("側壁", WALL), ("床", FLOOR), ("蓋", LID_T),
+                     ("上ケースの壁", BEZEL_WALL)):
+        n = t / NOZZLE
+        assert abs(n - round(n)) < 1e-6, \
+            f"{label} {t}mm がノズル {NOZZLE}mm の整数倍でない（{n:.2f} 本）"
