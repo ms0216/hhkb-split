@@ -30,6 +30,7 @@ from interface import (
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
+from bands import BAND_H, BAND_Y                                   # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -333,9 +334,7 @@ def _apply_jlcpcb_rules(board):
 # ソケットの占有はキー中心に対して非対称（-2.6 〜 +7.2mm）なので、
 # 中間に置くと 0.9mm ソケットに掛かる（実際に掛かって SW10_D などと
 # 短絡した）。ソケットの中心ぶん 2.3mm ずらす。
-_SOCK_MID = (7.2 + (-2.6)) / 2
-BAND_Y = [28.575 + _SOCK_MID, 9.525 + _SOCK_MID,
-          -9.525 + _SOCK_MID, -28.575 + _SOCK_MID]
+# 定義は bands.py（BAND_H, BAND_Y）。生成側と検査側で共有する。
 
 ELEC_FP = {
     "74HC595": ("Package_SO", "SOIC-16_3.9x9.9mm_P1.27mm"),

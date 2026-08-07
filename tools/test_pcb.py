@@ -466,3 +466,90 @@ def test_the_main_board_is_four_layers_with_a_ground_plane(half):
     zone = re.search(r"\(zone\b[\s\S]{0,400}?\(layer \"In1\.Cu\"", txt)
     assert zone, f"{half}: 内層 1 に GND のベタが無い"
     assert "filled_polygon" in txt, f"{half}: ベタが塗られていない"
+
+
+# --------------------------------------------------------------------------
+# 電子部品が帯に収まっているか
+#
+# **「寄っている」と「入っていない」は別の問題。**
+# SOIC-16 はコートヤード 10.49mm で、帯 9.25mm にそもそも入らない。
+# 位置を微調整しても 0 にはならない。算数で入らないものを、機械が言う。
+# --------------------------------------------------------------------------
+
+def _footprint_blocks(txt):
+    """(参照名, フットプリントの S 式) を順に返す。括弧の対応で切り出す。"""
+    for m in re.finditer(r"\n\t\(footprint ", txt):
+        i = m.start() + 1
+        depth, j = 0, i
+        while True:
+            if txt[j] == "(":
+                depth += 1
+            elif txt[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        blk = txt[i:j + 1]
+        r = re.search(r'\(property "Reference" "([^"]+)"', blk)
+        if r:
+            yield r.group(1), blk
+
+
+def _courtyard_bbox(blk):
+    """コートヤードの世界座標での (x0, y0, x1, y1)。無ければ None。"""
+    import math
+    at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+    ox, oy = float(at.group(1)), float(at.group(2))
+    rot = math.radians(float(at.group(3) or 0))
+    pts = []
+    for m in re.finditer(
+            r"\(fp_(line|rect|poly)\b([\s\S]*?)\(layer \"([^\"]+)\"\)", blk):
+        if not m.group(3).endswith(".CrtYd"):
+            continue
+        pts += [(float(a), float(b)) for a, b in
+                re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", m.group(2))]
+        for tag in ("start", "end"):
+            g = re.search(rf"\({tag} ([-\d.]+) ([-\d.]+)\)", m.group(2))
+            if g:
+                pts.append((float(g.group(1)), float(g.group(2))))
+    if not pts:
+        return None
+    c, s = math.cos(rot), math.sin(rot)
+    w = [(ox + x * c - y * s, oy + x * s + y * c) for x, y in pts]
+    xs, ys = [p[0] for p in w], [p[1] for p in w]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+# 電子部品の参照名。**接頭辞で拾わない。**`D` や `SW` で走査すると
+# ダイオード 61 個とスイッチ 61 個を巻き込む（過去 3 回やった）。
+ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR|J_DB|BT1_[+-]")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_electronics_fit_inside_their_band(half):
+    """電子部品のコートヤードが帯 9.25mm の内側にあること。
+
+    はみ出していると、行のバスやソケットに当たる。**位置の微調整では
+    直らない**（部品そのものが大きい）ので、フットプリントを選び直す
+    必要がある。それを人の目に頼らない。
+    """
+    from bands import BAND_H, band_bounds_kicad
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    bad = []
+    seen = 0
+    for ref, blk in _footprint_blocks(txt):
+        if not ELEC_REF.fullmatch(ref):
+            continue
+        bb = _courtyard_bbox(blk)
+        assert bb is not None, f"{half}: {ref} にコートヤードが無い"
+        seen += 1
+        # どの帯に属するかは、部品の中心がいちばん近い帯で決める。
+        mid = (bb[1] + bb[3]) / 2
+        i = min(range(4), key=lambda k: abs(sum(band_bounds_kicad(k)) / 2 - mid))
+        lo, hi = band_bounds_kicad(i)
+        if bb[1] < lo - 1e-6 or bb[3] > hi + 1e-6:
+            bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} "
+                       f"(高さ {bb[3] - bb[1]:.3f}) が帯 {i} "
+                       f"{lo:.3f}..{hi:.3f} からはみ出す")
+    assert seen >= 10, f"{half}: 電子部品を {seen} 個しか見ていない。走査が壊れている"
+    assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
