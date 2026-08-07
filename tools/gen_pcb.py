@@ -282,6 +282,45 @@ def _route(board, positions, rc):
                     _track(board, mm(*a), mm(*b), pcbnew.F_Cu, net)
 
 
+# --------------------------------------------------------------------------
+# JLCPCB の製造能力を、基板の設計規則として書き込む。
+#
+# **これが無い間、DRC は KiCad の既定値で通していただけだった。**
+# 「違反 0 件」は「JLCPCB で製造できる」を意味していない。規則を入れて
+# 初めて、線幅・ビア・アニュラリング・外形までの距離が能力の内側に
+# あることを機械が確かめられる。
+#
+# 値は JLCPCB の Capabilities（2層/4層・1oz・標準工程）から。
+# 追加費用のかかる高精度オプションは使わない前提で、標準値を採る。
+# --------------------------------------------------------------------------
+JLC = {
+    "track_min": 0.127,       # 最小線幅 5mil
+    "clearance_min": 0.127,   # 最小クリアランス 5mil
+    "via_dia_min": 0.45,      # 最小ビア外径
+    "via_drill_min": 0.20,    # 最小ビアドリル
+    "hole_min": 0.20,         # 最小 PTH ドリル
+    "hole_to_hole": 0.50,     # 穴どうしの最小距離
+    "edge_clearance": 0.30,   # 銅から基板外形までの最小距離
+    "silk_width": 0.15,       # シルクの最小線幅
+    "annular_ring": 0.13,     # 最小アニュラリング。KiCad 既定は 0.1 で足りない
+}
+
+
+def _apply_jlcpcb_rules(board):
+    d = board.GetDesignSettings()
+    mm = pcbnew.FromMM
+    d.m_TrackMinWidth = mm(JLC["track_min"])
+    d.m_MinClearance = mm(JLC["clearance_min"])
+    d.m_ViasMinSize = mm(JLC["via_dia_min"])
+    d.m_ViasMinDrill = mm(JLC["via_drill_min"])
+    d.m_MinThroughDrill = mm(JLC["hole_min"])
+    d.m_HoleToHoleMin = mm(JLC["hole_to_hole"])
+    d.m_CopperEdgeClearance = mm(JLC["edge_clearance"])
+    d.m_SilkClearance = mm(JLC["silk_width"])
+    d.m_ViasMinAnnularWidth = mm(JLC["annular_ring"])
+    return board
+
+
 def build(half, keys):
     """片側ぶんの基板を作る。"""
     # **キーマップ順に並べ替えてから使う。**
@@ -294,6 +333,7 @@ def build(half, keys):
     pcb_h = plate_h - PCB_INSET * 2
 
     board = pcbnew.CreateEmptyBoard()
+    _apply_jlcpcb_rules(board)
     _rounded_rect_outline(board, pcb_w, pcb_h, CORNER_R)
 
     # スイッチ
@@ -383,6 +423,35 @@ def build(half, keys):
         h.SetPosition(to_kicad(mx, my))
         h.SetReference(f"H{i}")
         board.Add(h)
+
+    # シルクの線幅を製造能力まで太らせる。
+    #
+    # **全部品を置き終えてから実行する。** 以前ここがダイオードより前に
+    # あり、61 個のダイオードだけ 0.12mm のまま残っていた。
+    #
+    # KiCad の標準フットプリントは 0.12mm で描かれているが、**JLCPCB の
+    # シルク最小線幅は 0.15mm**。細いままだとかすれるか印字されない。
+    # DRC はシルクの線幅を見ないので、これは自分で担保するしかない。
+    silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+    for fp in board.GetFootprints():
+        for it in fp.GraphicalItems():
+            if it.GetLayer() in silk and it.GetWidth() < pcbnew.FromMM(JLC["silk_width"]):
+                it.SetWidth(pcbnew.FromMM(JLC["silk_width"]))
+        for fld in (fp.Reference(), fp.Value()):
+            if fld.GetLayer() in silk:
+                fld.SetTextThickness(max(fld.GetTextThickness(),
+                                         pcbnew.FromMM(JLC["silk_width"])))
+
+    # 左右の識別。**2 種類が届いて見分けがつかないと、組み立ても修理も誤る。**
+    label = pcbnew.PCB_TEXT(board)
+    label.SetText(f"HHKB Split  {half.upper()}")
+    label.SetPosition(pcbnew.VECTOR2I_MM(ORIGIN[0], ORIGIN[1] + pcb_h / 2 - 3.0))
+    label.SetLayer(pcbnew.B_SilkS)
+    label.SetMirrored(True)
+    label.SetTextSize(pcbnew.VECTOR2I_MM(2.5, 2.5))
+    label.SetTextThickness(pcbnew.FromMM(0.3))
+    board.Add(label)
+
 
     OUT.mkdir(exist_ok=True)
     path = OUT / f"hhkb_split_{half}.kicad_pcb"

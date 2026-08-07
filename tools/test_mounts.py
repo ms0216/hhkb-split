@@ -76,14 +76,32 @@ def test_bosses_do_not_touch_any_key(name):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_rear_bosses_clear_the_battery(name):
-    """奥側のボスが電池室（幅 109mm）の外にあること。
+    """ボスが電池室を貫かないこと。
 
     中に立てると電池室を貫く。以前 231mm^3 の食い込みを出した。
+
+    **以前は「|x| が 109/2 より外」しか見ておらず、Y を見ていなかった。**
+    電池を外側へ寄せ、さらにコブの中へ移したあとも中央にあるものとして
+    検査していたので、**別の場所を見ていた**。実際の電池の占有範囲で見る。
     """
+    from gen_case import (BATT_W, BATT_X, battery_center, battery_x_center)
+    from gen_plate import plate_positions, halves
+    from interface import plan_depth
+    _, (w, h_plate) = plate_positions(halves()[name])
+    bx = battery_x_center(name, w)
+    by = battery_center(plan_depth(h_plate))
+    # **余裕は 0.5mm。** battery_envelope の側に既に余裕が入っている
+    # （電極とバネで長手 8.0mm、直径 +1.0mm）。ここで更に 3mm 積むと
+    # 二重計上になり、実際には 0.7mm 離れているボスを不合格にしていた。
+    # ここで見たいのは「占有空間に食い込まないこと」と印刷公差ぶんの隙間だけ。
+    r = M2_BOSS_D / 2 + 0.5
     for x, y in boss_positions(name):
-        if y > 0:
-            assert abs(x) >= BATTERY_HALF_W + BATTERY_CLEAR, \
-                f"{name}: 奥側のボス ({x}, {y}) が電池室にかかる"
+        inside_x = bx - BATT_X / 2 - r < x < bx + BATT_X / 2 + r
+        inside_y = by - BATT_W / 2 - r < y < by + BATT_W / 2 + r
+        assert not (inside_x and inside_y), \
+            f"{name}: ボス ({x}, {y}) が電池室 "\
+            f"(x {bx-BATT_X/2:.1f}..{bx+BATT_X/2:.1f}, "\
+            f"y {by-BATT_W/2:.1f}..{by+BATT_W/2:.1f}) にかかる"
 
 
 @pytest.mark.parametrize("name", NAMES)

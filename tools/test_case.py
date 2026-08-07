@@ -193,3 +193,26 @@ def test_bosses_do_not_stand_inside_the_battery_compartment(name):
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         v = intersection_volume(batt, b.part)
         assert v < 1e-3, f"{name}: ボス({bx:.1f},{by:.1f}) が電池室を貫く ({v:.1f}mm^3)"
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_antenna_is_kept_away_from_the_battery(name):
+    """XIAO のアンテナと単3電池の距離を確保すること。
+
+    **幾何が干渉しないことと、電波が届くことは別の話。**
+    電池を外へ寄せて子基板の場所を作ったとき、幾何だけを見ていて
+    アンテナから 1.0mm の位置に置いていた。単3 電池は金属の塊で、
+    至近距離では 2.4GHz のアンテナを大きく狂わせる。
+    左右間の BLE 接続はこのキーボードの中核要件で、その通信距離を
+    自分で潰すことになっていた。
+    """
+    from gen_case import (BATT_X, DB_ANTENNA_KEEPOUT, DB_W, battery_x_center,
+                          daughterboard_x_center, inner_sign)
+    from gen_plate import plate_positions
+    _, (w, _) = plate_positions(HALVES[name])
+    s = inner_sign(name)
+    gap = abs((daughterboard_x_center(name, w) - s * DB_W / 2)
+              - (battery_x_center(name, w) + s * BATT_X / 2))
+    assert gap >= DB_ANTENNA_KEEPOUT, (
+        f"{name}: アンテナと電池が {gap:.1f}mm しか離れていない"
+        f"（必要 {DB_ANTENNA_KEEPOUT}mm）")

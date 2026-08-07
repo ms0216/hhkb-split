@@ -332,3 +332,75 @@ def test_the_board_has_no_drc_violations(half):
     assert rec["violations"] == 0, f"{half}: DRC 違反 {rec['violations']} 件\n" + \
         "\n".join(rec.get("details", []))
     assert rec["unconnected"] == 0, f"{half}: 未配線 {rec['unconnected']} 件"
+
+
+# --------------------------------------------------------------------------
+# 製造能力
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_board_declares_the_manufacturer_rules(half):
+    """基板に JLCPCB の製造能力が設計規則として書き込まれていること。
+
+    **これが無い間、DRC は KiCad の既定値で通していただけだった。**
+    「違反 0 件」は「JLCPCB で製造できる」を意味していなかった。
+    規則が消えると、また同じ状態に戻る。
+    """
+    # **設計規則は .kicad_pcb ではなく .kicad_pro に入る。**
+    # 最初 .kicad_pcb を見ていて「書かれていない」と誤検出した。
+    import json
+    pro = json.loads((ROOT / f"pcb/hhkb_split_{half}.kicad_pro").read_text())
+    rules = pro["board"]["design_settings"]["rules"]
+    for key, mm in (("min_track_width", 0.127), ("min_clearance", 0.127),
+                    ("min_via_diameter", 0.45), ("min_through_hole_diameter", 0.2),
+                    ("min_hole_to_hole", 0.5), ("min_copper_edge_clearance", 0.3),
+                    ("min_via_annular_width", 0.13)):
+        assert key in rules, f"{half}: 設計規則 {key} が無い"
+        assert rules[key] == pytest.approx(mm, abs=1e-6), \
+            f"{half}: {key} が {rules[key]}（期待 {mm}）"
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_actual_geometry_is_inside_the_manufacturer_limits(half):
+    """実際の線幅・ビアが能力の内側にあること。
+
+    規則を書いただけでは足りない。**規則を緩めれば通ってしまう**ので、
+    実物の寸法も直接見る。
+    """
+    txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
+    # **銅箔の配線だけを見る。** 単に (width ...) を拾うと、フットプリントの
+    # シルクや図形（0.05〜0.12mm）まで混ざって誤検出する。
+    widths = {float(w) for w in
+              re.findall(r"\(segment[\s\S]{0,200}?\(width ([\d.]+)\)", txt)}
+    assert widths and min(widths) >= 0.127, f"{half}: 線幅 {sorted(widths)[:3]}"
+    for size, drill in re.findall(r"\(size ([\d.]+)\)\s*\n\s*\(drill ([\d.]+)\)", txt):
+        ring = (float(size) - float(drill)) / 2
+        assert float(drill) >= 0.20, f"{half}: ビアのドリル {drill} が小さすぎる"
+        assert ring >= 0.13, f"{half}: アニュラリング {ring:.3f}mm が薄すぎる"
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_silkscreen_is_thick_enough_to_print(half):
+    """シルクの線幅が JLCPCB の最小 0.15mm 以上であること。
+
+    KiCad の標準フットプリントは 0.12mm で描かれており、そのままだと
+    かすれるか印字されない。**DRC はシルクの線幅を見ないので、
+    自分で担保するしかない。**
+    """
+    txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
+    thin = set()
+    for m in re.finditer(r'\(fp_(?:line|arc|circle|poly)[\s\S]{0,300}?'
+                         r'\(width ([\d.]+)\)[\s\S]{0,120}?\(layer "([^"]+)"', txt):
+        if "SilkS" in m.group(2) and float(m.group(1)) < 0.15:
+            thin.add(float(m.group(1)))
+    assert not thin, f"{half}: シルクが細すぎる線がある {sorted(thin)}"
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_board_says_which_half_it_is(half):
+    """基板に左右の識別が印字されていること。
+
+    2 種類が届いて見分けがつかないと、組み立ても修理も取り違える。
+    """
+    txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
+    assert f"HHKB Split  {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"

@@ -187,8 +187,10 @@ def test_the_mcu_is_not_expected_to_fit_on_the_main_board():
     """
     for half in ("left", "right"):
         board, obs = _board_and_obstacles(half)
-        # 21x17.8mm を、奥の帯（＝USB が実機と同じ奥面に出せる場所）に置けるか
+        # 奥の帯の深さは**実測 10.30mm**（プレート余白とソケットの位置から導出）。
+        # 以前ここを 24.0mm と適当に取っており、取付穴を 1 つ動かしただけで
+        # 判定が裏返った。判定が偶然の障害物配置に依存していた。
         X0, Y0, X1, Y1 = board
-        rear = (X0, Y0, X1, Y0 + 24.0)
+        rear = (X0, Y0, X1, Y0 + 10.30)
         assert _fits(17.8, 21.0, rear, obs) is None, \
-            f"{half}: XIAO が奥に載る。子基板が不要になった可能性がある"
+            f"{half}: XIAO が奥の帯に載る。子基板が不要になった可能性がある"
