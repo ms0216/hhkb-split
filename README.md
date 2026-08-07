@@ -70,7 +70,7 @@ XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りな�
 | シールド | 用途 |
 |---|---|
 | `hhkb_split_left` / `hhkb_split_right` | 本番。4レイヤー × 61キー |
-| `proto_direct` | 疎通確認（XIAO 1個・キー2個）（[手順書](docs/hardware/task-c1-smoke-test.md)） |
+| `proto_direct` | 疎通確認（XIAO 1個・キー2個）（[手順書](docs/hardware/task-c1-smoke-test.md)）✅ 実機確認済 |
 | `proto_matrix` | マトリクス配線とゴースト試験の治具（[手順書](docs/hardware/task-c2-keyscan.md)） |
 
 ビルドは GitHub Actions（ZMK 公式の再利用ワークフロー）。Actions の成果物から
@@ -89,7 +89,7 @@ MX 軸のキーボードだった）。同じ穴に落ちないため。
 |---|---|
 | A. 実機寸法の確定 | ✅ 完了 |
 | B. 機構設計（プレート・ケース） | ✅ STL 生成・検証済み / ⬜ 未印刷 |
-| C. 電気・ファームウェア検証 | 🔶 進行中（C2 実測待ち。C3〜C5 は部品待ち） |
+| C. 電気・ファームウェア検証 | 🔶 進行中（**C1 合格**。C2 実測待ち、C3〜C5 は部品待ち） |
 | D. 基板設計（KiCad → JLCPCB） | ⬜ 未着手 |
 | E. 組み立て・実機調整 | ⬜ 未着手 |
 
