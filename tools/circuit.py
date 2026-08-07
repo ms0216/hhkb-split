@@ -85,7 +85,9 @@ def netlist(half):
     parts = [
         # ---- 電源 ----
         ("BT1", "battery_holder", {"+": "VBATT_RAW", "-": "GND"}),
-        ("SW1", "slide_switch", {"1": "VBATT_RAW", "2": "VBATT_SW"}),
+        # 参照名は SW_PWR。**SW1 にするとキースイッチの SW1 と衝突する**
+        # （conformance の検査が初回に見つけた）。
+        ("SW_PWR", "slide_switch", {"1": "VBATT_RAW", "2": "VBATT_SW"}),
         # ショットキー 1 個が「電池への充電を止める」と「USB を挿すと電池を
         # 自動で切り離す」の 2 役を兼ねる。P-MOSFET は不要。
         ("D_PWR", "schottky", {"A": "VBATT_SW", "K": "V3V3"}),

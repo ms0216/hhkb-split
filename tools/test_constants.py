@@ -1,0 +1,77 @@
+"""設計定数が、重複せず・出所つきで書かれていることを守る。
+
+**同じ名前を二度定義すると、後から書いた方が黙って勝つ。**
+実際に XIAO_H（XIAO 単体の高さ 5.0mm）を、子基板まわりの別の意味の 4.0mm で
+上書きしていた。どちらの利用側もエラーにならないので気づけない。
+
+**推定で埋めた値と、実測で確かめた値が区別できないと、
+「どこがまだ確かめられていないか」が分からなくなる。**
+この案件では、タクトスイッチの向きや XIAO のピンピッチを推定のまま断定し、
+どちらも利用者に指摘されて初めて誤りだと分かった。
+出所のタグ（[確定] / [暫定]）を機械が数え、暫定のものを一覧にする。
+"""
+
+import ast
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+TOOLS = ROOT / "tools"
+MODULES = sorted(p for p in TOOLS.glob("*.py") if not p.name.startswith("test_"))
+
+
+@pytest.mark.parametrize("path", MODULES, ids=lambda p: p.name)
+def test_no_constant_is_defined_twice(path):
+    """モジュール直下で同じ名前を二度代入していないこと。
+
+    後から書いた方が黙って勝つので、単体では誰もエラーにならない。
+    """
+    tree = ast.parse(path.read_text())
+    seen, dup = set(), set()
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for t in node.targets:
+            names = ([t.id] if isinstance(t, ast.Name)
+                     else [e.id for e in getattr(t, "elts", []) if isinstance(e, ast.Name)])
+            for n in names:
+                if n.isupper():
+                    (dup if n in seen else seen).add(n)
+    assert not dup, f"{path.name}: 二度定義されている定数 {sorted(dup)}"
+
+
+def provisional():
+    """[暫定] と書かれた定数を集める。"""
+    out = []
+    for path in MODULES:
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            if "[暫定]" in line:
+                m = re.match(r"\s*([A-Z_][A-Z0-9_,\s]*)\s*=", line)
+                if m:
+                    out.append((path.name, i, m.group(1).strip()))
+    return out
+
+
+def test_provisional_values_are_listed_where_they_can_be_seen():
+    """暫定値が、実測タスクの文書に一覧として載っていること。
+
+    **見えない暫定値は、確定値と区別がつかない。**
+    実測して差し替えるべきものが分からなくなる。
+    """
+    doc = (ROOT / "docs/hardware/provisional-values.md")
+    assert doc.exists(), "docs/hardware/provisional-values.md が無い"
+    text = doc.read_text()
+    missing = [f"{f}:{n}" for f, _, n in provisional() if n.split(",")[0].strip() not in text]
+    assert not missing, f"文書に載っていない暫定値: {missing}"
+
+
+def test_the_provisional_list_has_no_stale_entries():
+    """文書に載っているのに、もう暫定でなくなった値が残っていないこと。"""
+    doc = (ROOT / "docs/hardware/provisional-values.md").read_text()
+    live = {n.split(",")[0].strip() for _, _, n in provisional()}
+    listed = set(re.findall(r"^\| `([A-Z_][A-Z0-9_]*)`", doc, re.M))
+    stale = listed - live
+    assert not stale, f"もう暫定ではない値が文書に残っている: {sorted(stale)}"

@@ -53,11 +53,11 @@ def test_the_check_actually_detects_a_collision(half):
     """
     import envelopes
 
-    original = envelopes.XIAO_H
+    original = envelopes.DB_STACK_H
     try:
-        envelopes.XIAO_H = original + 15.0     # 子基板の部品を背高にする
+        envelopes.DB_STACK_H = original + 15.0     # 子基板の部品を背高にする
         problems, _ = check(HALVES[half], half)[:2]
         assert any("db" in p for p in problems), \
             "子基板を 15mm 背高にしても検出できない。検査が効いていない"
     finally:
-        envelopes.XIAO_H = original
+        envelopes.DB_STACK_H = original

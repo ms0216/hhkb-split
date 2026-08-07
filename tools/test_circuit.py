@@ -112,7 +112,7 @@ def test_the_battery_reaches_the_rail_only_through_the_diode(board):
     on_rail = {ref for ref, _ in nets["V3V3"]}
     assert "D_PWR" in on_rail, f"{board}: 3V3 がショットキー経由になっていない"
     assert "BT1" not in on_rail, f"{board}: 電池が 3V3 へ直結している"
-    assert "SW1" not in on_rail, f"{board}: スイッチが 3V3 へ直結している"
+    assert "SW_PWR" not in on_rail, f"{board}: スイッチが 3V3 へ直結している"
 
 
 @pytest.mark.parametrize("board", ["left", "right"])
@@ -265,7 +265,7 @@ def test_the_rules_actually_bite():
                      for r, k, p in ps],
          test_the_shift_register_control_pins_are_tied),
         ("電池を 3V3 へ直結する",
-         lambda ps: [(r, k, {**p, "2": "V3V3"} if r == "SW1" else p)
+         lambda ps: [(r, k, {**p, "2": "V3V3"} if r == "SW_PWR" else p)
                      for r, k, p in ps],
          test_the_battery_reaches_the_rail_only_through_the_diode),
         ("分圧をスイッチの手前へ移す",
@@ -286,3 +286,16 @@ def test_the_rules_actually_bite():
             circuit.netlist = original
             BOARDS["left"] = lambda: netlist("left")
     assert not missed, f"故意に壊しても検出できない規則がある: {missed}"
+
+
+@pytest.mark.parametrize("board", list(BOARDS))
+def test_no_two_parts_share_a_reference(board):
+    """参照名が重複していないこと。
+
+    **初回に本物の衝突を見つけた規則。**電源スイッチを SW1 と名づけていて、
+    キースイッチの SW1 とぶつかっていた。基板上で 2 つの別部品が同じ名前に
+    なると、実装機も人も取り違える。
+    """
+    refs = [ref for ref, _, _ in BOARDS[board]()]
+    dup = {r for r in refs if refs.count(r) > 1}
+    assert not dup, f"{board}: 参照名が重複している {sorted(dup)}"

@@ -115,7 +115,10 @@ def pcb_bottom_at(y, h_plate, rim_front):
 # --------------------------------------------------------------------------
 # 子基板（XIAO を載せる小さな別基板）
 # --------------------------------------------------------------------------
-XIAO_H = 4.0             # [暫定] 子基板の上面から XIAO の頭まで（USB コネクタ含む）
+# **XIAO_H と名づけてはいけない。**45 行目の XIAO_H（XIAO 単体の高さ 5.0mm）を
+# 上書きしてしまう。実際に一度上書きし、定数の重複定義を検査する
+# test_constants.py が見つけた。
+DB_STACK_H = 4.0         # [暫定] 子基板の上面から XIAO の頭まで（USB コネクタ含む）
 
 
 def daughterboard_envelope(center, w, d, t):
@@ -128,5 +131,5 @@ def daughterboard_envelope(center, w, d, t):
 
     with BuildPart() as env:
         with Locations(center):
-            Box(w, d, t + XIAO_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            Box(w, d, t + DB_STACK_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
     return env.part
