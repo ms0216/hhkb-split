@@ -370,15 +370,15 @@ PLACE = {
         "R_HI": (0, -40.0), "R_LO": (0, -35.0), "D_PWR": (0, -28.0),
         "J_DB": (0, -16.0),
         "C_BULK": (0, -2.0), "C_MCU": (0, 6.0),
-        "U1": (0, 20.0), "C_U1": (0, 32.0),
+        "U1": (0, 20.0, -1.8), "C_U1": (0, 32.0),
     },
     "right": {
         "BT1": (0, -78.0), "SW_PWR": (0, -66.0),
         "R_HI": (0, -56.0), "R_LO": (0, -51.0), "D_PWR": (0, -44.0),
         "J_DB": (0, -32.0),
         "C_BULK": (0, -18.0), "C_MCU": (0, -10.0),
-        "U1": (0, 4.0), "C_U1": (0, 16.0),
-        "U2": (0, 30.0), "C_U2": (0, 42.0),
+        "U1": (0, 4.0, -1.8), "C_U1": (0, 16.0),
+        "U2": (0, 30.0, -1.8), "C_U2": (0, 42.0),
     },
 }
 
@@ -387,14 +387,20 @@ def _place_electronics(board, half, net):
     """回路に宣言された電子部品を、段の間の帯に置いてネットを割り当てる。"""
     from circuit import netlist
     decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
-    for ref, (band, x) in PLACE[half].items():
+    for ref, spec in PLACE[half].items():
+        # 3 つ目は帯の中での y の微調整（省略可）。
+        # **SOIC-16 は縦 10.4mm あり、帯 9.25mm からはみ出して
+        # 行のバスに寄る。**回転させると配線の順序が崩れて悪化したので
+        # （24→144 件）、位置で逃がす。
+        band, x = spec[0], spec[1]
+        dy = spec[2] if len(spec) > 2 else 0.0
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
         # 電池線は 2 箇所のランドとして置く
         n = 2 if kind == "battery_holder" else 1
         for k in range(n):
             fp = _load(KICAD_FP / f"{lib}.pretty", name)
-            fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band]))
+            fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band] + dy))
             fp.SetReference(ref if n == 1 else f"{ref}_{'+-'[k]}")
             fp.SetValue(kind)
             board.Add(fp)
@@ -428,7 +434,25 @@ def _npth_holes(board):
     return out
 
 
-def _clear_x(holes, near, y0, y1, margin=0.6, used=(), keep=2.0):
+def _fcu_verticals(board):
+    """表面（F.Cu）の縦配線の x 一覧。
+
+    **列のバスはここにいる。**穴だけ避けても、行のビアが列のバスに
+    乗って短絡する。`_clear_x` に渡して避ける。
+    """
+    out = []
+    for t in board.GetTracks():
+        if t.Type() != pcbnew.PCB_TRACE_T or t.GetLayer() != pcbnew.F_Cu:
+            continue
+        a, b = t.GetStart(), t.GetEnd()
+        if abs(a.x - b.x) < pcbnew.FromMM(0.05):
+            out.append((pcbnew.ToMM(a.x),
+                        pcbnew.ToMM(min(a.y, b.y)), pcbnew.ToMM(max(a.y, b.y))))
+    return out
+
+
+def _clear_x(holes, near, y0, y1, margin=0.6, used=(), keep=2.0,
+             verticals=()):
     # keep は行の通路どうしの最小間隔。1.0/1.6/2.0/2.5 を試し、
     # 左右の合計が最小になる 2.0 を採った（左 23 / 右 37）。
     """near の近くで、y0〜y1 を縦に抜けられる x を探す。"""
@@ -438,6 +462,10 @@ def _clear_x(holes, near, y0, y1, margin=0.6, used=(), keep=2.0):
         # **すでに使った通路から離す。**行ごとに別の x を使わないと、
         # 内層で縦配線どうしが重なって短絡する（14 件出た）。
         if any(abs(x - u) < keep for u in used):
+            return False
+        # 表面の縦配線（列のバス）にも乗らないこと
+        if any(not (vy1 < lo or vy0 > hi) and abs(vx - x) < 0.8
+               for vx, vy0, vy1 in verticals):
             return False
         return not any(lo - hr <= hy <= hi + hr and abs(hx - x) < hr + margin
                        for hx, hy, hr in holes)
@@ -483,6 +511,7 @@ def _route_electronics(board, half, net):
     # 2. 行を各段のバスへ降ろす。**ここが 2 層では通らなかった箇所。**
     #    内層 2 を縦に降り、スイッチの非メッキ穴を避ける x を選ぶ。
     holes = _npth_holes(board)
+    verticals = _fcu_verticals(board)
     rows = {}
     for fp in board.GetFootprints():
         if not re.fullmatch(r"D\d+", fp.GetReference()):
@@ -501,7 +530,7 @@ def _route_electronics(board, half, net):
         sy = pcbnew.ToMM(src.GetPosition().y)
         tx = pcbnew.ToMM(tgt.GetPosition().x)
         ty = pcbnew.ToMM(tgt.GetPosition().y)
-        x = _clear_x(holes, sx, sy, ty, used=used_x)
+        x = _clear_x(holes, sx, sy, ty, used=used_x, verticals=verticals)
         if x is None:
             raise RuntimeError(f"{name}: 内層を縦に抜ける経路が見つからない")
         used_x.append(x)
