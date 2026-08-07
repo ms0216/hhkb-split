@@ -75,7 +75,10 @@ def test_switch_positions_match_the_plate(name):
     """
     keys = HALVES[name]
     want, _ = plate_positions(keys)
-    got = {ref: (x, y) for lib, ref, x, y in footprints(name) if lib.startswith("SW_")}
+    # **参照名で絞る。**フットプリント名で "SW_" を見ていたが、電源の
+    # スライドスイッチ（SW_DIP_SPSTx01_Slide_...）も一致してしまう。
+    got = {ref: (x, y) for lib, ref, x, y in footprints(name)
+           if re.fullmatch(r"SW\d+", ref)}
     assert len(got) == len(keys), f"{name}: スイッチ数が {len(got)}（期待 {len(keys)}）"
     for i, (wx, wy) in enumerate(want, start=1):
         gx, gy = got[f"SW{i}"]
