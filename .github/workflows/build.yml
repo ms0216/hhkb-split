@@ -1,0 +1,17 @@
+name: Build ZMK firmware
+
+# ZMK 公式の再利用ワークフローを呼ぶだけ。ローカルに Zephyr SDK は要らない。
+# config_path / build_matrix_path を指定しているので、ZMK 標準の構成
+# （リポジトリ直下に config/）でなくても動く。
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@main
+    with:
+      build_matrix_path: firmware/build.yaml
+      config_path: firmware/config

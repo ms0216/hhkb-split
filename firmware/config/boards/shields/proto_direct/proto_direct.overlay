@@ -1,0 +1,21 @@
+/*
+ * 疎通確認用。XIAO 1 個とタクトスイッチ 2 個だけの最小構成。
+ *
+ * &xiao_d は Zephyr の XIAO ボード定義にあるピンコネクタのラベルで、
+ * <&xiao_d 0> が基板シルクの D0 に対応する。P0.02 のような生のポート番号を
+ * 書かなくてよい。
+ */
+/ {
+	chosen {
+		zmk,kscan = &kscan0;
+	};
+
+	kscan0: kscan_0 {
+		compatible = "zmk,kscan-gpio-direct";
+		wakeup-source;
+		input-gpios
+			= <&xiao_d 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+			, <&xiao_d 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+			;
+	};
+};

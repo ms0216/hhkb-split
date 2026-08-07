@@ -1,0 +1,13 @@
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+
+		/* スイッチ 1 で a、スイッチ 2 で b が入力されれば疎通確認は完了。 */
+		default_layer {
+			bindings = <&kp A &kp B>;
+		};
+	};
+};

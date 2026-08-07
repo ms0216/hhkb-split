@@ -1,0 +1,5 @@
+# ビルド対象（ボード × シールド）の一覧。
+# シールドを増やすときはここに足す。
+include:
+  - board: seeeduino_xiao_ble
+    shield: proto_direct
