@@ -21,9 +21,11 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-FW = ROOT / "firmware"
-SHIELDS = FW / "config" / "boards" / "shields"
+SHIELDS = ROOT / "config" / "boards" / "shields"
 WORKFLOW = ROOT / ".github" / "workflows" / "build.yml"
+
+# ZMK が受け付けるボード名。Zephyr 4.1 以降は zmk バリアントが必須。
+ZMK_VARIANT = "//zmk"
 
 REQUIRED = ["Kconfig.shield", "{name}.overlay", "{name}.keymap"]
 
@@ -39,8 +41,8 @@ def load_yaml(path, problems):
 def main():
     problems, notes = [], []
 
-    build = load_yaml(FW / "build.yaml", problems)
-    west = load_yaml(FW / "config" / "west.yml", problems)
+    build = load_yaml(ROOT / "build.yaml", problems)
+    west = load_yaml(ROOT / "config" / "west.yml", problems)
     wf = load_yaml(WORKFLOW, problems)
 
     # west.yml
@@ -52,13 +54,20 @@ def main():
                if p.get("name") == "zmk"]
         notes.append(f"ZMK の revision: {rev[0] if rev else '未指定'}")
 
-    # ワークフローが firmware/ を指しているか
+    # 配置は ZMK 標準（リポジトリ直下の config/ と build.yaml）であること。
+    # 入れ子にすると west のワークスペース位置がずれて
+    # "no west workspace found" で失敗する。
     if wf:
-        with_ = (wf.get("jobs", {}).get("build", {}) or {}).get("with", {})
-        for key, want in [("build_matrix_path", "firmware/build.yaml"),
-                          ("config_path", "firmware/config")]:
-            if with_.get(key) != want:
-                problems.append(f"ワークフローの {key} が {want!r} でない: {with_.get(key)!r}")
+        with_ = (wf.get("jobs", {}).get("build", {}) or {}).get("with", {}) or {}
+        for key in ("build_matrix_path", "config_path"):
+            if key in with_:
+                problems.append(
+                    f"ワークフローが {key} を指定している（{with_[key]!r}）。"
+                    "config は必ずリポジトリ直下に置くこと")
+    if not (ROOT / "config" / "west.yml").exists():
+        problems.append("config/west.yml がリポジトリ直下にない")
+    if not (ROOT / "build.yaml").exists():
+        problems.append("build.yaml がリポジトリ直下にない")
 
     # build.yaml のシールドが実在するか
     if build:
@@ -66,6 +75,10 @@ def main():
         notes.append(f"ビルド対象 {len(entries)} 件")
         for e in entries:
             name, board = e.get("shield"), e.get("board")
+            if board and not board.endswith(ZMK_VARIANT):
+                problems.append(
+                    f"ボード名 {board!r} に {ZMK_VARIANT} が付いていない。"
+                    "Zephyr 4.1 以降の ZMK は zmk バリアント必須")
             d = SHIELDS / name
             if not d.is_dir():
                 problems.append(f"シールド '{name}' のディレクトリが無い: {d.relative_to(ROOT)}")

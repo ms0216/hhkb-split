@@ -1,0 +1,11 @@
+# ビルド対象（ボード × シールド）の一覧。
+#
+# ボード名は ZMK バリアント付きで指定する。ZMK が Zephyr 4.1 へ移行した際、
+# ZMK ツリーのボード定義はすべて zmk バリアント経由で使う決まりになった。
+#   旧: seeeduino_xiao_ble
+#   新: xiao_ble//zmk
+# 旧名のままだと "The selected board is not set up for ZMK" で失敗する。
+# 参照: https://zmk.dev/blog/2025/12/09/zephyr-4-1#zmk-board-variant
+include:
+  - board: xiao_ble//zmk
+    shield: proto_direct

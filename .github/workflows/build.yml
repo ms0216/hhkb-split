@@ -1,8 +1,13 @@
 name: Build ZMK firmware
 
 # ZMK 公式の再利用ワークフローを呼ぶだけ。ローカルに Zephyr SDK は要らない。
-# config_path / build_matrix_path を指定しているので、ZMK 標準の構成
-# （リポジトリ直下に config/）でなくても動く。
+#
+# 配置は ZMK 標準（リポジトリ直下に config/ と build.yaml）にすること。
+# 当初 firmware/config に入れ子にしたが、ワークフローは
+#   west init -l <config_path>   → ワークスペースは config の親に作られる
+#   west update                  → リポジトリ直下で実行される
+# という前提なので、config の親がリポジトリ直下でないと
+# "no west workspace found" で失敗する。
 
 on:
   push:
@@ -12,6 +17,3 @@ on:
 jobs:
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@main
-    with:
-      build_matrix_path: firmware/build.yaml
-      config_path: firmware/config
