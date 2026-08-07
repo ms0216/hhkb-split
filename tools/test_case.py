@@ -309,3 +309,24 @@ def test_wall_thicknesses_are_multiples_of_the_nozzle():
         n = t / NOZZLE
         assert abs(n - round(n)) < 1e-6, \
             f"{label} {t}mm がノズル {NOZZLE}mm の整数倍でない（{n:.2f} 本）"
+
+
+def test_the_daughterboard_can_carry_both_the_mcu_and_its_screws():
+    """子基板に XIAO とネジが**同時に**載ること。
+
+    22x22mm で設計を始めたが、取付穴の置ける場所が 0 箇所だった。
+    XIAO は 17.8x21mm で、ネジの逃げ（半径 2.2mm）が入る余地が残らない。
+    **入るかどうかは、置き始める前に数えられる。**
+    """
+    from gen_case import DB_BOSS_POS, DB_D, DB_W
+    from interface import M2_CLEAR_D
+    XW, XL = 17.8, 21.0
+    r = M2_CLEAR_D / 2 + 1.0
+    for x, y in DB_BOSS_POS:
+        assert abs(x) + r <= DB_W / 2, f"ネジ({x},{y}) が基板の幅から出る"
+        assert abs(y) + r <= DB_D / 2, f"ネジ({x},{y}) が基板の奥行から出る"
+        assert abs(x) - r >= XW / 2 or abs(y) - r >= XL / 2, \
+            f"ネジ({x},{y}) が XIAO の下に入る"
+    assert len(DB_BOSS_POS) >= 2, "ネジが 1 本では回る"
+    assert DB_BOSS_POS[0][0] != DB_BOSS_POS[1][0], \
+        "ネジが中心線上に並んでいる。回り止めにならない"

@@ -149,11 +149,20 @@ DB_W = 20.0              # 子基板の幅（左右）。XIAO は 17.8mm 幅。
 # 一度 1.0mm まで寄せていた（電池を外へ寄せて子基板の場所を作った副作用）。
 # 幾何の干渉だけを見て電波を見ていなかった。
 DB_ANTENNA_KEEPOUT = 10.0
-DB_D = 22.0              # 奥行（前後）
+# 奥行 30mm。**XIAO とネジを同時に載せるには、この深さが要る。**
+#
+# 22mm では取付穴の置ける場所が 0 箇所だった。XIAO は 17.8x21mm で、
+# ネジの逃げ（φ2.4＋ランド → 半径 2.2mm）が入る余地が残らない。
+#   ネジを XIAO の脇に置く  → 幅 26.6mm 必要（使える幅は 22.2mm。不可）
+#   ネジを XIAO の前後に置く → 奥行 29.8mm 必要
+# コブの奥の内面 y=69.16 から 30mm 前は y=39.16。そこでの本体基板の
+# 下端は 13.97mm で、子基板スタック 12.0mm に対して余裕がある。
+DB_D = 30.0
 DB_T = 1.6
 DB_BOSS_H = 4.0          # 床からの高さ。これが USB-C の高さを決める
-DB_BOSS_DX = 15.0        # 取付ボスの間隔
-DB_BOSS_DY = 14.0
+# 取付ボスは**対角に 2 本**。XIAO のパッド列（x=±7.62）と本体を避けると
+# ここしか残らない。中心線上に 2 本だと回ってしまうので対角にする。
+DB_BOSS_POS = [(-4.0, -12.8), (4.0, 12.8)]
 DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
 USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
 USB_H = 6.0
@@ -359,14 +368,13 @@ def build_case(keys, half):
         # 子基板もコブの中。USB-C はコブの奥面から出る（実機の USB も同じ面）。
         y_rear_outer = h_body / 2 + BUMP_DEPTH
         db_y = y_rear_outer - WALL - DB_FROM_REAR - DB_D / 2
-        for dx in (-DB_BOSS_DX / 2, DB_BOSS_DX / 2):
-            for dy in (-DB_BOSS_DY / 2, DB_BOSS_DY / 2):
-                with Locations((db_x + dx, db_y + dy, FLOOR)):
-                    Cylinder(M2_BOSS_D / 2, DB_BOSS_H,
-                             align=(Align.CENTER, Align.CENTER, Align.MIN))
-                with Locations((db_x + dx, db_y + dy, FLOOR)):
-                    Cylinder(M2_PILOT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
-                             align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for dx, dy in DB_BOSS_POS:
+            with Locations((db_x + dx, db_y + dy, FLOOR)):
+                Cylinder(M2_BOSS_D / 2, DB_BOSS_H,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((db_x + dx, db_y + dy, FLOOR)):
+                Cylinder(M2_PILOT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥の壁を貫く。壁の厚みより長い立体で切らないと薄皮が残る。
         with Locations((db_x, y_rear_outer, usb_center_z())):
             Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
