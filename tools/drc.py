@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
 KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
-HALVES = ("left", "right")
+HALVES = ("left", "right", "daughterboard")
 
 
 def board_path(half):
