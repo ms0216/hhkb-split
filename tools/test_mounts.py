@@ -41,19 +41,20 @@ def _pcb_half(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_holes_fit_inside_the_pcb(name):
-    """取付穴が基板の外形の中に、余裕を持って収まること。
 
-    これが崩れると、ネジが締まらない基板が届く。
+def test_holes_fit_inside_the_pcb(name):
+    """**ボスが基板の外にあること。**
+
+    上ケース方式では基板に穴を開けない。以前はここが「穴が基板の中に
+    収まること」で、向きが逆だった。
     """
-    hw, hh = _pcb_half(name)
+    from gen_plate import halves
+    from interface import PCB_INSET_Y, plate_positions
+    _, (_, case_h) = plate_positions(halves()[name])
+    pcb_half = case_h / 2 - PCB_INSET_Y
     for x, y in boss_positions(name):
-        mx = hw - (abs(x) + M2_CLEAR_D / 2)
-        my = hh - (abs(y) + M2_CLEAR_D / 2)
-        assert mx >= HOLE_EDGE_MARGIN, \
-            f"{name}: ({x}, {y}) の穴が基板の左右端に近すぎる（余裕 {mx:.2f}mm）"
-        assert my >= HOLE_EDGE_MARGIN, \
-            f"{name}: ({x}, {y}) の穴が基板の前後端に近すぎる（余裕 {my:.2f}mm）"
+        assert abs(y) - M2_BOSS_D / 2 >= pcb_half - 1e-6, \
+            f"{name}: ボス({x},{y}) が基板（半深 {pcb_half:.2f}）に掛かる"
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -105,20 +106,22 @@ def test_rear_bosses_clear_the_battery(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_seven_bosses_spread_around_the_perimeter(name):
-    """7 箇所あり、四隅・手前中央・長辺中央に散っていること。
 
-    数だけ合っていても片側に固まっていたらプレートを支えられない。
+def test_three_bosses_sit_along_the_front_edge(name):
+    """**手前の 3 本だけ。奥はフックで引っ掛ける。**
+
+    以前は 7 本を四方に置いていたが、14 本中 9 本がキーキャップの下に入り、
+    開けるのにキャップを外す必要があった。奥にも置こうとしたが、ボスの
+    外端 y=54.00 が電池の手前端 y=52.10 と 1.90mm 重なる。
     """
+    from interface import MOUNT_Y
     pts = boss_positions(name)
-    assert len(pts) == 7
-    hw, hh = _pcb_half(name)
-    assert sum(1 for x, y in pts if x < 0 and y < 0) >= 1, "手前左が無い"
-    assert sum(1 for x, y in pts if x > 0 and y < 0) >= 1, "手前右が無い"
-    assert sum(1 for x, y in pts if x < 0 and y > 0) >= 1, "奥左が無い"
-    assert sum(1 for x, y in pts if x > 0 and y > 0) >= 1, "奥右が無い"
-    assert any(abs(x) < hw * 0.3 and y < 0 for x, y in pts), "手前中央が無い"
-    assert any(abs(y) < hh * 0.3 for x, y in pts), "長辺の中央が無い"
+    assert len(pts) == 3, f"{name}: ボスが {len(pts)} 本ある"
+    assert all(y == pytest.approx(-MOUNT_Y) for _, y in pts), \
+        f"{name}: 手前の帯（y=-{MOUNT_Y}）に無いボスがある"
+    xs = sorted(x for x, _ in pts)
+    assert xs[0] < -30 and xs[1] == pytest.approx(0.0) and xs[2] > 30, \
+        f"{name}: 3 本が散っていない {xs}"
 
 
 def test_positions_are_defined_for_both_halves():

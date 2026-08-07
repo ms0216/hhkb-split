@@ -45,8 +45,11 @@ def test_outline_size_matches_keys_plus_margin(name):
     keys = HALVES[name]
     part, (w, h), _ = build_plate(keys, name)
     span_x = max(k.right_u for k in keys) - min(k.left_u for k in keys)
-    assert w == pytest.approx(span_x * UNIT + 2 * PLATE_MARGIN_X)
-    assert h == pytest.approx(5 * UNIT + 2 * PLATE_MARGIN_Y)
+    # **プレートはケースより上ケースの壁ぶん小さい。**
+    # かつては同じだった（プレートが天板だったため）。
+    from interface import BEZEL_WALL
+    assert w == pytest.approx(span_x * UNIT + 2 * PLATE_MARGIN_X - 2 * BEZEL_WALL)
+    assert h == pytest.approx(5 * UNIT + 2 * PLATE_MARGIN_Y - 2 * BEZEL_WALL)
     assert_bbox(part, expect_x=w, expect_y=h, label=f"{name}: ")
 
 
@@ -58,35 +61,53 @@ def test_is_printable(name):
 
 
 @pytest.mark.parametrize("name,keys_n", [("left", 27), ("right", 34)])
-def test_cutout_count_matches_keys_plus_screws(name, keys_n):
-    """開口の総数 = キー数 + 取付ネジ穴の数。
 
-    スタビライザー開口はそれぞれのスイッチ開口と繋がって 1 つになるので、
-    キーの分はキー数と一致する。隣のキーを飲み込むと数が減る。
-    ネジ穴はケース側のボスと同じ位置に開ける（開け忘れると締結できない）。
+
+def test_cutout_count_matches_keys_plus_screws(name, keys_n):
+    """**すべてのキー位置に開口が開いていること。**
+
+    以前は内周の数を数えていたが、数が合っていても位置が違えば意味がない。
+    キーの位置ごとに実際に貫通しているかを見る（外部の事実との照合）。
     """
-    from interface import boss_positions
-    part, (w, h), _ = build_plate(HALVES[name], name)
-    expect = keys_n + len(boss_positions(name))
-    assert len(cutouts(part)) == expect
+    from build123d import Align, Box, BuildPart, Locations
+    from interface import plate_positions
+    from verify import intersection_volume
+    part, _, _ = build_plate(HALVES[name], name)
+    positions, _ = plate_positions(HALVES[name])
+    blocked = []
+    for (x, y) in positions:
+        with BuildPart() as probe:
+            with Locations((x, y, -1)):
+                Box(13.0, 13.0, 10.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        if intersection_volume(probe.part, part) > 1e-3:
+            blocked.append((round(x, 1), round(y, 1)))
+    assert not blocked, f"{name}: 開口が無いキー位置 {blocked[:5]}"
+    assert len(positions) == keys_n
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
-def test_screw_holes_align_with_case_bosses(name):
-    """プレートのネジ穴が、ケース側のボスと同じ位置にあること。
 
-    両者が別々に位置を計算していると、いつかずれる。共有定義から導く。
+def test_screw_holes_align_with_case_bosses(name):
+    """ネジがプレートに当たらずに通ること。
+
+    **手前の 3 箇所はプレートの縁を跨ぐので切り欠きになる。**
+    以前は円形の穴を数えていたが、切り欠きは円として現れないので
+    「0 個」と判定してしまう。**通るかどうかを直接見る。**
     """
+    from build123d import Align, BuildPart, Cylinder, Locations
     from interface import M2_CLEAR_D, boss_positions
-    part, (w, h), _ = build_plate(HALVES[name], name)
-    holes = [c for c in cutouts(part)
-             if c[2] == pytest.approx(M2_CLEAR_D, abs=0.01)]
-    want = boss_positions(name)
-    assert len(holes) == len(want)
-    for wx, wy in want:
-        assert any(h[0] == pytest.approx(wx, abs=0.01)
-                   and h[1] == pytest.approx(wy, abs=0.01) for h in holes), \
-            f"{name}: ({wx:.2f}, {wy:.2f}) にネジ穴が無い"
+    from verify import intersection_volume
+    part, _, _ = build_plate(HALVES[name], name)
+    hit = []
+    for (x, y) in boss_positions(name):
+        with BuildPart() as probe:
+            with Locations((x, y, -1)):
+                Cylinder(M2_CLEAR_D / 2, 10.0,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        v = intersection_volume(probe.part, part)
+        if v > 1e-3:
+            hit.append((round(x, 1), round(y, 1), round(v, 2)))
+    assert not hit, f"{name}: ネジがプレートに当たる {hit}"
 
 
 @pytest.mark.parametrize("name", ["left", "right"])

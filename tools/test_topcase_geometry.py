@@ -82,8 +82,11 @@ def test_the_pcb_needs_no_notch():
 
     基板は JLCPCB へ出すので、加工が要らない形に収めておきたい。
     """
-    from interface import PCB_INSET
-    pcb_half = CASE_HALF - PCB_INSET - 2.0        # 既存の取り方
+    # **基板の実寸から取る。** 以前ここを CASE_HALF - PCB_INSET - 2.0 と
+    # 適当な式で書いており、実際の 51.0 ではなく 49.0 として通っていた
+    # （＝基板が 2mm 重なるのに合格していた）。
+    from interface import PCB_INSET_Y
+    pcb_half = (KEYS_HALF_H + PLATE_MARGIN_Y) - PCB_INSET_Y
     boss_inner = MOUNT_Y - M2_BOSS_D / 2
     assert pcb_half <= boss_inner + 1e-9, \
         f"基板の縁 {pcb_half:.2f} がボスの内端 {boss_inner:.2f} に掛かる"

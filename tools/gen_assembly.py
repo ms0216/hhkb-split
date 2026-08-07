@@ -90,6 +90,10 @@ def build_assembly(keys, half):
          h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2,
          FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
 
+    # 上ケース（ベゼル）。プレートを押さえ、手前端を実機の 17mm にする。
+    from gen_case import build_topcase
+    parts["topcase"] = build_topcase(keys, half)[0]
+
     return parts, (w, h_case)
 
 
@@ -109,6 +113,8 @@ def check(keys, half, label=""):
         frozenset({"case", "pcb"}): 30.0,    # 基板はネジボスの上に載る
         frozenset({"case", "plate"}): 30.0,  # プレートはリムに載る
         frozenset({"case", "lid"}): 30.0,    # 蓋はレールの段に載る
+        frozenset({"case", "topcase"}): 30.0,   # 上ケースは下ケースの壁に載る
+        frozenset({"plate", "topcase"}): 30.0,  # 上ケースはプレートを押さえる
         frozenset({"pcb", "batt"}): 30.0,    # 電池は基板の下面に触れうる
     }
     names = list(parts)
@@ -130,9 +136,13 @@ def check(keys, half, label=""):
     notes.append(f"ケース全体 {case_bb.size.X:.2f}x{case_bb.size.Y:.2f} "
                  f"(本体 {h_case:.2f} + コブ) / "
                  f"プレート(傾斜後) {plate_bb.size.X:.2f}x{plate_bb.size.Y:.2f}mm")
+    # **覆うのはプレートと上ケースの合計。** プレート単体はベゼルの壁ぶん
+    # 小さくてよい（上ケース方式にした時点でそうなった）。
+    from gen_case import BEZEL_WALL
     for axis, gap in (("X", gap_x), ("Y", gap_y)):
-        if gap > 0.3:
-            problems.append(f"プレートが {axis} 方向に {gap:.2f}mm 足りない")
+        if gap - BEZEL_WALL * 2 > 0.3:
+            problems.append(f"プレートと上ケースの合計が {axis} 方向に "
+                            f"{gap - BEZEL_WALL * 2:.2f}mm 足りない")
         if gap < -0.3:
             problems.append(f"プレートが {axis} 方向に {-gap:.2f}mm はみ出す")
 

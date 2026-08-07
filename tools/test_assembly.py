@@ -22,7 +22,7 @@ HALVES = halves()
 
 # 組み立てに含まれていなければならない部品。
 # 名前を書いておくことで、あとから足した部品が検査から漏れるのを防ぐ。
-REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db"}
+REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db", "topcase"}
 
 
 @pytest.mark.parametrize("half", ["left", "right"])

@@ -107,33 +107,41 @@ def test_stabilizers_are_on_the_wide_keys(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_mounting_holes_match_the_case_bosses(name):
-    """取付穴がケース側のボスと同じ位置にあること。
 
-    プレート・ケース・基板の 3 つが同じ位置を持つ必要がある。
-    以前プレートとケースで別々に計算していてずれた前科がある。
+def test_mounting_holes_match_the_case_bosses(name):
+    """**基板に取付穴が無いこと**と、ボスが基板に当たらないこと。
+
+    上ケース方式では、基板はプレートとスイッチで一体になり、上下ケースに
+    挟まれて保持される。ネジは上ケースから基板の外側のボスへ入る。
+    穴が要らないぶん配線の自由度も上がる。
+
+    以前は「穴がボスと同じ位置にあること」を見ていた。構造が変わったので、
+    **穴が無いこと**と**当たらないこと**の two 方向で見る。
     """
-    want = boss_positions(name)
-    got = [(x, y) for lib, ref, x, y in footprints(name) if lib.startswith("MountingHole")]
-    assert len(got) == len(want)
-    for wx, wy in want:
-        assert any(gx == pytest.approx(wx, abs=0.01) and gy == pytest.approx(wy, abs=0.01)
-                   for gx, gy in got), f"{name}: ({wx}, {wy}) に取付穴が無い"
+    from interface import M2_BOSS_D, boss_positions
+    txt = (ROOT / f"pcb/hhkb_split_{name}.kicad_pcb").read_text()
+    assert "MountingHole" not in txt, f"{name}: 基板に取付穴が残っている"
+    x0, y0, x1, y1 = outline_extent(name)
+    half_h = (y1 - y0) / 2
+    for bx, by in boss_positions(name):
+        assert abs(by) - M2_BOSS_D / 2 >= half_h - 1e-6, \
+            f"{name}: ボス({bx},{by}) が基板（半深 {half_h:.2f}）に掛かる"
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_outline_is_the_plate_inset_by_pcb_inset(name):
-    """基板の外形が、プレートより片側 PCB_INSET だけ小さいこと。
 
-    大きいとケースの側壁と当たる（1.0mm にしていて 17,000mm^3 衝突した）。
+def test_outline_is_the_plate_inset_by_pcb_inset(name):
+    """基板の外形が、ケースの外形から所定だけ小さいこと。
+
+    **左右と前後で詰め方が違う。** 前後は取付ボス（y=±51.5, φ5 → 内端 49.0）を
+    基板の外へ出すため深く詰める。左右を同じだけ詰めると、キー領域が
+    基板からはみ出す。
     """
-    keys = HALVES[name]
-    _, (plate_w, plate_h) = plate_positions(keys)
+    from interface import PCB_INSET_Y, plate_positions
     x0, y0, x1, y1 = outline_extent(name)
-    assert x1 - x0 == pytest.approx(plate_w - PCB_INSET * 2, abs=0.05)
-    assert y1 - y0 == pytest.approx(plate_h - PCB_INSET * 2, abs=0.05)
-    assert abs(x0 + x1) < 0.05, f"{name}: 外形が左右方向で原点中心になっていない"
-    assert abs(y0 + y1) < 0.05, f"{name}: 外形が前後方向で原点中心になっていない"
+    _, (case_w, case_h) = plate_positions(HALVES[name])
+    assert x1 - x0 == pytest.approx(case_w - PCB_INSET * 2, abs=0.05)
+    assert y1 - y0 == pytest.approx(case_h - PCB_INSET_Y * 2, abs=0.05)
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -148,7 +156,9 @@ def test_every_footprint_is_inside_the_outline(name):
 def test_board_depth_matches_the_real_machine(name):
     """基板の奥行が、実機の本体奥行から導いた値になっていること。"""
     _, y0, _, y1 = outline_extent(name)
-    assert y1 - y0 == pytest.approx(108.0 - PCB_INSET * 2, abs=0.05)
+    # 前後は取付ボスを基板の外へ出すため、左右より深く詰めてある。
+    from interface import PCB_INSET_Y
+    assert y1 - y0 == pytest.approx(108.0 - PCB_INSET_Y * 2, abs=0.05)
 
 
 def test_corner_radius_is_applied():

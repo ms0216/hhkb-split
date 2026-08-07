@@ -30,7 +30,8 @@ from build123d import (
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from layout import bounds_mm, load_layout, split_halves  # noqa: E402
 
-from interface import (  # noqa: E402
+from interface import (
+    BEZEL_WALL,
     CORNER_R,
     M2_CLEAR_D,
     plate_positions,
@@ -91,7 +92,11 @@ def build_plate(keys, half):
 
     half は "left" / "right"。取付ネジの位置が左右で違うため必須。
     """
-    positions, (w, h) = plate_positions(keys)
+    positions, (case_w, case_h) = plate_positions(keys)
+    # **プレートはケースより上ケースの壁ぶん小さい。**
+    # かつては両者が同じで、プレートがそのまま天板だった。
+    w = case_w - BEZEL_WALL * 2
+    h = case_h - BEZEL_WALL * 2
     stabs = [(pos, stab_offset_for(k.w_u)) for pos, k in zip(positions, keys)]
     stabs = [(pos, s) for pos, s in stabs if s is not None]
 
@@ -104,8 +109,9 @@ def build_plate(keys, half):
                 with BuildLine():
                     Polyline(*stab_polygon(s, at=pos), close=True)
                 make_face(mode=Mode.SUBTRACT)
-            # 取付ネジのバカ穴。ケース側のボスと同じ位置に開ける。
-            # これが無いとプレートとケースを締結できない（当初開け忘れていた）。
+            # 取付ネジの逃げ。**手前の 3 箇所は縁を跨ぐので切り欠きになる。**
+            # プレートの縁 y=±52.40 に対して逃げが 50.30〜52.70 なので、
+            # 穴ではなく開いた切り欠きとして抜ける（設計どおり）。
             with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)

@@ -46,10 +46,16 @@ from build123d import (
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from interface import (  # noqa: E402
+    BEZEL_OPENING_GAP,
+    BEZEL_TOP_FRONT,
+    BEZEL_WALL,
+    PLATE_MARGIN_X,
+    PLATE_MARGIN_Y,
     CORNER_R,
     boss_positions_plan,
     plan_depth,
     M2_BOSS_D,
+    M2_CLEAR_D,
     M2_PILOT_D,
     PLATE_T,
     boss_positions,
@@ -242,7 +248,10 @@ def build_case(keys, half):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_BOSS_D / 2, z_max,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-    bosses = _b.part - cutter_pcb
+    # **ボスの頭はプレートの下面（リム）で止める。**
+    # 以前は基板の下面で止めていた（基板をボスに載せる設計だったため）。
+    # 上ケース方式ではネジは上ケースから入り、プレートはボスの上に載る。
+    bosses = _b.part - cutter
     # 電池室の仕切り壁。**基板の下面（ソケットの先端）で頭を切る。**
     #
     # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
@@ -372,6 +381,14 @@ def build_case(keys, half):
                          mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
 
+        # 最後に外形で切り落とす。
+        # **ボスは壁と一体で、平面図では外形をわずかに越える**（手前のボスは
+        # 0.021mm 出る）。外形を保証するために最後に必ず通す。
+        with BuildSketch():
+            with Locations((0, y_off)):
+                RectangleRounded(w, h, CORNER_R)
+        extrude(amount=z_max, mode=Mode.INTERSECT)
+
     return case.part, (w, h_body), (z_front, z_rear)
 
 
@@ -477,6 +494,65 @@ def foot_height(h, add_deg):
     return FOOT_BASE_H + lever * tan(radians(add_deg))
 
 
+def build_topcase(keys, half):
+    """上ケース（ベゼル）。キーの周りに立つ枠。
+
+    **これが手前端 17mm と「ネジがキー領域に無いこと」を同時に成立させる。**
+    経緯は docs/hardware/decisions/2026-08-07-top-case.md。
+
+    断面（前縁）::
+
+        17.50 ┬─────┐                    ベゼル上面
+              │     │
+        11.78 │     └────────┐           プレート上面（内側はここに載る）
+        10.28 └──────────────┘           リム（下ケースの壁の上）
+              ├1.6mm┤                    上ケースの壁
+    """
+    positions, (w, h_plate) = plate_positions(keys)
+    h_body = plan_depth(h_plate)
+    key_w = w - PLATE_MARGIN_X * 2
+    key_h = h_body - PLATE_MARGIN_Y * 2
+    rim = PLATE_TOP_FRONT - PLATE_T
+    z_max = BEZEL_TOP_FRONT + h_body * tan(radians(TILT_DEG)) + 5.0
+
+    # 切削・保持用の立体はコンテキストの外で作る（中で作ると即座に合体される）。
+    keep_above_rim = tilted_cutter(w, h_body, rim)
+    cut_above_top = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
+    # 内側の座ぐり: 壁より内で、プレート上面より下を削る
+    with BuildPart() as _inner:
+        with BuildSketch():
+            RectangleRounded(w - BEZEL_WALL * 2, h_body - BEZEL_WALL * 2,
+                             max(CORNER_R - BEZEL_WALL, 0.5))
+        extrude(amount=z_max)
+    # プレート上面から 0.1mm 逃がす。**当たりにはしない。**
+    # 3Dプリントの公差が未確定（docs/hardware/open-gaps.md #11）なので、
+    # 押し付ける設計にすると個体差でプレートが反る。薄いガスケットで詰める。
+    rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
+
+    with BuildPart() as top:
+        with BuildSketch():
+            RectangleRounded(w, h_body, CORNER_R)
+        extrude(amount=z_max)
+        add(keep_above_rim, mode=Mode.INTERSECT)     # リムより下を落とす
+        add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
+        add(rebate, mode=Mode.SUBTRACT)              # プレートが入る座ぐり
+        # キーの開口
+        with BuildSketch():
+            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
+                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
+        extrude(amount=z_max, mode=Mode.SUBTRACT)
+        with BuildSketch(Plane.XY.offset(-z_max)):
+            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
+                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
+        extrude(amount=z_max, mode=Mode.SUBTRACT)
+        # ネジ穴（手前 3 箇所）。頭は座ぐりに沈める。
+        for bx, by in _boss_positions(half):
+            with Locations((bx, by, 0)):
+                Cylinder(M2_CLEAR_D / 2, z_max * 2, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    return top.part, (w, h_body)
+
+
 def build_battery_lid(half, keys):
     """電池蓋。ケースのレールに差し込んで奥へスライドさせる。
 
@@ -557,6 +633,12 @@ def main():
             fmesh, fstl = to_mesh(foot, f"tilt_foot_{int(deg)}deg_{name}")
             assert_watertight(fmesh, fstl.name)
             print(f"      チルト脚 +{deg:.0f}° 高さ {fz:.2f}mm -> {fstl.name}")
+        # 上ケース（ベゼル）
+        topc, (tw, th) = build_topcase(keys, name)
+        tmesh, tstl = to_mesh(topc, f"topcase_{name}")
+        assert_watertight(tmesh, tstl.name)
+        print(f"      上ケース {tw:.2f} x {th:.2f} x "
+              f"{topc.bounding_box().size.Z:.2f}mm -> {tstl.name}")
         render_outline_2d(part, BUILD / f"case_{name}_section.png", axis="X",
                           title=f"case {name} - side section", annotate_count=False)
         bb = part.bounding_box()
@@ -564,7 +646,9 @@ def main():
               f"プレート上面 前 {z_front:.1f} / 奥 {z_rear:.1f}mm  傾斜 {TILT_DEG}°")
         print(f"      実測値 {bb.size.X:6.2f} x {bb.size.Y:6.2f} x {bb.size.Z:6.2f}mm  "
               f"水密={mesh.is_watertight}")
-        assert abs(bb.size.X - w) < 0.01 and abs(bb.size.Y - h) < 0.01, "外形が設計値と違う"
+        # 奥行はコブぶん長い（実機も本体 108 ＋ コブ 12 ＝ 120mm）
+        assert abs(bb.size.X - w) < 0.01, "幅が設計値と違う"
+        assert abs(bb.size.Y - (h + BUMP_DEPTH)) < 0.01, "奥行が設計値と違う"
         assert abs(bb.size.Z - (z_rear - PLATE_T)) < 0.01, "高さが設計値と違う"
     return 0
 

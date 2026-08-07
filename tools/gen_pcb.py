@@ -24,7 +24,8 @@ import pcbnew
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-from interface import (CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
+from interface import (
+    PCB_INSET_Y,CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
@@ -330,7 +331,7 @@ def build(half, keys):
     keys = keymap_order(keys)
     positions, (plate_w, plate_h) = plate_positions(keys)
     pcb_w = plate_w - PCB_INSET * 2
-    pcb_h = plate_h - PCB_INSET * 2
+    pcb_h = plate_h - PCB_INSET_Y * 2
 
     board = pcbnew.CreateEmptyBoard()
     _apply_jlcpcb_rules(board)
@@ -417,12 +418,12 @@ def build(half, keys):
     # **非メッキ貫通穴なので両面をふさぐ**。列を表に逃がしても避けて通る必要がある。
     _route(board, positions, rc)
 
-    # 取付穴
-    for i, (mx, my) in enumerate(boss_positions(half), start=1):
-        h = _load(KICAD_FP / f"{MOUNT_FP[0]}.pretty", MOUNT_FP[1])
-        h.SetPosition(to_kicad(mx, my))
-        h.SetReference(f"H{i}")
-        board.Add(h)
+    # 取付穴は**もう開けない。**
+    #
+    # 上ケース方式では、基板はプレートとスイッチで機械的に一体になり、
+    # 上下のケースに挟まれて保持される。ネジは上ケースから、基板の外側
+    # （y=±51.5、基板の縁 49.0 より外）にあるボスへ入る。
+    # 基板に穴が要らないぶん、配線の自由度も上がる。
 
     # シルクの線幅を製造能力まで太らせる。
     #
@@ -458,7 +459,7 @@ def build(half, keys):
     board.Save(str(path))
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
-            (n_sw, n_stab, len(boss_positions(half)), rows, cols, len(nets)))
+            (n_sw, n_stab, 0, rows, cols, len(nets)))
 
 
 def main():
@@ -466,7 +467,7 @@ def main():
     for half, keys in (("left", keys_l), ("right", keys_r)):
         path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys)
         print(f"{half:5s} 基板 {w:7.2f} x {h:6.2f}mm  "
-              f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}")
+              f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}（不要）")
         print(f"      行列 {rows} 行 × {cols} 列 / ネット {n_net} 本")
         print(f"      {path}")
     return 0
