@@ -36,7 +36,7 @@ PLATE_TO_PCB = 3.5       # [暫定] プレート下面から基板上面まで�
 # 電池
 # --------------------------------------------------------------------------
 AA_D, AA_L = 14.5, 50.5  # [確定] 単3
-AA_TERMINAL = 6.0        # [暫定] 電極バネと配線に要る長手方向の余裕（片側）
+AA_TERMINAL = 8.0        # [暫定] 電極バネと配線に要る長手方向の余裕（合計）
 
 # --------------------------------------------------------------------------
 # MCU
@@ -74,10 +74,14 @@ def place_pcb(env, h_plate, rim_front):
 
 
 def battery_envelope(center):
-    """単3×2 と電極が占有する空間。"""
+    """単3×2 と電極が占有する空間。
+
+    左右方向に 2 本直列で寝かせる。前後に並べると奥行 30mm を要し、
+    傾いた基板の下に入らない。
+    """
     with BuildPart() as env:
         with Locations(center):
-            Box(AA_L + AA_TERMINAL * 2, AA_D * 2 + 1.0, AA_D,
+            Box(AA_L * 2 + AA_TERMINAL, AA_D + 1.0, AA_D,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
     return env.part
 

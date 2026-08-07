@@ -74,18 +74,21 @@ CLEARANCE = 0.2          # 収縮を見込んだ嵌合の逃げ
 # --------------------------------------------------------------------------
 # 内部に収めるもの
 # --------------------------------------------------------------------------
-AA_D, AA_L = 14.5, 50.5          # 単3電池
-BATT_W = AA_D * 2 + 1.0          # 2 本並べた奥行（接触を避ける 1mm を加える）
-BATT_H = AA_D + 1.0
-BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
-
-# 後部のコブ
+# 単3電池は**左右方向に 2 本直列**で寝かせる。
 #
-# 当初、電池を基板の真下（奥寄り）に置いたが、打鍵面が 7.3° 傾いているため
-# 基板も傾いて入り、手前側で電池と 4,000mm^3 衝突した。
-# 実機は本体 108mm の後ろに 12mm のコブを張り出させ、電池を**基板の後ろ**へ
-# 逃がしている（だから全体で 120mm ある）。同じ構造にする。
-BUMP_DEPTH = 14.0
+# 当初は前後方向に 2 本並べ（奥行 30mm 必要）、基板の真下に置いた。しかし
+# 打鍵面が 7.3° 傾いているので基板も傾いて入り、手前側で 4,000mm^3 衝突した。
+# 実機はこれを本体後ろの 12mm のコブで逃がしている。
+#
+# 占有空間から先に組み直したところ、左右方向に並べれば奥行は 15.5mm で済み、
+# 傾いた基板の下の「奥側の背の高い領域」に収まることが分かった。
+# コブを足す必要がなく、分割版として小さく収まる。
+AA_D, AA_L = 14.5, 50.5
+BATT_H = AA_D + 1.0              # 占有高さ
+BATT_W = AA_D + 1.0              # 占有奥行（左右に寝かせるので 1 本ぶん）
+BATT_X = AA_L * 2 + 8.0          # 占有幅（2 本直列＋電極）
+BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
+BUMP_DEPTH = 0.0                 # コブは不要になった
 
 from envelopes import PCB_T, PLATE_TO_PCB, SOCKET_DROP  # noqa: E402
 
@@ -114,7 +117,11 @@ FOOT_INSET_REAR = 10.0   # 後縁から脚中心までの距離
 FOOT_D = 12.0            # 脚の直径
 FOOT_PEG_D = 4.0         # 差し込みピンの径
 FOOT_PEG_H = 4.0
-TILT_STEPS = [3.0, 6.0]  # 追加する傾斜（0° は脚なし）
+# 脚は**後ろの隅**に差し、そこが設置点になる。実機の折りたたみ脚と同じ役割。
+# 0° 用の短い脚も作るので、脚は常に 2 個使う（外すのではなく差し替える）。
+# 当初は脚を内側に置き、電池室と蓋の中にボスが立っていた。
+TILT_STEPS = [0.0, 3.0, 6.0]
+FOOT_BASE_H = 2.0        # 0° の脚の高さ。前側のゴム足と同じ厚み
 
 # --------------------------------------------------------------------------
 # 三脚ネジ穴（テンティング用。普段は使わない）
@@ -186,18 +193,15 @@ def build_case(keys):
         # 4. 電池室。後壁ぎわ（コブの中）に置き、仕切り壁と天井を作る。
         #    天井を張らないと、傾いた基板が電池室の上に落ちてきて衝突する。
         y_batt = battery_center(h_body)
-        y_div = y_batt - BATT_W / 2 - WALL / 2          # 仕切り壁の中心
+        # 仕切り壁は電池からわずかに離す。ちょうど接する位置に置くと
+        # 干渉として検出される（接触は 0 にならない）。
+        y_div = y_batt - BATT_W / 2 - WALL / 2 - CLEARANCE
         with Locations((0, y_div, FLOOR)):
             Box(w - WALL * 2, WALL, BATT_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 天井（電池室の上を塞ぎ、基板の受けにもなる）
-        y_cap0 = y_div - WALL / 2
-        y_cap1 = h_body / 2 + BUMP_DEPTH
-        # 天井は**板**であって充填ではない。上端まで埋めると基板の入る空間を
-        # 潰す（7,083mm^3 の食い込みとして検出された）。厚みは壁と同じ。
-        with Locations((0, (y_cap0 + y_cap1) / 2, FLOOR + BATT_H)):
-            Box(w - WALL * 2, y_cap1 - y_cap0, WALL,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 天井は張らない。電池の上には基板が来るので、板を入れると
+        # 傾いた基板の下端を突き上げる（2,817mm^3 の食い込みとして検出）。
+        # 電池は 手前=仕切り壁 / 左右と奥=側壁 / 下=蓋 / 上=基板 で保持される。
 
         # 5. ネジボス。四隅と長辺の中央に立てる
         for bx, by in _boss_positions(w, h_plate):
@@ -267,8 +271,10 @@ def battery_center(h_body):
 
     ケース・蓋の開口・組み立て検査がすべてこの 1 つの関数を使う。
     同じ式を複数箇所に書いたせいで 14mm ずれた前科があるため。
+
+    奥へ寄せるほど傾いた基板との余裕が増えるので、後壁ぎわに置く。
     """
-    y_rear_inner = h_body / 2 + BUMP_DEPTH - WALL
+    y_rear_inner = h_body / 2 - WALL
     return y_rear_inner - BATT_MARGIN_REAR - BATT_W / 2
 
 
@@ -278,36 +284,36 @@ def _lid_opening(w, h_body):
     y は**本体部分の中心を原点**とした座標。コブの中に電池があるので、
     本体の後端より後ろに来る。
     """
-    return (0.0, battery_center(h_body), AA_L + 6.0, BATT_W)
+    return (0.0, battery_center(h_body), BATT_X, BATT_W)
 
 
 def _rubber_positions(w, h_body):
-    """ゴム足。前は本体の前隅、後ろはコブの後隅に置く。"""
+    """ゴム足は**前の 2 箇所**だけ。後ろはチルト脚が接地点を兼ねる。"""
     ix = w / 2 - RUBBER_INSET
-    iy0 = h_body / 2 - RUBBER_INSET
-    iy1 = h_body / 2 + BUMP_DEPTH - RUBBER_INSET
-    return [(-ix, -iy0), (ix, -iy0), (-ix, iy1), (ix, iy1)]
+    iy = h_body / 2 - RUBBER_INSET
+    return [(-ix, -iy), (ix, -iy)]
 
 
-def _foot_positions(w, h):
-    """チルト脚の位置。後縁寄りの左右 2 箇所。
+def _foot_positions(w, h_body):
+    """チルト脚の位置。**後ろの隅**。ここが接地点になる。
 
-    隅はゴム足に使うので、脚は内側へ寄せる。隅に両方を置くと座ぐりと
-    ピン穴が重なる（底面図で発覚）。
+    内側に寄せると電池室と電池蓋の中にボスが立つ。実際にそうなっており、
+    断面図で「電池室の中に 2 本の柱」として見えて発覚した。
+    隅なら電池（幅 109mm）にも蓋の開口にも当たらない。
     """
-    y = h / 2 + BUMP_DEPTH - FOOT_INSET_REAR
-    x = w / 2 - RUBBER_INSET - RUBBER_D / 2 - FOOT_D
+    y = h_body / 2 - RUBBER_INSET
+    x = w / 2 - RUBBER_INSET
     return [(-x, y), (x, y)]
 
 
 def foot_height(h, add_deg):
-    """後縁を add_deg だけ持ち上げるのに要る脚の高さ。
+    """後ろを add_deg だけ持ち上げるのに要る脚の高さ。
 
-    支点は前縁。脚は後縁から FOOT_INSET_REAR の位置にあるので、
-    支点からの距離はケース奥行から FOOT_INSET_REAR を引いた値になる。
+    支点は前側のゴム足。脚は後ろの隅にあるので、支点からの距離は
+    前後のゴム足／脚の間隔になる。0° の脚はゴム足と同じ高さ。
     """
-    lever = h - FOOT_INSET_REAR
-    return lever * tan(radians(add_deg))
+    lever = h - RUBBER_INSET * 2
+    return FOOT_BASE_H + lever * tan(radians(add_deg))
 
 
 def build_battery_lid(keys):
