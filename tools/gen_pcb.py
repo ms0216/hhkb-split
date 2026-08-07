@@ -16,6 +16,7 @@
 """
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -394,6 +395,43 @@ def _place_electronics(board, half, net):
                     pad.SetNet(net(netname))
 
 
+def _npth_holes(board):
+    """非メッキ貫通穴（スイッチの機械穴）の一覧。**全層をふさぐ。**
+
+    表・裏の配線では避けていたが、内層では避けていなかった。
+    穴は層を選ばないので、内層でも同じ仕組みを通す必要がある。
+    """
+    out = []
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
+                q = pad.GetPosition()
+                out.append((pcbnew.ToMM(q.x), pcbnew.ToMM(q.y),
+                            pcbnew.ToMM(pad.GetSize().x) / 2))
+    return out
+
+
+def _clear_x(holes, near, y0, y1, margin=0.6, used=(), keep=1.0):
+    """near の近くで、y0〜y1 を縦に抜けられる x を探す。"""
+    lo, hi = min(y0, y1), max(y0, y1)
+
+    def ok(x):
+        # **すでに使った通路から離す。**行ごとに別の x を使わないと、
+        # 内層で縦配線どうしが重なって短絡する（14 件出た）。
+        if any(abs(x - u) < keep for u in used):
+            return False
+        return not any(lo - hr <= hy <= hi + hr and abs(hx - x) < hr + margin
+                       for hx, hy, hr in holes)
+
+    # 基板の幅ぶん探す。**80 ステップ（±20mm）では足りなかった。**
+    # 最下段まで降りる行は、途中の段の穴をすべて避ける必要がある。
+    for d in [i * 0.25 for i in range(0, 360)]:
+        for cand in (near - d, near + d):
+            if ok(cand):
+                return round(cand, 2)
+    return None
+
+
 def _route_electronics(board, half, net):
     """電子部品を結線する。
 
@@ -423,17 +461,57 @@ def _route_electronics(board, half, net):
         _track(board, pos, off, pcbnew.B_Cu, pad.GetNet())
         _via(board, off, pad.GetNet())
 
-    # 2. 残りは In2.Cu で結ぶ。ネットごとに y のレーンをずらす。
+    # 2. 行を各段のバスへ降ろす。**ここが 2 層では通らなかった箇所。**
+    #    内層 2 を縦に降り、スイッチの非メッキ穴を避ける x を選ぶ。
+    holes = _npth_holes(board)
+    rows = {}
+    for fp in board.GetFootprints():
+        if not re.fullmatch(r"D\d+", fp.GetReference()):
+            continue
+        pad = fp.FindPadByNumber("1")
+        n = pad.GetNetname()
+        if n.startswith("ROW"):
+            rows.setdefault(n, []).append(pad)
+    used_x = []
+    for k, (name, cathodes) in enumerate(sorted(rows.items())):
+        src = next((p for p in pads.get(name, [])), None)
+        if src is None:
+            continue
+        tgt = min(cathodes, key=lambda p: abs(p.GetPosition().x - src.GetPosition().x))
+        sx = pcbnew.ToMM(src.GetPosition().x)
+        sy = pcbnew.ToMM(src.GetPosition().y)
+        tx = pcbnew.ToMM(tgt.GetPosition().x)
+        ty = pcbnew.ToMM(tgt.GetPosition().y)
+        x = _clear_x(holes, sx, sy, ty, used=used_x)
+        if x is None:
+            raise RuntimeError(f"{name}: 内層を縦に抜ける経路が見つからない")
+        used_x.append(x)
+        # **コネクタのパッド列に沿って走らせない。**
+        # 横に長く走ると、隣のパッドとレジストのアパーチャで橋を作る
+        # （49.5mm の配線が 24 件のブリッジを出した）。
+        # 直角に 1.6mm 離れてからビアで内層へ落とし、横移動は内層で行う。
+        # **行ごとに高さをずらす。**同じ y に並べると、隣の行のビアと
+        # 0.5mm（コネクタのピッチ）しか離れず当たる。
+        oy = sy + (1 if ty > sy else -1) * (1.6 + k * 0.9)
+        _track(board, src.GetPosition(), mm(sx, oy), pcbnew.B_Cu, src.GetNet())
+        _via(board, mm(sx, oy), src.GetNet())
+        _track(board, mm(sx, oy), mm(x, oy), pcbnew.In2_Cu, src.GetNet())
+        _track(board, mm(x, oy), mm(x, ty), pcbnew.In2_Cu, src.GetNet())
+        _via(board, mm(x, ty), src.GetNet())
+        _track(board, mm(x, ty), tgt.GetPosition(), pcbnew.B_Cu, src.GetNet())
+        pads.pop(name, None)
+
+    # 3. 残りは In2.Cu で結ぶ。ネットごとに y のレーンをずらす。
     for i, (name, group) in enumerate(sorted(pads.items())):
         group = sorted(group, key=lambda p: p.GetPosition().x)
         if name.startswith("COL"):
-            continue                      # 列は 3 で別に扱う
+            continue                      # 列は 4 で別に扱う
         for a, b in zip(group, group[1:]):
             # **レーンはネットごとに固有にする。**6 本で使い回していて
             # 重なっていた（違反 29/49 件）。帯は 9.25mm あるので足りる。
             _link(board, a, b, lane=1.2 + i * 0.45)
 
-    # 3. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
+    # 4. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
     #    In2 で近くまで運んでからビアで表へ上げる。
     k = 0
     for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
@@ -480,7 +558,10 @@ def _link(board, a, b, lane, to_via=False):
         _via(board, mm(*vb), netitem)
     else:
         vb = (bx, by)
-    y = ay + lane
+    # **横配線は帯（段と段の間）の中に収める。**パッドからの相対だと
+    # 部品ごとのパッド位置のぶんはみ出し、スイッチの非メッキ穴を通る。
+    band = min(BAND_Y, key=lambda b: abs((ORIGIN[1] - b) - ay))
+    y = (ORIGIN[1] - band) + max(-3.4, min(3.4, lane))
     for p, q in ((va, (va[0], y)), ((va[0], y), (vb[0], y)), ((vb[0], y), vb)):
         if p != q:
             _track(board, mm(*p), mm(*q), pcbnew.In2_Cu, netitem)
