@@ -17,15 +17,21 @@ def test_outer_size_matches_the_tilted_plate(name):
 
     平らなプレートを 7.3° 傾けると平面図の奥行は cos 倍に縮む。
     プレートの平らな寸法をそのまま使うとリムが 0.84mm 長くなる。
+
+    **奥行はコブぶんだけプレートより長い。** 実機も同じで、本体 108mm に
+    電池コブ 12mm が足されて全長 120mm になる。
     """
+    from gen_case import BUMP_DEPTH
     from gen_plate import plate_positions
     from interface import plan_depth
     part, (w, h_body), _ = build_case(HALVES[name], name)
     _, (pw, h_plate) = plate_positions(HALVES[name])
     bb = part.bounding_box().size
     assert bb.X == pytest.approx(pw, abs=0.01)
-    assert h_body == pytest.approx(plan_depth(h_plate), abs=0.01)
-    assert bb.Y == pytest.approx(h_body, abs=0.01)
+    assert h_body == pytest.approx(plan_depth(h_plate), abs=0.01), \
+        "プレートが載る範囲が、傾けたプレートの平面図と違う"
+    assert bb.Y == pytest.approx(h_body + BUMP_DEPTH, abs=0.01), \
+        "ケース全体の奥行が「プレートの範囲 ＋ コブ」になっていない"
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
@@ -173,8 +179,12 @@ def test_bosses_do_not_stand_inside_the_battery_compartment(name):
     from interface import plan_depth
     from verify import intersection_volume
 
+    from gen_case import battery_x_center
     _, (w, h_plate) = plate_positions(HALVES[name])
-    batt = battery_envelope((0, battery_center(plan_depth(h_plate)),
+    # **電池の実際の X 位置を使う。** 0 のまま書いていて、電池を外側へ
+    # 寄せたあとも中央にあるものとして検査していた（＝別の場所を見ていた）。
+    batt = battery_envelope((battery_x_center(name, w),
+                             battery_center(plan_depth(h_plate)),
                              FLOOR + AA_D / 2))
     for bx, by in _boss_positions(name):
         with BuildPart() as b:

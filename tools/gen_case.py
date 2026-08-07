@@ -59,8 +59,26 @@ from interface import (  # noqa: E402
 # 実機から確定した値（docs/hardware/dimensions.md §4.5）
 # --------------------------------------------------------------------------
 TILT_DEG = 7.3           # 打鍵面の傾斜。topre_key の実測値
-PLATE_TOP_FRONT = 17.5   # 前縁でのプレート上面高さ。実機の手前縁 17mm に合わせた暫定値。
-                         # 実測後に調整する唯一のつまみ
+
+# 前縁でのプレート上面高さ。**定数で置かず、要求から導く。**
+#
+# 以前は 17.5 と直接書いていた。「実機の手前縁 17mm に合わせた」つもりだったが、
+# **その 17mm はベゼル（リム）の高さで、実機のプレート面は 14.00mm**。
+# 取り違えた結果、全段のキートップが 3.5mm 高くなっていた。
+#
+#   ホーム段  実機 31.6mm  →  当時の設計 35.1mm
+#
+# しかも test_keytop_heights_match_the_real_machine は参照モデルが実機と
+# 合っているかを見ているだけで、**私たちの設計は検査していなかった**。
+# 最重要要求を守っているように見えて、守っていないテストだった。
+#
+# 以後は目標から逆算する。キャップの実測が入れば自動でここが動く。
+TARGET_KEYTOP_HOME = 31.6    # 実機のホーム段キートップ高さ（dimensions.md §4.5）
+CAP_LIFT = 6.2               # [暫定] プレート上面 → キーキャップ底面（MX ＋ キャップ）
+CAP_H_HOME = 6.7             # [暫定] ホーム段のキャップ高さ
+_Y_HOME = 6.375 + 2.5 * 19.05          # ホーム段のキー中心（手前から）
+PLATE_TOP_FRONT = round(
+    TARGET_KEYTOP_HOME - CAP_LIFT - CAP_H_HOME - _Y_HOME * tan(radians(TILT_DEG)), 2)
 
 # --------------------------------------------------------------------------
 # 3Dプリント（K1 Max / PLA / ノズル 0.4mm）に合わせた値
@@ -87,15 +105,22 @@ AA_D, AA_L = 14.5, 50.5
 BATT_H = AA_D + 1.0              # 占有高さ
 BATT_W = AA_D + 1.0              # 占有奥行（左右に寝かせるので 1 本ぶん）
 BATT_X = AA_L * 2 + 8.0          # 占有幅（2 本直列＋電極）
-BATT_MARGIN_REAR = 15.0          # 電池と後壁の間隔。
-                                 # **チルト脚のボスを Y 方向で避けるための値。**
-                                 # 2.0mm（後壁ぎわ）に置くと、後隅のチルト脚ボス
-                                 # (x=±61.2, y=41.6, r=4.0, z=0..5.6) が電池
-                                 # (z=2.4..16.9) の下に入り 307mm^3 食い込む。
-                                 # 前へ寄せるほど傾いた基板との余裕は減るので、
-                                 # 脚を避ける最小限に留める（test_two_aa_batteries_fit
-                                 # と test_pcb_does_not_hit_the_battery が両側を守る）。
-BUMP_DEPTH = 0.0                 # コブは不要になった
+BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
+# **コブは要る。実機と同じ理由で。**
+#
+# 一度「コブは不要になった」として 0 にしていた。だが実際には、
+# プレートを 3.5mm 高くすることで無理に押し込んでいただけだった。
+# ホーム段のキートップを実機どおり 31.6mm に戻した瞬間、電池が基板に
+# 3,648mm^3 食い込むと組み立て検査が報告した。
+#
+# MX ＋ ホットスワップソケットは、プレート上面からソケット下端まで 9.8mm ある。
+# Topre は基板の下に出っ張りが無いのでここが 5mm 以上薄い。**実機が単3×2 を
+# 収めるためにコブを持っているのと、まったく同じ事情**が分割版にも当てはまる。
+#
+# 実機は本体 108mm ＋ コブ 12mm ＝ 奥行 120mm（PFU 公称）。同じ 12mm を採る。
+BUMP_DEPTH = 18.0                # 実機は 12mm。MX ＋ ソケットが Topre より
+                                 # 5mm 厚いぶん、6mm 深くなる。12/14/16 では
+                                 # 電池が基板に食い込むことを検査で確認した
 
 # --------------------------------------------------------------------------
 # 子基板（XIAO を載せる小さな別基板）
@@ -222,6 +247,11 @@ def build_case(keys, half):
             Box(BATT_X, WALL, BATT_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     divider = _d.part - cutter_under_pcb
+    with BuildPart() as _n:
+        with Locations((0, 0, FLOOR)):
+            Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+    nut_boss = _n.part - cutter_under_pcb
 
     with BuildPart() as case:
         # 1. 外形を最大高さまで立ち上げる（コブぶん後ろへずらす）
@@ -272,7 +302,9 @@ def build_case(keys, half):
         # 蓋の開口より**先に**置く。開口は床を貫通させる操作なので、
         # あとから足すとボスの根元が削られる。
         db_x = daughterboard_x_center(half, w)
-        db_y = h_body / 2 - WALL - DB_FROM_REAR - DB_D / 2
+        # 子基板もコブの中。USB-C はコブの奥面から出る（実機の USB も同じ面）。
+        y_rear_outer = h_body / 2 + BUMP_DEPTH
+        db_y = y_rear_outer - WALL - DB_FROM_REAR - DB_D / 2
         for dx in (-DB_BOSS_DX / 2, DB_BOSS_DX / 2):
             for dy in (-DB_BOSS_DY / 2, DB_BOSS_DY / 2):
                 with Locations((db_x + dx, db_y + dy, FLOOR)):
@@ -282,7 +314,7 @@ def build_case(keys, half):
                     Cylinder(M2_PILOT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
                              align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥の壁を貫く。壁の厚みより長い立体で切らないと薄皮が残る。
-        with Locations((db_x, h_body / 2, usb_center_z())):
+        with Locations((db_x, y_rear_outer, usb_center_z())):
             Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
@@ -300,9 +332,13 @@ def build_case(keys, half):
             Box(ow, LID_STOP, RAIL_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
         # 7. 三脚ネジ穴（1/4-20 の六角ナットを底面から埋め込む）
-        with Locations((0, 0, FLOOR)):
-            Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H,
-                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        #
+        # **床から立つものは、すべて基板の下面で頭を切る。**
+        # ここだけ切っていなかったため、プレートを実機の高さまで下げたときに
+        # ボスの頂点 11.40mm がソケット下端 8.84mm を突き上げ、
+        # 250mm^3 の食い込みとして検出された。ナット（厚 5.7mm）は
+        # 切ったあとの高さでも完全に収まる。
+        add(nut_boss, mode=Mode.ADD)
         with Locations((0, 0, 0)):
             Cylinder(NUT_THRU_D / 2, NUT_BOSS_H + FLOOR * 2, mode=Mode.SUBTRACT,
                      align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -338,7 +374,9 @@ def battery_center(h_body):
 
     奥へ寄せるほど傾いた基板との余裕が増えるので、後壁ぎわに置く。
     """
-    y_rear_inner = h_body / 2 - WALL
+    # **コブの中に置く。** コブぶんを足さずに書いていた時期があり、
+    # 電池が本体側へ 12mm 前へずれていた。
+    y_rear_inner = h_body / 2 + BUMP_DEPTH - WALL
     return y_rear_inner - BATT_MARGIN_REAR - BATT_W / 2
 
 

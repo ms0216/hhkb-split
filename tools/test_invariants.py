@@ -8,6 +8,8 @@
 そこの根拠を更新すること。根拠なしにこのファイルを緩めない。
 """
 
+from pathlib import Path
+
 import pytest
 from layout import UNIT, bounds_mm, load_layout, split_halves
 
@@ -34,9 +36,27 @@ def test_typing_plane_tilt_is_7_3deg():
 
 
 def test_front_edge_height():
-    """Tom's Hardware の実測 17mm と別レビューの約18mm の中間。手首が当たる。"""
+    """手首が当たる手前端の高さ。
+
+    **このテストは以前 PLATE_TOP_FRONT == 17.5 を固定していた。**
+    実機の手前端 17mm は**ベゼル（リム）の上面**で、プレート面はその 5.2mm 下の
+    14.00mm。二つを混同したまま固定していたため、全段のキートップが 3.5mm
+    高いまま誰も気づかなかった。**要求を守っているように見えて、
+    守っていない値を固定していた。**
+
+    いまの設計にはベゼルが無く、手前端＝プレート面。実機との差は
+    docs/hardware/open-gaps.md に記録し、忘れられないようにしてある。
+    """
     from gen_case import PLATE_TOP_FRONT
-    assert PLATE_TOP_FRONT == 17.5
+    import re
+    doc = (Path(__file__).resolve().parent.parent
+           / "docs/hardware/open-gaps.md").read_text()
+    m = re.search(r"手前端の高さ\s*\|\s*\*{0,2}([\d.]+)mm\*{0,2}\s*\|\s*\*{0,2}([\d.]+)mm", doc)
+    assert m, "open-gaps.md に手前端の行が無い"
+    designed, real = float(m.group(1)), float(m.group(2))
+    assert designed == PLATE_TOP_FRONT, \
+        f"設計値 {PLATE_TOP_FRONT} と文書 {designed} が食い違っている"
+    assert designed < real, "差が無くなったなら、この行を open-gaps.md から消すこと"
 
 
 def test_keytop_heights_match_the_real_machine():
@@ -146,3 +166,48 @@ def test_plate_depth_matches_the_real_machine():
         x0, y0, x1, y1 = bounds_mm(keys)
         _, h = plate_size(x1 - x0, y1 - y0)
         assert h == pytest.approx(108.0, abs=0.01)
+
+
+def test_our_design_actually_reaches_the_real_keytop_heights():
+    """**私たちの設計**のキートップ高さが実機と合っていること。
+
+    すぐ上の test_keytop_heights_match_the_real_machine は、参照モデルが
+    実機と合っているかを見ているだけで、**設計そのものは検査していなかった**。
+    最重要要求を守っているように見えて、守っていないテストだった。
+
+    そのせいで PLATE_TOP_FRONT を 17.5mm（実機のベゼル高さ）と取り違え、
+    全段のキートップが 3.5mm 高いまま気づかなかった。実機のプレート面は
+    14.00mm で、ベゼルはその上に 5.2mm 立っている。
+    """
+    from math import radians, tan
+
+    from gen_case import CAP_LIFT, PLATE_TOP_FRONT, TILT_DEG
+    from reference_hhkb import ROWS, solve
+
+    target = [round(z, 1) for z in solve(4.0).rows_cap_top_z]
+    t = tan(radians(TILT_DEG))
+    got = []
+    for i, (_, cap_h, _) in enumerate(ROWS):
+        y = 6.375 + (i + 0.5) * 19.05                  # 手前からのキー中心
+        got.append(round(PLATE_TOP_FRONT + y * t + CAP_LIFT + cap_h, 1))
+
+    diffs = [g - r for g, r in zip(got, target)]
+    worst = max(abs(d) for d in diffs)
+    assert worst <= 0.15, (
+        "設計のキートップ高さが実機と違う\n"
+        + "\n".join(f"  {n:8s} 実機 {r:5.1f}  設計 {g:5.1f}  差 {d:+.1f}"
+                    for (n, _, _), r, g, d in zip(ROWS, target, got, diffs)))
+
+
+def test_the_case_is_no_deeper_than_it_has_to_be():
+    """奥行が、実機（本体 108 ＋ コブ 12 ＝ 120mm）から離れすぎないこと。
+
+    コブは電池のために要るが、無制限に伸ばしてよいものではない。
+    分割キーボードなので机の占有面積に効く。
+    """
+    from gen_case import BUMP_DEPTH
+    from reference_hhkb import DEPTH_BODY, DEPTH_FULL
+    total = 107.12 + BUMP_DEPTH
+    assert total <= DEPTH_FULL + 6.0, (
+        f"奥行 {total:.1f}mm が実機 {DEPTH_FULL}mm より "
+        f"{total - DEPTH_FULL:.1f}mm 深い。コブを見直すこと")

@@ -83,11 +83,11 @@ def build_assembly(keys, half):
 
     # 子基板。**取付ボスの上に載る位置**に置く。ケース側の造作と同じ
     # 関数から座標を取るので、片方だけ動かしてもずれない。
-    from gen_case import (DB_BOSS_H, DB_D, DB_FROM_REAR, DB_T, DB_W, WALL,
-                          daughterboard_x_center)
+    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_D, DB_FROM_REAR, DB_T, DB_W,
+                          WALL, daughterboard_x_center)
     parts["db"] = daughterboard_envelope(
         (daughterboard_x_center(half, w),
-         h_case / 2 - WALL - DB_FROM_REAR - DB_D / 2,
+         h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2,
          FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
 
     return parts, (w, h_case)
