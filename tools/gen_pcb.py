@@ -122,15 +122,31 @@ def _rounded_rect_outline(board, w, h, r):
 # --------------------------------------------------------------------------
 # 配線
 # --------------------------------------------------------------------------
-TRACK_W = 0.25          # JLCPCB の最小 0.127mm に対して余裕を見た値
+TRACK_W = 0.2           # JLCPCB の最小 0.127mm に対して余裕を見た値。
+                        # 列の通り道が 3.8mm しかないので 0.4mm 間隔で並べる必要があり、
+                        # 0.25mm だと隣との隙間が 0.15mm になって既定の 0.2mm を割る。
 VIA_D, VIA_DRILL = 0.6, 0.3
 COL_VIA_DX = -1.8       # 列のビアを、ソケットのパッドからどれだけ左へ置くか
 
 # 列のバスが行間で折れ曲がるときの通り道。**列ごとに高さをずらす。**
-# 全部同じ高さにすると、行ずれのぶん横へ動く区間どうしが交差する
-# （tracks_crossing が 30 件出た）。
-# 行間の空きは キー中心 +4.4 〜 +12.7mm。0.8mm 間隔なら 8 列まで収まる。
-LANE_SPACING = 0.8
+# 全部同じ高さにすると、行ずれのぶん横へ動く区間どうしが交差する。
+#
+# 通れる帯は狭い。スイッチの機械穴は非メッキ貫通穴なので表も裏もふさぐ。
+# キー中心からの位置（KiCad 座標）で数えると:
+#
+#   ピン穴      y −6.61〜−3.55、−4.07〜−1.01
+#   中央ポスト  y −2.00〜+2.00
+#   位置決め    y −0.88〜+0.88
+#   スタビ穴    y −8.50〜−5.46、**+6.23〜+10.22**
+#   次の段のスタビ穴  +10.55〜+13.59
+#
+# → 確実に空いているのは **+2.2 〜 +6.0mm の 3.8mm** だけ。
+#   ここに 0.4mm 間隔で並べれば 9 列（右半分）がちょうど収まる。
+#
+# 当初は行間の中央（+9.5 付近）に通していたが、そこはスタビの穴の帯で、
+# DRC が hole_clearance を 5 件出した。
+LANE_CENTER = 4.1       # キー中心からの距離（KiCad 座標・下向き）
+LANE_SPACING = 0.4
 
 
 def _track(board, p1, p2, layer, net):
@@ -184,28 +200,86 @@ def _route(board, positions, rc):
                    pcbnew.B_Cu, p1.GetNet())
 
     # 3. 列のバス（表面・ビア経由）
-    #    行ずれのせいで同じ列でも x が揃わないので、行間の空きで折れ曲がる。
+    #
+    # **段を飛ばす列がある。** 右半分の列 2 は 行0 の次が 行2 で、行1 にキーが無い。
+    # そこを縦一直線で結ぶと、行ずれのぶん途中の段の真ん中を突っ切り、
+    # 位置決めポストに当たる（hole_clearance が出た）。
+    # そこで **段の切れ目ごとに折れ曲がる**。各段では、その段の中で物理的に
+    # 最も近いキーの脇（＝安全な通り道）を通す。
     cols = {}
-    for i, (_, c) in enumerate(rc, start=1):
-        cols.setdefault(c, []).append(_pad(board, f"SW{i}", "1"))
+    for i, (r, c) in enumerate(rc, start=1):
+        cols.setdefault(c, []).append((r, _pad(board, f"SW{i}", "1")))
     n_cols = len(cols)
-    for c, pads in cols.items():
-        pads.sort(key=lambda p: p.GetPosition().y)
+
+    # 段ごとの「キーの脇」の x 一覧（安全な通り道の候補）
+    row_keys = {}
+    for i, (r, _) in enumerate(rc, start=1):
+        pos = board.FindFootprintByReference(f"SW{i}").GetPosition()
+        row_keys.setdefault(r, []).append(pcbnew.ToMM(pos.x))
+    row_y = {}
+    for i, (r, _) in enumerate(rc, start=1):
+        row_y[r] = pcbnew.ToMM(board.FindFootprintByReference(f"SW{i}").GetPosition().y)
+
+    def corridor_x(r, near_x):
+        """段 r の中で near_x に最も近いキーの脇を通る x。"""
+        kx = min(row_keys[r], key=lambda x: abs(x - near_x))
+        return kx - 7.085 + COL_VIA_DX
+
+    # 機械穴（非メッキ貫通穴）の一覧。表も裏もふさぐので、縦に抜けるときは
+    # これを避ける必要がある。位置は生成済みの基板から読む（推測しない）。
+    holes = []
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
+                q = pad.GetPosition()
+                holes.append((pcbnew.ToMM(q.x), pcbnew.ToMM(q.y),
+                              pcbnew.ToMM(pad.GetSize().x) / 2))
+
+    def vertical_is_clear(x, y0, y1, margin=0.45):
+        """x を通る縦線が y0〜y1 の範囲で穴に当たらないか。"""
+        lo, hi = min(y0, y1), max(y0, y1)
+        for hx, hy, hr in holes:
+            if lo - hr <= hy <= hi + hr and abs(hx - x) < hr + margin:
+                return False
+        return True
+
+    def find_clear_x(near, y0, y1):
+        """near の近くで、縦に抜けられる x を探す。見つからなければ None。"""
+        for d in [i * 0.1 for i in range(0, 61)]:
+            for cand in ((near - d), (near + d)):
+                if vertical_is_clear(cand, y0, y1):
+                    return round(cand, 2)
+        return None
+
+    for c, entries in cols.items():
+        entries.sort(key=lambda t: t[1].GetPosition().y)
+        lane = (c - (n_cols - 1) / 2) * LANE_SPACING
         vias = []
-        for p in pads:
+        for r, p in entries:
             pos = p.GetPosition()
             vp = mm(pcbnew.ToMM(pos.x) + COL_VIA_DX, pcbnew.ToMM(pos.y))
             _track(board, pos, vp, pcbnew.B_Cu, p.GetNet())
-            vias.append((_via(board, vp, p.GetNet()), vp))
-        lane = (c - (n_cols - 1) / 2) * LANE_SPACING
-        for (v1, p1), (v2, p2) in zip(vias, vias[1:]):
-            mid = (pcbnew.ToMM(p1.y) + pcbnew.ToMM(p2.y)) / 2 + lane
-            c1 = mm(pcbnew.ToMM(p1.x), mid)
-            c2 = mm(pcbnew.ToMM(p2.x), mid)
+            vias.append((r, _via(board, vp, p.GetNet()), vp))
+        for (ra, v1, p1), (rb, v2, p2) in zip(vias, vias[1:]):
             net = v1.GetNet()
-            _track(board, p1, c1, pcbnew.F_Cu, net)
-            _track(board, c1, c2, pcbnew.F_Cu, net)
-            _track(board, c2, p2, pcbnew.F_Cu, net)
+            x1, y1 = pcbnew.ToMM(p1.x), pcbnew.ToMM(p1.y)
+            x2, y2 = pcbnew.ToMM(p2.x), pcbnew.ToMM(p2.y)
+            lane_a = row_y[ra] + LANE_CENTER + lane
+            if rb == ra + 1:
+                # 隣り合う段。通り道を 1 本使うだけで届く。
+                pts = [(x1, y1), (x1, lane_a), (x2, lane_a), (x2, y2)]
+            else:
+                # 段を飛ばす。途中の段を縦に抜けられる x を探してから渡る。
+                lane_b = row_y[rb - 1] + LANE_CENTER + lane
+                sx = find_clear_x(x1, lane_a, lane_b)
+                if sx is None:
+                    raise RuntimeError(
+                        f"列 {c}: 段 {ra}→{rb} を縦に抜ける経路が見つからない")
+                pts = [(x1, y1), (x1, lane_a), (sx, lane_a),
+                       (sx, lane_b), (x2, lane_b), (x2, y2)]
+            for a, b in zip(pts, pts[1:]):
+                if a != b:
+                    _track(board, mm(*a), mm(*b), pcbnew.F_Cu, net)
 
 
 def build(half, keys):
@@ -241,6 +315,22 @@ def build(half, keys):
             st.SetReference(f"ST{i}")
             board.Add(st)
             n_stab += 1
+
+    # 裏面のシルクにキー名を入れる。
+    #
+    # ソケットもダイオードも裏面に付くので、**組み立てる人が見るのは裏面**。
+    # そこに SW1 のような通し番号しか無いと、どのキーか分からないまま
+    # 61 個を半田付けすることになる。実機で「このキーだけ反応しない」と
+    # なったときも、名前が刷ってあれば探す手間が要らない。
+    for (kx, ky), k in zip(positions, keys):
+        t = pcbnew.PCB_TEXT(board)
+        t.SetText(k.label)
+        t.SetPosition(to_kicad(kx, ky + 8.2))
+        t.SetLayer(pcbnew.B_SilkS)
+        t.SetMirrored(True)
+        t.SetTextSize(pcbnew.VECTOR2I_MM(1.1, 1.1))
+        t.SetTextThickness(pcbnew.FromMM(0.18))
+        board.Add(t)
 
     # ダイオードとマトリクスのネット
     #
