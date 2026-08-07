@@ -540,7 +540,9 @@ def _route_electronics(board, half, net):
         # 直角に 1.6mm 離れてからビアで内層へ落とし、横移動は内層で行う。
         # **行ごとに高さをずらす。**同じ y に並べると、隣の行のビアと
         # 0.5mm（コネクタのピッチ）しか離れず当たる。
-        oy = sy + (1 if ty > sy else -1) * (1.6 + k * 1.1)
+        # **帯を前後で分ける。**行はマトリクス寄りの半分、電源の幹線は
+        # 奥寄りの半分。同じ場所を奪い合うと必ず交差する。
+        oy = sy + (1 if ty > sy else -1) * (1.4 + k * 0.8)
         _track(board, src.GetPosition(), mm(sx, oy), pcbnew.B_Cu, src.GetNet())
         _via(board, mm(sx, oy), src.GetNet())
         _track(board, mm(sx, oy), mm(x, oy), pcbnew.In2_Cu, src.GetNet())
@@ -559,7 +561,7 @@ def _route_electronics(board, half, net):
             # 重なっていた（違反 29/49 件）。帯は 9.25mm あるので足りる。
             # **帯の中（±3.4mm）に均等に配る。**上限で頭打ちにすると
             # 複数のネットが同じ y に重なる（V3V3 と VBATT_SENSE が 10 件）。
-            _link(board, a, b, lane=-3.2 + (i % 9) * 0.8)
+            _link(board, a, b, lane=-1.0 - (i % 5) * 0.7)
 
     # 4. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
     #    In2 で近くまで運んでからビアで表へ上げる。
