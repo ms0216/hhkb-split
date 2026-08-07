@@ -1,0 +1,15 @@
+/*
+ * 左右で共通の土台。
+ *
+ * キースキャンはチャープレックス（ZMK 公式サポート）。ピン割り当ては
+ * docs/superpowers/specs の仕様書どおり:
+ *   左 6ピン D3..D8 / 右 7ピン D2..D8 / 電池電圧 D0
+ * XIAO nRF52840 で ADC が使えるのは D0..D5 だけなので、電池測定用に D0 を空ける。
+ */
+#include <dt-bindings/zmk/matrix_transform.h>
+
+/ {
+	chosen {
+		zmk,kscan = &kscan0;
+	};
+};

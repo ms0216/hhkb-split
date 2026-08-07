@@ -38,6 +38,31 @@ def load_yaml(path, problems):
         return None
 
 
+def find_shield_dir(name):
+    """<name>.overlay を持つディレクトリを探す。"""
+    for d in SHIELDS.iterdir():
+        if d.is_dir() and (d / f"{name}.overlay").exists():
+            return d
+    return None
+
+
+def count_map_entries(overlay):
+    """overlay の matrix-transform の map に並んだ RC(...) の数。"""
+    text = overlay.read_text(encoding="utf-8")
+    m = re.search(r"map\s*=\s*<(.*?)>\s*;", text, re.S)
+    return len(re.findall(r"RC\s*\(", m.group(1))) if m else 0
+
+
+def count_bindings(keymap):
+    """キーマップの各レイヤーのバインディング数を [(名前, 個数), ...] で返す。"""
+    text = keymap.read_text(encoding="utf-8")
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)      # コメントを除く
+    out = []
+    for m in re.finditer(r"(\w+)\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S):
+        out.append((m.group(1), len(re.findall(r"&\w+", m.group(2)))))
+    return out
+
+
 def main():
     problems, notes = [], []
 
@@ -79,33 +104,49 @@ def main():
                 problems.append(
                     f"ボード名 {board!r} に {ZMK_VARIANT} が付いていない。"
                     "Zephyr 4.1 以降の ZMK は zmk バリアント必須")
-            d = SHIELDS / name
-            if not d.is_dir():
-                problems.append(f"シールド '{name}' のディレクトリが無い: {d.relative_to(ROOT)}")
+            # 分割シールドは 1 つのディレクトリに左右 2 つのシールド名を置く慣例。
+            # ディレクトリ名 = シールド名とは限らないので、<name>.overlay が
+            # あるディレクトリを探す。
+            d = find_shield_dir(name)
+            if d is None:
+                problems.append(f"シールド '{name}': {name}.overlay が見つからない")
                 continue
-            for pat in REQUIRED:
-                f = d / pat.format(name=name)
-                if not f.exists():
-                    problems.append(f"{name}: {f.name} が無い")
-            # Kconfig.shield の引数
-            kc = (d / "Kconfig.shield")
+            if not (d / "Kconfig.shield").exists():
+                problems.append(f"{name}: Kconfig.shield が無い（{d.name}/）")
+            if not list(d.glob("*.keymap")):
+                problems.append(f"{name}: キーマップが無い（{d.name}/）")
+            # Kconfig.shield が **このシールド名** を宣言しているか。
+            # 綴りがずれるとビルド時に無言で無視される。
+            kc = d / "Kconfig.shield"
             if kc.exists():
-                m = re.search(r"shields_list_contains,\s*([A-Za-z0-9_]+)\s*\)",
-                              kc.read_text(encoding="utf-8"))
-                if not m:
+                declared = set(re.findall(r"shields_list_contains,\s*([A-Za-z0-9_]+)\s*\)",
+                                          kc.read_text(encoding="utf-8")))
+                if not declared:
                     problems.append(f"{name}: Kconfig.shield に shields_list_contains が無い")
-                elif m.group(1) != name:
+                elif name not in declared:
                     problems.append(
-                        f"{name}: Kconfig.shield の引数 '{m.group(1)}' が"
-                        f"ディレクトリ名 '{name}' と違う（ビルド時に無言で無視される）")
-            notes.append(f"  {board} / {name}")
+                        f"{name}: Kconfig.shield が宣言しているのは {sorted(declared)} で、"
+                        f"'{name}' が無い（ビルド時に無言で無視される）")
+            notes.append(f"  {board} / {name}  ({d.name}/)")
 
-    # シールドの keymap と overlay の対応
+    # キーマップのバインディング個数
+    #
+    # ZMK で最も多い失敗。個数が matrix-transform の map と合わないと
+    # ビルドが落ちるか、キーが 1 つずつずれる。手元で数えれば往復が減る。
     for d in sorted(p for p in SHIELDS.iterdir() if p.is_dir()):
-        stems = {f.stem for f in d.glob("*.*")}
-        odd = {s for s in stems if s not in {d.name, "Kconfig"} and not s.startswith(d.name)}
-        if odd:
-            problems.append(f"{d.name}: 名前がシールド名と一致しないファイル {sorted(odd)}")
+        km = list(d.glob("*.keymap"))
+        if not km:
+            continue
+        n_map = sum(count_map_entries(f) for f in sorted(d.glob("*.overlay")))
+        if n_map == 0:
+            continue
+        for layer, n in count_bindings(km[0]):
+            if n != n_map:
+                problems.append(
+                    f"{d.name}: レイヤー '{layer}' のバインディングが {n} 個。"
+                    f"transform の map は合計 {n_map} 箇所（{n - n_map:+d}）")
+        notes.append(f"  {d.name}: map {n_map} 箇所 / "
+                     f"レイヤー {len(count_bindings(km[0]))} 枚すべて一致")
 
     for n in notes:
         print(f"  {n}")

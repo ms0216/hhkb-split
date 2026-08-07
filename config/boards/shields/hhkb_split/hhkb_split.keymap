@@ -1,0 +1,132 @@
+/*
+ * HHKB Professional HYBRID Type-S のキーマップを分割版へ移植したもの。
+ *
+ * 出典: docs/hardware/dimensions.md §3（配列）と §4（Fn 面）。
+ * Fn 面は Wikimedia Commons の HHKB Pro 2 の KLE 図（刻印つき）から読み取り、
+ * 実機写真のキーキャップ前面刻印とも照合した。推測で埋めていない。
+ *
+ * バインディングの並び順は「左 27 キー → 右 34 キー」で、各半分は
+ * 上段左から順に読む。overlay の matrix-transform の map と一対一で対応する。
+ *
+ *   左 27:  Esc 1 2 3 4 5 / Tab Q W E R T / Ctrl A S D F G /
+ *           Shift Z X C V B / Alt Meta L-Space
+ *   右 34:  6 7 8 9 0 - = \ ` / Y U I O P [ ] Del /
+ *           H J K L ; ' Enter / N M , . / Shift Fn / R-Space Meta Alt
+ *
+ * レイヤー番号は定義順で決まる。tools/test_invariants.py が固定している。
+ *
+ * Fn + Ctrl の再現方法:
+ *   ZMK の conditional-layers はレイヤー同士の組み合わせしか扱えず、Ctrl は
+ *   レイヤーではないので使えない。代わりに FN レイヤー上の Ctrl の位置に
+ *   &mo SYS を置く。これで「Fn を押しながら Ctrl」が SYS への入口になり、
+ *   Ctrl 単独では通常の Ctrl のまま残る。
+ */
+
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/bt.h>
+#include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/outputs.h>
+
+#define BASE_MAC 0
+#define BASE_WIN 1
+#define FN       2
+#define SYS      3
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+
+		/* ------------------------------------------------------------
+		 * 0: Mac モード（起動時の既定）
+		 *    ◇ = Command、Alt = Option
+		 * ------------------------------------------------------------ */
+		base_mac {
+			bindings = <
+			/* --- 左 27 --- */
+			&kp ESC    &kp N1 &kp N2 &kp N3 &kp N4 &kp N5
+			&kp TAB    &kp Q  &kp W  &kp E  &kp R  &kp T
+			&kp LCTRL  &kp A  &kp S  &kp D  &kp F  &kp G
+			&kp LSHFT  &kp Z  &kp X  &kp C  &kp V  &kp B
+			&kp LALT   &kp LGUI  &kp SPACE
+			/* --- 右 34 --- */
+			&kp N6 &kp N7 &kp N8 &kp N9 &kp N0    &kp MINUS &kp EQUAL &kp BSLH  &kp GRAVE
+			&kp Y  &kp U  &kp I  &kp O  &kp P     &kp LBKT  &kp RBKT  &kp BSPC
+			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
+			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
+			&kp SPACE  &kp RGUI  &kp RALT
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 1: Windows モード
+		 *    ◇ と Alt を入れ替える。実機の DIP SW4 相当。
+		 *    Fn + Ctrl + W で入り、Fn + Ctrl + M で戻る。
+		 *    電源を切ると Mac へ戻る（実機と同じ挙動）。
+		 * ------------------------------------------------------------ */
+		base_win {
+			bindings = <
+			/* --- 左 27 --- */
+			&kp ESC    &kp N1 &kp N2 &kp N3 &kp N4 &kp N5
+			&kp TAB    &kp Q  &kp W  &kp E  &kp R  &kp T
+			&kp LCTRL  &kp A  &kp S  &kp D  &kp F  &kp G
+			&kp LSHFT  &kp Z  &kp X  &kp C  &kp V  &kp B
+			&kp LGUI   &kp LALT  &kp SPACE
+			/* --- 右 34 --- */
+			&kp N6 &kp N7 &kp N8 &kp N9 &kp N0    &kp MINUS &kp EQUAL &kp BSLH  &kp GRAVE
+			&kp Y  &kp U  &kp I  &kp O  &kp P     &kp LBKT  &kp RBKT  &kp BSPC
+			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
+			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
+			&kp SPACE  &kp RALT  &kp RGUI
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 2: Fn（押している間だけ）
+		 *    実機の刻印をそのまま移植。&trans は下のレイヤーへ素通し。
+		 *    矢印は [ ; ' / の 4 キーで、いずれも右半分にある。
+		 * ------------------------------------------------------------ */
+		fn {
+			bindings = <
+			/* --- 左 27 --- */
+			&kp K_POWER &kp F1 &kp F2 &kp F3 &kp F4 &kp F5
+			&kp CAPS    &trans &trans &trans &trans &trans
+			&mo SYS     &kp C_VOL_UP &kp C_VOL_DN &kp C_MUTE &kp C_EJECT &trans
+			&trans      &trans &trans &trans &trans &trans
+			&trans      &trans &trans
+			/* --- 右 34 --- */
+			&kp F6 &kp F7 &kp F8 &kp F9 &kp F10 &kp F11 &kp F12 &kp INS &kp DEL
+			&trans &trans &kp PSCRN &kp SLCK &kp PAUSE_BREAK &kp UP    &trans &trans
+			&kp KP_MULTIPLY &kp KP_DIVIDE &kp HOME &kp PG_UP &kp LEFT  &kp RIGHT &trans
+			&kp KP_PLUS &kp KP_MINUS &kp END &kp PG_DN &kp DOWN &trans &trans
+			&trans &kp C_STOP &trans
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 3: SYS（Fn + Ctrl を押している間だけ）
+		 *    実機と同じ打ち方で BT と OS モードを切り替える。
+		 *      Fn+Ctrl+1〜4 : Bluetooth プロファイル 1〜4
+		 *      Fn+Ctrl+0    : USB 接続へ
+		 *      Fn+Ctrl+M    : Mac モード
+		 *      Fn+Ctrl+W    : Windows モード
+		 *      Fn+Ctrl+`    : 現在のプロファイルのペアリング情報を消去
+		 *                     （実機には無いが、無線機の復旧手段として必要）
+		 * ------------------------------------------------------------ */
+		sys {
+			bindings = <
+			/* --- 左 27 --- */
+			&none  &bt BT_SEL 0 &bt BT_SEL 1 &bt BT_SEL 2 &bt BT_SEL 3 &none
+			&none  &none  &to BASE_WIN &none &none &none
+			&trans &none  &none  &none  &none  &none
+			&none  &none  &none  &none  &none  &none
+			&none  &none  &none
+			/* --- 右 34 --- */
+			&none &none &none &none &out OUT_USB &none &none &none &bt BT_CLR
+			&none &none &none &none &none &none &none &none
+			&none &none &none &none &none &none &none
+			&none &to BASE_MAC &none &none &none &none &trans
+			&none &none &none
+			>;
+		};
+	};
+};
