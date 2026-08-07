@@ -89,13 +89,25 @@ def check(keys, label=""):
     parts, (w, h_case) = build_assembly(keys)
     problems, notes = [], []
 
-    # 1. 干渉。接触は許すが、食い込みは許さない
+    # 1. 干渉。**設計上の接触**は許し、食い込みは許さない。
+    #
+    #    面どうしが接すると、ブーリアン演算とテッセレーションの誤差で
+    #    わずかな重なりとして出る。支え合う関係にある組は許容量を広げる。
+    #    許容を広げるのは「接触が設計意図である」と言える組だけにする。
+    CONTACT = {
+        frozenset({"case", "pcb"}): 30.0,    # 基板はネジボスの上に載る
+        frozenset({"case", "plate"}): 30.0,  # プレートはリムに載る
+        frozenset({"case", "lid"}): 30.0,    # 蓋はレールの段に載る
+        frozenset({"pcb", "batt"}): 30.0,    # 電池は基板の下面に触れうる
+    }
     names = list(parts)
     for i, a in enumerate(names):
         for b in names[i + 1:]:
             v = intersection_volume(parts[a], parts[b])
-            if v > 1.0:                      # 1mm^3 を超える食い込み
-                problems.append(f"{a} と {b} が {v:.1f}mm^3 食い込んでいる")
+            limit = CONTACT.get(frozenset({a, b}), 1.0)
+            if v > limit:
+                kind = "接触の域を超えて" if limit > 1.0 else ""
+                problems.append(f"{a} と {b} が {kind}{v:.1f}mm^3 食い込んでいる")
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。

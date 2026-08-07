@@ -172,6 +172,14 @@ def build_case(keys):
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
     cutter_pcb = tilted_cutter(w, h_body, rim_front - PLATE_TO_PCB - PCB_T)
+    # ボスも外で作って外で切る。基板はボスの上に載り、ネジはプレート→基板→
+    # ボスの順に通るので、ボスの頭は基板の下面で止める。
+    with BuildPart() as _b:
+        for bx, by in _boss_positions(w, h_plate):
+            with Locations((bx, by, FLOOR)):
+                Cylinder(M2_BOSS_D / 2, z_max,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+    bosses = _b.part - cutter_pcb
 
     with BuildPart() as case:
         # 1. 外形を最大高さまで立ち上げる（コブぶん後ろへずらす）
@@ -203,14 +211,10 @@ def build_case(keys):
         # 傾いた基板の下端を突き上げる（2,817mm^3 の食い込みとして検出）。
         # 電池は 手前=仕切り壁 / 左右と奥=側壁 / 下=蓋 / 上=基板 で保持される。
 
-        # 5. ネジボス。四隅と長辺の中央に立てる
-        for bx, by in _boss_positions(w, h_plate):
-            with Locations((bx, by, FLOOR)):
-                Cylinder(M2_BOSS_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # ボスの頭は**基板の下面**で止める。リムまで伸ばすと基板を貫いて
-        # ぶつかる（組み立て検査で 17,000mm^3 の食い込みとして検出）。
-        # 基板はボスの上に載り、ネジはプレート→基板→ボスの順に通る。
-        add(cutter_pcb, mode=Mode.SUBTRACT)
+        # 5. ネジボス。ケースに合体する**前に**頭を基板の下面で切る。
+        #    ケースに合体してから切ると、平面がケース全体に効いてリムまで
+        #    5.1mm 下がる（プレートが沈む）。高さのテストで検出された。
+        add(bosses, mode=Mode.ADD)
         for bx, by in _boss_positions(w, h_plate):
             with Locations((bx, by, FLOOR)):
                 Cylinder(M2_PILOT_D / 2, z_max, mode=Mode.SUBTRACT,
@@ -366,14 +370,15 @@ def tilted_cutter(w, h, rim_front, y_offset=0.0):
     return Location((0, 0, mid_z), (TILT_DEG, 0, 0)) * box
 
 
-def _boss_positions(w, h):
-    """ネジボスの位置。キー開口と干渉しない外周寄りに置く。"""
-    # 壁に 1mm めり込ませる。ちょうど接する位置に置くと接線接触になり、
-    # 非多様体（水密でない）メッシュになる。
-    overlap = 1.0
-    ix = w / 2 - WALL - M2_BOSS_D / 2 + overlap
-    iy = h / 2 - WALL - M2_BOSS_D / 2 + overlap
-    return [(-ix, -iy), (ix, -iy), (-ix, iy), (ix, iy), (0, -iy), (0, iy)]
+def _boss_positions(w, h_plate):
+    """ネジボスの位置。**必ず** tools/interface.py の共有定義から導く。
+
+    ここに独自の実装を持っていたせいで、プレートの穴（共有定義）と
+    ケースのボス（独自実装）が食い違い、しかもボスが電池室の中に
+    立っていた。テストが「プレートの穴 vs 共有定義」しか見ておらず、
+    ケースの実物と照合していなかったため長く気づけなかった。
+    """
+    return boss_positions_plan(w, h_plate)
 
 
 def main():
