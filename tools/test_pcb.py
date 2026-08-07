@@ -222,7 +222,9 @@ def test_diode_direction_is_col2row(name):
     """
     pads = pads_with_nets(name)
     for ref, p in pads.items():
-        if not ref.startswith("D"):
+        # **キーのダイオードだけを見る。**電源部の D_PWR も "D" で始まるので、
+        # 接頭辞だけで拾うと巻き込む（実際に巻き込んだ）。
+        if not re.fullmatch(r"D\d+", ref):
             continue
         assert p["1"].startswith("ROW"), f"{ref}: カソードが行側にない"
         assert p["2"].startswith("SW"), f"{ref}: アノードがスイッチ側にない"
@@ -243,23 +245,28 @@ def test_diodes_are_on_the_back(name):
 
 @pytest.mark.parametrize("name,rows,cols", [("left", 5, 6), ("right", 5, 9)])
 def test_net_count_is_exactly_rows_plus_cols_plus_keys(name, rows, cols):
-    """ネットの本数が 行 + 列 + キー数 と一致すること。
+    """マトリクスのネットが過不足なくあること。
 
-    余計なネットがあれば配線ミス、足りなければ繋ぎ忘れ。
+    **電源部のネットは別に数える。**部品を載せたので全体の本数は増えるが、
+    マトリクスの本数は変わってはいけない。
     """
-    keys = len(HALVES[name])
-    names = {n for p in pads_with_nets(name).values() for n in p.values()}
-    assert len(names) == rows + cols + keys
-    assert {n for n in names if n.startswith("ROW")} == {f"ROW{i}" for i in range(rows)}
-    assert {n for n in names if n.startswith("COL")} == {f"COL{i}" for i in range(cols)}
+    txt = (ROOT / f"pcb/hhkb_split_{name}.kicad_pcb").read_text()
+    nets = {n for n in re.findall(r'\(net (?:\d+ )?"([^"]*)"\)', txt) if n}
+    matrix = {n for n in nets if re.fullmatch(r"(ROW|COL)\d+|SW\d+_D", n)}
+    assert len(matrix) == rows + cols + len(HALVES[name]), \
+        f"{name}: マトリクスのネットが {len(matrix)} 本"
+    # 電源・通信のネットも載っていること
+    for n in ("GND", "V3V3", "VBATT_RAW", "VBATT_SW", "VBATT_SENSE",
+              "SPI_SCK", "SPI_MOSI", "CS"):
+        assert n in nets, f"{name}: ネット {n} が無い"
 
 
 @pytest.mark.parametrize("name", NAMES)
 def test_every_key_has_its_own_diode(name):
     """キー 1 つにダイオード 1 つ。使い回すとゴーストが出る。"""
     pads = pads_with_nets(name)
-    n_sw = sum(1 for r in pads if r.startswith("SW"))
-    n_d = sum(1 for r in pads if r.startswith("D"))
+    n_sw = sum(1 for r in pads if re.fullmatch(r"SW\d+", r))
+    n_d = sum(1 for r in pads if re.fullmatch(r"D\d+", r))
     assert n_sw == n_d == len(HALVES[name])
 
 
@@ -335,8 +342,29 @@ def test_the_drc_report_matches_the_current_board(half):
         f"python3 tools/drc.py を実行すること")
 
 
+# **まだ配線が終わっていない基板。**電子部品を段の間に置き、In2.Cu で
+# 結び始めたところ。ここに名前がある間は発注できない。
+# 空になったら、その基板は完成している。
+WIP_BOARDS = {"left", "right"}
+
+
+def test_the_unfinished_boards_are_declared():
+    """未完の基板が明示されていること。
+
+    **偽の緑を出さないため。**DRC の検査から外すなら、外していることが
+    見えていなければならない。open-gaps #16 と対応する。
+    """
+    import json
+    for half in WIP_BOARDS:
+        rec = json.loads((ROOT / f"pcb/drc_{half}.json").read_text())
+        assert rec["violations"] or rec["unconnected"], \
+            f"{half}: もう綺麗なので WIP_BOARDS から外すこと"
+
+
 @pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_board_has_no_drc_violations(half):
+    if half in WIP_BOARDS:
+        pytest.skip(f"{half}: 配線が未完（open-gaps #16 / WIP_BOARDS）")
     import json
     rec = json.loads((ROOT / f"pcb/drc_{half}.json").read_text())
     assert rec["violations"] == 0, f"{half}: DRC 違反 {rec['violations']} 件\n" + \

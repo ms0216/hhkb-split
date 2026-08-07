@@ -322,6 +322,158 @@ def _apply_jlcpcb_rules(board):
     return board
 
 
+# 電子部品は**段と段の間**に置く。
+#
+# 当初は奥の帯（10.3mm）に置く計画だったが、取付ボスを基板の外へ出すために
+# 基板の前後を詰めた結果、奥の帯は 3.40mm になり 595 も FFC も入らなくなった。
+# 段の間なら 9.25mm x 全幅 の帯が 4 本ある。裏面はソケットとダイオードの
+# 実装面なので、同じ面に置けば JLCPCB の実装が片面で済む。
+BAND_Y = [28.575, 9.525, -9.525, -28.575]     # 段と段の中間（CAD 座標）
+
+ELEC_FP = {
+    "74HC595": ("Package_SO", "SOIC-16_3.9x9.9mm_P1.27mm"),
+    "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric"),
+    "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric"),
+    "res_1M": ("Resistor_SMD", "R_0805_2012Metric"),
+    "schottky": ("Diode_SMD", "D_SOD-123"),
+    "ffc_12p": ("Connector_FFC-FPC",
+                "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal"),
+    # スライドスイッチは 9.78x4.72mm。段の間の 9.25mm 帯に収まる
+    "slide_switch": ("Button_Switch_SMD",
+                     "SW_DIP_SPSTx01_Slide_9.78x4.72mm_W8.61mm_P2.54mm"),
+    "battery_holder": ("TestPoint", "TestPoint_Pad_2.0x2.0mm"),
+}
+
+# 参照名 → (帯の番号, 帯の中での x)。**手前の帯に電源、奥の帯に論理。**
+# 電源スイッチは手前＝手が届く側に置く。
+PLACE = {
+    "left": {
+        "U1": (0, -40.0), "C_U1": (0, -30.0),
+        "J_DB": (0, 20.0), "C_MCU": (0, 30.0),
+        "C_BULK": (3, -40.0), "D_PWR": (3, -30.0),
+        "R_HI": (3, -22.0), "R_LO": (3, -16.0),
+        "SW_PWR": (3, 0.0), "BT1": (3, 20.0),
+    },
+    "right": {
+        "U1": (0, -55.0), "C_U1": (0, -44.0),
+        "U2": (0, -30.0), "C_U2": (0, -19.0),
+        "J_DB": (0, 30.0), "C_MCU": (0, 45.0),
+        "C_BULK": (3, -55.0), "D_PWR": (3, -44.0),
+        "R_HI": (3, -36.0), "R_LO": (3, -30.0),
+        "SW_PWR": (3, -10.0), "BT1": (3, 20.0),
+    },
+}
+
+
+def _place_electronics(board, half, net):
+    """回路に宣言された電子部品を、段の間の帯に置いてネットを割り当てる。"""
+    from circuit import netlist
+    decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
+    for ref, (band, x) in PLACE[half].items():
+        kind, pins = decl[ref]
+        lib, name = ELEC_FP[kind]
+        # 電池線は 2 箇所のランドとして置く
+        n = 2 if kind == "battery_holder" else 1
+        for k in range(n):
+            fp = _load(KICAD_FP / f"{lib}.pretty", name)
+            fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band]))
+            fp.SetReference(ref if n == 1 else f"{ref}_{'+-'[k]}")
+            fp.SetValue(kind)
+            board.Add(fp)
+            fp.Flip(fp.GetPosition(), False)
+            if n == 2:
+                pad = fp.Pads()[0]
+                pad.SetNet(net(pins["+" if k == 0 else "-"]))
+        if n == 1:
+            fp = board.FindFootprintByReference(ref)
+            for pin, netname in pins.items():
+                if netname == "NC":
+                    continue
+                pad = fp.FindPadByNumber(pin)
+                if pad is not None:
+                    pad.SetNet(net(netname))
+
+
+def _route_electronics(board, half, net):
+    """電子部品を結線する。
+
+    **GND はベタ（In1.Cu）で受ける。**各 GND パッドの脇にビアを 1 本立てる
+    だけでよく、配線が要らない。これで結線するネットが大きく減る。
+
+    残りは In2.Cu を使う。ここは行の引き回しと電源のために空けた層で、
+    表（列のバス）とも裏（ソケットと行のバス）とも衝突しない。
+    """
+    mm = pcbnew.VECTOR2I_MM
+    refs = [f.GetReference() for f in board.GetFootprints()]
+    elec = [r for r in refs if r in PLACE[half] or r.startswith("BT1_")]
+
+    pads = {}
+    for fp in board.GetFootprints():
+        if fp.GetReference() not in elec:
+            continue
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if n:
+                pads.setdefault(n, []).append(pad)
+
+    # 1. GND はベタへ落とす
+    for pad in pads.pop("GND", []):
+        pos = pad.GetPosition()
+        off = mm(pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y) + 1.8)
+        _track(board, pos, off, pcbnew.B_Cu, pad.GetNet())
+        _via(board, off, pad.GetNet())
+
+    # 2. 残りは In2.Cu で結ぶ。ネットごとに y のレーンをずらす。
+    for i, (name, group) in enumerate(sorted(pads.items())):
+        group = sorted(group, key=lambda p: p.GetPosition().x)
+        if name.startswith("COL"):
+            continue                      # 列は 3 で別に扱う
+        for a, b in zip(group, group[1:]):
+            _link(board, a, b, lane=1.2 + (i % 6) * 0.45)
+
+    # 3. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
+    #    In2 で近くまで運んでからビアで表へ上げる。
+    for fp in board.GetFootprints():
+        if not fp.GetReference().startswith("U"):
+            continue
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if not n.startswith("COL"):
+                continue
+            target = _nearest_via(board, n, pad.GetPosition())
+            if target is not None:
+                _link(board, pad, target, lane=2.4, to_via=True)
+
+
+def _nearest_via(board, netname, pos):
+    """そのネットのビアのうち、pos に最も近いものの位置を返す。"""
+    best, bd = None, None
+    for it in board.GetTracks():
+        if it.Type() != pcbnew.PCB_VIA_T or it.GetNetname() != netname:
+            continue
+        d = (it.GetPosition() - pos).EuclideanNorm()
+        if bd is None or d < bd:
+            best, bd = it.GetPosition(), d
+    return best
+
+
+def _link(board, a, b, lane, to_via=False):
+    """2 点を In2.Cu で結ぶ（両端にビアを立てる）。"""
+    mm = pcbnew.VECTOR2I_MM
+    pa = a.GetPosition()
+    pb = b if to_via else b.GetPosition()
+    netitem = a.GetNet()
+    ax, ay = pcbnew.ToMM(pa.x), pcbnew.ToMM(pa.y)
+    bx, by = pcbnew.ToMM(pb.x), pcbnew.ToMM(pb.y)
+    _via(board, pa, netitem)
+    if not to_via:
+        _via(board, pb, netitem)
+    y = ay + lane
+    for p, q in (((ax, ay), (ax, y)), ((ax, y), (bx, y)), ((bx, y), (bx, by))):
+        if p != q:
+            _track(board, mm(*p), mm(*q), pcbnew.In2_Cu, netitem)
+
+
 def _pour(board, netitem, layer, w, h):
     """その層いっぱいにベタを敷く。"""
     zone = pcbnew.ZONE(board)
@@ -440,6 +592,9 @@ def build(half, keys):
     # スイッチの機械穴（中央 φ4・位置決め φ1.75・ピン穴 φ3.05）は
     # **非メッキ貫通穴なので両面をふさぐ**。列を表に逃がしても避けて通る必要がある。
     _route(board, positions, rc)
+
+    _place_electronics(board, half, net)
+    _route_electronics(board, half, net)
 
     # 取付穴は**もう開けない。**
     #

@@ -22,10 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # まだ基板に載せていない部品。**ここが減っていくことが進捗そのもの。**
 # 電源部はケース内寸（スイッチに手が届く位置）が決まってから置く。
-PENDING = {
-    "BT1", "SW_PWR", "D_PWR", "C_BULK", "C_MCU", "R_HI", "R_LO",
-    "U1", "U2", "C_U1", "C_U2", "J_DB",
-}
+# **全部載った。**空になったので、あとは配線が終われば発注できる。
+PENDING = set()
 
 
 def board_parts(half):
@@ -44,7 +42,9 @@ def board_nets(half):
 def test_every_declared_part_is_on_the_board_or_listed_as_pending(half):
     """宣言した部品が、基板にあるか PENDING に書いてあるかのどちらかであること。"""
     declared = {ref for ref, _, _ in netlist(half)}
-    on_board = board_parts(half)
+    # 電池線は BT1 を 2 つのランド（BT1_+ / BT1_-）として置いている
+    on_board = {r.split("_")[0] if r.startswith("BT1_") else r
+                for r in board_parts(half)}
     missing = declared - on_board - PENDING
     assert not missing, (
         f"{half}: 宣言したのに基板に無く、PENDING にも書いていない部品:\n  "
@@ -59,8 +59,10 @@ def test_nothing_on_the_board_is_undeclared(half):
     をすり抜ける。
     """
     declared = {ref for ref, _, _ in netlist(half)}
-    extra = {r for r in board_parts(half)
-             if not r.startswith(("H", "ST"))} - declared    # 取付穴とスタビは機構部品
+    # 電池線は BT1 を 2 つのランド（BT1_+ / BT1_-）に分けて置いている
+    extra = {r.split("_")[0] if r.startswith("BT1_") else r
+             for r in board_parts(half)
+             if not r.startswith(("H", "ST"))} - declared
     assert not extra, f"{half}: 基板にあるが回路に宣言が無い部品 {sorted(extra)}"
 
 
@@ -91,10 +93,10 @@ def test_the_matrix_nets_match_the_declaration(half):
     assert not missing, f"{half}: 宣言にあるが基板に無いネット {sorted(missing)[:10]}"
 
 
-def test_the_pending_list_shrinks_to_nothing_before_ordering():
+def test_the_pending_list_shrinks_to_nothing_before_ordering():  # noqa: D401
     """発注前に PENDING が空でなければならないことを、明文で残す。
 
     このテストは今は通る（残件があることを許す）。**発注の直前に
     PENDING を空にすること**が条件で、それを忘れないための場所。
     """
-    assert PENDING, "PENDING が空。発注できる状態なので、この確認を外してよい"
+    assert not PENDING, f"まだ基板に載っていない部品がある: {sorted(PENDING)}"
