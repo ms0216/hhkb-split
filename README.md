@@ -49,7 +49,7 @@ build/         生成された STL（未印刷）
 メッシュ健全性を、OrcaSlicer CLI で実際にスライスできるかを検証する。
 
 ```bash
-python -m pytest tools          # 63 件
+python -m pytest tools          # 76 件
 python tools/gen_case.py        # ケースを生成
 python tools/verify.py          # メッシュとスライスの検証
 ```
@@ -61,13 +61,17 @@ python tools/verify.py          # メッシュとスライスの検証
 ### config/
 
 ZMK。ボードは **Seeed Studio XIAO nRF52840**（技適 211-220207）。
-XIAO は GPIO が 11 本しかないので、キースキャンはチャープレックス方式。
+XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りないため、列の駆動に
+シフトレジスタ 74HC595 を使う（ZMK 公式が推奨する手段）。キーごとにダイオード 1 個の
+ごく普通の行×列マトリクスなので、同時押しでゴーストが出ない。
+当初はチャープレックス方式で設計していたが、基板発注前に破棄した
+（[判断根拠](docs/hardware/decisions/2026-08-07-keyscan.md)）。
 
 | シールド | 用途 |
 |---|---|
 | `hhkb_split_left` / `hhkb_split_right` | 本番。4レイヤー × 61キー |
 | `proto_direct` | 疎通確認（XIAO 1個・キー2個） |
-| `proto_charlie` | チャープレックス配線の実測検証治具（[手順書](docs/hardware/task-c2-charlieplex.md)） |
+| `proto_matrix` | マトリクス配線とゴースト試験の治具（[手順書](docs/hardware/task-c2-keyscan.md)） |
 
 ビルドは GitHub Actions（ZMK 公式の再利用ワークフロー）。Actions の成果物から
 `.uf2` をダウンロードして書き込む。

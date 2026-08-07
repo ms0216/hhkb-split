@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 530" width="700" height="530" font-family="Helvetica, Arial, sans-serif">
+<rect width="700" height="530" fill="#ffffff"/>
+<text x="24" y="28" font-size="17" font-weight="bold" fill="#111">Task C2 の配線 — 3 行 × 2 列 = 6 キー</text>
+<text x="24" y="48" font-size="12" fill="#666">交点ごとに「タクトスイッチ ＋ ダイオード」を直列で入れる。ダイオードの帯（カソード）は行の側。</text>
+<line x1="190" y1="112" x2="190" y2="400" stroke="#a83232" stroke-width="2.5"/>
+<rect x="148" y="76" width="84" height="32" rx="4" fill="#fdf1f1" stroke="#d64545" stroke-width="1.5"/>
+<text x="190" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C0 = D6</text>
+<line x1="370" y1="112" x2="370" y2="400" stroke="#a83232" stroke-width="2.5"/>
+<rect x="328" y="76" width="84" height="32" rx="4" fill="#fdf1f1" stroke="#d64545" stroke-width="1.5"/>
+<text x="370" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C1 = D7</text>
+<line x1="120" y1="185" x2="440" y2="185" stroke="#2b4a97" stroke-width="2.5"/>
+<rect x="24" y="169" width="92" height="32" rx="4" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.5"/>
+<text x="70" y="190" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b4a97">行 R0 = D1</text>
+<line x1="120" y1="275" x2="440" y2="275" stroke="#2b4a97" stroke-width="2.5"/>
+<rect x="24" y="259" width="92" height="32" rx="4" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.5"/>
+<text x="70" y="280" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b4a97">行 R1 = D2</text>
+<line x1="120" y1="365" x2="440" y2="365" stroke="#2b4a97" stroke-width="2.5"/>
+<rect x="24" y="349" width="92" height="32" rx="4" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.5"/>
+<text x="70" y="370" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b4a97">行 R2 = D3</text>
+<circle cx="190" cy="127" r="4" fill="#333"/>
+<line x1="190" y1="127" x2="212" y2="109" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="151" r="4" fill="#333"/>
+<polygon points="181,155 199,155 190,171" fill="#333"/>
+<line x1="179" y1="171" x2="201" y2="171" stroke="#333" stroke-width="4"/>
+<line x1="190" y1="171" x2="190" y2="185" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="185" r="4.5" fill="#2b4a97"/>
+<rect x="224" y="133" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="242" y="156" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">a</text>
+<circle cx="370" cy="127" r="4" fill="#333"/>
+<line x1="370" y1="127" x2="392" y2="109" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="151" r="4" fill="#333"/>
+<polygon points="361,155 379,155 370,171" fill="#333"/>
+<line x1="359" y1="171" x2="381" y2="171" stroke="#333" stroke-width="4"/>
+<line x1="370" y1="171" x2="370" y2="185" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="185" r="4.5" fill="#2b4a97"/>
+<rect x="404" y="133" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="422" y="156" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">b</text>
+<circle cx="190" cy="217" r="4" fill="#333"/>
+<line x1="190" y1="217" x2="212" y2="199" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="241" r="4" fill="#333"/>
+<polygon points="181,245 199,245 190,261" fill="#333"/>
+<line x1="179" y1="261" x2="201" y2="261" stroke="#333" stroke-width="4"/>
+<line x1="190" y1="261" x2="190" y2="275" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="275" r="4.5" fill="#2b4a97"/>
+<rect x="224" y="223" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="242" y="246" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">c</text>
+<circle cx="370" cy="217" r="4" fill="#333"/>
+<line x1="370" y1="217" x2="392" y2="199" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="241" r="4" fill="#333"/>
+<polygon points="361,245 379,245 370,261" fill="#333"/>
+<line x1="359" y1="261" x2="381" y2="261" stroke="#333" stroke-width="4"/>
+<line x1="370" y1="261" x2="370" y2="275" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="275" r="4.5" fill="#2b4a97"/>
+<rect x="404" y="223" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="422" y="246" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">d</text>
+<circle cx="190" cy="307" r="4" fill="#333"/>
+<line x1="190" y1="307" x2="212" y2="289" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="331" r="4" fill="#333"/>
+<polygon points="181,335 199,335 190,351" fill="#333"/>
+<line x1="179" y1="351" x2="201" y2="351" stroke="#333" stroke-width="4"/>
+<line x1="190" y1="351" x2="190" y2="365" stroke="#333" stroke-width="2"/>
+<circle cx="190" cy="365" r="4.5" fill="#2b4a97"/>
+<rect x="224" y="313" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="242" y="336" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">e</text>
+<circle cx="370" cy="307" r="4" fill="#333"/>
+<line x1="370" y1="307" x2="392" y2="289" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="331" r="4" fill="#333"/>
+<polygon points="361,335 379,335 370,351" fill="#333"/>
+<line x1="359" y1="351" x2="381" y2="351" stroke="#333" stroke-width="4"/>
+<line x1="370" y1="351" x2="370" y2="365" stroke="#333" stroke-width="2"/>
+<circle cx="370" cy="365" r="4.5" fill="#2b4a97"/>
+<rect x="404" y="313" width="36" height="32" rx="4" fill="#eef7f0" stroke="#2f8f4e" stroke-width="1.5"/>
+<text x="422" y="336" text-anchor="middle" font-size="17" font-weight="bold" fill="#1e6b39">f</text>
+<text x="478" y="139" font-size="11" fill="#8a8f96">← 押すと出る文字</text>
+<rect x="490" y="196" width="186" height="60" rx="5" fill="#fdf1f1" stroke="#d64545" stroke-width="1.2"/>
+<text x="583" y="217" text-anchor="middle" font-size="12" font-weight="bold" fill="#a83232">列（縦の赤い線）</text>
+<text x="583" y="235" text-anchor="middle" font-size="11" fill="#8a4444">出力。ここが駆動される</text>
+<text x="583" y="250" text-anchor="middle" font-size="11" fill="#8a4444">ダイオードのアノード側</text>
+<rect x="490" y="266" width="186" height="60" rx="5" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.2"/>
+<text x="583" y="287" text-anchor="middle" font-size="12" font-weight="bold" fill="#2b4a97">行（横の青い線）</text>
+<text x="583" y="305" text-anchor="middle" font-size="11" fill="#4a63a0">入力。MCU 直結にする</text>
+<text x="583" y="320" text-anchor="middle" font-size="11" fill="#4a63a0">ダイオードのカソード側</text>
+<rect x="24" y="430" width="652" height="80" rx="6" fill="#fff8e6" stroke="#c9a227" stroke-width="1.5"/>
+<text x="44" y="454" font-size="14" font-weight="bold" fill="#6b5410">ゴースト試験（このタスクで最も重要）</text>
+<text x="44" y="476" font-size="12" fill="#6b5410">a ・ b ・ c の 3 つを同時に押し続ける。このとき d が出なければ合格。</text>
+<text x="44" y="496" font-size="12" fill="#6b5410">ダイオードが抜け道を止めている証拠であり、Shift や Ctrl との同時押しが安全だと確認できる。</text>
+</svg>

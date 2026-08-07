@@ -1,5 +1,17 @@
 # フェーズ1: 電気・ファームウェア検証 実装計画
 
+> [!WARNING]
+> **Task 2 と Task 3 はこの計画のままでは実施しない（2026-08-07）。**
+>
+> キースキャンをチャープレックスから「行×列マトリクス ＋ 74HC595」へ変更した。
+> nRF52840 の 3.3V ではダイオードの電圧降下だけで 2 キー同時押しのゴーストを
+> 消せないことが計算で判明したため。判断根拠は
+> [decisions/2026-08-07-keyscan.md](../../hardware/decisions/2026-08-07-keyscan.md)、
+> 差し替え後の手順は [task-c2-keyscan.md](../../hardware/task-c2-keyscan.md)。
+>
+> 以下の記述はチャープレックス前提のまま残してある（経緯の記録として）。
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** PCB を発注する前に、ブレッドボード上で「チャープレックス配線・BLE 分割・乾電池給電・HHKB キーマップ」の4つが成立することを実測で確定させる。

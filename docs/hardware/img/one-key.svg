@@ -45,8 +45,8 @@
 
   <!-- left pin -->
   <rect x="40" y="318" width="86" height="38" rx="5" fill="#fdf1f1" stroke="#d64545" stroke-width="1.6"/>
-  <text x="83" y="336" text-anchor="middle" font-size="14" font-weight="bold" fill="#a83232">D3</text>
-  <text x="83" y="350" text-anchor="middle" font-size="10" fill="#8a4444">アノード側</text>
+  <text x="83" y="334" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 (D6)</text>
+  <text x="83" y="350" text-anchor="middle" font-size="10" fill="#8a4444">アノード側・出力</text>
 
   <!-- wire -->
   <line x1="126" y1="337" x2="196" y2="337" stroke="#333" stroke-width="2.5"/>
@@ -68,8 +68,8 @@
 
   <!-- right pin -->
   <rect x="470" y="318" width="86" height="38" rx="5" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.6"/>
-  <text x="513" y="336" text-anchor="middle" font-size="14" font-weight="bold" fill="#2b4a97">D4</text>
-  <text x="513" y="350" text-anchor="middle" font-size="10" fill="#4a63a0">カソード側</text>
+  <text x="513" y="334" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b4a97">行 (D1)</text>
+  <text x="513" y="350" text-anchor="middle" font-size="10" fill="#4a63a0">カソード側・入力</text>
 
   <!-- current arrow -->
   <line x1="83" y1="398" x2="505" y2="398" stroke="#2f8f4e" stroke-width="2"/>
@@ -84,5 +84,5 @@
   <line x1="300" y1="438" x2="326" y2="438" stroke="#999" stroke-width="3"/>
   <text x="200" y="442" text-anchor="end" font-size="12" fill="#6b5410">実物 →</text>
   <text x="346" y="435" font-size="12" font-weight="bold" fill="#6b5410">白い帯のある側がカソード。</text>
-  <text x="346" y="451" font-size="12" fill="#6b5410">この向きを逆にすると、別の文字が出る。</text>
+  <text x="346" y="451" font-size="12" fill="#6b5410">逆に挿すとそのキーは反応しない。</text>
 </svg>
