@@ -153,3 +153,97 @@ def test_corner_radius_is_applied():
     arcs = [b for b in re.findall(r"\(gr_arc\b(.*?)\n\t\)", s, re.S) if '"Edge.Cuts"' in b]
     assert len(arcs) == 4, f"外形の円弧が {len(arcs)} 個（期待 4）"
     assert CORNER_R > 0
+
+
+# --------------------------------------------------------------------------
+# ネット（配線の接続情報）
+# --------------------------------------------------------------------------
+
+def pads_with_nets(name):
+    """{参照: {パッド番号: ネット名}} を返す。"""
+    s = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    out = {}
+    for fp in re.finditer(r'\n\t\(footprint "[^"]+"(.*?)\n\t\)', s, re.S):
+        body = fp.group(1)
+        m = re.search(r'\(property "Reference" "([^"]+)"', body)
+        if not m:
+            continue
+        ref = m.group(1)
+        pads = {}
+        for pm in re.finditer(r'\(pad "([^"]+)"(.*?)\n\t\t\)', body, re.S):
+            nm = re.search(r'\(net "([^"]+)"\)', pm.group(2))
+            if nm:
+                pads[pm.group(1)] = nm.group(1)
+        out[ref] = pads
+    return out
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_matrix_wiring_matches_the_firmware(name):
+    """基板の配線が、ファームウェアの行列対応表と一致すること。
+
+    **ここがずれるとキーが入れ替わる。** 基板とファームで別々に表を持つと
+    いつか片方だけ直して破綻するので、同じ出所（hhkb_split.dtsi の
+    matrix-transform）から導いていることを毎回確かめる。
+    """
+    from matrix import assignments
+    rc = assignments(name)
+    pads = pads_with_nets(name)
+    for i, (r, c) in enumerate(rc, start=1):
+        assert pads[f"SW{i}"]["1"] == f"COL{c}", \
+            f"{name}: SW{i} が COL{c} につながっていない"
+        assert pads[f"D{i}"]["1"] == f"ROW{r}", \
+            f"{name}: D{i} のカソードが ROW{r} につながっていない"
+        # スイッチとダイオードは同じ中間ノードで繋がる
+        assert pads[f"SW{i}"]["2"] == pads[f"D{i}"]["2"] == f"SW{i}_D", \
+            f"{name}: SW{i} とダイオードが繋がっていない"
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_diode_direction_is_col2row(name):
+    """ダイオードの向きが col2row（アノードが列側・カソードが行側）であること。
+
+    KiCad の D_SOD-123 は pad 1 がカソード、pad 2 がアノード。
+    逆にすると 1 つも反応しない。
+    """
+    pads = pads_with_nets(name)
+    for ref, p in pads.items():
+        if not ref.startswith("D"):
+            continue
+        assert p["1"].startswith("ROW"), f"{ref}: カソードが行側にない"
+        assert p["2"].startswith("SW"), f"{ref}: アノードがスイッチ側にない"
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_diodes_are_on_the_back(name):
+    """ダイオードがソケットと同じ裏面にあること。
+
+    表面に置くとキーキャップと干渉する。JLCPCB の実装も片面に揃えたい。
+    """
+    s = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    for fp in re.finditer(r'\n\t\(footprint "D_SOD-123"(.*?)\n\t\)', s, re.S):
+        body = fp.group(1)
+        ref = re.search(r'\(property "Reference" "([^"]+)"', body).group(1)
+        assert '(layer "B.Cu")' in body, f"{ref} が裏面にない"
+
+
+@pytest.mark.parametrize("name,rows,cols", [("left", 5, 6), ("right", 5, 8)])
+def test_net_count_is_exactly_rows_plus_cols_plus_keys(name, rows, cols):
+    """ネットの本数が 行 + 列 + キー数 と一致すること。
+
+    余計なネットがあれば配線ミス、足りなければ繋ぎ忘れ。
+    """
+    keys = len(HALVES[name])
+    names = {n for p in pads_with_nets(name).values() for n in p.values()}
+    assert len(names) == rows + cols + keys
+    assert {n for n in names if n.startswith("ROW")} == {f"ROW{i}" for i in range(rows)}
+    assert {n for n in names if n.startswith("COL")} == {f"COL{i}" for i in range(cols)}
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_every_key_has_its_own_diode(name):
+    """キー 1 つにダイオード 1 つ。使い回すとゴーストが出る。"""
+    pads = pads_with_nets(name)
+    n_sw = sum(1 for r in pads if r.startswith("SW"))
+    n_d = sum(1 for r in pads if r.startswith("D"))
+    assert n_sw == n_d == len(HALVES[name])

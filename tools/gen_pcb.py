@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 from interface import (CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
+from matrix import assignments, shape                              # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -46,6 +47,14 @@ SWITCH_FP = {
 # スタビライザーの半間隔 → フットプリント名
 STAB_FP = {11.938: "Stabilizer_Cherry_MX_2.00u", 19.05: "Stabilizer_Cherry_MX_3.00u"}
 MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")
+DIODE_FP = ("Diode_SMD", "D_SOD-123")     # JLCPCB の基本部品 1N4148W が入る
+
+# ダイオードをキー中心からどれだけずらして置くか（レイアウト座標・Y 上向き）。
+#
+# **スイッチのピン穴もソケットのパッドも、レイアウト座標では中心より「上」**に
+# ある（KiCad の座標では下）。当初 +Y へ逃がしてしまい、機械穴と重なって
+# DRC が npth_inside_courtyard を 27 件出した。下側は完全に空いている。
+DIODE_OFFSET = (0.0, -7.0)
 
 
 def to_kicad(x, y):
@@ -126,6 +135,38 @@ def build(half, keys):
             board.Add(st)
             n_stab += 1
 
+    # ダイオードとマトリクスのネット
+    #
+    # 行と列の割り当ては tools/matrix.py がファームウェアの matrix-transform から
+    # 読む。**基板とファームで別々に持つと、いつか片方だけ直して破綻する。**
+    #
+    # col2row なので、電流は 列 → スイッチ → ダイオード → 行 と流れる。
+    # ダイオードのアノードが列側、カソード（KiCad の D_SOD-123 では pad 1）が行側。
+    nets = {}
+
+    def net(name):
+        if name not in nets:
+            n = pcbnew.NETINFO_ITEM(board, name)
+            board.Add(n)
+            nets[name] = n
+        return nets[name]
+
+    rc = assignments(half)
+    for i, ((kx, ky), (r, c)) in enumerate(zip(positions, rc), start=1):
+        d = _load(KICAD_FP / f"{DIODE_FP[0]}.pretty", DIODE_FP[1])
+        d.SetPosition(to_kicad(kx + DIODE_OFFSET[0], ky + DIODE_OFFSET[1]))
+        d.SetReference(f"D{i}")
+        d.SetValue("1N4148W")
+        board.Add(d)
+        # **Flip は board.Add の後で呼ぶ。** 基板に属していない状態で反転すると
+        # segfault する（実際に落とした）。
+        d.Flip(d.GetPosition(), False)          # ソケットと同じ裏面へ
+        sw = board.FindFootprintByReference(f"SW{i}")
+        sw.FindPadByNumber("1").SetNet(net(f"COL{c}"))
+        sw.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))
+        d.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))   # アノード
+        d.FindPadByNumber("1").SetNet(net(f"ROW{r}"))    # カソード
+
     # 取付穴
     for i, (mx, my) in enumerate(boss_positions(half), start=1):
         h = _load(KICAD_FP / f"{MOUNT_FP[0]}.pretty", MOUNT_FP[1])
@@ -136,15 +177,18 @@ def build(half, keys):
     OUT.mkdir(exist_ok=True)
     path = OUT / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(path))
-    return path, (pcb_w, pcb_h), (n_sw, n_stab, len(boss_positions(half)))
+    rows, cols = shape(half)
+    return (path, (pcb_w, pcb_h),
+            (n_sw, n_stab, len(boss_positions(half)), rows, cols, len(nets)))
 
 
 def main():
     keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
     for half, keys in (("left", keys_l), ("right", keys_r)):
-        path, (w, h), (n_sw, n_stab, n_hole) = build(half, keys)
+        path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys)
         print(f"{half:5s} 基板 {w:7.2f} x {h:6.2f}mm  "
-              f"スイッチ {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}")
+              f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}")
+        print(f"      行列 {rows} 行 × {cols} 列 / ネット {n_net} 本")
         print(f"      {path}")
     return 0
 
