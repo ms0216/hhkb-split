@@ -675,7 +675,7 @@ def _pour(board, netitem, layer, w, h):
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 
-def build(half, keys):
+def build(half, keys, route=True):
     """片側ぶんの基板を作る。"""
     # **キーマップ順に並べ替えてから使う。**
     # layout.split_halves は x 順（列方向）で返すので、そのまま
@@ -776,10 +776,12 @@ def build(half, keys):
     #
     # スイッチの機械穴（中央 φ4・位置決め φ1.75・ピン穴 φ3.05）は
     # **非メッキ貫通穴なので両面をふさぐ**。列を表に逃がしても避けて通る必要がある。
-    _route(board, positions, rc)
+    if route:
+        _route(board, positions, rc)
 
     _place_electronics(board, half, net)
-    _route_electronics(board, half, net)
+    if route:
+        _route_electronics(board, half, net)
 
     # 取付穴は**もう開けない。**
     #
@@ -822,7 +824,11 @@ def build(half, keys):
     _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
 
     OUT.mkdir(exist_ok=True)
-    path = OUT / f"hhkb_split_{half}.kicad_pcb"
+    if route:
+        path = OUT / f"hhkb_split_{half}.kicad_pcb"
+    else:
+        (OUT / "unrouted").mkdir(exist_ok=True)
+        path = OUT / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(path))
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
@@ -830,9 +836,10 @@ def build(half, keys):
 
 
 def main():
+    route = "--no-route" not in sys.argv
     keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
     for half, keys in (("left", keys_l), ("right", keys_r)):
-        path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys)
+        path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys, route)
         print(f"{half:5s} 基板 {w:7.2f} x {h:6.2f}mm  "
               f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}（不要）")
         print(f"      行列 {rows} 行 × {cols} 列 / ネット {n_net} 本")
