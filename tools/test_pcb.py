@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from gen_plate import halves
+from matrix import keymap_order
 from interface import (
     CORNER_R,
     PCB_INSET,
@@ -27,7 +28,10 @@ PCB = ROOT / "pcb"
 NAMES = ["left", "right"]
 ORIGIN = (150.0, 100.0)          # gen_pcb.ORIGIN と同じ
 
-HALVES = halves()
+# **キーマップ順に並べ替えたものを使う。** 生成側と同じ並びにしないと
+# 比較にならないが、その並びが正しいことは
+# test_keymap_order_matches_the_keymap が別途担保する。
+HALVES = {k: keymap_order(v) for k, v in halves().items()}
 
 pytestmark = pytest.mark.skipif(
     not (PCB / "hhkb_split_left.kicad_pcb").exists(),
@@ -227,7 +231,7 @@ def test_diodes_are_on_the_back(name):
         assert '(layer "B.Cu")' in body, f"{ref} が裏面にない"
 
 
-@pytest.mark.parametrize("name,rows,cols", [("left", 5, 6), ("right", 5, 8)])
+@pytest.mark.parametrize("name,rows,cols", [("left", 5, 6), ("right", 5, 9)])
 def test_net_count_is_exactly_rows_plus_cols_plus_keys(name, rows, cols):
     """ネットの本数が 行 + 列 + キー数 と一致すること。
 
@@ -247,3 +251,52 @@ def test_every_key_has_its_own_diode(name):
     n_sw = sum(1 for r in pads if r.startswith("SW"))
     n_d = sum(1 for r in pads if r.startswith("D"))
     assert n_sw == n_d == len(HALVES[name])
+
+
+# --------------------------------------------------------------------------
+# 並び順そのものの正しさ
+# --------------------------------------------------------------------------
+
+# キーマップ（hhkb_split.keymap）の先頭に並ぶキー。ここが検証の基準点になる。
+EXPECTED_HEAD = {
+    "left": ["Esc", "1", "2", "3", "4", "5", "Tab", "Q", "W", "E", "R", "T",
+             "Ctrl", "A", "S", "D", "F", "G"],
+    "right": ["6", "7", "8", "9", "0", "-", "=", "\\", "`",
+              "Y", "U", "I", "O", "P", "[", "]", "Del"],
+}
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_keymap_order_matches_the_keymap(name):
+    """並べ替えの結果が、キーマップに書かれた並びと一致すること。
+
+    **これが全ての比較の基準点。** 他のテストは「生成側と期待値が同じ並びを
+    使っているか」しか見ておらず、その並び自体が間違っていれば揃って通る。
+    実際に一度そうなった（layout.split_halves は x 順で返すのに、行順だと
+    思い込んで突き合わせ、61 キー全部の割り当てを取り違えた）。
+    **自分自身との一致は検証ではない。**
+
+    ここだけは外部の事実（キーマップに書かれたキー名の並び）と照合する。
+    """
+    got = [k.label for k in HALVES[name]][:len(EXPECTED_HEAD[name])]
+    assert got == EXPECTED_HEAD[name], f"{name}: 並び順が違う\n  got  {got}"
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_matrix_columns_follow_physical_position(name):
+    """同じ列のキーが物理的にも近いこと。
+
+    列を「段の中で何番目か」で決めると、最下段のようにキー数が違う段で
+    論理的に同じ列のキーが大きく離れる。基板に 38mm の横断配線が生まれ、
+    DRC が交差を検出した。
+    """
+    from matrix import assignments
+    rc = assignments(name)
+    keys = HALVES[name]
+    cols = {}
+    for k, (_, c) in zip(keys, rc):
+        cols.setdefault(c, []).append(k.x_mm)
+    for c, xs in cols.items():
+        spread = max(xs) - min(xs)
+        assert spread <= 19.05 * 1.5, \
+            f"{name}: 列 {c} のキーが x 方向に {spread:.1f}mm 散らばっている"

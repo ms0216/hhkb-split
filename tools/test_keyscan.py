@@ -21,7 +21,7 @@ LEFT = SHIELD / "hhkb_split_left.overlay"
 RIGHT = SHIELD / "hhkb_split_right.overlay"
 
 LEFT_KEYS, RIGHT_KEYS = 27, 34
-LEFT_COLS, RIGHT_COLS = 6, 8
+LEFT_COLS, RIGHT_COLS = 6, 9
 ROWS = 5
 
 
@@ -88,15 +88,17 @@ def test_row_pin_count_matches_the_physical_rows():
     assert _gpio_count(DTSI, "row-gpios") == ROWS
 
 
-def test_column_counts_fit_one_shift_register():
-    """左右とも 74HC595 1 個（8 出力）に収まること。
+def test_column_counts_match_the_shift_registers():
+    """左は 595 が 1 個（8 出力）、右は 2 個の数珠つなぎ（16 出力）。
 
-    右の最上段は 9 キーあるが、` を最下段の空きへ回して 8 列に収めた。
-    ここが 9 になると 595 を 2 個数珠つなぎにする必要が出て、部品構成が変わる。
+    右の最上段が 9 キーあるため、右だけ 9 列要る。当初は ` を最下段の空きへ
+    回して 8 列に収めていたが、物理的に最上段のキーが論理的に最下段になり、
+    90mm の配線が 4 段ぶんのスイッチを横切ることになった。部品を 1 個
+    足す方が配線の素直さに見合う。
     """
-    assert _gpio_count(LEFT, "col-gpios") == LEFT_COLS
-    assert _gpio_count(RIGHT, "col-gpios") == RIGHT_COLS
-    assert RIGHT_COLS <= 8
+    assert _gpio_count(LEFT, "col-gpios") == LEFT_COLS == 6
+    assert _gpio_count(RIGHT, "col-gpios") == RIGHT_COLS == 9
+    assert "ngpios = <16>" in _strip(RIGHT.read_text()), "右は 595 を 2 個使う"
 
 
 # --------------------------------------------------------------------------
@@ -147,11 +149,15 @@ def test_bindings_match_the_transform_in_every_layer():
         assert len(re.findall(r"&\w+", body)) == len(_map_entries()), name
 
 
-def test_backtick_was_moved_to_the_spare_bottom_row_slot():
-    """右上段 9 キーのうち ` だけを最下段へ回した、という設計判断を固定する。
+def test_matrix_rows_follow_the_physical_rows():
+    """論理の行が物理の段と一致すること。
 
-    ここを戻すと右が 9 列になり、595 が 1 個で足りなくなる。
+    ` を最下段へ回していた時期があり、そのせいで基板に 90mm の配線が生まれた。
+    行がずれると配線が段をまたいで長くなるので、一致させておく。
     """
     right = _map_entries()[LEFT_KEYS:]
-    backtick = right[8]        # 右 34 個中 9 番目が `
-    assert backtick == (4, LEFT_COLS + 3), f"` の位置が変わっている: {backtick}"
+    counts = {}
+    for r, _ in right:
+        counts[r] = counts.get(r, 0) + 1
+    assert counts == {0: 9, 1: 8, 2: 7, 3: 7, 4: 3}, \
+        f"右の各段のキー数が物理配列と違う: {counts}"

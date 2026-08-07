@@ -78,5 +78,56 @@ def main():
         print()
 
 
+
+
+def keymap_order(keys):
+    """キーをキーマップの並び順（行順）に並べ替える。
+
+    **layout.split_halves は x 順（列方向）で返す。** キーマップと
+    matrix-transform は行順（上段の左から右へ、次の段へ）を前提にしているので、
+    突き合わせる前に必ずここを通す。
+
+    これを忘れて基板を生成し、61 キー全部の行列割り当てを取り違えた。
+    しかも「基板の割り当て」と「期待値」の両方に同じ誤った並びを使っていたため、
+    テストが通ってしまった。**自分自身との一致は検証ではない。**
+    発覚したのは DRC が「同じ行のはずのキーが物理的に離れている」ことによる
+    異常な長さの配線を検出したため。
+
+    layout.py の y_mm は Y 下向き（上の段ほど小さい）なので、y の昇順 → x の昇順。
+    """
+    return sorted(keys, key=lambda k: (k.y_mm, k.x_mm))
+
+
+def computed_assignments(keys):
+    """キー配置から行列の割り当てを計算する（行順に並べたキーを渡す）。
+
+    **列は「段の中で何番目か」ではなく、物理的な x で決める。**
+    番号で割り当てると、最下段（Space・Meta・Alt）のように段によって
+    キー数が違うところで、論理的に同じ列のキーが物理的に大きく離れる。
+    実際にそうなり、基板に 38mm の横断配線が生まれて DRC が交差を検出した。
+
+    最上段（最も列数が多い段）を基準の列とし、各段のキーを x の順に
+    単調増加で最も近い列へ割り当てる。単調にするのは、交差を避けるため。
+    """
+    rows = {}
+    for k in keys:
+        rows.setdefault(round(k.y_mm, 2), []).append(k)
+    ys = sorted(rows)
+    ref = sorted(rows[ys[0]], key=lambda k: k.x_mm)      # 最上段
+    out = {}
+    for r, y in enumerate(ys):
+        row = sorted(rows[y], key=lambda k: k.x_mm)
+        c_prev = -1
+        for k in row:
+            best, bestd = None, None
+            for c in range(c_prev + 1, len(ref) - (len(row) - row.index(k) - 1)):
+                d = abs(ref[c].x_mm - k.x_mm)
+                if bestd is None or d < bestd:
+                    best, bestd = c, d
+            out[id(k)] = (r, best)
+            c_prev = best
+    return [out[id(k)] for k in keys]
+
+
 if __name__ == "__main__":
     main()

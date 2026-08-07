@@ -1,7 +1,8 @@
 /*
  * 右半分（34 キー）。分割の周辺側（ペリフェラル）。
  *
- * 列は 8 本ぶんシフトレジスタの出力 0..7 を使う。
+ * 列は 9 本。74HC595 は 8 出力なので 2 個を数珠つなぎにして出力 0..8 を使う
+ * （ngpios = 16）。最上段が 9 キーあるため。
  * 右半分の基板上では列 0..7 だが、キーマップ全体では列 6..13 に当たるので、
  * col-offset で 6 だけずらす。これが ZMK の分割の標準的な書き方。
  */
@@ -9,6 +10,12 @@
 
 &default_transform {
 	col-offset = <6>;
+};
+
+/* 右だけ 595 を 2 個つなぐ。数珠つなぎのぶん取りこぼしやすくなるので、
+ * 速い打鍵での確認を Task C2-b の重点項目にしている。 */
+&shifter {
+	ngpios = <16>;
 };
 
 &kscan0 {
@@ -21,5 +28,6 @@
 		, <&shifter 5 GPIO_ACTIVE_HIGH>
 		, <&shifter 6 GPIO_ACTIVE_HIGH>
 		, <&shifter 7 GPIO_ACTIVE_HIGH>
+		, <&shifter 8 GPIO_ACTIVE_HIGH>
 		;
 };
