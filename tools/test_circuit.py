@@ -299,3 +299,18 @@ def test_no_two_parts_share_a_reference(board):
     refs = [ref for ref, _, _ in BOARDS[board]()]
     dup = {r for r in refs if refs.count(r) > 1}
     assert not dup, f"{board}: 参照名が重複している {sorted(dup)}"
+
+
+def test_the_firmware_can_be_recovered_without_opening_the_case():
+    """RESET のボタンが子基板にあり、XIAO の RST に繋がっていること。
+
+    **XIAO 自身のリセットボタンは上を向いており、真上に本体基板が来るので
+    押せない。** ブートローダに入るには RESET を素早く 2 回押す必要があり
+    （Task C1 で実際に使った）、これが無いとファームを壊したとき
+    ケースを開けるまで復旧できない。
+    """
+    parts = {ref: (kind, pins) for ref, kind, pins in daughterboard_netlist()}
+    assert "SW_RST" in parts, "子基板に RESET のボタンが無い"
+    kind, pins = parts["SW_RST"]
+    assert set(pins.values()) == {"RESET", "GND"}, f"RESET のボタンの結線が違う: {pins}"
+    assert parts["U_MCU"][1].get("RST") == "RESET", "XIAO の RST に繋がっていない"

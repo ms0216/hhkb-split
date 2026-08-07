@@ -158,6 +158,18 @@ DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
 USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
 USB_H = 6.0
 USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
+RESET_D = 2.5            # RESET を突くクリップ用の穴。
+                         # **XIAO のリセットボタンは上を向いており、真上に
+                         # 本体基板が来るので押せない。**子基板に押しボタンを
+                         # 載せ、奥の壁の穴からクリップで突く。
+RESET_DX = 16.0          # USB-C の切り欠きから横へずらす量
+
+# 上ケースを奥で留める方法は**未解決**（docs/hardware/open-gaps.md #12）。
+#
+# 舌と溝を試したが噛まなかった。**ケースは上が開いたトレイなので、
+# コブの上に材料が無い。**溝を空中に切っていた。
+# 「当たらない」ことしか見ない干渉検査では気づけず、噛み合いを直接見る
+# test_the_rear_hook_is_actually_captured が検出した。
 
 from envelopes import PCB_T, PLATE_TO_PCB, SOCKET_DROP  # noqa: E402
 
@@ -232,12 +244,25 @@ def build_case(keys, half):
     z_front, z_rear = case_heights(h)
     rim_front = z_front - PLATE_T          # プレートを載せるリムの高さ（前縁）
     rim_rear = z_rear - PLATE_T
-    z_max = rim_rear + 5.0
+    # **コブの上面はベゼル面まで上がる**ので、そこまで立ち上げておく。
+    # rim_rear + 5.0 のままだと 31.31mm までしか無く、ベゼル面（33.53mm）に
+    # 届かず切れない。
+    z_max = BEZEL_TOP_FRONT + h * tan(radians(TILT_DEG)) + 5.0
 
     # 切削用の立体は BuildPart に入る前に作る。
     # コンテキストの中で Box() を作ると、その時点で部品に合体されてしまい、
     # 「原点で合体 → 傾けた位置で減算」という食い違いが起きる。
-    cutter = tilted_cutter(w, h_body, rim_front)
+    # 上面の切り方は**本体とコブで違う**。
+    #   本体   … リム（プレートの下面）で切る。上にプレートと上ケースが載る
+    #   コブ   … ベゼル上面で切る。ここには上ケースが載らないので、
+    #             低く切ると奥に 5.7mm の段ができ、上ケースの舌を受ける
+    #             材料も無くなる（噛み合いの検査が「舌の上に材料が無い」と検出）
+    with BuildPart() as _body:
+        with BuildSketch():
+            RectangleRounded(w + 20, h_body, CORNER_R)
+        extrude(amount=z_max + 50, both=True)
+    cutter = tilted_cutter(w, h_body, rim_front).intersect(_body.part)
+    cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
     cutter_pcb = tilted_cutter(w, h_body, rim_front - PLATE_TO_PCB - PCB_T)
@@ -278,8 +303,9 @@ def build_case(keys, half):
                 RectangleRounded(w, h, CORNER_R)
         extrude(amount=z_max)
 
-        # 2. 上面を傾いた平面で切り落とす（＝プレートの裏面）
-        add(cutter, mode=Mode.SUBTRACT)
+        # 2. 上面を傾いた平面で切り落とす
+        add(cutter_bump, mode=Mode.SUBTRACT)      # 全体をベゼル上面で
+        add(cutter, mode=Mode.SUBTRACT)           # 本体部分はさらにリムまで
 
         # 3. 内側をくり抜く
         with BuildSketch(Plane.XY.offset(FLOOR)):
@@ -335,6 +361,13 @@ def build_case(keys, half):
         with Locations((db_x, y_rear_outer, usb_center_z())):
             Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # RESET 用の穴。子基板の押しボタンをクリップで突く。
+        with Locations((db_x - inner_sign(half) * RESET_DX, y_rear_outer,
+                        usb_center_z())):
+            Cylinder(RESET_D / 2, WALL * 4, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER),
+                     rotation=(90, 0, 0))
+
 
         ox, oy, ow, oh = _lid_opening(half, w, h_body)
         # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）
@@ -649,7 +682,9 @@ def main():
         # 奥行はコブぶん長い（実機も本体 108 ＋ コブ 12 ＝ 120mm）
         assert abs(bb.size.X - w) < 0.01, "幅が設計値と違う"
         assert abs(bb.size.Y - (h + BUMP_DEPTH)) < 0.01, "奥行が設計値と違う"
-        assert abs(bb.size.Z - (z_rear - PLATE_T)) < 0.01, "高さが設計値と違う"
+        # 最も高いのはコブの後端（ベゼル上面）
+        z_top = BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
+        assert abs(bb.size.Z - z_top) < 0.05, f"高さが設計値と違う（{bb.size.Z:.2f} vs {z_top:.2f}）"
     return 0
 
 

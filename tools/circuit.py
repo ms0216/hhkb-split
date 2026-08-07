@@ -149,8 +149,13 @@ def daughterboard_netlist():
             "D0": "VBATT_SENSE",
             "D1": "ROW0", "D2": "ROW1", "D3": "ROW2", "D4": "ROW3", "D5": "ROW4",
             "D6": "NC", "D7": "CS", "D8": "SPI_SCK", "D9": "NC", "D10": "SPI_MOSI",
+            "RST": "RESET",
         }),
         ("C_DB", "cap_100n", {"1": "V3V3", "2": "GND"}),
+        # RESET のボタン。**XIAO 自身のボタンは上を向いており、真上に本体基板が
+        # 来るので押せない。**ここに載せてケース奥の穴からクリップで突く。
+        # ファームを壊したときに分解せず復旧できるかが懸かっている。
+        ("SW_RST", "tact_switch", {"1": "RESET", "2": "GND"}),
     ]
 
 

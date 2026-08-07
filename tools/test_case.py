@@ -37,8 +37,16 @@ def test_outer_size_matches_the_tilted_plate(name):
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_rim_height_gives_the_intended_plate_top(name):
     """リムの高さ + 板厚 = 狙ったプレート上面高さ。"""
-    part, _, (z_front, z_rear) = build_case(HALVES[name], name)
-    assert part.bounding_box().size.Z == pytest.approx(z_rear - PLATE_T, abs=0.05)
+    from math import radians, tan
+    from gen_case import BEZEL_TOP_FRONT, BUMP_DEPTH
+    from interface import plan_depth
+    from gen_plate import plate_positions
+    part, (_, h_body), (z_front, z_rear) = build_case(HALVES[name], name)
+    # **最も高いのはコブの後端（ベゼル上面）。**
+    # 以前はプレートのリムが最高点だったが、上ケース方式でコブがベゼル面まで
+    # 上がったので基準が変わった。
+    z_top = BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
+    assert part.bounding_box().size.Z == pytest.approx(z_top, abs=0.05)
     assert z_front == pytest.approx(PLATE_TOP_FRONT)
 
 
@@ -216,3 +224,29 @@ def test_the_antenna_is_kept_away_from_the_battery(name):
     assert gap >= DB_ANTENNA_KEEPOUT, (
         f"{name}: アンテナと電池が {gap:.1f}mm しか離れていない"
         f"（必要 {DB_ANTENNA_KEEPOUT}mm）")
+
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_a_clip_can_reach_the_reset_button(name):
+    """奥の壁の RESET 穴が貫通していること。
+
+    **XIAO のリセットボタンは上を向いており、真上に本体基板が来るので
+    押せない。** 子基板に押しボタンを載せ、この穴からクリップで突く。
+    ファームを壊したときに分解せず復旧できるかが懸かっている。
+    """
+    from build123d import Align, BuildPart, Cylinder, Locations
+    from gen_case import (BUMP_DEPTH, RESET_D, RESET_DX, build_case,
+                          daughterboard_x_center, inner_sign, usb_center_z)
+    from gen_plate import plate_positions
+    from verify import intersection_volume
+
+    case, (w, h_body), _ = build_case(HALVES[name], name)
+    x = daughterboard_x_center(name, w) - inner_sign(name) * RESET_DX
+    y = h_body / 2 + BUMP_DEPTH
+    with BuildPart() as clip:
+        with Locations((x, y, usb_center_z())):
+            Cylinder(RESET_D / 2 - 0.3, 20.0, rotation=(90, 0, 0),
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    v = intersection_volume(clip.part, case)
+    assert v < 1e-3, f"{name}: RESET の穴が貫通していない（{v:.2f}mm^3 塞がれている）"
