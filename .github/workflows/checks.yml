@@ -1,0 +1,22 @@
+name: 設計の自己検証
+
+# **これが無かった間、124 個のテストは CI で一度も動いていなかった。**
+# 手で pytest を叩いたときにしか動かず、「単体は通るが組み上げると食い込む」
+# 状態を作った。基板の発注も 3D プリントも費用とリードタイムがかかるので、
+# 押すたびに機械が確かめる状態にしておく。
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - name: テスト（配列・キーマップ・プレート・ケース・基板・組み立て）
+        run: pytest tools -q

@@ -53,7 +53,11 @@ def test_two_aa_batteries_fit(name):
     from envelopes import battery_envelope
     from gen_case import battery_center
     part, (_, h_body), _ = build_case(HALVES[name], name)
-    batt = battery_envelope((0, battery_center(h_body), FLOOR + AA_D / 2))
+    from gen_case import battery_x_center
+    from gen_plate import plate_positions
+    _, (w, _) = plate_positions(HALVES[name])
+    batt = battery_envelope((battery_x_center(name, w),
+                             battery_center(h_body), FLOOR + AA_D / 2))
     v = intersection_volume(batt, part)
     assert v < 1e-3, f"{name}: 電池がケースと干渉している ({v:.2f}mm^3)"
 
@@ -78,11 +82,11 @@ def _dist(a, b):
 def test_battery_lid_is_printable_and_fits_the_opening(name):
     from gen_case import CLEARANCE, LID_STOP, _lid_opening, build_battery_lid
     from gen_plate import plate_positions
-    lid, (lw, lh) = build_battery_lid(HALVES[name])
+    lid, (lw, lh) = build_battery_lid(name, HALVES[name])
     mesh, _ = to_mesh(lid, f"battery_lid_{name}")
     assert_watertight(mesh, f"battery_lid_{name}")
     _, (w, h) = plate_positions(HALVES[name])
-    _, _, ow, oh = _lid_opening(w, h)
+    _, _, ow, oh = _lid_opening(name, w, h)
     assert lw < ow, "蓋が開口より大きい"
     assert lh < oh - LID_STOP, "蓋がストッパーに当たって入らない"
     assert ow - lw == pytest.approx(CLEARANCE), "嵌合の逃げが設計値と違う"

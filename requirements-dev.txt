@@ -1,0 +1,5 @@
+# 設計の自己検証に使う。CI（.github/workflows/checks.yml）と同じものを入れる。
+build123d==0.11.1
+trimesh==5.0.0
+numpy==2.5.1
+pytest==9.1.1

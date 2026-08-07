@@ -110,3 +110,23 @@ def pcb_bottom_at(y, h_plate, rim_front):
     """
     rim = rim_front + (y + h_plate / 2) * tan(radians(TILT_DEG))
     return rim - PLATE_TO_PCB - PCB_T - SOCKET_DROP
+
+
+# --------------------------------------------------------------------------
+# 子基板（XIAO を載せる小さな別基板）
+# --------------------------------------------------------------------------
+XIAO_H = 4.0             # [暫定] 子基板の上面から XIAO の頭まで（USB コネクタ含む）
+
+
+def daughterboard_envelope(center, w, d, t):
+    """子基板と、その上に載る XIAO が占める空間。
+
+    **基板だけでなく XIAO の高さを含める。** 基板の板厚だけで検査すると、
+    その上に立つ部品が本体基板とぶつかるのを見逃す。
+    """
+    from build123d import Box, BuildPart, Locations, Align
+
+    with BuildPart() as env:
+        with Locations(center):
+            Box(w, d, t + XIAO_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return env.part

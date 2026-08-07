@@ -87,8 +87,37 @@ AA_D, AA_L = 14.5, 50.5
 BATT_H = AA_D + 1.0              # 占有高さ
 BATT_W = AA_D + 1.0              # 占有奥行（左右に寝かせるので 1 本ぶん）
 BATT_X = AA_L * 2 + 8.0          # 占有幅（2 本直列＋電極）
-BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
+BATT_MARGIN_REAR = 15.0          # 電池と後壁の間隔。
+                                 # **チルト脚のボスを Y 方向で避けるための値。**
+                                 # 2.0mm（後壁ぎわ）に置くと、後隅のチルト脚ボス
+                                 # (x=±61.2, y=41.6, r=4.0, z=0..5.6) が電池
+                                 # (z=2.4..16.9) の下に入り 307mm^3 食い込む。
+                                 # 前へ寄せるほど傾いた基板との余裕は減るので、
+                                 # 脚を避ける最小限に留める（test_two_aa_batteries_fit
+                                 # と test_pcb_does_not_hit_the_battery が両側を守る）。
 BUMP_DEPTH = 0.0                 # コブは不要になった
+
+# --------------------------------------------------------------------------
+# 子基板（XIAO を載せる小さな別基板）
+#
+# 経緯は docs/hardware/decisions/2026-08-07-daughterboard.md。
+# HHKB のキー配列は本体基板をほぼ埋め尽くすので、XIAO (21x17.8mm) の
+# 置き場所が無い。別基板に載せてケース奥に置き、USB-C を実機と同じ奥面へ出す。
+#
+# **寝かせる。立てない。** XIAO は子基板に平らに載るので、子基板を立てると
+# USB-C コネクタが横を向いてしまい、奥の壁に届かない。
+# --------------------------------------------------------------------------
+DB_W = 22.0              # 子基板の幅（左右）。XIAO は 17.8mm 幅。
+                         # 24.0mm にしたら左半分で 0.3mm 足りず、ガードに弾かれた
+DB_D = 22.0              # 奥行（前後）
+DB_T = 1.6
+DB_BOSS_H = 4.0          # 床からの高さ。これが USB-C の高さを決める
+DB_BOSS_DX = 15.0        # 取付ボスの間隔
+DB_BOSS_DY = 14.0
+DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
+USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
+USB_H = 6.0
+USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
 
 from envelopes import PCB_T, PLATE_TO_PCB, SOCKET_DROP  # noqa: E402
 
@@ -180,6 +209,19 @@ def build_case(keys, half):
                 Cylinder(M2_BOSS_D / 2, z_max,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
     bosses = _b.part - cutter_pcb
+    # 電池室の仕切り壁。**基板の下面（ソケットの先端）で頭を切る。**
+    #
+    # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
+    # BATT_H いっぱいに立てると傾いた基板を突き上げる（186mm^3 の食い込みとして
+    # 組み立て検査が検出）。ボスと同じく、コンテキストの外で作って外で切る。
+    cutter_under_pcb = tilted_cutter(
+        w, h_body, rim_front - PLATE_TO_PCB - PCB_T - SOCKET_DROP)
+    y_div = (battery_center(h_body) - BATT_W / 2 - WALL / 2 - CLEARANCE)
+    with BuildPart() as _d:
+        with Locations((battery_x_center(half, w), y_div, FLOOR)):
+            Box(BATT_X, WALL, BATT_H,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+    divider = _d.part - cutter_under_pcb
 
     with BuildPart() as case:
         # 1. 外形を最大高さまで立ち上げる（コブぶん後ろへずらす）
@@ -200,13 +242,12 @@ def build_case(keys, half):
 
         # 4. 電池室。後壁ぎわ（コブの中）に置き、仕切り壁と天井を作る。
         #    天井を張らないと、傾いた基板が電池室の上に落ちてきて衝突する。
-        y_batt = battery_center(h_body)
         # 仕切り壁は電池からわずかに離す。ちょうど接する位置に置くと
         # 干渉として検出される（接触は 0 にならない）。
-        y_div = y_batt - BATT_W / 2 - WALL / 2 - CLEARANCE
-        with Locations((0, y_div, FLOOR)):
-            Box(w - WALL * 2, WALL, BATT_H,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        #
+        # **幅は電池ぶんだけ。** 以前は内寸いっぱいに張っていたが、
+        # 内縁側は子基板の場所として空けておく必要がある。
+        add(divider, mode=Mode.ADD)
         # 天井は張らない。電池の上には基板が来るので、板を入れると
         # 傾いた基板の下端を突き上げる（2,817mm^3 の食い込みとして検出）。
         # 電池は 手前=仕切り壁 / 左右と奥=側壁 / 下=蓋 / 上=基板 で保持される。
@@ -226,7 +267,26 @@ def build_case(keys, half):
         # 逆にすると（広い開口を先に貫通させてから狭い座ぐりを削ると）、
         # 蓋を受ける段が一切できない。当初これを間違えており、組み立て検査で
         # ケースと蓋が食い込むという形で発覚した。
-        ox, oy, ow, oh = _lid_opening(w, h_body)
+        # 6-0. 子基板の座（取付ボス 2 本）と、奥の壁の USB-C 切り欠き。
+        #
+        # 蓋の開口より**先に**置く。開口は床を貫通させる操作なので、
+        # あとから足すとボスの根元が削られる。
+        db_x = daughterboard_x_center(half, w)
+        db_y = h_body / 2 - WALL - DB_FROM_REAR - DB_D / 2
+        for dx in (-DB_BOSS_DX / 2, DB_BOSS_DX / 2):
+            for dy in (-DB_BOSS_DY / 2, DB_BOSS_DY / 2):
+                with Locations((db_x + dx, db_y + dy, FLOOR)):
+                    Cylinder(M2_BOSS_D / 2, DB_BOSS_H,
+                             align=(Align.CENTER, Align.CENTER, Align.MIN))
+                with Locations((db_x + dx, db_y + dy, FLOOR)):
+                    Cylinder(M2_PILOT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
+                             align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 奥の壁を貫く。壁の厚みより長い立体で切らないと薄皮が残る。
+        with Locations((db_x, h_body / 2, usb_center_z())):
+            Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+
+        ox, oy, ow, oh = _lid_opening(half, w, h_body)
         # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）
         with Locations((ox, oy, 0)):
             Box(ow - RAIL_W * 2, oh, FLOOR * 3, mode=Mode.SUBTRACT,
@@ -282,13 +342,58 @@ def battery_center(h_body):
     return y_rear_inner - BATT_MARGIN_REAR - BATT_W / 2
 
 
-def _lid_opening(w, h_body):
+def inner_sign(half):
+    """分割の**内縁**（相手側の半分に面する側）が +X か −X か。
+
+    左半分は右端が内縁、右半分は左端が内縁。
+    """
+    return 1.0 if half == "left" else -1.0
+
+
+def battery_x_center(half, w):
+    """電池室の中心 X。**外側へ寄せる。**
+
+    奥の壁ぎわの中央に置くと、子基板の場所が無くなる。外へ寄せれば
+    内縁側に 24mm（左）/ 56mm（右）空き、そこへ子基板が入る。
+    ケースの外形も電池の向きも変えずに済むのが、この寄せ方の利点。
+    """
+    return -inner_sign(half) * ((w / 2 - WALL) - BATT_X / 2 - CLEARANCE)
+
+
+def daughterboard_x_center(half, w):
+    """子基板の中心 X。電池の内側端と、奥のネジボスの間に置く。
+
+    **奥のネジボスに当たらないこと**が効く制約。左半分では使える幅が
+    24.1mm しかなく、子基板 24.0mm でほぼ一杯になる。
+    """
+    s = inner_sign(half)
+    # 電池の**内縁側の端**。中心の絶対値に足すと外縁側の端になる（一度間違えた）。
+    lo = abs(battery_x_center(half, w) + s * BATT_X / 2) + CLEARANCE
+    hi = min([abs(bx) - M2_BOSS_D / 2 - CLEARANCE
+              for bx, by in boss_positions(half)
+              if by > 20 and bx * s > 0] or [w / 2 - WALL])
+    if hi - lo < DB_W:
+        raise RuntimeError(
+            f"{half}: 子基板の場所が {hi - lo:.1f}mm しかない（{DB_W}mm 必要）")
+    return s * (lo + hi) / 2
+
+
+def usb_center_z():
+    """奥の壁に開ける USB-C 切り欠きの中心高さ。
+
+    子基板の載る高さから導く。数値を直接書くと、ボスの高さを変えたときに
+    穴だけ取り残される。
+    """
+    return FLOOR + DB_BOSS_H + DB_T + USB_Z_ABOVE_PCB
+
+
+def _lid_opening(half, w, h_body):
     """電池蓋の開口（中心 x, y と 大きさ）。電池室の真下に開ける。
 
-    y は**本体部分の中心を原点**とした座標。コブの中に電池があるので、
-    本体の後端より後ろに来る。
+    y は**本体部分の中心を原点**とした座標。
+    x は電池を外側へ寄せたぶんだけずれる。
     """
-    return (0.0, battery_center(h_body), BATT_X, BATT_W)
+    return (battery_x_center(half, w), battery_center(h_body), BATT_X, BATT_W)
 
 
 def _rubber_positions(w, h_body):
@@ -320,14 +425,14 @@ def foot_height(h, add_deg):
     return FOOT_BASE_H + lever * tan(radians(add_deg))
 
 
-def build_battery_lid(keys):
+def build_battery_lid(half, keys):
     """電池蓋。ケースのレールに差し込んで奥へスライドさせる。
 
     開口の位置と大きさはケース側の造作なので、平面図の奥行で計算する。
     プレートの平らな奥行を渡すと 0.42mm ずれる。
     """
     _, (w, h_plate) = plate_positions(keys)
-    _, _, ow, oh = _lid_opening(w, plan_depth(h_plate))
+    _, _, ow, oh = _lid_opening(half, w, plan_depth(h_plate))
     lw = ow - CLEARANCE                      # 開口より少し小さく
     lh = oh - LID_STOP - CLEARANCE
     with BuildPart() as lid:
@@ -390,7 +495,7 @@ def main():
         mesh, stl = to_mesh(part, f"case_{name}")
         assert_watertight(mesh, stl.name)
 
-        lid, (lw, lh) = build_battery_lid(keys)
+        lid, (lw, lh) = build_battery_lid(name, keys)
         lmesh, lstl = to_mesh(lid, f"battery_lid_{name}")
         assert_watertight(lmesh, lstl.name)
         print(f"      電池蓋 {lw:.1f} x {lh:.1f} x {LID_T}mm -> {lstl.name}")

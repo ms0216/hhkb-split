@@ -23,12 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_case import (  # noqa: E402
     AA_D, AA_L, BATT_MARGIN_REAR, BATT_W, CLEARANCE, FLOOR, FOOT_PEG_H,
     LID_STOP, LID_T, PLATE_TOP_FRONT, RAIL_H, TILT_DEG, WALL, _foot_positions,
-    _lid_opening, battery_center, build_battery_lid, build_case,
+    _lid_opening, battery_center, battery_x_center, build_battery_lid, build_case,
     build_tilt_foot, case_heights,
 )
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from envelopes import (  # noqa: E402
-    battery_envelope, pcb_bottom_at, pcb_envelope, place_pcb,
+    battery_envelope, daughterboard_envelope, pcb_bottom_at, pcb_envelope,
+    place_pcb,
 )
 from interface import PLATE_T  # noqa: E402
 
@@ -56,7 +57,7 @@ def build_assembly(keys, half):
     _, (w, h_plate) = plate_positions(keys)
     case, (_, h_case), _ = build_case(keys, half)
     plate, _, _ = build_plate(keys, half)
-    lid, (lw, lh) = build_battery_lid(keys)
+    lid, (lw, lh) = build_battery_lid(half, keys)
 
     parts = {"case": case, "plate": plate_placement(w, h_plate) * plate}
 
@@ -66,7 +67,7 @@ def build_assembly(keys, half):
     parts["pcb"] = place_pcb(pcb_envelope(w, h_plate, half, keys), h_plate, rim_front)
 
     # 電池蓋はレールの段に載る。開口の中心へ、レールの高さに置く。
-    ox, oy, _, oh = _lid_opening(w, h_case)
+    ox, oy, _, oh = _lid_opening(half, w, h_case)
     # 蓋の手前端はストッパーの奥に来る
     y_lid = oy - oh / 2 + LID_STOP + CLEARANCE + lh / 2
     parts["lid"] = Location((ox, y_lid, FLOOR - RAIL_H)) * lid
@@ -77,7 +78,17 @@ def build_assembly(keys, half):
         parts[f"foot{i}"] = Location((fx, fy, -fz), (180, 0, 0)) * foot
 
     # 単3電池 2 本（電極と配線の余裕を含めた占有空間として扱う）
-    parts["batt"] = battery_envelope((0, battery_center(h_case), FLOOR + AA_D / 2))
+    parts["batt"] = battery_envelope((battery_x_center(half, w),
+                                      battery_center(h_case), FLOOR + AA_D / 2))
+
+    # 子基板。**取付ボスの上に載る位置**に置く。ケース側の造作と同じ
+    # 関数から座標を取るので、片方だけ動かしてもずれない。
+    from gen_case import (DB_BOSS_H, DB_D, DB_FROM_REAR, DB_T, DB_W, WALL,
+                          daughterboard_x_center)
+    parts["db"] = daughterboard_envelope(
+        (daughterboard_x_center(half, w),
+         h_case / 2 - WALL - DB_FROM_REAR - DB_D / 2,
+         FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
 
     return parts, (w, h_case)
 
@@ -126,8 +137,8 @@ def check(keys, half, label=""):
             problems.append(f"プレートが {axis} 方向に {-gap:.2f}mm はみ出す")
 
     # 3. 蓋がレールに載っているか
-    ox, oy, ow, oh = _lid_opening(w, h_case)
-    _, (lw, lh) = build_battery_lid(keys)
+    ox, oy, ow, oh = _lid_opening(half, w, h_case)
+    _, (lw, lh) = build_battery_lid(half, keys)
     notes.append(f"電池蓋 {lw:.1f}x{lh:.1f} / 開口 {ow:.1f}x{oh:.1f}mm")
 
     return problems, notes, parts
