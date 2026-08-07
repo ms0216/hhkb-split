@@ -4,10 +4,10 @@
 <text x="24" y="48" font-size="12" fill="#666">交点ごとに「タクトスイッチ ＋ ダイオード」を直列で入れる。ダイオードの帯（カソード）は行の側。</text>
 <line x1="190" y1="112" x2="190" y2="330" stroke="#a83232" stroke-width="2.5"/>
 <rect x="144" y="76" width="92" height="32" rx="4" fill="#fdf1f1" stroke="#d64545" stroke-width="1.5"/>
-<text x="190" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C0 = D10</text>
+<text x="190" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C0 = D6</text>
 <line x1="370" y1="112" x2="370" y2="330" stroke="#a83232" stroke-width="2.5"/>
 <rect x="324" y="76" width="92" height="32" rx="4" fill="#fdf1f1" stroke="#d64545" stroke-width="1.5"/>
-<text x="370" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C1 = D9</text>
+<text x="370" y="97" text-anchor="middle" font-size="13" font-weight="bold" fill="#a83232">列 C1 = D5</text>
 <line x1="120" y1="185" x2="440" y2="185" stroke="#2b4a97" stroke-width="2.5"/>
 <rect x="24" y="169" width="92" height="32" rx="4" fill="#eef3fd" stroke="#3a63c4" stroke-width="1.5"/>
 <text x="70" y="190" text-anchor="middle" font-size="13" font-weight="bold" fill="#2b4a97">行 R0 = D1</text>
