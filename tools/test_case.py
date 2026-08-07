@@ -229,27 +229,40 @@ def test_the_antenna_is_kept_away_from_the_battery(name):
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_a_clip_can_reach_the_reset_button(name):
-    """奥の壁の RESET 穴が貫通していること。
+    """RESET の穴が底を貫通し、**その先が子基板の上にある**こと。
 
-    **XIAO のリセットボタンは上を向いており、真上に本体基板が来るので
-    押せない。** 子基板に押しボタンを載せ、この穴からクリップで突く。
-    ファームを壊したときに分解せず復旧できるかが懸かっている。
+    XIAO のリセットボタンは上を向いており、真上に本体基板が来るので押せない。
+    子基板の裏に押しボタンを載せ、キーボードを裏返してクリップで突く。
+
+    以前は奥の壁に開けており、しかも横へ 16.0mm ずらしていた。
+    子基板の幅は 20mm（±10）なので**穴の先に基板が無かった**。
+    「壁を貫通しているか」しか見ておらず、その先を見ていなかった。
     """
     from build123d import Align, BuildPart, Cylinder, Locations
-    from gen_case import (BUMP_DEPTH, RESET_D, RESET_DX, build_case,
-                          daughterboard_x_center, inner_sign, usb_center_z)
+    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, DB_W, RESET_D,
+                          RESET_DX, RESET_DY, WALL, build_case,
+                          daughterboard_x_center)
     from gen_plate import plate_positions
     from verify import intersection_volume
 
     case, (w, h_body), _ = build_case(HALVES[name], name)
-    x = daughterboard_x_center(name, w) - inner_sign(name) * RESET_DX
-    y = h_body / 2 + BUMP_DEPTH
+    db_x = daughterboard_x_center(name, w)
+    db_y = h_body / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+    x, y = db_x + RESET_DX, db_y + RESET_DY
+
+    # 1. 底を貫通しているか
     with BuildPart() as clip:
-        with Locations((x, y, usb_center_z())):
-            Cylinder(RESET_D / 2 - 0.3, 20.0, rotation=(90, 0, 0),
-                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        with Locations((x, y, -5)):
+            Cylinder(RESET_D / 2 - 0.3, 12.0,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
     v = intersection_volume(clip.part, case)
-    assert v < 1e-3, f"{name}: RESET の穴が貫通していない（{v:.2f}mm^3 塞がれている）"
+    assert v < 1e-3, f"{name}: RESET の穴が貫通していない（{v:.2f}mm^3）"
+
+    # 2. **その先が子基板の上にあるか**
+    assert abs(RESET_DX) + RESET_D / 2 <= DB_W / 2 - 0.5, \
+        f"{name}: 穴が子基板の幅（±{DB_W/2}）から外れる"
+    assert abs(RESET_DY) + RESET_D / 2 <= DB_D / 2 - 0.5, \
+        f"{name}: 穴が子基板の奥行（±{DB_D/2}）から外れる"
 
 
 # --------------------------------------------------------------------------

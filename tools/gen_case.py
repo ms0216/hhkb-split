@@ -160,9 +160,19 @@ USB_H = 6.0
 USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
 RESET_D = 2.5            # RESET を突くクリップ用の穴。
                          # **XIAO のリセットボタンは上を向いており、真上に
-                         # 本体基板が来るので押せない。**子基板に押しボタンを
-                         # 載せ、奥の壁の穴からクリップで突く。
-RESET_DX = 16.0          # USB-C の切り欠きから横へずらす量
+                         # 本体基板が来るので押せない。**子基板の裏に
+                         # 押しボタンを載せ、**ケースの底**の穴から突く。
+                         #
+                         # 当初は奥の壁に開けていたが、横へ 16.0mm ずらす
+                         # 設計になっており、子基板の幅 20mm（±10）の外だった。
+                         # 「壁を貫通しているか」しか見ておらず、
+                         # **その先にボタンがあるか**を見ていなかった。
+                         # 底なら高さ合わせも要らず、キーボードを裏返すだけ。
+# **取付ボス（±7.5, ±7.0 / φ5）を避ける位置。**
+# (6, 6) に置いたらボスと 7.18mm^3 重なり、穴が貫通しなかった。
+# x=0 ならボスが無く、XIAO のパッド列（±7.62）の間にも収まる。
+RESET_DX = 0.0
+RESET_DY = 6.0
 
 # 上ケースを奥で留める方法は**未解決**（docs/hardware/open-gaps.md #12）。
 #
@@ -361,13 +371,12 @@ def build_case(keys, half):
         with Locations((db_x, y_rear_outer, usb_center_z())):
             Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # RESET 用の穴。子基板の押しボタンをクリップで突く。
-        with Locations((db_x - inner_sign(half) * RESET_DX, y_rear_outer,
-                        usb_center_z())):
-            Cylinder(RESET_D / 2, WALL * 4, mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.CENTER),
-                     rotation=(90, 0, 0))
 
+
+        # RESET の穴（底面）。子基板の裏の押しボタンを、裏返してクリップで突く。
+        with Locations((db_x + RESET_DX, db_y + RESET_DY, 0)):
+            Cylinder(RESET_D / 2, FLOOR * 3, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
         ox, oy, ow, oh = _lid_opening(half, w, h_body)
         # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）
