@@ -590,6 +590,30 @@ def _check_jar():
             "別の場所に置くなら FREEROUTING_JAR で指定する")
 
 
+def _protect_the_ground_plane(dsn):
+    """In1.Cu を「電源層」として宣言し直す。
+
+    **KiCad の DSN は 4 層すべてを (type signal) として書き出す。**
+    In1.Cu は GND のベタなのに、そのまま渡すと自動配線器が基準面の上に
+    信号を通し、面を切り刻む。
+
+    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
+    連続していることの価値が大きい（4 層にしたのはそのため）。
+    DRC は面が切れていても何も言わないので、ここで守る。
+
+    効いたかどうかは、配線後に In1.Cu の配線本数を数えて確かめる
+    （test_the_ground_plane_is_not_cut_by_routing）。
+    """
+    txt = dsn.read_text()
+    old = "(layer In1.Cu\n      (type signal)"
+    new = "(layer In1.Cu\n      (type power)"
+    if old not in txt:
+        raise SystemExit(
+            "DSN の In1.Cu の宣言が想定と違う。KiCad の書式が変わった"
+            "可能性がある。手で確かめること")
+    dsn.write_text(txt.replace(old, new, 1))
+
+
 def run(half):
     """未配線の基板を配線し、記録を残して返す。"""
     _check_jar()
@@ -604,6 +628,7 @@ def run(half):
     ses = PCB / f"_{half}.ses"
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
+    _protect_the_ground_plane(dsn)
 
     subprocess.run(
         [_java(), "-jar", str(JAR), "-de", str(dsn), "-do", str(ses),
@@ -827,7 +852,313 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: DRC 0 を確定し、WIP_BOARDS を空にして文書を更新する
+### Task 6: 配線の質をレビューする
+
+**なぜ要るか:** **DRC 0 は「配線が良い」を意味しない。** 自動配線器は
+「規則を破らない解」を出すだけで、基準面を切る・遠回りする・ビアを
+撒き散らすといったことは平気でやる。DRC はどれも何も言わない。
+
+CLAUDE.md は品質に「回路の綺麗さ・ノイズ耐性」を含めている。
+ここを機械の数字と目の両方で見て、**人（利用者）に判断材料を渡すまでが
+この Task。**
+
+**Files:**
+- Create: `tools/route_report.py`
+- Test: `tools/test_pcb.py`（GND 面の検査を追加）
+
+**Interfaces:**
+- Consumes: `pcb/hhkb_split_{half}.kicad_pcb`（Task 5 の成果）
+- Produces: `route_report.stats(half) -> dict`。キーは `layers`（層名 → `{"count", "length_mm"}`）/ `vias` / `gnd_islands` / `detours`（`[(ネット名, 実長, 直線距離, 比)]`）
+
+- [ ] **Step 1: GND 面が切られていないことの検査を書く**
+
+`tools/test_pcb.py` に追加する。**これがこの Task でいちばん重要。**
+
+```python
+@pytest.mark.parametrize("half", NAMES)
+def test_the_ground_plane_is_not_cut_by_routing(half):
+    """In1.Cu に配線が 1 本も無いこと。
+
+    **In1.Cu は GND のベタ専用。** ここに信号を通すと基準面が切れる。
+
+    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
+    連続していることの価値が大きい（4 層にしたのはそのため。
+    decisions/2026-08-07-four-layer.md）。
+
+    KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
+    そのまま渡すと自動配線器がここを使う。autoroute.py が
+    _protect_the_ground_plane で (type power) に直している。
+    **その細工が効いているかを、ここで確かめる。**
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    on_in1 = re.findall(
+        r"\(segment[\s\S]{0,300}?\(layer \"In1\.Cu\"\)", txt)
+    assert not on_in1, (
+        f"{half}: GND 基準面（In1.Cu）に配線が {len(on_in1)} 本ある。"
+        "自動配線器が基準面を切っている。"
+        "autoroute.py の _protect_the_ground_plane を確かめること")
+```
+
+- [ ] **Step 2: 走らせる**
+
+```bash
+.venv/bin/pytest tools/test_pcb.py -k ground_plane_is_not_cut -q
+```
+
+期待: PASS。**FAIL した場合は `_protect_the_ground_plane` が効いていない。**
+`(type power)` で駄目なら、Freerouting の rules ファイル（`-dr`）で
+In1.Cu を配線対象から外す方法に切り替える。**「DRC が 0 だからよい」で
+先へ進まないこと。**
+
+- [ ] **Step 3: 検査が効いていることを確認する（故意に壊す）**
+
+`autoroute.py` の `_protect_the_ground_plane(dsn)` の呼び出しを一時的に
+コメントアウトし、配線し直して検査を走らせる。
+
+```bash
+"$KPY" tools/autoroute.py
+.venv/bin/pytest tools/test_pcb.py -k ground_plane_is_not_cut -q
+```
+
+期待: `GND 基準面（In1.Cu）に配線が N 本ある` で **FAIL**。
+**この検査は「細工が効いていること」を守るものなので、細工を外して
+落ちなければ意味が無い。**（もし落ちなければ、Freerouting はもともと
+In1 を使わなかったということ。その事実を報告する）
+
+**確認したら元に戻し、配線し直す。**
+
+- [ ] **Step 4: `tools/route_report.py` を書く**
+
+```python
+"""配線の質を数字で見る。**DRC が 0 でも、良い配線とは限らない。**
+
+DRC は規則違反しか見ない。基準面を切る・遠回りする・ビアを撒き散らす、
+どれも DRC は何も言わない。CLAUDE.md は品質に「回路の綺麗さ・
+ノイズ耐性」を含めているので、そこを数字にする。
+
+    .venv/bin/python3 tools/route_report.py
+
+pcbnew を使わない（.kicad_pcb を S 式のテキストとして読む）ので、
+通常の venv から走る。
+"""
+
+import math
+import re
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+PCB = ROOT / "pcb"
+HALVES = ("left", "right")
+
+# **KiCad 10 はネットを番号ではなく引用符つきの名前で書く**（`(net "COL0")`）。
+# 番号だと思って組んだ正規表現は 1 本も拾わず、それでも例外は出ない
+# （0 本として静かに通る）。実際の書式を見てから書くこと。
+SEG = re.compile(
+    r"\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
+    r"\s*\(width [\d.]+\)\s*\(layer \"([^\"]+)\"\)\s*\(net \"([^\"]*)\"\)")
+VIA = re.compile(r"\(via\s*\(at ([-\d.]+) ([-\d.]+)\)")
+EDGE = re.compile(
+    r"\(gr_line\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
+    r"[\s\S]{0,120}?\(layer \"Edge\.Cuts\"\)")
+
+LAYERS = ("F.Cu", "In1.Cu", "In2.Cu", "B.Cu")
+COLOR = {"F.Cu": "#c83232", "In1.Cu": "#c8c832",
+         "In2.Cu": "#32c8c8", "B.Cu": "#3232c8"}
+
+
+def stats(half):
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+
+    layers = defaultdict(lambda: {"count": 0, "length_mm": 0.0})
+    per_net_len = defaultdict(float)
+    pts = defaultdict(list)
+    for x1, y1, x2, y2, layer, net in SEG.findall(txt):
+        x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
+        d = math.hypot(x2 - x1, y2 - y1)
+        layers[layer]["count"] += 1
+        layers[layer]["length_mm"] += d
+        per_net_len[net] += d
+        pts[net] += [(x1, y1), (x2, y2)]
+
+    # 遠回りの度合い。実際の長さ ÷ そのネットが覆う範囲の対角線。
+    # **絶対的な良し悪しではなく、極端なものを見つけるための指標。**
+    detours = []
+    for net, length in per_net_len.items():
+        p = pts[net]
+        span = math.hypot(max(a for a, _ in p) - min(a for a, _ in p),
+                          max(b for _, b in p) - min(b for _, b in p))
+        if span > 1.0:
+            detours.append((net, length, span, length / span))
+    detours.sort(key=lambda t: -t[3])
+
+    # GND ベタが何個の島に割れているか。**1 個が理想。**
+    islands = len(re.findall(
+        r"\(filled_polygon\s*\(layer \"In1\.Cu\"\)", txt))
+
+    return {
+        "layers": {k: v for k, v in sorted(layers.items())},
+        "vias": len(VIA.findall(txt)),
+        "gnd_islands": islands,
+        "detours": detours[:8],
+    }
+
+
+def plot(half, out_dir):
+    """層ごとに配線を描いて PNG にする。**数字だけでは綺麗さは分からない。**
+
+    matplotlib は既にこのプロジェクトの依存にある（tools/requirements.txt）。
+    日本語のフォントは入っていないので、図の中の文字は英数字にする
+    （日本語を入れると豆腐になる）。
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    segs = SEG.findall(txt)
+    vias = VIA.findall(txt)
+    edges = EDGE.findall(txt)
+
+    fig, axes = plt.subplots(len(LAYERS), 1, figsize=(16, 4.2 * len(LAYERS)))
+    for ax, layer in zip(axes, LAYERS):
+        n = 0
+        for x1, y1, x2, y2, lay, _net in segs:
+            if lay != layer:
+                continue
+            n += 1
+            # KiCad は Y 下向き。上下を反転して見慣れた向きにする。
+            ax.plot([float(x1), float(x2)], [-float(y1), -float(y2)],
+                    color=COLOR[layer], lw=0.7)
+        ax.scatter([float(x) for x, _ in vias], [-float(y) for _, y in vias],
+                   s=1.2, c="#888888", zorder=3)
+        for x1, y1, x2, y2 in edges:
+            ax.plot([float(x1), float(x2)], [-float(y1), -float(y2)],
+                    color="#000000", lw=0.8)
+        ax.set_title(f"{half}  {layer}   tracks {n} / vias {len(vias)}",
+                     fontsize=11)
+        ax.set_aspect("equal")
+        ax.axis("off")
+    fig.tight_layout()
+    p = Path(out_dir) / f"{half}.png"
+    fig.savefig(p, dpi=110, facecolor="white")
+    plt.close(fig)
+    return p
+
+
+def main():
+    out_dir = None
+    if "--plot" in sys.argv:
+        out_dir = sys.argv[sys.argv.index("--plot") + 1]
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+    for half in HALVES:
+        s = stats(half)
+        print(f"===== {half}")
+        total = 0.0
+        for layer in LAYERS:
+            v = s["layers"].get(layer, {"count": 0, "length_mm": 0.0})
+            total += v["length_mm"]
+            print(f"  {layer:8s} {v['count']:5d} 本  {v['length_mm']:9.1f} mm")
+        print(f"  合計                {total:9.1f} mm")
+        print(f"  ビア     {s['vias']:5d} 個")
+        print(f"  GND の島 {s['gnd_islands']:5d} 個  （1 個が理想）")
+        print("  遠回りの大きいネット（実長 / 範囲の対角線）:")
+        for name, length, span, ratio in s["detours"]:
+            print(f"    {name:14s} {length:7.1f}mm / {span:6.1f}mm = {ratio:4.1f}")
+        if out_dir:
+            print(f"  図 {plot(half, out_dir)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+- [ ] **Step 5: 数字を出し、手書きルータの値と比べる**
+
+```bash
+.venv/bin/python3 tools/route_report.py --plot /tmp/route_review
+```
+
+**比較の基準（手書きルータの最終状態・2026-08-08 実測）。**
+この値は計画を書く時点で測ってある。`git stash` は要らない。
+
+| | 左 | 右 |
+|---|---|---|
+| F.Cu | 63 本 / 597.7mm | 78 本 / 737.8mm |
+| In1.Cu | **0 本** | **0 本** |
+| In2.Cu | 31 本 / 386.9mm | 34 本 / 467.2mm |
+| B.Cu | 134 本 / 832.4mm | 165 本 / 1085.0mm |
+| 合計長 | 1817.0mm | 2290.0mm |
+| ビア | 58 個 | 68 個 |
+| GND の島 | 1 個 | 1 個 |
+| 遠回りの最大 | VBATT_SENSE 2.3 | VBATT_SENSE 2.3 |
+
+（この状態は違反 左 25 / 右 29 で**製造できない**。長さやビア数は
+「違反を残したまま」の値なので、参考値として見る）
+
+見るところ:
+
+| | 目安 |
+|---|---|
+| `In1.Cu` の本数 | **0 でなければ不合格。**手書きルータでも 0 だった。ここは下げられない |
+| `GND の島` | **1 が理想。**手書きルータでも 1 だった |
+| ビアの数 | 上表から極端に増えていないか。倍以上なら理由を確かめる |
+| 合計長 | 上表から極端に増えていないか |
+| 遠回りの比 | 3 を大きく超えるネットがあれば、絵で理由を見る |
+
+- [ ] **Step 6: 絵を見る**
+
+**CLAUDE.md の「見えるものは見る」。**Step 5 の `--plot` が
+`/tmp/route_review/{left,right}.png` に層ごとの図を出している。
+4 層が縦に並ぶので、層ごとの様子と全体の癖が一目で分かる。
+
+```bash
+ls -la /tmp/route_review/
+```
+
+見るところ: 鋭角、ひげ状の行き止まり、不自然に密集した場所、基板の縁
+ぎりぎりを走る線、帯の外へ大きく回り込んでいる電源の線。
+
+- [ ] **Step 7: レビューして報告する**
+
+**ここは実装者が判断せず、必ず利用者に報告する。**
+
+Step 5 の数字と Step 6 の絵を見て、以下を報告する。
+
+- 層ごとの本数・長さ・ビア数・GND の島の数
+- `In1.Cu` が 0 本であること
+- 遠回りの比が大きいネットと、その理由（絵で見て分かる範囲で）
+- 絵を見て気づいたこと（鋭角、ひげ状の残り、不自然に密集した場所、
+  基板の縁ぎりぎりを走る線など）
+- **手書きルータの結果と比べて良くなったのか悪くなったのか**の所感
+
+**「DRC 0 なので完了」と書かない。** 数字と絵を出したうえで、
+質の判断は利用者に委ねる。
+
+- [ ] **Step 8: コミット**
+
+実測値を入れる。**推測値を書かない。**
+
+```bash
+git add tools/route_report.py tools/test_pcb.py
+git commit -m "配線の質を数字で見る道具と、GND 面を守る検査を足した
+
+DRC は規則違反しか見ない。基準面を切る・遠回りする・ビアを撒き散らす、
+どれも DRC は何も言わない。
+
+KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
+そのまま渡すと自動配線器が GND ベタの層（In1.Cu）に信号を通して
+基準面を切る。autoroute.py で (type power) に直し、その細工が
+効いていることを検査で確かめる（細工を外すと落ちることを確認済み）。
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 7: DRC 0 を確定し、WIP_BOARDS を空にして文書を更新する
 
 **Files:**
 - Modify: `tools/test_pcb.py`（`WIP_BOARDS`）
