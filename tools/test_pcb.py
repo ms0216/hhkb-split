@@ -401,6 +401,28 @@ def test_the_board_declares_the_manufacturer_rules(half):
             f"{half}: {key} が {rules[key]}（期待 {mm}）"
 
 
+@pytest.mark.parametrize("half", NAMES)
+def test_the_board_declares_the_netclass_used_for_routing(half):
+    """配線に使われるネットクラスが、意図した値で書かれていること。
+
+    **最小値（min_track_width ほか）とは別物。** 最小値は「これを下回るな」
+    であって、実際に何 mm で引くかはネットクラスが決める。
+
+    以前ここは設定されておらず、KiCad の既定値が入っていた。たまたま
+    意図と同じ 0.2mm だったので誰も気づかなかった。手書きルータは
+    TRACK_W を直接読んでいたが、**自動配線器はネットクラスしか見ない。**
+    既定値が変われば、黙って別の線幅で配線される。
+    """
+    import json
+    pro = json.loads((PCB / f"hhkb_split_{half}.kicad_pro").read_text())
+    cls = pro["net_settings"]["classes"][0]
+    assert cls["name"] == "Default"
+    for key, mm in (("track_width", 0.2), ("clearance", 0.2),
+                    ("via_diameter", 0.6), ("via_drill", 0.3)):
+        assert cls[key] == pytest.approx(mm, abs=1e-6), \
+            f"{half}: ネットクラスの {key} が {cls[key]}（期待 {mm}）"
+
+
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_actual_geometry_is_inside_the_manufacturer_limits(half):
     """実際の線幅・ビアが能力の内側にあること。

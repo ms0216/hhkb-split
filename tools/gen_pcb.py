@@ -321,6 +321,19 @@ def _apply_jlcpcb_rules(board):
     d.m_CopperEdgeClearance = mm(JLC["edge_clearance"])
     d.m_SilkClearance = mm(JLC["silk_width"])
     d.m_ViasMinAnnularWidth = mm(JLC["annular_ring"])
+
+    # **ネットクラスを明示する。**
+    #
+    # 上の m_* は「これを下回るな」という最小値であって、実際に何 mm で
+    # 引くかを決めるのはネットクラス。ここを設定していなかったので、
+    # KiCad の既定値（偶然 TRACK_W と同じ 0.2mm）で配線されていた。
+    #
+    # 自動配線器はネットクラスしか見ないので、既定値頼みにはできない。
+    nc = d.m_NetSettings.GetDefaultNetclass()
+    nc.SetTrackWidth(mm(TRACK_W))
+    nc.SetClearance(mm(TRACK_W))       # 0.2mm。線幅と同じ
+    nc.SetViaDiameter(mm(VIA_D))
+    nc.SetViaDrill(mm(VIA_DRILL))
     return board
 
 
