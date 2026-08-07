@@ -37,6 +37,7 @@ from interface import (  # noqa: E402
     PLATE_T,
     SWITCH_CUTOUT,
     boss_positions,
+    stab_offset_for,
 )
 
 SPLIT = "layout/hhkb_split.json"
@@ -55,8 +56,7 @@ SPLIT = "layout/hhkb_split.json"
 # 2u 未満のキーにはスタビライザーを入れない（業界慣行）。
 # 本設計で該当するのは 左Shift 2.25u / Enter 2.25u / L-Space 3u / R-Space 3u。
 # --------------------------------------------------------------------------
-STAB_OFFSET = {2.0: 11.9, 2.25: 11.9, 2.75: 11.9, 3.0: 19.05,
-               6.25: 50.0, 7.0: 57.15}
+# スタビライザー間隔は interface.py（凍結境界）から読む。基板と共有するため。
 
 def stab_polygon(s, at=(0.0, 0.0)):
     """半間隔 s のスタビライザー開口を、中心 `at` に置いた点列で返す。
@@ -84,15 +84,6 @@ def stab_polygon(s, at=(0.0, 0.0)):
     return [(ax + x, ay - y) for x, y in pts]
 
 
-def stab_offset_for(w_u):
-    """幅 w_u のキーに要るスタビライザー半間隔。不要なら None。"""
-    if w_u < 2.0:
-        return None
-    if w_u not in STAB_OFFSET:
-        raise ValueError(
-            f"{w_u}u のスタビライザー間隔が未定義。swillkb の実装に定義がある値のみ対応する"
-        )
-    return STAB_OFFSET[w_u]
 
 
 def plate_positions(keys):

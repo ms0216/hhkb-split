@@ -162,3 +162,24 @@ def test_corner_radius_is_applied():
     outer = top_face(part).outer_wire()
     assert len(outer.edges()) > 4, "角丸が適用されていない"
     assert CORNER_R > 0
+
+
+def test_stabilizer_offsets_come_from_the_shared_definition():
+    """スタビライザー間隔をプレート側で独自に持たない。
+
+    プレートの開口と基板の逃げ穴は同じ位置に来る必要がある。以前ネジボスの
+    位置をプレートとケースで別々に持っていて食い違わせたので、同じ轍を踏まない。
+
+    値そのものも Cherry の規格（11.938 / 19.05mm）と一致していること。
+    基板用フットプリント（kiswitch）がこの値を使うため、ここがずれると
+    プレートと基板が合わなくなる。
+    """
+    import gen_plate
+    import interface
+
+    assert not hasattr(gen_plate, "STAB_OFFSET"), \
+        "gen_plate が独自にスタビライザー間隔を持っている"
+    assert gen_plate.stab_offset_for is interface.stab_offset_for
+    assert interface.STAB_OFFSET[2.25] == 11.938
+    assert interface.STAB_OFFSET[3.0] == 19.05
+    assert interface.stab_offset_for(1.75) is None, "2u 未満にスタビは付けない"
