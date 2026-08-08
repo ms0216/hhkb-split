@@ -173,6 +173,28 @@ def test_the_c4_breadboard_figure_is_generated_from_this_file():
         "  .venv/bin/python3 tools/gen_breadboard_c4.py")
 
 
+@pytest.mark.parametrize("module", ["gen_breadboard", "gen_breadboard_c4"])
+def test_the_xiao_straddles_the_gutter_by_its_real_pin_pitch(module):
+    """配線図の XIAO が、実際に挿さる行に描かれていること。
+
+    **これを 2 枚の図で間違えた。**ピン間隔は 0.6 インチ＝6 ピッチ。
+    行の間隔は 2.54mm、中央の溝は 7.62mm なので、下半分 a..e が 0..4、
+    上半分 f..j が 7..11 ピッチ。差が 6 になる組は b/f・c/g・d/h・e/i だけで、
+    **i 行と c 行は 8 ピッチあり物理的に入らない**。
+
+    図が間違っていると、本文の穴番号と食い違って組めない。実際
+    task-c2-keyscan.md の「3V3 の空きは 1 穴」という記述は、この誤りから
+    出ていた（2026-08-08 に両方直した）。
+    """
+    import importlib
+
+    pitch = dict(zip("abcdefghij", (0, 1, 2, 3, 4, 7, 8, 9, 10, 11)))
+    top, bottom = importlib.import_module(module).XIAO_ROWS
+    assert pitch[top] - pitch[bottom] == 6, (
+        f"{module}: XIAO を {top} 行と {bottom} 行に描いている。"
+        f"{pitch[top] - pitch[bottom]} ピッチでは挿さらない（0.6 インチ＝6 ピッチ）")
+
+
 def _c4_holes():
     """C4 の配線から (使っている穴 → 誰が, 部品の胴体で塞がる穴) を作る。"""
     import gen_breadboard_c4 as g

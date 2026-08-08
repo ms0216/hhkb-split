@@ -434,3 +434,28 @@ def test_the_antenna_keepout_covers_the_real_antenna(name):
     assert lo_y <= ky_lo and ky_hi <= hi_y, (
         f"{name}: 禁止域 y {lo_y:.1f}〜{hi_y:.1f} が"
         f" アンテナ y {ky_lo:.1f}〜{ky_hi:.1f} を覆っていない")
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_battery_does_not_sit_under_the_board(name):
+    """電池が基板の下に入っていないこと。
+
+    **裸の単3 の外装はマイナス極そのもの。**基板の裏には電池と電源
+    スイッチのランド（`BT1_+` `BT1_-` `SW_PWR_1` `SW_PWR_2`）が露出して
+    いるので、電池が基板の真下に来ると**電池を直接短絡しうる**。
+
+    いまの設計では電池は基板の後端より後ろ（コブの中）にあるので当たらない。
+    **文書には「上＝基板」と書いてあったが誤り**で、実際はコブの天井。
+    電池室を前へ動かしたくなったときに、ここが止める。
+    """
+    from gen_case import BATT_W, battery_center
+    from gen_plate import plate_positions
+    from interface import PCB_INSET_Y
+
+    _, (_w, h) = plate_positions(HALVES[name])
+    pcb_rear = h / 2 - PCB_INSET_Y
+    batt_front = battery_center(h) - BATT_W / 2
+    assert batt_front >= pcb_rear, (
+        f"{name}: 電池の前端 y={batt_front:.1f} が基板の後端 y={pcb_rear:.1f} "
+        f"より前にある。**基板裏の露出ランドと電池の外装が触れうる。**"
+        f"電池を後ろへ戻すか、ランドを表面へ移すこと")

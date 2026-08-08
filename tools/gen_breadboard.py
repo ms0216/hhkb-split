@@ -84,11 +84,13 @@ def curve(p0, p1, sag, color, dash=None):
 # ================= 1 枚目 =================
 board(0, "1 枚目 — C2-a のまま。触るのは ✕ の 2 本だけ")
 
+XIAO_ROWS = ("h", "d")   # 上側 / 下側のピンが刺さる行
+
 # **ピンは h 行と d 行**。ピン間隔 0.6 インチ＝6 ピッチで、行の間隔 2.54mm・
 # 溝 7.62mm から a..e = 0..4、f..j = 7..11 ピッチ。h(9) − d(3) = 6 で一致する。
 # **以前ここを i 行/c 行（8 ピッチ）で描いていた**（2026-08-08 に直した）。
 # 本文（task-c2-keyscan.md §4）とも食い違っていた。配線そのものは変えていない。
-a(f'<rect x="118" y="{row("h")+11}" width="172" height="{row("d")-row("h")-22}" rx="6" '
+a(f'<rect x="118" y="{row(XIAO_ROWS[0])+11}" width="172" height="{row(XIAO_ROWS[1])-row(XIAO_ROWS[0])-22}" rx="6" '
   'fill="#1f2933" stroke="#0d1216" stroke-width="2"/>')
 a('<rect x="92" y="286" width="28" height="32" rx="3" fill="#b8bcc2" stroke="#8a8f96" stroke-width="1.5"/>')
 a('<text x="106" y="307" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#3c4147">USB</text>')
@@ -96,13 +98,13 @@ a('<text x="204" y="299" text-anchor="middle" font-size="13" fill="#c9d3dc">XIAO
 a('<text x="204" y="316" text-anchor="middle" font-size="10" fill="#8b97a3">nRF52840</text>')
 for i, (t, c) in enumerate((("5V", "#7d838a"), ("GND", BLK), ("3V3", ORA), ("D10", PUR),
                             ("D9", "#7d838a"), ("D8", PUR), ("D7", PUR))):
-    a(f'<circle cx="{col(i+1)}" cy="{row("h")}" r="5" fill="#c9a227"/>')
-    a(f'<text x="{col(i+1)}" y="{row("h")-13}" text-anchor="middle" font-size="9.5" '
+    a(f'<circle cx="{col(i+1)}" cy="{row(XIAO_ROWS[0])}" r="5" fill="#c9a227"/>')
+    a(f'<text x="{col(i+1)}" y="{row(XIAO_ROWS[0])-13}" text-anchor="middle" font-size="9.5" '
       f'font-weight="bold" fill="{c}">{t}</text>')
 for i, (t, c) in enumerate((("D0", "#7d838a"), ("D1", BLUE), ("D2", BLUE), ("D3", "#7d838a"),
                             ("D4", "#7d838a"), ("D5", RED), ("D6", RED))):
-    a(f'<circle cx="{col(i+1)}" cy="{row("d")}" r="5" fill="#c9a227"/>')
-    a(f'<text x="{col(i+1)}" y="{row("d")+20}" text-anchor="middle" font-size="9.5" '
+    a(f'<circle cx="{col(i+1)}" cy="{row(XIAO_ROWS[1])}" r="5" fill="#c9a227"/>')
+    a(f'<text x="{col(i+1)}" y="{row(XIAO_ROWS[1])+20}" text-anchor="middle" font-size="9.5" '
       f'font-weight="bold" fill="{c}">{t}</text>')
 
 for x0, ch in ((339, "a"), (435, "b"), (531, "c"), (627, "d")):

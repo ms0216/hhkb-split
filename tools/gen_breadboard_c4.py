@@ -89,8 +89,9 @@ LINK = {name: (p, q) for name, p, q, _kind in LINKS}
 # **ピン間隔は 0.6 インチ＝6 ピッチなので h 行と d 行**（[Task C2](../docs/hardware/task-c2-keyscan.md) §4）。
 # 行の間隔は 2.54mm、溝は 7.62mm なので、a..e が 0..4、f..j が 7..11 ピッチ。
 # h(9) − d(3) = 6 で一致する。i 行と c 行だと 8 ピッチになり**入らない**。
-XIAO_PINS = {(n, "h"): t for n, t in enumerate(("5V", "GND", "3V3", "D10", "D9", "D8", "D7"), 1)}
-XIAO_PINS.update({(n, "d"): t for n, t in enumerate(("D0", "D1", "D2", "D3", "D4", "D5", "D6"), 1)})
+XIAO_ROWS = ("h", "d")   # 上側 / 下側のピンが刺さる行
+XIAO_PINS = {(n, XIAO_ROWS[0]): t for n, t in enumerate(("5V", "GND", "3V3", "D10", "D9", "D8", "D7"), 1)}
+XIAO_PINS.update({(n, XIAO_ROWS[1]): t for n, t in enumerate(("D0", "D1", "D2", "D3", "D4", "D5", "D6"), 1)})
 
 # 本体が上に乗って使えなくなる穴。XIAO は 1〜7 列の g〜e、スイッチは 23〜25 の b。
 COVERED = {(n, r) for n in range(1, 8) for r in "gfe"} | {(n, "b") for n in (23, 24, 25)}
