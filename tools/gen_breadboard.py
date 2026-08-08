@@ -84,17 +84,26 @@ def curve(p0, p1, sag, color, dash=None):
 # ================= 1 枚目 =================
 board(0, "1 枚目 — C2-a のまま。触るのは ✕ の 2 本だけ")
 
-a('<rect x="118" y="231" width="172" height="142" rx="6" fill="#1f2933" stroke="#0d1216" stroke-width="2"/>')
+# **ピンは h 行と d 行**。ピン間隔 0.6 インチ＝6 ピッチで、行の間隔 2.54mm・
+# 溝 7.62mm から a..e = 0..4、f..j = 7..11 ピッチ。h(9) − d(3) = 6 で一致する。
+# **以前ここを i 行/c 行（8 ピッチ）で描いていた**（2026-08-08 に直した）。
+# 本文（task-c2-keyscan.md §4）とも食い違っていた。配線そのものは変えていない。
+a(f'<rect x="118" y="{row("h")+11}" width="172" height="{row("d")-row("h")-22}" rx="6" '
+  'fill="#1f2933" stroke="#0d1216" stroke-width="2"/>')
 a('<rect x="92" y="286" width="28" height="32" rx="3" fill="#b8bcc2" stroke="#8a8f96" stroke-width="1.5"/>')
 a('<text x="106" y="307" text-anchor="middle" font-size="8.5" font-weight="bold" fill="#3c4147">USB</text>')
 a('<text x="204" y="299" text-anchor="middle" font-size="13" fill="#c9d3dc">XIAO</text>')
 a('<text x="204" y="316" text-anchor="middle" font-size="10" fill="#8b97a3">nRF52840</text>')
 for i, (t, c) in enumerate((("5V", "#7d838a"), ("GND", BLK), ("3V3", ORA), ("D10", PUR),
                             ("D9", "#7d838a"), ("D8", PUR), ("D7", PUR))):
-    a(f'<text x="{col(i+1)}" y="228" text-anchor="middle" font-size="9.5" font-weight="bold" fill="{c}">{t}</text>')
+    a(f'<circle cx="{col(i+1)}" cy="{row("h")}" r="5" fill="#c9a227"/>')
+    a(f'<text x="{col(i+1)}" y="{row("h")-13}" text-anchor="middle" font-size="9.5" '
+      f'font-weight="bold" fill="{c}">{t}</text>')
 for i, (t, c) in enumerate((("D0", "#7d838a"), ("D1", BLUE), ("D2", BLUE), ("D3", "#7d838a"),
                             ("D4", "#7d838a"), ("D5", RED), ("D6", RED))):
-    a(f'<text x="{col(i+1)}" y="381" text-anchor="middle" font-size="9.5" font-weight="bold" fill="{c}">{t}</text>')
+    a(f'<circle cx="{col(i+1)}" cy="{row("d")}" r="5" fill="#c9a227"/>')
+    a(f'<text x="{col(i+1)}" y="{row("d")+20}" text-anchor="middle" font-size="9.5" '
+      f'font-weight="bold" fill="{c}">{t}</text>')
 
 for x0, ch in ((339, "a"), (435, "b"), (531, "c"), (627, "d")):
     a(f'<rect x="{x0}" y="323" width="66" height="98" rx="5" fill="#39434d" stroke="#161c22" stroke-width="1.5"/>')
@@ -195,7 +204,7 @@ for i, t in enumerate((
         "③ QA・QB は、外した D6・D5 のジャンパと同じ穴（8 列・9 列の a 行）に挿す。",
         "④ 595 の切り欠きは左。1 番ピン（QB）は切り欠き側の e 行。",
         "⑤ QC〜QH・Q7S は未使用。何もつながない。",
-        "⑥ 1 枚目の 3V3・GND は XIAO が塞いでいて空きが 1 穴ずつ。だから 2 枚目側にバスを作って分岐させる。")):
+        "⑥ 3V3・GND は XIAO の h 行のピン。同じ列の i・j 行が空くが、板をまたぐ線を増やさないよう 2 枚目側で分岐させる。")):
     a(f'<text x="{VB_X+40}" y="{LY+26+i*22}" font-size="12.5" fill="#3c4147">{t}</text>')
 for i, (cc, t) in enumerate(((BLUE, "行 D1・D2（1 枚目のまま）"), (RED, "列バス C0・C1 と QA・QB"),
                              (PUR, "SPI（D10・D8・D7）"), (ORA, "3V3"), (BLK, "GND"))):
