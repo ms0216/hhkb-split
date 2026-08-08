@@ -169,34 +169,53 @@ def test_plate_depth_matches_the_real_machine():
 
 
 def test_our_design_actually_reaches_the_real_keytop_heights():
-    """**私たちの設計**のキートップ高さが実機と合っていること。
+    """**私たちの設計＋私たちが買うキーキャップ**の高さが、実機とどれだけ違うか。
 
     すぐ上の test_keytop_heights_match_the_real_machine は、参照モデルが
     実機と合っているかを見ているだけで、**設計そのものは検査していなかった**。
     最重要要求を守っているように見えて、守っていないテストだった。
 
     そのせいで PLATE_TOP_FRONT を 17.5mm（実機のベゼル高さ）と取り違え、
-    全段のキートップが 3.5mm 高いまま気づかなかった。実機のプレート面は
-    14.00mm で、ベゼルはその上に 5.2mm 立っている。
+    全段のキートップが 3.5mm 高いまま気づかなかった。
+
+    **さらにその後、この検査は「実機の Topre キャップを履かせたら」を
+    計算していた。**私たちが実際に買うのは MX 用のキャップで、段ごとの
+    高さが違う。DSA を入れたとき、実態と違う一律 −0.9mm という数字で
+    落ちて発覚した。いまは gen_case.OUR_CAPS（買うキャップ）で計算する。
+
+    差そのものは open-gaps.md の表と突き合わせる。**差があること自体は
+    悪くない。気づけないことが悪い。**表と設計がずれたらここで落ちる。
     """
+    import re
     from math import radians, tan
 
-    from gen_case import CAP_LIFT, PLATE_TOP_FRONT, TILT_DEG
+    from gen_case import CAP_LIFT, OUR_CAPS, PLATE_TOP_FRONT, TILT_DEG
     from reference_hhkb import ROWS, solve
 
     target = [round(z, 1) for z in solve(4.0).rows_cap_top_z]
     t = tan(radians(TILT_DEG))
-    got = []
-    for i, (_, cap_h, _) in enumerate(ROWS):
+    got, names = [], []
+    for i, (name, _cap_h, _) in enumerate(ROWS):
         y = 6.375 + (i + 0.5) * 19.05                  # 手前からのキー中心
-        got.append(round(PLATE_TOP_FRONT + y * t + CAP_LIFT + cap_h, 1))
+        got.append(round(PLATE_TOP_FRONT + y * t + CAP_LIFT + OUR_CAPS[name], 1))
+        names.append(name)
+    diffs = {n: round(g - r, 1) for n, g, r in zip(names, got, target)}
 
-    diffs = [g - r for g, r in zip(got, target)]
-    worst = max(abs(d) for d in diffs)
-    assert worst <= 0.15, (
-        "設計のキートップ高さが実機と違う\n"
-        + "\n".join(f"  {n:8s} 実機 {r:5.1f}  設計 {g:5.1f}  差 {d:+.1f}"
-                    for (n, _, _), r, g, d in zip(ROWS, target, got, diffs)))
+    doc = (Path(__file__).resolve().parent.parent
+           / "docs/hardware/open-gaps.md").read_text()
+    rows = dict(re.findall(
+        r"^\|\s*(bottom|ZXCV|home|QWERTY|number)\s*\|[^|]*\|[^|]*\|\s*"
+        r"\*{0,2}([-+][\d.]+)mm\*{0,2}\s*\|", doc, re.M))
+    assert len(rows) == 5, (
+        "open-gaps.md にキートップ高さの差の表が無い（5 段ぶん要る）。"
+        f"読めたのは {sorted(rows)}")
+    documented = {k: float(v) for k, v in rows.items()}
+    assert diffs == documented, (
+        "設計のキートップ高さの差が、文書に書いてある差と食い違っている\n"
+        + "\n".join(f"    {n:8s} 設計 {diffs[n]:+.1f}mm  文書 {documented[n]:+.1f}mm"
+                    for n in names if diffs[n] != documented[n])
+        + "\n  どちらかを直すこと。差が無くなったなら表から行を消す")
+
 
 
 def test_the_case_is_no_deeper_than_it_has_to_be():
