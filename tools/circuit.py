@@ -72,7 +72,6 @@ MCU_V_ABSMAX = 3.9                   # 絶対最大定格。超えたら壊れ�
 # フットプリントは同じ TSSOP-16 なので基板は変わらない。
 # 上限 3.6V に対してレールの最大は 2.90V（USB 時 3.3V）で内側。
 IC_SUPPLY_RANGE = {                  # 種類 → (下限V, 上限V)
-    "74HC595": (2.0, 6.0),           # 使わない。比較のために残す
     "74LVC595": (1.1, 3.6),          # SN74LVC595A（C52287685）
     "xiao_nrf52840": (MCU_V_MIN, MCU_V_MAX),
 }
@@ -97,7 +96,39 @@ IC_SUPPLY_RANGE = {                  # 種類 → (下限V, 上限V)
 # データシートは IF=1A の 0.6V しか保証しておらず、特性グラフも 0.1A まで
 # （25℃ で約 0.28V）。実使用の 10〜15mA は図の外。**Task C4 で実測する。**
 # 実測できたら SCHOTTKY_VF を下げ、下限もそのぶん下げられる。
-BATT_V_MIN = MCU_V_MIN + MCU_MARGIN + SCHOTTKY_VF
+# マトリクスのダイオードの順方向降下。**行の入力電圧はここで決まる。**
+#
+# 列 → キー → ダイオード → 行 と流れるので、行に届くのは
+# （レール − ダイオードの Vf）。nRF52840 の VIH は 0.7 x VDD なので、
+#
+#     レール − Vf ≧ 0.7 × レール   →   レール ≧ Vf / 0.3
+#
+# **これを見ていなかった。**打ち止めをマイコンの下限だけから計算していた。
+# 1N4148W（シリコン）だと典型 0.5V でレール 1.83V が要り、いまの
+# 打ち止め（レール 1.80V）を**上回る**。しかも 1mA 以下の Vf 最大値は
+# データシートに規定が無いので、**保証で詰められない**（1mA の最大 0.715V を
+# 使うと 1.48V/本 になってしまう）。open-gaps #25。
+MATRIX_DIODE_VF = 0.50   # [暫定] 1N4148W の 100µA 付近の典型値。実測待ち
+
+# 列を駆動する側の出力降下（LVC の VOH。100µA 級ならほぼ VCC）
+COL_DRIVER_DROP = 0.05
+
+# **使い切れる下限は、望みではなく回路で決まる。**
+#
+# 3 つの制約のうち、いちばん厳しいものがレールの下限になる。
+#
+#   マイコン        MCU_V_MIN + MCU_MARGIN
+#   IC の動作範囲   IC_SUPPLY_RANGE の下限
+#   マトリクス      (MATRIX_DIODE_VF + COL_DRIVER_DROP) / 0.3
+#
+# **1 つだけ見て決めると足をすくわれる。**実際、マイコンだけを見ていて
+# 74HC595 の 2.0V とマトリクスの制約を 2 回とも見落とした。
+_RAIL_FLOOR = max(
+    MCU_V_MIN + MCU_MARGIN,
+    max(lo for lo, _hi in IC_SUPPLY_RANGE.values()),
+    (MATRIX_DIODE_VF + COL_DRIVER_DROP) / 0.3,
+)
+BATT_V_MIN = _RAIL_FLOOR + SCHOTTKY_VF
 
 DIVIDER_R_HIGH = 1_000_000
 DIVIDER_R_LOW = 1_000_000
