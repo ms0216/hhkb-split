@@ -120,6 +120,17 @@ def pcb_bottom_at(y, h_plate, rim_front):
 # test_constants.py が見つけた。
 DB_STACK_H = 4.0         # [暫定] 子基板の上面から XIAO の頭まで（USB コネクタ含む）
 
+# 本体基板（J_DB）と子基板（J_MAIN）を結ぶ FFC ケーブル。
+#
+# **まだ買っていない。**0.5mm ピッチ 12 芯の既製品から選ぶ前提で、
+# 手に入りやすい 100mm を置いている。
+FFC_LENGTH = 100.0       # [暫定] FFC ケーブルの長さ
+
+# 直線距離に足す余裕。垂直の落差・両端の曲げ半径・抜け止めの遊び。
+# **実測ではなく見積もり。**ケーブルを張った状態で使ってはいけないので、
+# 直線距離ぴったりでは足りない。
+FFC_SLACK = 25.0         # [暫定] FFC に要る直線距離以外の余裕
+
 
 def daughterboard_envelope(center, w, d, t):
     """子基板と、その上に載る XIAO が占める空間。

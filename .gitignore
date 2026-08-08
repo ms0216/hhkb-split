@@ -32,3 +32,6 @@ Thumbs.db
 
 # スライス結果(容量が大きいので管理しない)
 build/slice/
+
+# SDD の作業場所（この計画かぎりの一時ファイル）
+.superpowers/

@@ -8,6 +8,7 @@
 そのため通常の pytest（プロジェクトの venv）から実行できる。
 """
 
+import math
 import re
 from pathlib import Path
 
@@ -345,10 +346,9 @@ def test_the_drc_report_matches_the_current_board(half):
         f"python3 tools/drc.py を実行すること")
 
 
-# **まだ配線が終わっていない基板。**電子部品を段の間に置き、In2.Cu で
-# 結び始めたところ。ここに名前がある間は発注できない。
-# 空になったら、その基板は完成している。
-WIP_BOARDS = {"left", "right"}
+# **まだ配線が終わっていない基板。**ここに名前がある間は発注できない。
+# **空 = 3 基板すべて DRC 違反 0・未配線 0。**
+WIP_BOARDS = set()
 
 
 def test_the_unfinished_boards_are_declared():
@@ -399,6 +399,28 @@ def test_the_board_declares_the_manufacturer_rules(half):
         assert key in rules, f"{half}: 設計規則 {key} が無い"
         assert rules[key] == pytest.approx(mm, abs=1e-6), \
             f"{half}: {key} が {rules[key]}（期待 {mm}）"
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_board_declares_the_netclass_used_for_routing(half):
+    """配線に使われるネットクラスが、意図した値で書かれていること。
+
+    **最小値（min_track_width ほか）とは別物。** 最小値は「これを下回るな」
+    であって、実際に何 mm で引くかはネットクラスが決める。
+
+    以前ここは設定されておらず、KiCad の既定値が入っていた。たまたま
+    意図と同じ 0.2mm だったので誰も気づかなかった。手書きルータは
+    TRACK_W を直接読んでいたが、**自動配線器はネットクラスしか見ない。**
+    既定値が変われば、黙って別の線幅で配線される。
+    """
+    import json
+    pro = json.loads((PCB / f"hhkb_split_{half}.kicad_pro").read_text())
+    cls = pro["net_settings"]["classes"][0]
+    assert cls["name"] == "Default"
+    for key, mm in (("track_width", 0.2), ("clearance", 0.2),
+                    ("via_diameter", 0.6), ("via_drill", 0.3)):
+        assert cls[key] == pytest.approx(mm, abs=1e-6), \
+            f"{half}: ネットクラスの {key} が {cls[key]}（期待 {mm}）"
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -466,3 +488,262 @@ def test_the_main_board_is_four_layers_with_a_ground_plane(half):
     zone = re.search(r"\(zone\b[\s\S]{0,400}?\(layer \"In1\.Cu\"", txt)
     assert zone, f"{half}: 内層 1 に GND のベタが無い"
     assert "filled_polygon" in txt, f"{half}: ベタが塗られていない"
+
+
+# --------------------------------------------------------------------------
+# 電子部品が帯に収まっているか
+#
+# **「寄っている」と「入っていない」は別の問題。**
+# SOIC-16 はコートヤード 10.49mm で、帯 9.25mm にそもそも入らない。
+# 位置を微調整しても 0 にはならない。算数で入らないものを、機械が言う。
+# --------------------------------------------------------------------------
+
+def _footprint_blocks(txt):
+    """(参照名, フットプリントの S 式) を順に返す。括弧の対応で切り出す。"""
+    for m in re.finditer(r"\n\t\(footprint ", txt):
+        i = m.start() + 1
+        depth, j = 0, i
+        while True:
+            if txt[j] == "(":
+                depth += 1
+            elif txt[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        blk = txt[i:j + 1]
+        r = re.search(r'\(property "Reference" "([^"]+)"', blk)
+        if r:
+            yield r.group(1), blk
+
+
+def _courtyard_bbox(blk):
+    """コートヤードの世界座標での (x0, y0, x1, y1)。無ければ None。"""
+    import math
+    at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+    ox, oy = float(at.group(1)), float(at.group(2))
+    rot = math.radians(float(at.group(3) or 0))
+    pts = []
+    for m in re.finditer(
+            r"\(fp_(line|rect|poly)\b([\s\S]*?)\(layer \"([^\"]+)\"\)", blk):
+        if not m.group(3).endswith(".CrtYd"):
+            continue
+        pts += [(float(a), float(b)) for a, b in
+                re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", m.group(2))]
+        for tag in ("start", "end"):
+            g = re.search(rf"\({tag} ([-\d.]+) ([-\d.]+)\)", m.group(2))
+            if g:
+                pts.append((float(g.group(1)), float(g.group(2))))
+    if not pts:
+        return None
+    c, s = math.cos(rot), math.sin(rot)
+    w = [(ox + x * c - y * s, oy + x * s + y * c) for x, y in pts]
+    xs, ys = [p[0] for p in w], [p[1] for p in w]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+# 電子部品の参照名。**接頭辞で拾わない。**`D` や `SW` で走査すると
+# ダイオード 61 個とスイッチ 61 個を巻き込む（過去 3 回やった）。
+ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR|J_DB|BT1_[+-]")
+
+
+def _expected_electronics(half):
+    """回路の宣言から、帯に置かれる部品の参照名を導く。
+
+    **走査の正解を、走査するコード自身から作らない。**
+    circuit.py は基板の生成側も読んでいる宣言なので、部品が増えれば
+    検査も自動で追従する。個数の下限を手で書くと、そこが嘘になる。
+    """
+    from circuit import netlist
+    refs = set()
+    for ref, kind, _pins in netlist(half):
+        if kind in ("keyswitch", "diode"):
+            continue          # マトリクスの 61 個は帯の外
+        if kind == "battery_holder":
+            refs |= {f"{ref}_+", f"{ref}_-"}   # ランド 2 箇所として置かれる
+        else:
+            refs.add(ref)
+    return refs
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_electronics_fit_inside_their_band(half):
+    """電子部品のコートヤードが帯 9.25mm の内側にあること。
+
+    はみ出していると、行のバスやソケットに当たる。**位置の微調整では
+    直らない**（部品そのものが大きい）ので、フットプリントを選び直す
+    必要がある。それを人の目に頼らない。
+    """
+    from bands import BAND_H, band_bounds_kicad
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    bad = []
+    seen = set()
+    for ref, blk in _footprint_blocks(txt):
+        if not ELEC_REF.fullmatch(ref):
+            continue
+        bb = _courtyard_bbox(blk)
+        assert bb is not None, f"{half}: {ref} にコートヤードが無い"
+        seen.add(ref)
+        # どの帯に属するかは、部品の中心がいちばん近い帯で決める。
+        mid = (bb[1] + bb[3]) / 2
+        i = min(range(4), key=lambda k: abs(sum(band_bounds_kicad(k)) / 2 - mid))
+        lo, hi = band_bounds_kicad(i)
+        if bb[1] < lo - 1e-6 or bb[3] > hi + 1e-6:
+            bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} "
+                       f"(高さ {bb[3] - bb[1]:.3f}) が帯 {i} "
+                       f"{lo:.3f}..{hi:.3f} からはみ出す")
+    want = _expected_electronics(half)
+    assert seen == want, (
+        f"{half}: 走査できた部品が回路の宣言と一致しない。\n"
+        f"  拾えなかった: {sorted(want - seen)}\n"
+        f"  余計に拾った: {sorted(seen - want)}")
+    assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_ground_plane_is_not_cut_by_routing(half):
+    """In1.Cu に配線が 1 本も無いこと。
+
+    **In1.Cu は GND のベタ専用。**ここに信号を通すと基準面が切れる。
+    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
+    連続していることの価値が大きい（4 層にしたのはそのため）。
+
+    KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
+    そのまま渡すと自動配線器がここを使う。autoroute.py の
+    _protect_the_ground_plane が (type power) に直している。
+    **その細工が効いているかを、ここで確かめる。**DRC は面が切れていても
+    何も言わない。
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    # **セグメントの塊ごとに見る。**非貪欲でも `(segment ...` から
+    # 次のゾーンの `(layer "In1.Cu")` まで食ってしまい、誤検出した。
+    on_in1 = [b for b in re.findall(r"\(segment\n(?:\t\t\([^\n]*\)\n)+\t\)", txt)
+              if '(layer "In1.Cu")' in b]
+    assert not on_in1, (
+        f"{half}: GND 基準面（In1.Cu）に配線が {len(on_in1)} 本ある。"
+        "autoroute.py の _protect_the_ground_plane を確かめること")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_every_ground_pad_reaches_the_plane(half):
+    """電子部品の GND パッドの脇にビアが立っていること。
+
+    GND ベタは In1.Cu の 1 層だけ、GND パッドは全部 B.Cu の SMD。
+    間にビアが無いとベタに届かない。**ImportSpecctraSES は既存の配線を
+    作り直すので、取り込みのたびにファンアウトが消える**（実測 7→0）。
+    autoroute.py が立て直しているかを見る。
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    vias = [(float(x), float(y)) for x, y in
+            re.findall(r'\(via\s*\(at ([-\d.]+) ([-\d.]+)\)'
+                       r'[\s\S]{0,200}?\(net (?:\d+ )?"GND"\)', txt)]
+    pads = []
+    for ref, blk in _footprint_blocks(txt):
+        if not ELEC_REF.fullmatch(ref):
+            continue
+        # **フットプリントの回転をパッドにも掛ける。**掛け忘れると
+        # 180 度回っている部品（J_DB など）のパッドが 3.7mm ずれる。
+        at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+        ox, oy = float(at.group(1)), float(at.group(2))
+        rot = math.radians(float(at.group(3) or 0))
+        cos, sin = math.cos(rot), math.sin(rot)
+        for m in re.finditer(r'\(pad "[^"]*"[\s\S]{0,400}?\(net (?:\d+ )?"GND"\)', blk):
+            a = re.search(r"\(at ([-\d.]+) ([-\d.]+)", m.group(0))
+            px, py = float(a.group(1)), float(a.group(2))
+            pads.append((ref, ox + px * cos - py * sin, oy + px * sin + py * cos))
+    assert pads, f"{half}: GND パッドを 1 つも拾えていない。走査が壊れている"
+    far = [(r, x, y) for r, x, y in pads
+           if not any(abs(vx - x) < 3.0 and abs(vy - y) < 3.0 for vx, vy in vias)]
+    assert not far, (
+        f"{half}: ベタに届いていない GND パッド\n" +
+        "\n".join(f"  {r} ({x:.2f}, {y:.2f})" for r, x, y in far))
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_routing_was_made_from_the_current_placement(half):
+    """配線が、いまの未配線基板から作られたものであること。
+
+    **配置を変えたのに配線し直していない状態を検出する。**
+    drc.py が「基板を変えたのに DRC をかけ直していない」を見るのと
+    同じ型を、一段手前に置いたもの。
+
+    **バイト列ではなく指紋で比べる。** KiCad は保存のたびに UUID と
+    フットプリントの並び順を変えるので、バイトの sha256 だと
+    「再生成しただけ」で落ちてしまい、何も変わっていないのに
+    Freerouting（数分）を回し直すことになる（tools/boardhash.py）。
+    """
+    import json
+    from boardhash import fingerprint
+    rec_path = PCB / f"route_{half}.json"
+    assert rec_path.exists(), \
+        f"{half}: 配線の記録が無い。tools/autoroute.py を実行すること"
+    rec = json.loads(rec_path.read_text())
+    src = PCB / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
+    assert src.exists(), f"{half}: 未配線の基板が無い: {src}"
+    assert rec["unrouted_fingerprint"] == fingerprint(src), (
+        f"{half}: 配置が変わったのに配線し直していない。"
+        'KiCad の Python で "tools/gen_pcb.py" のあと '
+        '"tools/autoroute.py" を実行すること')
+
+
+# --------------------------------------------------------------------------
+# 本体基板と子基板をつなぐ FFC
+# --------------------------------------------------------------------------
+
+def ffc_span(half):
+    """J_DB（本体）と J_MAIN（子基板）の平面距離 mm。
+
+    **左右で別の値になる。**子基板の左右位置が半分ごとに違うため。
+    """
+    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
+                          daughterboard_x_center)
+    from interface import plate_positions
+    _, (w, h) = plate_positions(HALVES[half])
+    # **footprints() を使わない。**あの正規表現は `.*?` で最初に見つかった
+    # (at ...) を拾うため、部品によって別の座標を返す（J_DB では左が
+    # 誤った値・右が空になった）。括弧の対応で切り出す方を使う。
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    blk = next(b for r, b in _footprint_blocks(txt) if r == "J_DB")
+    at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)", blk)
+    jx, jy = float(at.group(1)) - ORIGIN[0], ORIGIN[1] - float(at.group(2))
+    # 子基板は奥の壁ぎわ。J_MAIN は子基板の中心から手前へ 11.0mm
+    # （pcb/hhkb_split_daughterboard.kicad_pcb で実測。外形中心 y=100、
+    #   J_MAIN は y=111 で KiCad は Y 下向きなので手前側）。
+    dbx = daughterboard_x_center(half, w)
+    dby = h / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+    return math.hypot(dbx - jx, (dby - 11.0) - jy)
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_ffc_cable_reaches_the_daughterboard(half):
+    """FFC が本体基板から子基板まで、余裕を持って届くこと。
+
+    **部品を動かすと静かに届かなくなる。**実際、自動配線のために
+    J_DB を左 9.1mm・右 8.5mm 動かしたとき、これを見る検査が無かった。
+    ケーブルは発注品なので、合わないと分かるのが組み立て時になる。
+
+    ケーブルを張った状態では使えないので、直線距離に FFC_SLACK
+    （垂直の落差・両端の曲げ・抜け止めの遊び）を足して見る。
+    **どちらも暫定値**（docs/hardware/provisional-values.md）。
+    """
+    from envelopes import FFC_LENGTH, FFC_SLACK
+    need = ffc_span(half) + FFC_SLACK
+    assert need <= FFC_LENGTH, (
+        f"{half}: FFC が届かない。直線 {ffc_span(half):.1f}mm + 余裕 "
+        f"{FFC_SLACK}mm = {need:.1f}mm > ケーブル {FFC_LENGTH}mm。"
+        "J_DB か子基板を近づけるか、長いケーブルを選ぶこと")
+
+
+def test_both_halves_can_use_the_same_ffc_cable():
+    """左右で同じ長さの FFC が使えること。
+
+    **違う長さが要ると、部品表と在庫が 2 種類になる。**組み立てで
+    取り違えると、短い方が届かない。左右で子基板の位置が違うので、
+    ここは黙って壊れうる。
+    """
+    from envelopes import FFC_LENGTH, FFC_SLACK
+    need = {h: ffc_span(h) + FFC_SLACK for h in NAMES}
+    assert max(need.values()) <= FFC_LENGTH, (
+        f"1 種類のケーブルで足りない: "
+        + " / ".join(f"{h} {v:.1f}mm" for h, v in need.items())
+        + f" > {FFC_LENGTH}mm")
