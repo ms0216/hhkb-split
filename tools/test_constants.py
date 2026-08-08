@@ -87,3 +87,51 @@ def test_the_provisional_list_has_no_stale_entries():
             listed.add(f"{prefix}_{suffix}" if "_" not in suffix else suffix)
     stale = listed - live
     assert not stale, f"もう暫定ではない値が文書に残っている: {sorted(stale)}"
+
+
+def test_the_provisional_list_shows_the_same_numbers_as_the_code():
+    """文書に書いてある暫定値が、コードの実際の値と一致すること。
+
+    **名前が載っているだけでは足りない。**この検査が無い間、
+    `SW_PWR_H` はコードで 8.6mm、文書で 4.0mm と**倍以上ずれていた**。
+    文書を見て部品を買えば、入らないものを買う。実際、同じ型で
+    電池ボックスを買い直すことになっている（open-gaps #22）。
+
+    暫定値は「これから実物と突き合わせる値」なので、**文書とコードが
+    ずれていると、どちらを信じて買えばよいか分からなくなる。**
+    """
+    import importlib
+
+    doc = (ROOT / "docs/hardware/provisional-values.md").read_text()
+    # 表の行から「定数名」と「最初に出てくる数値」を拾う。
+    #   | `SW_PWR_W` | 4.4mm | ... |
+    #   | `XIAO_L/W/H` | 21.0 / 18.0 / 3.0mm | ...
+    rows = {}
+    for name_cell, value_cell in re.findall(
+            r"^\|\s*`([^`]+)`\s*\|([^|]*)\|", doc, re.M):
+        names = [n.strip() for n in name_cell.split("/")]
+        nums = re.findall(r"-?\d+(?:\.\d+)?", value_cell)
+        if len(names) == 1 and nums:
+            rows[names[0]] = float(nums[0])
+        elif len(names) == len(nums) > 1:
+            head = names[0]
+            prefix = head.rsplit("_", 1)[0]
+            for n, v in zip(names, nums):
+                full = n if "_" in n else f"{prefix}_{n}"
+                rows[full] = float(v)
+
+    assert rows, "文書から暫定値の数値をひとつも読めなかった"
+
+    bad = []
+    for path, _line, decl in provisional():
+        mod = importlib.import_module(path[:-3])
+        for name in (n.strip() for n in decl.split(",")):
+            if name not in rows:
+                continue          # 一覧に載っているかは別の検査が見る
+            actual = getattr(mod, name, None)
+            if actual is None or abs(float(actual) - rows[name]) > 1e-6:
+                bad.append(f"{name}: コード {actual} / 文書 {rows[name]}")
+    assert not bad, (
+        "暫定値の文書とコードで数値が食い違っている\n    "
+        + "\n    ".join(bad)
+        + "\n  文書を見て部品を買うと間違える。どちらかを直すこと")

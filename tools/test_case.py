@@ -335,3 +335,22 @@ def test_the_bosses_take_heat_set_inserts():
     assert wall >= 1.2 - 1e-9, f"ボスの肉厚が {wall:.2f}mm しかない（インサートが割る）"
     assert M2_PILOT_D == M2_INSERT_D, \
         "ケース側の下穴がインサート外径になっていない（タッピング用のまま）"
+
+
+def test_the_m2_inserts_fit_the_bosses():
+    """買う M2 インサートが、いちばん浅いボスに収まること。
+
+    **外径だけでは足りない。**`interface.M2_INSERT_D` は外径 3.2mm を
+    規定しているが、**長さはどこにも規定が無かった**。子基板のボスは
+    下穴を 5.0mm しか掘っておらず、市販の 5.7mm を買うと入らない
+    （open-gaps #24）。
+
+    買う製品を変えたら `envelopes.M2_INSERT_L` を差し替える。
+    それだけでここが判定し直す。
+    """
+    from envelopes import M2_INSERT_L
+    from gen_case import DB_BOSS_H
+    deepest = DB_BOSS_H + 1.0          # gen_case が実際に掘っている深さ
+    assert M2_INSERT_L <= deepest, (
+        f"M2 インサートの長さ {M2_INSERT_L}mm が、子基板のボスに掘った "
+        f"{deepest}mm を超える。短いものを買うか、DB_BOSS_H を深くすること")
