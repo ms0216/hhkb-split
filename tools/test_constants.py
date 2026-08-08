@@ -72,6 +72,18 @@ def test_the_provisional_list_has_no_stale_entries():
     """文書に載っているのに、もう暫定でなくなった値が残っていないこと。"""
     doc = (ROOT / "docs/hardware/provisional-values.md").read_text()
     live = {n.split(",")[0].strip() for _, _, n in provisional()}
-    listed = set(re.findall(r"^\| `([A-Z_][A-Z0-9_]*)`", doc, re.M))
+    # **`XIAO_L/W/H` のような「まとめ書き」も読む。**以前この形の行は
+    # 正規表現に掛からず、暫定でなくなっても検出されなかった（2026-08-08）。
+    listed = set()
+    for cell in re.findall(r"^\| `([^`]+)`", doc, re.M):
+        head = cell.split("/")[0].strip()
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", head):
+            continue
+        listed.add(head)
+        for suffix in cell.split("/")[1:]:
+            suffix = suffix.strip()
+            # XIAO_L/W/H → XIAO_W, XIAO_H
+            prefix = head.rsplit("_", 1)[0]
+            listed.add(f"{prefix}_{suffix}" if "_" not in suffix else suffix)
     stale = listed - live
     assert not stale, f"もう暫定ではない値が文書に残っている: {sorted(stale)}"
