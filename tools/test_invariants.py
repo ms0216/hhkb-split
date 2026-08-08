@@ -271,14 +271,22 @@ def test_fabrication_output_is_blocked_while_the_antenna_is_unresolved():
     doc = (root / "docs/hardware/open-gaps.md").read_text()
     if "## 23. ★未解決★ アンテナが地板に挟まれている" not in doc:
         return                      # 解決済み。何も止めない
+    # **子基板は通す。**アンテナを測るには子基板の実物が要る（段階 ②）。
+    # ここで子基板まで止めると「測らないと発注できない／発注しないと
+    # 測れない」の堂々巡りになる。実際、最初はそう書いていた。
+    #
+    # 判断材料は ①→② の差、つまり **GND ベタの影響だけ**で、
+    # 本体基板は要らない（Task C3 §6-6）。子基板は 21x32mm で安い。
+    # **先に子基板だけ発注して測り、本体基板はその結果を見てから出す。**
     fab = sorted(
         str(q.relative_to(root))
         for pat in ("**/*.gbr", "**/*.gtl", "**/*.gbl", "**/*.drl", "**/*.gm1")
         for q in root.glob(pat)
-        if ".superpowers" not in str(q))
+        if ".superpowers" not in str(q) and "daughterboard" not in q.name.lower()
+        and "daughterboard" not in str(q.parent).lower())
     assert not fab, (
         "\n"
-        "  ★ アンテナを測る前に製造ファイルが出ている ★\n"
+        "  ★ アンテナを測る前に本体基板の製造ファイルが出ている ★\n"
         f"  {fab[:5]}\n"
         "\n"
         "  子基板のアンテナは上下を地板に挟まれており、チップアンテナの\n"
@@ -286,6 +294,8 @@ def test_fabrication_output_is_blocked_while_the_antenna_is_unresolved():
         "  **実測で判断すると決めた。まだ測っていない。**\n"
         "\n"
         "  発注前にやること:\n"
+        "    0. **先に子基板だけ発注する。**それがアンテナを測る道具になる\n"
+        "       （子基板の製造ファイルはこの検査を通る）\n"
         "    1. Task C3 の §6-6 で RSSI を測る\n"
         "       （①単体 →②＋子基板 →③＋ケーブル →④＋組み立て を\n"
         "         **同じ日に続けて**。日を分けると比較にならない）\n"
