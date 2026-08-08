@@ -117,3 +117,33 @@ def test_the_pending_list_shrinks_to_nothing_before_ordering():  # noqa: D401
     PENDING を空にすること**が条件で、それを忘れないための場所。
     """
     assert not PENDING, f"まだ基板に載っていない部品がある: {sorted(PENDING)}"
+
+
+def test_every_part_that_gets_assembled_has_a_row_in_the_parts_table():
+    """基板に載る部品が、買う部品の表（tools/parts.py）に全部あること。
+
+    **部品を足したときに書き忘れると、発注の直前に気づく。**そこで
+    気づくのがいちばん高くつく（JLCPCB の見積もりを取り直すことになる）。
+
+    番号そのものが埋まっているかは export_fab.py が見る。**ここは
+    「行があるか」だけ。**番号は現物を確認しないと書けないので、
+    埋まっていないことを検査で咎めるのは早すぎる。
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from circuit import daughterboard_netlist, netlist
+    from parts import NOT_ASSEMBLED, PARTS
+
+    need = {kind
+            for parts in (netlist("left"), netlist("right"),
+                          daughterboard_netlist())
+            for _ref, kind, _pins in parts
+            if kind not in NOT_ASSEMBLED}
+    missing = sorted(need - set(PARTS))
+    assert not missing, (
+        f"買う部品の表に無い部品: {missing}\n"
+        "  tools/parts.py の PARTS に足すこと")
+    extra = sorted(set(PARTS) - need)
+    assert not extra, (
+        f"もう使っていない部品が表に残っている: {extra}\n"
+        "  tools/parts.py から消すこと")
