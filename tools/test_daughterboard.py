@@ -176,3 +176,72 @@ def test_the_firmware_and_the_circuit_agree_on_the_battery_divider():
     assert full_ohms == DIVIDER_R_HIGH + DIVIDER_R_LOW, (
         f"ファームの full-ohms={full_ohms} が、回路の合計 "
         f"{DIVIDER_R_HIGH + DIVIDER_R_LOW} と違う")
+
+
+# **ケーブルの界面（凍結）。**
+#
+# アンテナの件（open-gaps #23）は発注前に直せないので、駄目だったときに
+# **子基板 1 枚だけを作り直せば済む**ようにしておく。そのために、本体基板と
+# ケーブルに触れる部分をここで凍結する。ここが動くと、子基板の作り直しが
+# 本体基板 2 枚（発注済み）とケーブル（購入済み）まで巻き込む。
+FROZEN_FOOTPRINT = "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal"
+FROZEN_LAYER = "B.Cu"
+FROZEN_ROTATION = 180.0
+FROZEN_FROM_FRONT_EDGE = 5.0     # 子基板の前端からコネクタ中心まで（mm）
+
+
+def test_the_cable_interface_is_frozen():
+    """ケーブルの界面が凍結どおりであること。
+
+    **これが手戻りの範囲を決める。**アンテナが駄目だったとき、ここが
+    動いていなければ作り直すのは子基板 1 枚（21x32mm）だけで済む。
+    動いていると、本体基板 2 枚とケーブルまで巻き込む。
+
+    凍結するのは「相手がある」ものだけ。子基板の中の配置や外形は
+    自由に変えてよい（ケースは 3D プリントなので作り直せる）。
+    """
+    import re as _re
+
+    found = {}
+    for name in ("hhkb_split_left", "hhkb_split_right", "hhkb_split_daughterboard"):
+        text = (ROOT / f"pcb/{name}.kicad_pcb").read_text()
+        for blk in _re.split(r"\n\t\(footprint ", text)[1:]:
+            ref = _re.search(r'\(property "Reference" "(J_[A-Z]+)"', blk)
+            if not ref:
+                continue
+            at = _re.search(r"\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+            lay = _re.search(r'\(layer "([^"]+)"\)', blk)
+            found[f"{name}/{ref.group(1)}"] = {
+                "fp": blk.split('"')[1],
+                "x": float(at.group(1)), "y": float(at.group(2)),
+                "rot": float(at.group(3) or 0), "layer": lay.group(1)}
+    assert len(found) == 3, f"FFC コネクタが 3 個見つからない: {sorted(found)}"
+
+    for where, d in sorted(found.items()):
+        assert d["fp"] == FROZEN_FOOTPRINT, \
+            f"{where}: コネクタが {d['fp']}。凍結は {FROZEN_FOOTPRINT}"
+        # **面と回転はケーブルの向き（同面/対向）を決める。**買う部品が変わる。
+        assert d["layer"] == FROZEN_LAYER, \
+            f"{where}: {d['layer']} 面にある。凍結は {FROZEN_LAYER}"
+        assert d["rot"] == FROZEN_ROTATION, \
+            f"{where}: 回転 {d['rot']}。凍結は {FROZEN_ROTATION}"
+
+    # 子基板の前端からの距離。**ケーブルの必要長がここで決まる。**
+    text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
+    ys = [float(b) for _a, b in
+          _re.findall(r"\(gr_line[\s\S]{0,120}?\(start ([-\d.]+) ([-\d.]+)\)", text)]
+    front = max(ys)                      # KiCad は Y 下向き。手前＝大きい y
+    got = front - found["hhkb_split_daughterboard/J_MAIN"]["y"]
+    assert abs(got - FROZEN_FROM_FRONT_EDGE) < 0.01, (
+        f"子基板の前端からコネクタまで {got:.2f}mm。"
+        f"凍結は {FROZEN_FROM_FRONT_EDGE}mm。ケーブルの必要長が変わる")
+
+    # 2 つのコネクタのピン割り当てが一致すること（向きの取り違え防止）
+    main = next(p for r, _k, p in _import_netlist("left") if r == "J_DB")
+    db = next(p for r, _k, p in daughterboard_netlist() if r == "J_MAIN")
+    assert main == db, "本体基板と子基板でケーブルのピン割り当てが違う"
+
+
+def _import_netlist(half):
+    from circuit import netlist
+    return netlist(half)

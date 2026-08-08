@@ -859,3 +859,57 @@ def test_the_declared_socket_envelope_contains_the_real_footprint(name):
     assert SOCK_X_HI - worst_x_hi <= SLACK, (
         f"{name}: SOCK_X_HI={SOCK_X_HI} が実物（{worst_x_hi:.2f}）より "
         f"{SOCK_X_HI - worst_x_hi:.2f}mm も余っている")
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_the_antenna_keepout_is_actually_empty(name):
+    """アンテナの禁止域に、銅が本当に 1 つも無いこと。
+
+    **設定しただけでは効いていない。**Freerouting 2.3.0 は DSN に書いた
+    禁止域を守らない（4 層とも正しく出ていることは確認済み）。宣言を
+    信じると、実際は配線が通っているのに「対策した」と思い込む。
+
+    右は入れられなかった（`ANTENNA_KEEPOUT["right"] is None`）。
+    裏面を列のバス 9 本が横断しており、子基板の x を 0.5mm 刻みで
+    全部試しても最良で 9 本掛かる。理由は interface.py に書いた。
+    """
+    from interface import ANTENNA_KEEPOUT
+
+    spec = ANTENNA_KEEPOUT[name]
+    if spec is None:
+        return
+    cx, cy, w, h = spec
+    # レイアウト座標 → KiCad 座標（Y 下向き・原点 ORIGIN）
+    x_lo, x_hi = ORIGIN[0] + cx - w / 2, ORIGIN[0] + cx + w / 2
+    y_lo, y_hi = ORIGIN[1] - cy - h / 2, ORIGIN[1] - cy + h / 2
+    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+
+    # **境界ちょうどは中ではない。**ベタは禁止域を避けて回り込むので、
+    # その輪郭の頂点が縁の上に載る。それを「銅がある」と数えると
+    # 正しく効いているのに落ちる（実際に落ちた）。少し内側で見る。
+    EPS = 0.01
+
+    def inside(x, y):
+        return (x_lo + EPS <= x <= x_hi - EPS
+                and y_lo + EPS <= y <= y_hi - EPS)
+
+    bad = []
+    for seg in re.findall(r"\n\t\(segment[\s\S]*?\n\t\)", text):
+        a = re.search(r"\(start ([-\d.]+) ([-\d.]+)\)", seg)
+        b = re.search(r"\(end ([-\d.]+) ([-\d.]+)\)", seg)
+        lay = re.search(r'\(layer "([^"]+)"\)', seg)
+        if a and b and (inside(float(a.group(1)), float(a.group(2)))
+                        or inside(float(b.group(1)), float(b.group(2)))):
+            bad.append(f"配線({lay.group(1)})")
+    for via in re.findall(r"\n\t\(via[\s\S]*?\n\t\)", text):
+        a = re.search(r"\(at ([-\d.]+) ([-\d.]+)\)", via)
+        if a and inside(float(a.group(1)), float(a.group(2))):
+            bad.append("ビア")
+    n_fill = 0
+    for zp in re.findall(r"\(filled_polygon[\s\S]*?\n\t\t\)", text):
+        for xs, ys in re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", zp):
+            if inside(float(xs), float(ys)):
+                n_fill += 1
+    assert not bad and n_fill == 0, (
+        f"{name}: アンテナの禁止域に銅がある。"
+        f"{bad[:5]}{'' if not bad else ' ほか'} / ベタの頂点 {n_fill} 点")

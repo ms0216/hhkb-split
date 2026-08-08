@@ -39,14 +39,31 @@ JAR = Path(os.environ.get(
 
 
 def _java():
-    """java の実行ファイル。Homebrew の openjdk は PATH に無いことがある。"""
+    """java の実行ファイル。Homebrew の openjdk は PATH に無いことがある。
+
+    **あることを確かめるだけでは足りない。**macOS には `/usr/bin/java` と
+    いうスタブが必ず存在し、実行すると「Java をインストールせよ」と出して
+    失敗する。存在検査だけだとこれを選び、配線が黙って失敗する（実際に
+    そうなった。PATH に openjdk が無い環境で起きる）。
+    **`-version` が通ることまで確かめる。**
+    """
+    tried = []
     for cand in (shutil.which("java"),
                  "/opt/homebrew/opt/openjdk/bin/java",
                  "/usr/local/opt/openjdk/bin/java"):
-        if cand and Path(cand).exists():
+        if not cand or not Path(cand).exists():
+            continue
+        tried.append(cand)
+        try:
+            r = subprocess.run([cand, "-version"], capture_output=True, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if r.returncode == 0:
             return cand
     raise SystemExit(
-        "java が見つからない。brew install openjdk を実行すること")
+        "動く java が見つからない。brew install openjdk を実行すること。\n"
+        f"  試したもの: {tried or 'なし'}\n"
+        "  （/usr/bin/java は macOS のスタブで、存在しても動かない）")
 
 
 def _check_jar():

@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 from interface import (
+    ANTENNA_KEEPOUT,
     PCB_INSET_Y,CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
@@ -365,6 +366,32 @@ def _place_electronics(board, half, net):
                     pad.SetNet(net(netname))
 
 
+# アンテナの禁止域は interface.ANTENNA_KEEPOUT（凍結境界）から読む。
+
+
+def _antenna_keepout(board, half):
+    """アンテナの真上を全層で禁止域にする。**配線もビアもベタも入れない。**"""
+    spec = ANTENNA_KEEPOUT[half]
+    if spec is None:
+        return                       # 右は入れられない。理由は上の注記
+    cx, cy, w, h = spec
+    zone = pcbnew.ZONE(board)
+    zone.SetIsRuleArea(True)
+    zone.SetDoNotAllowZoneFills(True)   # KiCad 10 の名前
+    zone.SetDoNotAllowTracks(True)
+    zone.SetDoNotAllowVias(True)
+    zone.SetDoNotAllowPads(True)
+    layers = pcbnew.LSET()
+    for lay in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
+        layers.addLayer(lay)
+    zone.SetLayerSet(layers)
+    pts = pcbnew.VECTOR_VECTOR2I()
+    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        pts.append(to_kicad(cx + dx * w / 2, cy + dy * h / 2))
+    zone.AddPolygon(pts)
+    board.Add(zone)
+
+
 def _pour(board, netitem, layer, w, h):
     """その層いっぱいにベタを敷く。"""
     zone = pcbnew.ZONE(board)
@@ -527,6 +554,8 @@ def build(half, keys):
 
     # GND ベタ（内層 1）。**分割の左右で 2.4GHz を至近距離で動かすので、
     # 基準電位が連続していることの価値が大きい。**
+    # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
+    _antenna_keepout(board, half)
     _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
 
     # **未配線のまま pcb/unrouted/ に出す。**

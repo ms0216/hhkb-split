@@ -382,3 +382,55 @@ def test_the_usb_opening_clears_the_connector():
         f"USB 切り欠きの余裕が {margin:.2f}mm しかない"
         f"（切り欠き {lo:.2f}〜{hi:.2f} / XIAO {bottom:.2f}〜"
         f"{bottom + DB_STACK_H:.2f}）")
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_antenna_keepout_covers_the_real_antenna(name):
+    """本体基板に開けた禁止域が、本物のアンテナの真上にあること。
+
+    禁止域の位置は interface.ANTENNA_KEEPOUT に数字で書いてある。
+    **書いただけでは、そこにアンテナがある保証にならない。**子基板の
+    位置はケース側（電池の寄せ方・壁厚）から決まるので、そちらが動くと
+    黙ってずれる。ここで両方から計算して突き合わせる。
+
+    右は入れられなかった（None）。裏面を列のバス 9 本が横断しており、
+    子基板の x をどこに置いても配線が掛かる。理由は interface.py。
+    """
+    from interface import ANTENNA_KEEPOUT
+    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
+                          daughterboard_x_center)
+    from gen_plate import plate_positions
+
+    spec = ANTENNA_KEEPOUT[name]
+    if spec is None:
+        return
+    cx, cy, w, h = spec
+    _, (pw, ph) = plate_positions(HALVES[name])
+
+    # 本物のアンテナ（ケース座標）。子基板の前端 3mm、幅は XIAO の 18mm。
+    dbx = daughterboard_x_center(name, pw)
+    db_hi = ph / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
+    ant_x_lo, ant_x_hi = dbx - 9.0, dbx + 9.0
+    ant_y_lo = db_hi - DB_D
+    ant_y_hi = ant_y_lo + 3.0
+
+    # 基板の座標系はケースと同じ原点・同じ向き（どちらも中心・Y 上向き）
+    # ではない。基板の y=0 は基板の中心、ケースの y=0 は本体の中心。
+    # 基板は PCB_INSET_Y ぶん前後を詰めてあるので、後端どうしで合わせる。
+    from interface import PCB_INSET_Y
+    pcb_rear_case_y = ph / 2 - PCB_INSET_Y          # 基板の後端（ケース座標）
+    pcb_h = ph - 2 * PCB_INSET_Y
+    def to_pcb_y(case_y):
+        return case_y - (pcb_rear_case_y - pcb_h / 2)
+
+    ky_lo, ky_hi = to_pcb_y(ant_y_lo), to_pcb_y(ant_y_hi)
+    kx_lo, kx_hi = ant_x_lo, ant_x_hi
+
+    lo_x, hi_x = cx - w / 2, cx + w / 2
+    lo_y, hi_y = cy - h / 2, cy + h / 2
+    assert lo_x <= kx_lo and kx_hi <= hi_x, (
+        f"{name}: 禁止域 x {lo_x:.1f}〜{hi_x:.1f} が"
+        f" アンテナ x {kx_lo:.1f}〜{kx_hi:.1f} を覆っていない")
+    assert lo_y <= ky_lo and ky_hi <= hi_y, (
+        f"{name}: 禁止域 y {lo_y:.1f}〜{hi_y:.1f} が"
+        f" アンテナ y {ky_lo:.1f}〜{ky_hi:.1f} を覆っていない")
