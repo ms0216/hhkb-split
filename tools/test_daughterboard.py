@@ -116,3 +116,37 @@ def test_the_battery_never_reaches_the_bat_pin():
     bat = _mcu_pins()["BAT"]
     assert bat == "NC", f"BAT 端子に {bat} が繋がっている"
     assert bat not in cable_signals().values(), "BAT の信号がケーブルに載っている"
+
+
+def test_the_connector_spec_matches_the_board():
+    """文書に書いたコネクタの仕様が、実基板のフットプリントと一致すること。
+
+    **文書は「1.0mm ピッチ・12 本が 12mm」と書いていたが、実基板は
+    最初から 0.5mm ピッチだった。**それまでの検査は本数（`"12 ピン"` と
+    いう文字列）しか見ていなかったので通っていた。
+
+    ピッチを間違えたままケーブルを買うと、届いてから挿さらないと分かる。
+    """
+    doc = DOC.read_text()
+    m = re.search(r"\*\*(\d+) ピン・([\d.]+)mm ピッチ", doc)
+    assert m, "文書のコネクタ指定（**N ピン・X.Xmm ピッチ**）が読めない"
+    pins, pitch = int(m.group(1)), float(m.group(2))
+
+    # 実基板から読む。**両方の基板を見る。**片方だけだと食い違いに気づかない。
+    found = {}
+    for half in ("hhkb_split_left", "hhkb_split_right", "hhkb_split_daughterboard"):
+        text = (ROOT / f"pcb/{half}.kicad_pcb").read_text()
+        for blk in re.split(r"\n\t\(footprint ", text)[1:]:
+            ref = re.search(r'\(property "Reference" "(J_[A-Z]+)"', blk)
+            if ref:
+                found[f"{half}/{ref.group(1)}"] = blk.split('"')[1]
+    assert len(found) == 3, f"FFC コネクタが 3 個見つからない: {sorted(found)}"
+
+    for where, fp in found.items():
+        n = re.search(r"1x(\d+)", fp)
+        p = re.search(r"P([\d.]+)mm", fp)
+        assert n and p, f"{where}: フットプリント名から本数とピッチが読めない ({fp})"
+        assert int(n.group(1)) == pins, \
+            f"{where}: 実基板は {n.group(1)} ピン、文書は {pins} ピン"
+        assert float(p.group(1)) == pitch, \
+            f"{where}: 実基板は {p.group(1)}mm ピッチ、文書は {pitch}mm ピッチ"
