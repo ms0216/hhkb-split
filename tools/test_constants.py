@@ -157,3 +157,36 @@ def test_the_breadboard_figure_is_generated_from_this_file():
         f"{svg.name} が tools/gen_breadboard.py の出力と食い違っている。\n"
         "  手で SVG を編集したか、生成器を直して実行し忘れている。\n"
         "  .venv/bin/python3 tools/gen_breadboard.py")
+
+
+def test_provisional_tags_sit_on_the_assignment_line():
+    """`[暫定]` が代入行に書かれていること。
+
+    **注記の中へ書いても検出されない。**provisional() は代入行しか見ない
+    ので、説明のかたまりの中に `[暫定]` と書くと、暫定値なのに一覧にも
+    載らず、誰も追わなくなる。**実際にやった**（SCHOTTKY_VF の出所を
+    直したとき、注記の先頭に書いて素通りした）。
+
+    モジュールの説明文（凡例を書く場所）だけは除く。
+    """
+    import ast
+
+    bad = []
+    for path in MODULES:
+        src = path.read_text()
+        lines = src.splitlines()
+        # モジュールの説明文の行範囲を除く
+        skip = set()
+        tree = ast.parse(src)
+        if (tree.body and isinstance(tree.body[0], ast.Expr)
+                and isinstance(tree.body[0].value, ast.Constant)
+                and isinstance(tree.body[0].value.value, str)):
+            skip = set(range(tree.body[0].lineno, tree.body[0].end_lineno + 1))
+        for i, line in enumerate(lines, 1):
+            if "[暫定]" not in line or i in skip:
+                continue
+            if not re.match(r"\s*([A-Z_][A-Z0-9_,\s]*)\s*=", line):
+                bad.append(f"{path.name}:{i}  {line.strip()[:60]}")
+    assert not bad, (
+        "`[暫定]` が代入行の外に書かれている。この書き方だと一覧に載らず、"
+        "**暫定値が見えないまま残る**:\n  " + "\n  ".join(bad))
