@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from circuit import board_refs, netlist  # noqa: E402
+from circuit import board_refs, mechanical_refs, netlist  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -32,6 +32,18 @@ def board_parts(half):
     return set(re.findall(r'\(property "Reference" "([^"]+)"', txt))
 
 
+def expected_parts(half):
+    """基板に載っているべき参照名の**全体**。
+
+    電気部品（circuit.netlist）と機械部品（circuit.mechanical_refs）の和。
+    **どちらの向きの検査もこの 1 つの集合で照合する。**片方だけ接頭辞で
+    除外していると、その接頭辞を名乗るものが何でも素通りする。
+    """
+    return ({b for ref, kind, pins in netlist(half)
+             for b in board_refs(ref, kind, pins)}
+            | mechanical_refs(half))
+
+
 def board_nets(half):
     """基板に張られているネット名。"""
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
@@ -40,14 +52,14 @@ def board_nets(half):
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_every_declared_part_is_on_the_board_or_listed_as_pending(half):
-    """宣言した部品が、基板にあるか PENDING に書いてあるかのどちらかであること。"""
+    """宣言した部品が、基板にあるか PENDING に書いてあるかのどちらかであること。
+
+    スタビライザも見る。**以前は接頭辞で除外していたので、1 個欠けても
+    誰も気づかなかった。**
+    """
     # **基板上の名前で比べる。**リード線で繋ぐ部品（電池・電源スイッチ）は
     # ランド 2 個に分かれるので、宣言側を circuit.board_refs で展開する。
-    declared = {b for ref, kind, pins in netlist(half)
-                for b in board_refs(ref, kind, pins)}
-    on_board = {r
-                for r in board_parts(half)}
-    missing = declared - on_board - PENDING
+    missing = expected_parts(half) - board_parts(half) - PENDING
     assert not missing, (
         f"{half}: 宣言したのに基板に無く、PENDING にも書いていない部品:\n  "
         + "\n  ".join(sorted(missing)))
@@ -55,17 +67,17 @@ def test_every_declared_part_is_on_the_board_or_listed_as_pending(half):
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_nothing_on_the_board_is_undeclared(half):
-    """基板にあるのに回路に宣言されていない部品が無いこと。
+    """基板にあるのに宣言されていない部品が無いこと。
 
     こちら向きも要る。基板だけに部品を足すと、回路の検査（パスコンの数など）
     をすり抜ける。
+
+    **接頭辞で除外しない。**以前は `startswith(("H", "ST"))` を素通りさせて
+    いたので、`HACK_ROGUE` を置いても検出できなかった（実際に確かめた）。
+    機械部品は circuit.mechanical_refs が名前で宣言する。
     """
-    declared = {b for ref, kind, pins in netlist(half)
-                for b in board_refs(ref, kind, pins)}
-    extra = {r
-             for r in board_parts(half)
-             if not r.startswith(("H", "ST"))} - declared
-    assert not extra, f"{half}: 基板にあるが回路に宣言が無い部品 {sorted(extra)}"
+    extra = board_parts(half) - expected_parts(half)
+    assert not extra, f"{half}: 基板にあるが宣言が無い部品 {sorted(extra)}"
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -87,9 +99,12 @@ def test_the_matrix_nets_match_the_declaration(half):
 
     ここは実装済みなので、名前が 1 つでも欠けたら落ちる。
     """
+    # **種類で選ぶ。参照名の接頭辞で選ばない。**`("SW", "D")` で拾うと
+    # 電源スイッチ SW_PWR_1/2 とショットキー D_PWR まで巻き込む。
+    # CLAUDE.md が名指しで禁じている型で、この案件で 5 回起きている。
     declared = set()
-    for ref, _, pins in netlist(half):
-        if ref.startswith(("SW", "D")) and ref not in PENDING:
+    for ref, kind, pins in netlist(half):
+        if kind in ("keyswitch", "diode") and ref not in PENDING:
             declared |= {n for n in pins.values() if n != "NC"}
     missing = declared - board_nets(half)
     assert not missing, f"{half}: 宣言にあるが基板に無いネット {sorted(missing)[:10]}"

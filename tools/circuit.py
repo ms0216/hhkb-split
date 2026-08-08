@@ -24,6 +24,7 @@ NC と書く。**書き忘れと区別がつかないと、浮きピンの検査
 """
 
 import re
+from pathlib import Path
 
 # 電池は単3×2。新品のアルカリは 1 本 1.6V まで上がりうる。
 BATT_CELLS = 2
@@ -105,6 +106,31 @@ def board_refs(ref, kind, pins):
     if kind in WIRE_PAD_KINDS:
         return [f"{ref}_{p}" for p in pins]
     return [ref]
+
+
+def mechanical_refs(half):
+    """基板に載るが**回路には入らない**部品の参照名。いまはスタビライザだけ。
+
+    以前は検査側が `startswith(("H", "ST"))` で除外していた。CLAUDE.md が
+    禁じている接頭辞での走査で、**`HACK_ROGUE` のような名前が素通りした**
+    （実際に置いて確かめた）。しかも `"H"` は本体基板に 1 つも該当が無く、
+    効いていない除外だった（`H` は子基板の取付穴）。
+
+    除外をやめて**あるべきものを宣言する**と、逆向きも効く。
+    スタビライザが 1 個欠けても同じ検査が落ちる（以前は誰も見ていなかった）。
+
+    参照名の番号はキーの通し番号。gen_pcb が `ST{i}` を振るのと同じ
+    `keymap_order` の並びから作る。
+    """
+    from interface import stab_offset_for
+    from layout import load_layout, split_halves
+    from matrix import keymap_order
+
+    path = Path(__file__).resolve().parent.parent / "layout/hhkb_split.json"
+    left, right = split_halves(load_layout(str(path)))
+    keys = keymap_order(left if half == "left" else right)
+    return {f"ST{i}" for i, k in enumerate(keys, start=1)
+            if stab_offset_for(k.w_u) is not None}
 
 
 def netlist(half):

@@ -320,8 +320,9 @@ def build_case(keys, half):
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
     cutter_pcb = tilted_cutter(w, h_body, rim_front - PLATE_TO_PCB - PCB_T)
-    # ボスも外で作って外で切る。基板はボスの上に載り、ネジはプレート→基板→
-    # ボスの順に通るので、ボスの頭は基板の下面で止める。
+    # ボスも外で作って外で切る。**ネジは基板を通らない。**基板に取付穴は
+    # 無く（feec08b で廃止）、ボスは基板の外に立っている。切る高さは
+    # 20 行ほど下で「プレートの下面（リム）」に決めている。
     with BuildPart() as _b:
         for bx, by in _boss_positions(half):
             with Locations((bx, by, FLOOR)):

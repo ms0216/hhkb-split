@@ -212,11 +212,16 @@ def test_every_column_is_driven_by_exactly_one_output(board):
 @pytest.mark.parametrize("board", ["left", "right"])
 def test_the_cable_and_the_shift_registers_agree_on_the_spi_pins(board):
     """ケーブルで来る SPI が、そのままシフトレジスタへ届いていること。"""
-    nets = nets_of(BOARDS[board]())
+    parts = BOARDS[board]()
+    nets = nets_of(parts)
+    # **種類で選ぶ。接頭辞ではない。**`"U"` で拾うのはたまたま今そう
+    # 名付けているからで、部品が増えれば静かに巻き込む。
+    registers = {ref for ref, kind, _ in parts if kind == "74HC595"}
+    assert registers, f"{board}: シフトレジスタが 1 個も宣言されていない"
     for net in ("SPI_SCK", "SPI_MOSI", "CS"):
         refs = {ref for ref, _ in nets[net]}
         assert "J_DB" in refs, f"{board}: {net} がケーブルに来ていない"
-        assert any(r.startswith("U") for r in refs), \
+        assert refs & registers, \
             f"{board}: {net} がシフトレジスタに届いていない"
 
 

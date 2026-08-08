@@ -51,7 +51,9 @@ SWITCH_FP = {
 }
 # スタビライザーの半間隔 → フットプリント名
 STAB_FP = {11.938: "Stabilizer_Cherry_MX_2.00u", 19.05: "Stabilizer_Cherry_MX_3.00u"}
-MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")
+# 取付穴は feec08b（上ケース方式）で廃止した。基板はプレートとスイッチで
+# 一体になり、上下ケースに挟まれる。ボスは基板の外にある。
+# 定数だけが使われないまま残っていたので消した。
 DIODE_FP = ("Diode_SMD", "D_SOD-123")     # JLCPCB の基本部品 1N4148W が入る
 
 # ダイオードの置き場所（KiCad 座標・キー中心から mm）と向き。
