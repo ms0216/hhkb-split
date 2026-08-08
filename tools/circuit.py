@@ -113,8 +113,15 @@ IC_SUPPLY_RANGE = {                  # 種類 → (下限V, 上限V)
 # 差し戻すときは 0.55 に戻す（tools/parts.py のバックアップの項）。
 MATRIX_DIODE_VF = 0.30   # BAT46W の保証 0.25V @ 0.1mA ＋ 温度の余裕 0.05V
 
-# 列を駆動する側の出力降下（LVC の VOH。100µA 級ならほぼ VCC）
-COL_DRIVER_DROP = 0.05
+# 列を駆動する側の出力降下。
+#
+# **SN74LVC595A のデータシートの保証値: IOH = -100µA で VOH ≧ VCC - 0.2V**
+# （VCC 1.1〜3.6V）。走査電流は行のプルダウン 11〜16kΩ に流れる約 100µA
+# なので、この条件そのもの。
+#
+# **0.05V と置いていたが 4 倍の誤りだった**（「CMOS だからほぼ VCC のはず」
+# という推測。2026-08-08 に datasheet で訂正）。
+COL_DRIVER_DROP = 0.20
 
 # **使い切れる下限は、望みではなく回路で決まる。**
 #
@@ -126,10 +133,19 @@ COL_DRIVER_DROP = 0.05
 #
 # **1 つだけ見て決めると足をすくわれる。**実際、マイコンだけを見ていて
 # 74HC595 の 2.0V とマトリクスの制約を 2 回とも見落とした。
+# ホットスワップソケットの最低使用電圧。
+#
+# **CPG151101S11 のデータシート: Voltage 12V max / 2V DC min、接点は錫めっき。**
+# 錫は低電圧だと酸化膜を破れず接触不良になりうる（保証範囲の下限）。
+# ダイオードやマイコンの下限と違って「割ると必ず動かない」ではないが、
+# **メーカーが保証していない領域**なので制約に入れる。
+SOCKET_V_MIN = 2.00
+
 _RAIL_FLOOR = max(
     MCU_V_MIN + MCU_MARGIN,
     max(lo for lo, _hi in IC_SUPPLY_RANGE.values()),
     (MATRIX_DIODE_VF + COL_DRIVER_DROP) / 0.3,
+    SOCKET_V_MIN,
 )
 BATT_V_MIN = _RAIL_FLOOR + SCHOTTKY_VF
 
