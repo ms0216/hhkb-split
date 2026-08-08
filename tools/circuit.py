@@ -61,6 +61,22 @@ MCU_MARGIN = 0.1                     # 下限に対して残す余裕
 MCU_V_MAX = 3.6                      # 推奨動作範囲の上限
 MCU_V_ABSMAX = 3.9                   # 絶対最大定格。超えたら壊れる
 
+# **基板に載る IC の動作電圧範囲。**打ち止めはいちばん厳しい IC で決まる。
+#
+# **これを見ていなかった。**打ち止めをマイコンの 1.7V だけから計算していて、
+# 74HC595 の下限 2.0V を見落としていた。レールは打ち止めで 1.8V まで下がる
+# ので、**シフトレジスタが規格外で動く**ことになっていた（列が正しく
+# 駆動されず、キーが反応しない）。
+#
+# 74HC を 74LVC に替えて解いた。LVC は 1.1〜3.6V で、レールの全域を覆う。
+# フットプリントは同じ TSSOP-16 なので基板は変わらない。
+# 上限 3.6V に対してレールの最大は 2.90V（USB 時 3.3V）で内側。
+IC_SUPPLY_RANGE = {                  # 種類 → (下限V, 上限V)
+    "74HC595": (2.0, 6.0),           # 使わない。比較のために残す
+    "74LVC595": (1.1, 3.6),          # SN74LVC595A（C52287685）
+    "xiao_nrf52840": (MCU_V_MIN, MCU_V_MAX),
+}
+
 # **使い切れる下限は、望みではなく回路で決まる。**
 #
 # 当初 0.9V/本（＝完全放電）と書いていたが、test_circuit の
@@ -107,7 +123,7 @@ def _shift_register(ref, cols, first_col, serial_in, serial_out):
     }
     for i, name in enumerate(_595_OUTPUTS):
         pins[name] = f"COL{first_col + i}" if i < cols else "NC"
-    return (ref, "74HC595", pins)
+    return (ref, "74LVC595", pins)
 
 
 # 電子部品の参照名（基板上の名前）。
@@ -259,7 +275,7 @@ def daughterboard_netlist():
 
 
 # その種類の部品が「電源端子を持つ IC」かどうか。パスコンの検査に使う。
-ICS = {"74HC595", "xiao_nrf52840"}
+ICS = {"74LVC595", "xiao_nrf52840"}
 
 # 電源ネット。ここに繋がるだけの端子は「駆動されていない」と見なさない。
 POWER_NETS = {"V3V3", "GND", "VBATT_RAW", "VBATT_SW"}

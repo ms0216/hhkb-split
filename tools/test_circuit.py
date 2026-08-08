@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import (  # noqa: E402
     BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
+    IC_SUPPLY_RANGE,
     MCU_MARGIN, MCU_V_ABSMAX, MCU_V_MAX, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF,
     daughterboard_netlist,
     netlist,
@@ -50,7 +51,7 @@ def nets_of(parts):
 def test_every_ic_has_a_decoupling_capacitor(board):
     """IC の数だけ 0.1µF がある。
 
-    74HC595 は出力が同時に切り替わるとき電源へノイズを返す。パスコンが
+    74LVC595 は出力が同時に切り替わるとき電源へノイズを返す。パスコンが
     無いとそのノイズが行の入力へ回り込み、誤検出やチャタリングになる。
     ブレッドボードでは症状が出にくく、基板にしてから気づく類のもの。
     """
@@ -76,13 +77,13 @@ def test_there_is_a_bulk_capacitor(board):
 
 @pytest.mark.parametrize("board", ["left", "right"])
 def test_the_shift_register_control_pins_are_tied(board):
-    """74HC595 の MR が VCC、OE が GND に固定されている。
+    """74LVC595 の MR が VCC、OE が GND に固定されている。
 
     浮かせると、MR はノイズで中身が消え、OE は出力が High-Z になって
     全キーが反応しない。**繋ぎ忘れても回路図上は見た目が変わらない。**
     """
     for ref, kind, pins in BOARDS[board]():
-        if kind != "74HC595":
+        if kind != "74LVC595":
             continue
         assert pins.get("MR") == "V3V3", f"{board} {ref}: MR が VCC に固定されていない"
         assert pins.get("OE") == "GND", f"{board} {ref}: OE が GND に固定されていない"
@@ -171,6 +172,35 @@ def test_the_rail_never_exceeds_what_the_mcu_can_take():
         f"絶対最大 {MCU_V_ABSMAX}V。電池の本数か降圧を見直すこと")
 
 
+def test_every_ic_runs_down_to_the_cutoff():
+    """**打ち止めの電圧で、基板上のどの IC も規格内であること。**
+
+    打ち止めをマイコンの下限 1.7V だけから計算していて、**74HC595 の
+    下限 2.0V を見落としていた。**レールは打ち止めで 1.8V まで下がるので、
+    シフトレジスタが規格外で動くことになっていた（列が正しく駆動されず、
+    キーが反応しない）。**部品を選ぶとき「Basic かどうか」しか見ておらず、
+    動作電圧の範囲を見ていなかった。**
+
+    74LVC595（1.1〜3.6V）に替えて解いた。基板は変わらない（同じ TSSOP-16）。
+
+    上側も見る。新品の電池でレールが IC の上限を超えないこと。
+    """
+    rail_min = BATT_V_MIN - SCHOTTKY_VF
+    rail_max = BATT_V_MAX - SCHOTTKY_VF
+    used = {kind for board in BOARDS.values() for _r, kind, _p in board()
+            if kind in IC_SUPPLY_RANGE}
+    assert used, "基板に IC が 1 つも無い。走査が壊れている"
+    for kind in sorted(used):
+        lo, hi = IC_SUPPLY_RANGE[kind]
+        assert lo <= rail_min, (
+            f"{kind} の下限 {lo}V に対して、打ち止めでレールが {rail_min:.2f}V "
+            f"まで下がる。**規格外で動くことになる。**"
+            f"打ち止めを上げるか、もっと低電圧の品種にすること")
+        assert rail_max <= hi, (
+            f"{kind} の上限 {hi}V に対して、新品の電池でレールが "
+            f"{rail_max:.2f}V になる")
+
+
 def test_the_cutoff_is_not_quietly_optimistic():
     """打ち止めが、乾電池として妥当な範囲にあること。
 
@@ -213,7 +243,7 @@ def test_every_column_is_driven_by_exactly_one_output(board):
     """
     drivers = {}
     for ref, kind, pins in BOARDS[board]():
-        if kind != "74HC595":
+        if kind != "74LVC595":
             continue
         for pin, net in pins.items():
             if net.startswith("COL"):
@@ -234,7 +264,7 @@ def test_the_cable_and_the_shift_registers_agree_on_the_spi_pins(board):
     nets = nets_of(parts)
     # **種類で選ぶ。接頭辞ではない。**`"U"` で拾うのはたまたま今そう
     # 名付けているからで、部品が増えれば静かに巻き込む。
-    registers = {ref for ref, kind, _ in parts if kind == "74HC595"}
+    registers = {ref for ref, kind, _ in parts if kind == "74LVC595"}
     assert registers, f"{board}: シフトレジスタが 1 個も宣言されていない"
     for net in ("SPI_SCK", "SPI_MOSI", "CS"):
         refs = {ref for ref, _ in nets[net]}
@@ -246,7 +276,7 @@ def test_the_cable_and_the_shift_registers_agree_on_the_spi_pins(board):
 @pytest.mark.parametrize("board", ["left", "right"])
 def test_the_chained_shift_registers_are_actually_chained(board):
     """右半分の 2 個目が、1 個目の Q7' から受けていること。"""
-    parts = {ref: pins for ref, kind, pins in BOARDS[board]() if kind == "74HC595"}
+    parts = {ref: pins for ref, kind, pins in BOARDS[board]() if kind == "74LVC595"}
     if len(parts) < 2:
         pytest.skip("この半分はシフトレジスタが 1 個")
     assert parts["U2"]["DS"] == parts["U1"]["Q7S"] != "NC", \
@@ -284,7 +314,7 @@ def test_the_rules_actually_bite():
          lambda ps: [p for p in ps if p[1] != "cap_100u"],
          test_there_is_a_bulk_capacitor),
         ("MR を浮かせる",
-         lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74HC595" else p)
+         lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74LVC595" else p)
                      for r, k, p in ps],
          test_the_shift_register_control_pins_are_tied),
         ("電池を 3V3 へ直結する",

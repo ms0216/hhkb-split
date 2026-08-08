@@ -246,7 +246,7 @@ ELEC_FP = {
     # SOIC-16 はコートヤード 10.49mm で、帯 9.25mm に**入らない**。
     # 位置の微調整で逃がそうとしていたが、どちら側にはみ出すかを
     # 選んでいるだけだった。TSSOP-16 は 5.59mm で 3.66mm 余る。
-    "74HC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm"),
+    "74LVC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm"),
     "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric"),
     "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric"),
     "res_1M": ("Resistor_SMD", "R_0805_2012Metric"),

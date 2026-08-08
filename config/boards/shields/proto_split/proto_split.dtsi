@@ -5,11 +5,15 @@
  * ここではキースキャンを最も単純な直結（ダイオードもシフトレジスタも無し）に
  * して、**左右が無線でつながるかどうかだけ**を見る。
  *
- * 左 2 キー（a b）＋ 右 2 キー（c d）。配線は Task C1 とまったく同じで、
- * スイッチの片側を D0・D1 へ、反対側を GND へ落とすだけ。
+ * 左 2 キー（a b）＋ 右 2 キー（c d）。配線は Task C1 とほぼ同じで、
+ * スイッチの片側を D1・D2 へ、反対側を GND へ落とすだけ。
  *
  * BLE は当然 有効 のまま。ここで無効にしたら検証にならない。
  * （C1・C2 では変数を減らすために切っていたが、このタスクでは主役）
+ *
+ * **D0 はキーに使わない（2026-08-08）。** Task C5（電池残量）で D0 = AIN0 を
+ * ADC に使うため。この治具は C4・C5 でも先に使うので、キーを D1・D2 へ寄せて
+ * D0 を空けた。ADC が使えるのは D0..D5 だけで、本番シールドも同じ割り当て。
  */
 #include <dt-bindings/zmk/matrix_transform.h>
 
@@ -17,6 +21,7 @@
 	chosen {
 		zmk,kscan = &kscan0;
 		zmk,matrix-transform = &default_transform;
+		zmk,battery = &vbatt;
 	};
 
 	/*
@@ -39,8 +44,26 @@
 		compatible = "zmk,kscan-gpio-direct";
 		wakeup-source;
 		input-gpios
-			= <&xiao_d 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-			, <&xiao_d 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+			= <&xiao_d 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+			, <&xiao_d 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
 			;
 	};
+
+	/* Task C5: 電池電圧の測定。本番シールド（hhkb_split.dtsi）と同じ値。
+	 * 分圧 1MΩ + 1MΩ を D0 (P0.02 = AIN0) で読む。測定点はショットキーの
+	 * 手前（電池側）なので、USB 接続中も電池そのものの電圧が読める。
+	 *
+	 * 抵抗を実測して 5% ずれていたら、その実測値を入れ直す。
+	 */
+	vbatt: vbatt {
+		compatible = "zmk,battery-voltage-divider";
+		io-channels = <&adc 0>;
+		output-ohms = <1000000>;
+		full-ohms = <2000000>;
+	};
+
+};
+
+&adc {
+	status = "okay";
 };
