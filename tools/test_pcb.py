@@ -8,6 +8,7 @@
 そのため通常の pytest（プロジェクトの venv）から実行できる。
 """
 
+import math
 import re
 from pathlib import Path
 
@@ -597,3 +598,62 @@ def test_the_electronics_fit_inside_their_band(half):
         f"  拾えなかった: {sorted(want - seen)}\n"
         f"  余計に拾った: {sorted(seen - want)}")
     assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_ground_plane_is_not_cut_by_routing(half):
+    """In1.Cu に配線が 1 本も無いこと。
+
+    **In1.Cu は GND のベタ専用。**ここに信号を通すと基準面が切れる。
+    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
+    連続していることの価値が大きい（4 層にしたのはそのため）。
+
+    KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
+    そのまま渡すと自動配線器がここを使う。autoroute.py の
+    _protect_the_ground_plane が (type power) に直している。
+    **その細工が効いているかを、ここで確かめる。**DRC は面が切れていても
+    何も言わない。
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    # **セグメントの塊ごとに見る。**非貪欲でも `(segment ...` から
+    # 次のゾーンの `(layer "In1.Cu")` まで食ってしまい、誤検出した。
+    on_in1 = [b for b in re.findall(r"\(segment\n(?:\t\t\([^\n]*\)\n)+\t\)", txt)
+              if '(layer "In1.Cu")' in b]
+    assert not on_in1, (
+        f"{half}: GND 基準面（In1.Cu）に配線が {len(on_in1)} 本ある。"
+        "autoroute.py の _protect_the_ground_plane を確かめること")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_every_ground_pad_reaches_the_plane(half):
+    """電子部品の GND パッドの脇にビアが立っていること。
+
+    GND ベタは In1.Cu の 1 層だけ、GND パッドは全部 B.Cu の SMD。
+    間にビアが無いとベタに届かない。**ImportSpecctraSES は既存の配線を
+    作り直すので、取り込みのたびにファンアウトが消える**（実測 7→0）。
+    autoroute.py が立て直しているかを見る。
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    vias = [(float(x), float(y)) for x, y in
+            re.findall(r'\(via\s*\(at ([-\d.]+) ([-\d.]+)\)'
+                       r'[\s\S]{0,200}?\(net (?:\d+ )?"GND"\)', txt)]
+    pads = []
+    for ref, blk in _footprint_blocks(txt):
+        if not ELEC_REF.fullmatch(ref):
+            continue
+        # **フットプリントの回転をパッドにも掛ける。**掛け忘れると
+        # 180 度回っている部品（J_DB など）のパッドが 3.7mm ずれる。
+        at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+        ox, oy = float(at.group(1)), float(at.group(2))
+        rot = math.radians(float(at.group(3) or 0))
+        cos, sin = math.cos(rot), math.sin(rot)
+        for m in re.finditer(r'\(pad "[^"]*"[\s\S]{0,400}?\(net (?:\d+ )?"GND"\)', blk):
+            a = re.search(r"\(at ([-\d.]+) ([-\d.]+)", m.group(0))
+            px, py = float(a.group(1)), float(a.group(2))
+            pads.append((ref, ox + px * cos - py * sin, oy + px * sin + py * cos))
+    assert pads, f"{half}: GND パッドを 1 つも拾えていない。走査が壊れている"
+    far = [(r, x, y) for r, x, y in pads
+           if not any(abs(vx - x) < 3.0 and abs(vy - y) < 3.0 for vx, vy in vias)]
+    assert not far, (
+        f"{half}: ベタに届いていない GND パッド\n" +
+        "\n".join(f"  {r} ({x:.2f}, {y:.2f})" for r, x, y in far))

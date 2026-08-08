@@ -124,168 +124,20 @@ def _rounded_rect_outline(board, w, h, r):
 
 
 # --------------------------------------------------------------------------
-# 配線
+# 配線の寸法
+#
+# **配線そのものはここではやらない。**Freerouting に委ねる
+# （tools/autoroute.py）。ここで持つのは、自動配線器へ渡す値だけ。
+#
+# 手書きのルータは削除した。衝突判定を持たないので任意のネット対を
+# 短絡させ、それは経路の調整では 0 にならなかった。経緯は
+# docs/superpowers/specs/2026-08-08-pcb-autoroute-design.md。
+#
+# **この 3 つは _apply_jlcpcb_rules がネットクラスに書き込む。**
+# 自動配線器はネットクラスしか見ないので、ここが唯一の出どころ。
 # --------------------------------------------------------------------------
-TRACK_W = 0.2           # JLCPCB の最小 0.127mm に対して余裕を見た値。
-                        # 列の通り道が 3.8mm しかないので 0.4mm 間隔で並べる必要があり、
-                        # 0.25mm だと隣との隙間が 0.15mm になって既定の 0.2mm を割る。
+TRACK_W = 0.2           # JLCPCB の最小 0.127mm に対して余裕を見た値
 VIA_D, VIA_DRILL = 0.6, 0.3
-COL_VIA_DX = -1.8       # 列のビアを、ソケットのパッドからどれだけ左へ置くか
-
-# 列のバスが行間で折れ曲がるときの通り道。**列ごとに高さをずらす。**
-# 全部同じ高さにすると、行ずれのぶん横へ動く区間どうしが交差する。
-#
-# 通れる帯は狭い。スイッチの機械穴は非メッキ貫通穴なので表も裏もふさぐ。
-# キー中心からの位置（KiCad 座標）で数えると:
-#
-#   ピン穴      y −6.61〜−3.55、−4.07〜−1.01
-#   中央ポスト  y −2.00〜+2.00
-#   位置決め    y −0.88〜+0.88
-#   スタビ穴    y −8.50〜−5.46、**+6.23〜+10.22**
-#   次の段のスタビ穴  +10.55〜+13.59
-#
-# → 確実に空いているのは **+2.2 〜 +6.0mm の 3.8mm** だけ。
-#   ここに 0.4mm 間隔で並べれば 9 列（右半分）がちょうど収まる。
-#
-# 当初は行間の中央（+9.5 付近）に通していたが、そこはスタビの穴の帯で、
-# DRC が hole_clearance を 5 件出した。
-LANE_CENTER = 4.1       # キー中心からの距離（KiCad 座標・下向き）
-LANE_SPACING = 0.4
-
-
-def _track(board, p1, p2, layer, net):
-    t = pcbnew.PCB_TRACK(board)
-    t.SetStart(p1)
-    t.SetEnd(p2)
-    t.SetWidth(pcbnew.FromMM(TRACK_W))
-    t.SetLayer(layer)
-    t.SetNet(net)
-    board.Add(t)
-
-
-def _via(board, pos, net):
-    v = pcbnew.PCB_VIA(board)
-    v.SetPosition(pos)
-    v.SetWidth(pcbnew.FromMM(VIA_D))
-    v.SetDrill(pcbnew.FromMM(VIA_DRILL))
-    v.SetNet(net)
-    board.Add(v)
-    return v
-
-
-def _pad(board, ref, num):
-    return board.FindFootprintByReference(ref).FindPadByNumber(num)
-
-
-def _route(board, positions, rc):
-    """マトリクスを配線する。位置は生成済みのフットプリントから読む。"""
-    mm = pcbnew.VECTOR2I_MM
-
-    # 1. スイッチ → ダイオード（L 字 2 本、裏面）
-    #    ソケットの端子 2 とダイオードのアノードは同じ x に並べてあるので、
-    #    横へ 1 本・縦へ 1 本で届く。
-    for i in range(1, len(positions) + 1):
-        a = _pad(board, f"SW{i}", "2")
-        b = _pad(board, f"D{i}", "2")
-        net = a.GetNet()
-        corner = pcbnew.VECTOR2I(b.GetPosition().x, a.GetPosition().y)
-        _track(board, a.GetPosition(), corner, pcbnew.B_Cu, net)
-        _track(board, corner, b.GetPosition(), pcbnew.B_Cu, net)
-
-    # 2. 行のバス（裏面・水平）
-    #    同じ行のキーは y が揃うので、カソードどうしを直線で結べる。
-    rows = {}
-    for i, (r, _) in enumerate(rc, start=1):
-        rows.setdefault(r, []).append(_pad(board, f"D{i}", "1"))
-    for r, pads in rows.items():
-        pads.sort(key=lambda p: p.GetPosition().x)
-        for p1, p2 in zip(pads, pads[1:]):
-            _track(board, p1.GetPosition(), p2.GetPosition(),
-                   pcbnew.B_Cu, p1.GetNet())
-
-    # 3. 列のバス（表面・ビア経由）
-    #
-    # **段を飛ばす列がある。** 右半分の列 2 は 行0 の次が 行2 で、行1 にキーが無い。
-    # そこを縦一直線で結ぶと、行ずれのぶん途中の段の真ん中を突っ切り、
-    # 位置決めポストに当たる（hole_clearance が出た）。
-    # そこで **段の切れ目ごとに折れ曲がる**。各段では、その段の中で物理的に
-    # 最も近いキーの脇（＝安全な通り道）を通す。
-    cols = {}
-    for i, (r, c) in enumerate(rc, start=1):
-        cols.setdefault(c, []).append((r, _pad(board, f"SW{i}", "1")))
-    n_cols = len(cols)
-
-    # 段ごとの「キーの脇」の x 一覧（安全な通り道の候補）
-    row_keys = {}
-    for i, (r, _) in enumerate(rc, start=1):
-        pos = board.FindFootprintByReference(f"SW{i}").GetPosition()
-        row_keys.setdefault(r, []).append(pcbnew.ToMM(pos.x))
-    row_y = {}
-    for i, (r, _) in enumerate(rc, start=1):
-        row_y[r] = pcbnew.ToMM(board.FindFootprintByReference(f"SW{i}").GetPosition().y)
-
-    def corridor_x(r, near_x):
-        """段 r の中で near_x に最も近いキーの脇を通る x。"""
-        kx = min(row_keys[r], key=lambda x: abs(x - near_x))
-        return kx - 7.085 + COL_VIA_DX
-
-    # 機械穴（非メッキ貫通穴）の一覧。表も裏もふさぐので、縦に抜けるときは
-    # これを避ける必要がある。位置は生成済みの基板から読む（推測しない）。
-    holes = []
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            if pad.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
-                q = pad.GetPosition()
-                holes.append((pcbnew.ToMM(q.x), pcbnew.ToMM(q.y),
-                              pcbnew.ToMM(pad.GetSize().x) / 2))
-
-    def vertical_is_clear(x, y0, y1, margin=0.45):
-        """x を通る縦線が y0〜y1 の範囲で穴に当たらないか。"""
-        lo, hi = min(y0, y1), max(y0, y1)
-        for hx, hy, hr in holes:
-            if lo - hr <= hy <= hi + hr and abs(hx - x) < hr + margin:
-                return False
-        return True
-
-    def find_clear_x(near, y0, y1):
-        """near の近くで、縦に抜けられる x を探す。見つからなければ None。"""
-        for d in [i * 0.1 for i in range(0, 61)]:
-            for cand in ((near - d), (near + d)):
-                if vertical_is_clear(cand, y0, y1):
-                    return round(cand, 2)
-        return None
-
-    for c, entries in cols.items():
-        entries.sort(key=lambda t: t[1].GetPosition().y)
-        lane = (c - (n_cols - 1) / 2) * LANE_SPACING
-        vias = []
-        for r, p in entries:
-            pos = p.GetPosition()
-            vp = mm(pcbnew.ToMM(pos.x) + COL_VIA_DX, pcbnew.ToMM(pos.y))
-            _track(board, pos, vp, pcbnew.B_Cu, p.GetNet())
-            vias.append((r, _via(board, vp, p.GetNet()), vp))
-        for (ra, v1, p1), (rb, v2, p2) in zip(vias, vias[1:]):
-            net = v1.GetNet()
-            x1, y1 = pcbnew.ToMM(p1.x), pcbnew.ToMM(p1.y)
-            x2, y2 = pcbnew.ToMM(p2.x), pcbnew.ToMM(p2.y)
-            lane_a = row_y[ra] + LANE_CENTER + lane
-            if rb == ra + 1:
-                # 隣り合う段。通り道を 1 本使うだけで届く。
-                pts = [(x1, y1), (x1, lane_a), (x2, lane_a), (x2, y2)]
-            else:
-                # 段を飛ばす。途中の段を縦に抜けられる x を探してから渡る。
-                lane_b = row_y[rb - 1] + LANE_CENTER + lane
-                sx = find_clear_x(x1, lane_a, lane_b)
-                if sx is None:
-                    raise RuntimeError(
-                        f"列 {c}: 段 {ra}→{rb} を縦に抜ける経路が見つからない")
-                pts = [(x1, y1), (x1, lane_a), (sx, lane_a),
-                       (sx, lane_b), (x2, lane_b), (x2, y2)]
-            for a, b in zip(pts, pts[1:]):
-                if a != b:
-                    _track(board, mm(*a), mm(*b), pcbnew.F_Cu, net)
-
-
 # --------------------------------------------------------------------------
 # JLCPCB の製造能力を、基板の設計規則として書き込む。
 #
@@ -463,211 +315,6 @@ def _place_electronics(board, half, net):
                     pad.SetNet(net(netname))
 
 
-def _npth_holes(board):
-    """非メッキ貫通穴（スイッチの機械穴）の一覧。**全層をふさぐ。**
-
-    表・裏の配線では避けていたが、内層では避けていなかった。
-    穴は層を選ばないので、内層でも同じ仕組みを通す必要がある。
-    """
-    out = []
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            if pad.GetAttribute() == pcbnew.PAD_ATTRIB_NPTH:
-                q = pad.GetPosition()
-                out.append((pcbnew.ToMM(q.x), pcbnew.ToMM(q.y),
-                            pcbnew.ToMM(pad.GetSize().x) / 2))
-    return out
-
-
-def _fcu_verticals(board):
-    """表面（F.Cu）の縦配線の x 一覧。
-
-    **列のバスはここにいる。**穴だけ避けても、行のビアが列のバスに
-    乗って短絡する。`_clear_x` に渡して避ける。
-    """
-    out = []
-    for t in board.GetTracks():
-        if t.Type() != pcbnew.PCB_TRACE_T or t.GetLayer() != pcbnew.F_Cu:
-            continue
-        a, b = t.GetStart(), t.GetEnd()
-        if abs(a.x - b.x) < pcbnew.FromMM(0.05):
-            out.append((pcbnew.ToMM(a.x),
-                        pcbnew.ToMM(min(a.y, b.y)), pcbnew.ToMM(max(a.y, b.y))))
-    return out
-
-
-def _clear_x(holes, near, y0, y1, margin=0.6, used=(), keep=2.0,
-             verticals=()):
-    # keep は行の通路どうしの最小間隔。1.0/1.6/2.0/2.5 を試し、
-    # 左右の合計が最小になる 2.0 を採った（左 23 / 右 37）。
-    """near の近くで、y0〜y1 を縦に抜けられる x を探す。"""
-    lo, hi = min(y0, y1), max(y0, y1)
-
-    def ok(x):
-        # **すでに使った通路から離す。**行ごとに別の x を使わないと、
-        # 内層で縦配線どうしが重なって短絡する（14 件出た）。
-        if any(abs(x - u) < keep for u in used):
-            return False
-        # 表面の縦配線（列のバス）にも乗らないこと
-        if any(not (vy1 < lo or vy0 > hi) and abs(vx - x) < 0.8
-               for vx, vy0, vy1 in verticals):
-            return False
-        return not any(lo - hr <= hy <= hi + hr and abs(hx - x) < hr + margin
-                       for hx, hy, hr in holes)
-
-    # 基板の幅ぶん探す。**80 ステップ（±20mm）では足りなかった。**
-    # 最下段まで降りる行は、途中の段の穴をすべて避ける必要がある。
-    for d in [i * 0.25 for i in range(0, 360)]:
-        for cand in (near - d, near + d):
-            if ok(cand):
-                return round(cand, 2)
-    return None
-
-
-def _route_electronics(board, half, net):
-    """電子部品を結線する。
-
-    **GND はベタ（In1.Cu）で受ける。**各 GND パッドの脇にビアを 1 本立てる
-    だけでよく、配線が要らない。これで結線するネットが大きく減る。
-
-    残りは In2.Cu を使う。ここは行の引き回しと電源のために空けた層で、
-    表（列のバス）とも裏（ソケットと行のバス）とも衝突しない。
-    """
-    mm = pcbnew.VECTOR2I_MM
-    refs = [f.GetReference() for f in board.GetFootprints()]
-    elec = [r for r in refs if r in PLACE[half] or r.startswith("BT1_")]
-
-    pads = {}
-    for fp in board.GetFootprints():
-        if fp.GetReference() not in elec:
-            continue
-        for pad in fp.Pads():
-            n = pad.GetNetname()
-            if n:
-                pads.setdefault(n, []).append(pad)
-
-    # 1. GND はベタへ落とす
-    for pad in pads.pop("GND", []):
-        pos = pad.GetPosition()
-        off = mm(pcbnew.ToMM(pos.x), pcbnew.ToMM(pos.y) + 1.8)
-        _track(board, pos, off, pcbnew.B_Cu, pad.GetNet())
-        _via(board, off, pad.GetNet())
-
-    # 2. 行を各段のバスへ降ろす。**ここが 2 層では通らなかった箇所。**
-    #    内層 2 を縦に降り、スイッチの非メッキ穴を避ける x を選ぶ。
-    holes = _npth_holes(board)
-    verticals = _fcu_verticals(board)
-    rows = {}
-    for fp in board.GetFootprints():
-        if not re.fullmatch(r"D\d+", fp.GetReference()):
-            continue
-        pad = fp.FindPadByNumber("1")
-        n = pad.GetNetname()
-        if n.startswith("ROW"):
-            rows.setdefault(n, []).append(pad)
-    used_x = []
-    for k, (name, cathodes) in enumerate(sorted(rows.items())):
-        src = next((p for p in pads.get(name, [])), None)
-        if src is None:
-            continue
-        tgt = min(cathodes, key=lambda p: abs(p.GetPosition().x - src.GetPosition().x))
-        sx = pcbnew.ToMM(src.GetPosition().x)
-        sy = pcbnew.ToMM(src.GetPosition().y)
-        tx = pcbnew.ToMM(tgt.GetPosition().x)
-        ty = pcbnew.ToMM(tgt.GetPosition().y)
-        x = _clear_x(holes, sx, sy, ty, used=used_x, verticals=verticals)
-        if x is None:
-            raise RuntimeError(f"{name}: 内層を縦に抜ける経路が見つからない")
-        used_x.append(x)
-        # **コネクタのパッド列に沿って走らせない。**
-        # 横に長く走ると、隣のパッドとレジストのアパーチャで橋を作る
-        # （49.5mm の配線が 24 件のブリッジを出した）。
-        # 直角に 1.6mm 離れてからビアで内層へ落とし、横移動は内層で行う。
-        # **行ごとに高さをずらす。**同じ y に並べると、隣の行のビアと
-        # 0.5mm（コネクタのピッチ）しか離れず当たる。
-        # **帯を前後で分ける。**行はマトリクス寄りの半分、電源の幹線は
-        # 奥寄りの半分。同じ場所を奪い合うと必ず交差する。
-        oy = sy + (1 if ty > sy else -1) * (1.4 + k * 0.8)
-        _track(board, src.GetPosition(), mm(sx, oy), pcbnew.B_Cu, src.GetNet())
-        _via(board, mm(sx, oy), src.GetNet())
-        _track(board, mm(sx, oy), mm(x, oy), pcbnew.In2_Cu, src.GetNet())
-        _track(board, mm(x, oy), mm(x, ty), pcbnew.In2_Cu, src.GetNet())
-        _via(board, mm(x, ty), src.GetNet())
-        _track(board, mm(x, ty), tgt.GetPosition(), pcbnew.B_Cu, src.GetNet())
-        pads.pop(name, None)
-
-    # 3. 残りは In2.Cu で結ぶ。ネットごとに y のレーンをずらす。
-    for i, (name, group) in enumerate(sorted(pads.items())):
-        group = sorted(group, key=lambda p: p.GetPosition().x)
-        if name.startswith("COL"):
-            continue                      # 列は 4 で別に扱う
-        for a, b in zip(group, group[1:]):
-            # **レーンはネットごとに固有にする。**6 本で使い回していて
-            # 重なっていた（違反 29/49 件）。帯は 9.25mm あるので足りる。
-            # **帯の中（±3.4mm）に均等に配る。**上限で頭打ちにすると
-            # 複数のネットが同じ y に重なる（V3V3 と VBATT_SENSE が 10 件）。
-            _link(board, a, b, lane=-1.0 - (i % 5) * 0.7)
-
-    # 4. 595 の出力を列のバスへ。列のバスは表（F.Cu）にあるので、
-    #    In2 で近くまで運んでからビアで表へ上げる。
-    k = 0
-    for fp in sorted(board.GetFootprints(), key=lambda f: f.GetReference()):
-        if not fp.GetReference().startswith("U"):
-            continue
-        for pad in fp.Pads():
-            n = pad.GetNetname()
-            if not n.startswith("COL"):
-                continue
-            target = _nearest_via(board, n, pad.GetPosition())
-            if target is not None:
-                _link(board, pad, target, lane=3.2 - (k % 9) * 0.7,
-                      to_via=True)
-                k += 1
-
-
-def _nearest_via(board, netname, pos):
-    """そのネットのビアのうち、pos に最も近いものの位置を返す。"""
-    best, bd = None, None
-    for it in board.GetTracks():
-        if it.Type() != pcbnew.PCB_VIA_T or it.GetNetname() != netname:
-            continue
-        d = (it.GetPosition() - pos).EuclideanNorm()
-        if bd is None or d < bd:
-            best, bd = it.GetPosition(), d
-    return best
-
-
-def _link(board, a, b, lane, to_via=False):
-    """2 点を In2.Cu で結ぶ（両端にビアを立てる）。"""
-    mm = pcbnew.VECTOR2I_MM
-    pa = a.GetPosition()
-    pb = b if to_via else b.GetPosition()
-    netitem = a.GetNet()
-    ax, ay = pcbnew.ToMM(pa.x), pcbnew.ToMM(pa.y)
-    bx, by = pcbnew.ToMM(pb.x), pcbnew.ToMM(pb.y)
-    # **ビアはパッドの真上に置かない。**穴が重なって
-    # 「穴のクリアランス 0.00mm」になる。少しずらして引き出す。
-    # **引き出す距離もレーンに応じてずらす。**FFC のパッドは 0.5mm ピッチ
-    # なので、同じ距離で引き出すとビアが横並びで当たる（V3V3 と
-    # VBATT_SENSE が 10 件）。レーンと同じ順に離せば重ならない。
-    d = 1.4 + (lane + 3.4) * 0.55
-    va, vb = (ax, ay + d), (bx, by + d)
-    _track(board, mm(ax, ay), mm(*va), pcbnew.B_Cu, netitem)
-    _via(board, mm(*va), netitem)
-    if not to_via:
-        _track(board, mm(bx, by), mm(*vb), pcbnew.B_Cu, netitem)
-        _via(board, mm(*vb), netitem)
-    else:
-        vb = (bx, by)
-    # **横配線は帯（段と段の間）の中に収める。**パッドからの相対だと
-    # 部品ごとのパッド位置のぶんはみ出し、スイッチの非メッキ穴を通る。
-    band = min(BAND_Y, key=lambda b: abs((ORIGIN[1] - b) - ay))
-    y = (ORIGIN[1] - band) + max(-3.4, min(3.4, lane))
-    for p, q in ((va, (va[0], y)), ((va[0], y), (vb[0], y)), ((vb[0], y), vb)):
-        if p != q:
-            _track(board, mm(*p), mm(*q), pcbnew.In2_Cu, netitem)
-
-
 def _pour(board, netitem, layer, w, h):
     """その層いっぱいにベタを敷く。"""
     zone = pcbnew.ZONE(board)
@@ -684,7 +331,7 @@ def _pour(board, netitem, layer, w, h):
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 
-def build(half, keys, route=True):
+def build(half, keys):
     """片側ぶんの基板を作る。"""
     # **キーマップ順に並べ替えてから使う。**
     # layout.split_halves は x 順（列方向）で返すので、そのまま
@@ -777,26 +424,17 @@ def build(half, keys, route=True):
         d.FindPadByNumber("1").SetNet(net(f"ROW{r}"))    # カソード
 
     # ------------------------------------------------------------------
-    # 配線
+    # 配線はここではやらない
     # ------------------------------------------------------------------
-    # 層の使い分け:
-    #   B.Cu  スイッチ→ダイオード、行のバス（パッドがすべて裏面にあるため）
-    #   F.Cu  列のバス（行と直交するので別の層に逃がす）
+    # **このファイルは配置・ネット・ゾーン・設計規則だけを持つ。**
+    # 配線は tools/autoroute.py が Freerouting に委ねる。
     #
-    # スイッチの機械穴（中央 φ4・位置決め φ1.75・ピン穴 φ3.05）は
-    # **非メッキ貫通穴なので両面をふさぐ**。列を表に逃がしても避けて通る必要がある。
-    if route:
-        _route(board, positions, rc)
-
+    # 例外は GND のファンアウトだけ。GND は配線せずベタ（In1.Cu）で受ける
+    # 方針で、パッドからベタへ落とすビアは位置が決まっている。
+    # 自動配線器に任せると混んだ区画で失敗するので、ここで決定的に立てる
+    # （理由は tools/gnd_fanout.py）。
     _place_electronics(board, half, net)
-    if route:
-        _route_electronics(board, half, net)
-    else:
-        # **Freerouting に渡す未配線の基板だけ、GND ファンアウトを先置きする。**
-        #
-        # 手書きルータ（_route_electronics）は自前で GND のビアを立てるので
-        # ここでは呼ばない。詳しくは tools/gnd_fanout.py。
-        gnd_fanout.place(board)
+    gnd_fanout.place(board)
 
     # 取付穴は**もう開けない。**
     #
@@ -838,12 +476,10 @@ def build(half, keys, route=True):
     # 基準電位が連続していることの価値が大きい。**
     _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
 
-    OUT.mkdir(exist_ok=True)
-    if route:
-        path = OUT / f"hhkb_split_{half}.kicad_pcb"
-    else:
-        (OUT / "unrouted").mkdir(exist_ok=True)
-        path = OUT / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
+    # **未配線のまま pcb/unrouted/ に出す。**
+    # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。
+    (OUT / "unrouted").mkdir(parents=True, exist_ok=True)
+    path = OUT / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(path))
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
@@ -851,10 +487,9 @@ def build(half, keys, route=True):
 
 
 def main():
-    route = "--no-route" not in sys.argv
     keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
     for half, keys in (("left", keys_l), ("right", keys_r)):
-        path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys, route)
+        path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys)
         print(f"{half:5s} 基板 {w:7.2f} x {h:6.2f}mm  "
               f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}（不要）")
         print(f"      行列 {rows} 行 × {cols} 列 / ネット {n_net} 本")
