@@ -459,3 +459,34 @@ def test_the_battery_does_not_sit_under_the_board(name):
         f"{name}: 電池の前端 y={batt_front:.1f} が基板の後端 y={pcb_rear:.1f} "
         f"より前にある。**基板裏の露出ランドと電池の外装が触れうる。**"
         f"電池を後ろへ戻すか、ランドを表面へ移すこと")
+
+
+def test_the_zero_degree_state_is_actually_level():
+    """「0°」の脚を差したとき、前後の接地高さが等しいこと。
+
+    **ゴム足は座ぐりに沈み、チルト脚は沈まない。**接地までの高さは
+    ゴム足が（厚み − 座ぐり）、チルト脚が全高。ここを揃えないと
+    「0°」でも傾く。
+
+    `FOOT_BASE_H = 2.0`（＝ゴム足の厚みそのもの）と置いていたため、
+    **後ろが 0.6mm 高く、打鍵面が 7.3° ではなく 7.71° になっていた**
+    （2026-08-08 に発見）。傾斜は動かしてはならない値。
+    """
+    import math
+
+    from gen_case import (FOOT_BASE_H, RUBBER_INSET, RUBBER_RECESS, RUBBER_T,
+                          foot_height)
+    from gen_plate import plate_positions
+
+    front = RUBBER_T - RUBBER_RECESS
+    rear = foot_height(plate_positions(HALVES["left"])[1][1], 0.0)
+    assert rear == pytest.approx(front, abs=1e-9), (
+        f"「0°」で前 {front}mm / 後 {rear}mm と食い違っている。"
+        f"FOOT_BASE_H はゴム足の**接地までの高さ**（厚み − 座ぐり）に揃えること")
+
+    # 念のため、傾きに直したときの誤差も見る
+    for name in ("left", "right"):
+        _, (_w, h) = plate_positions(HALVES[name])
+        lever = h - RUBBER_INSET * 2
+        err = math.degrees(math.atan((rear - front) / lever))
+        assert abs(err) < 0.05, f"{name}: 「0°」なのに {err:+.2f}° 傾いている"
