@@ -23,9 +23,36 @@ import pcbnew
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import daughterboard_netlist  # noqa: E402
 from gen_pcb import (  # noqa: E402
-    CORNER_R, JLC, KICAD_FP, TRACK_W, _apply_jlcpcb_rules, _load,
-    _rounded_rect_outline, _track, _via,
+    CORNER_R, JLC, KICAD_FP, TRACK_W, VIA_D, VIA_DRILL, _apply_jlcpcb_rules,
+    _load, _rounded_rect_outline,
 )
+
+def _track(board, p1, p2, layer, net):
+    """配線を 1 本引く。
+
+    **かつては gen_pcb にあった。**本体基板が Freerouting に移ったとき
+    一緒に消してしまい、子基板の生成が壊れた（誰も再生成していなかったので
+    しばらく気づかなかった）。**いま使うのは子基板だけ**なのでここへ移した。
+    """
+    t = pcbnew.PCB_TRACK(board)
+    t.SetStart(p1)
+    t.SetEnd(p2)
+    t.SetWidth(pcbnew.FromMM(TRACK_W))
+    t.SetLayer(layer)
+    t.SetNet(net)
+    board.Add(t)
+
+
+def _via(board, pos, net):
+    """ビアを 1 個立てる。上の _track と同じ理由でここにある。"""
+    v = pcbnew.PCB_VIA(board)
+    v.SetPosition(pos)
+    v.SetWidth(pcbnew.FromMM(VIA_D))
+    v.SetDrill(pcbnew.FromMM(VIA_DRILL))
+    v.SetNet(net)
+    board.Add(v)
+    return v
+
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "pcb"
@@ -39,6 +66,7 @@ DB_W, DB_D = 21.0, 32.0
 DB_BOSS_POS = [(-8.0, -13.5), (8.0, 13.5)]
 
 XIAO_FP = (ROOT / "pcb/lib/hhkb_split.pretty", "XIAO_nRF52840")
+
 FFC_FP = ("Connector_FFC-FPC", "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal")
 CAP_FP = ("Capacitor_SMD", "C_0805_2012Metric")
 MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")
@@ -67,6 +95,10 @@ def build():
 
     # XIAO。USB は CAD の +Y（奥）を向く。フットプリントの y=-7.62 側が
     # USB 端なので、回転させずに置けばそのまま奥を向く。
+    #
+    # **中央に置く。**奥へ寄せてアンテナを本体基板の下から出す案を検討したが、
+    # USB の隙間 2.9mm が要るうえ奥側の取付穴が入らなくなり（帯 2.90mm、
+    # M2 は 4.4mm 必要）、得られるのは 1.1mm だけだった。open-gaps #23。
     x = _load(*XIAO_FP)
     x.SetPosition(to_kicad(0, 0))
     x.SetReference("U_MCU")

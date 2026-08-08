@@ -230,3 +230,65 @@ def test_the_case_is_no_deeper_than_it_has_to_be():
     assert total <= DEPTH_FULL + 6.0, (
         f"奥行 {total:.1f}mm が実機 {DEPTH_FULL}mm より "
         f"{total - DEPTH_FULL:.1f}mm 深い。コブを見直すこと")
+
+
+def test_the_antenna_record_cannot_be_silently_deleted():
+    """アンテナの件の記録が、測らないまま消されていないこと。
+
+    子基板の XIAO のアンテナは、上 4.09mm に本体基板の GND ベタ、
+    下 1.6mm に子基板の GND ベタ、横 0.5mm に FFC コネクタがある。
+    チップアンテナの指針（全層 5〜10mm の禁止域）を満たしていない。
+    **有効な対策が見つからず、実測で判断すると決めた。**
+
+    この検査が守るのは「**測る前に記録だけ消える**」こと。
+    消してよいのは Task C3 の §6-3 で実測し、結果を書いたときだけ。
+    """
+    doc = (Path(__file__).resolve().parent.parent
+           / "docs/hardware/open-gaps.md").read_text()
+    open_marker = "## 23. ★未解決★ アンテナが地板に挟まれている" in doc
+    measured = "アンテナの実測結果" in doc
+    assert open_marker or measured, (
+        "アンテナの件（open-gaps #23）の記録が消えている。\n"
+        "  実測して結果を書いたなら、見出しに「アンテナの実測結果」を\n"
+        "  含む節を残すこと。測っていないなら #23 を戻すこと")
+
+
+def test_fabrication_output_is_blocked_while_the_antenna_is_unresolved():
+    """**アンテナを測る前に、製造ファイルを出していないこと。**
+
+    アンテナの劣化は組み上げてからでないと測れず、組み上げた頃には
+    基板は発注済みになる。**「動かしてみたら通信できない」が最悪の結末。**
+
+    そこで「発注しようとした瞬間」に止める。ガーバーやドリルの出力が
+    存在するのに #23 が未解決なら、ここで落ちる。
+
+    文書に書くだけでは埋もれる。実際この案件では、電源スイッチが
+    「ケースを開けないと操作できない場所」にあるまま、DRC 0 件・
+    検査 264 件すべて緑で進んでいた。
+    """
+    root = Path(__file__).resolve().parent.parent
+    doc = (root / "docs/hardware/open-gaps.md").read_text()
+    if "## 23. ★未解決★ アンテナが地板に挟まれている" not in doc:
+        return                      # 解決済み。何も止めない
+    fab = sorted(
+        str(q.relative_to(root))
+        for pat in ("**/*.gbr", "**/*.gtl", "**/*.gbl", "**/*.drl", "**/*.gm1")
+        for q in root.glob(pat)
+        if ".superpowers" not in str(q))
+    assert not fab, (
+        "\n"
+        "  ★ アンテナを測る前に製造ファイルが出ている ★\n"
+        f"  {fab[:5]}\n"
+        "\n"
+        "  子基板のアンテナは上下を地板に挟まれており、チップアンテナの\n"
+        "  指針を満たしていない（open-gaps #23）。有効な対策が無く、\n"
+        "  **実測で判断すると決めた。まだ測っていない。**\n"
+        "\n"
+        "  発注前にやること:\n"
+        "    1. Task C3 の §6-3 で RSSI を測る\n"
+        "       （①単体 →②＋子基板 →③＋ケーブル →④＋組み立て を\n"
+        "         **同じ日に続けて**。日を分けると比較にならない）\n"
+        "    2. 左右 20〜40cm・手を鍵盤に乗せて高速打鍵し、切れないか見る\n"
+        "\n"
+        "  測れないまま発注すると決めたなら、その判断を open-gaps #23 に\n"
+        "  書いてから、この検査を消すこと。**黙って消さないこと。**\n")
