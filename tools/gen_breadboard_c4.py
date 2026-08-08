@@ -81,6 +81,9 @@ LINKS = (
     ("ジャンパ（GND → XIAO の GND）", (12, "e"), (2, "j"), "wire"),
     ("ジャンパ（タップ → XIAO の D0）", (17, "e"), (1, "b"), "wire"),
     ("電池 −（黒）", None, (12, "a"), "wire"),
+    # 測定 B のときだけ挿す。1kΩ を迂回して起動させ、スリープしてから抜く。
+    # 1kΩ を入れたままでは起動電流（2.2mA）を流せずレールが 1.35V に落ちる。
+    ("起動用の短絡ジャンパ（測定 B）", (29, "d"), (27, "e"), "wire"),
 )
 LINK = {name: (p, q) for name, p, q, _kind in LINKS}
 
@@ -247,6 +250,15 @@ for nm in ("ジャンパ（シャント → スイッチ）", "ジャンパ（�
     (p, q) = LINK[nm]
     wire([(col(p[0]), row(p[1])), (col(q[0]), row(q[1]))], RED, halo=False)
 
+# 起動用の短絡ジャンパは破線。常設ではない。
+_p, _q = LINK["起動用の短絡ジャンパ（測定 B）"]
+a(f'<path d="M {col(_p[0])} {row(_p[1])} L {col(_q[0])} {row(_q[1])}" fill="none" '
+  f'stroke="{RED}" stroke-width="2.2" stroke-dasharray="6 4"/>')
+for _h in (_p, _q):
+    a(f'<circle cx="{col(_h[0])}" cy="{row(_h[1])}" r="4" fill="none" '
+      f'stroke="{RED}" stroke-width="1.8"/>')
+txt(col(28), 476, "破線 = 起動用の短絡（測定 B のときだけ挿す）", RED, 10.5, "end")
+
 # ================= 溝をまたぐ 3 本 =================
 # 左端を回り込ませる。3 本は入れ子になっていて、交差するのは D0 の 2 か所だけ。
 _p, _q = LINK["ジャンパ（GND → XIAO の GND）"]
@@ -293,7 +305,7 @@ for i, t in enumerate(PROBE_ROWS):
 
 # ================= 下段: 要点 と 部品表 =================
 LY = 700
-a(f'<rect x="24" y="{LY-26}" width="556" height="160" rx="6" fill="#fafbfc" '
+a(f'<rect x="24" y="{LY-26}" width="556" height="192" rx="6" fill="#fafbfc" '
   'stroke="#dde1e5" stroke-width="1.2"/>')
 txt(44, LY, "要点", "#111", 14, "start")
 for i, t in enumerate((
@@ -302,7 +314,8 @@ for i, t in enumerate((
         "⑥ 100µF は極性あり。＋を 14 列、−を 12 列へ。無いと 1kΩ で測れない。",
         "② スイッチは中央（24 列）が共通。ON 側はテスターの導通で確かめる。",
         "・分圧のタップはダイオードの手前。USB 中も電池電圧そのものが読める。",
-        "・測定 A のときだけ USB を挿す。Mac の充電器は必ず抜くこと。")):
+        "・測定 A のときだけ USB を挿す。Mac の充電器は必ず抜くこと。",
+        "・破線は測定 B のときだけ挿す。1kΩ のままでは起動できない（§6 の警告 1）。")):
     txt(44, LY + 26 + i * 22, t, "#3c4147", 12.5, "start", bold=False)
 
 a(f'<rect x="600" y="{LY-26}" width="386" height="192" rx="6" fill="#fafbfc" '

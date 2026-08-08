@@ -303,6 +303,41 @@ def test_fabrication_output_requires_an_accepted_antenna_risk():
         "  **この検査を消して通すこと。それは記録を消すのと同じ。**\n")
 
 
+def test_the_prototype_shield_sleeps_like_the_production_one():
+    """**試作シールドのスリープ設定が本番と揃っていること。**
+
+    Task C4 の測定 B で確かめたいのは「スリープ時の消費電流」で、
+    それは `CONFIG_ZMK_SLEEP` があるかどうかで決まる。ZMK の既定は `n` で、
+    **無いと deep sleep に入らない。**
+
+    **実際にこれで測り損ねた（2026-08-09）。**治具に `CONFIG_ZMK_SLEEP` が
+    無いまま測定 B をやり、2.0〜2.5mA から一向に下がらなかった。
+    測っていたのは「起きたままの電流」で、**測りたかった値ではなかった。**
+    そのまま信じれば電池寿命を 38 日と見積もり、電源方式ごと捨てていた。
+
+    `CONFIG_ZMK_IDLE_SLEEP_TIMEOUT`（いつ寝るか）は揃えない。
+    **スリープ電流を変えない値**なので、台の上で 30 分待つ必要が無い。
+    ただし**どちらにも書いてあること**は要る。書き忘れとの区別がつかないため。
+    """
+    shields = Path(__file__).resolve().parent.parent / "config/boards/shields"
+    confs = {f: f.read_text() for f in sorted(shields.rglob("*.conf"))}
+    assert confs, "*.conf がどこにも無い。検査が空回りしている"
+
+    # 電池で動くのは split の 4 枚だけ。USB 給電の治具は対象外。
+    battery = {f: t for f, t in confs.items() if "_split_" in f.name}
+    assert len(battery) == 4, f"split の conf が 4 枚見つからない: {sorted(f.name for f in battery)}"
+
+    bad = []
+    for f, text in sorted(battery.items()):
+        if "CONFIG_ZMK_SLEEP=y" not in text:
+            bad.append(f"{f.name}: CONFIG_ZMK_SLEEP=y が無い（既定は n。deep sleep に入らない）")
+        if "CONFIG_ZMK_IDLE_SLEEP_TIMEOUT=" not in text:
+            bad.append(f"{f.name}: CONFIG_ZMK_IDLE_SLEEP_TIMEOUT が無い")
+    assert not bad, (
+        "治具と本番でスリープの設定が食い違っている。C4 の測定 B が\n"
+        "「起きたままの電流」を測ることになる:\n  " + "\n  ".join(bad))
+
+
 def test_the_prototype_shield_uses_the_production_spi_speed():
     """**試作シールドの SPI 転送速度が本番と揃っていること。**
 
