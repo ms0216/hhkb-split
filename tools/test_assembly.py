@@ -61,3 +61,59 @@ def test_the_check_actually_detects_a_collision(half):
             "子基板を 15mm 背高にしても検出できない。検査が効いていない"
     finally:
         envelopes.DB_STACK_H = original
+
+
+# --------------------------------------------------------------------------
+# 電源スイッチが背面パネルに収まるか
+# --------------------------------------------------------------------------
+
+def rear_panel_gaps(half):
+    """背面パネルぞいの、障害物が無い x 区間と、使える奥行を返す。
+
+    コブの中には電池と子基板が入っていて、どちらも背面壁の 1〜2mm 手前まで
+    来ている。**スイッチを置けるのは、その左右の隙間だけ。**
+    """
+    from gen_case import (BUMP_DEPTH, DB_W, WALL, battery_x_center,
+                          daughterboard_x_center)
+    from gen_case import BATT_X
+    from gen_plate import halves
+    from interface import plate_positions
+    from matrix import keymap_order
+    _, (w, _h) = plate_positions(keymap_order(halves()[half]))
+    bx, dx = battery_x_center(half, w), daughterboard_x_center(half, w)
+    obstacles = sorted([(bx - BATT_X / 2, bx + BATT_X / 2),
+                        (dx - DB_W / 2, dx + DB_W / 2)])
+    gaps, cur = [], -w / 2 + WALL
+    for a, b in obstacles:
+        if a > cur:
+            gaps.append((cur, a))
+        cur = max(cur, b)
+    if w / 2 - WALL > cur:
+        gaps.append((cur, w / 2 - WALL))
+    return gaps, BUMP_DEPTH - WALL
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_power_switch_fits_on_the_rear_panel(half):
+    """電源スイッチが背面パネルの空きに収まること。
+
+    **これは目で見て判断してはいけない。**左半分は電池と子基板の間に
+    10.6mm しか無く、電池は左端まで 0.2mm・子基板は右端まで 0.8mm しか
+    余っていないので、どちらもずらせない。買ってから入らないと分かると、
+    リードタイムがもう一往復する（open-gaps #17 / #18）。
+
+    買う製品を変えたら envelopes.py の SW_PWR_W / _D / _H を差し替える。
+    それだけでここが判定し直す。
+    """
+    from envelopes import SW_PWR_D, SW_PWR_H, SW_PWR_W
+    from gen_case import BATT_H
+    gaps, depth = rear_panel_gaps(half)
+    widest = max(b - a for a, b in gaps)
+    assert SW_PWR_W <= widest, (
+        f"{half}: スイッチの幅 {SW_PWR_W}mm が背面の空き {widest:.1f}mm に入らない\n"
+        f"  空き区間: {[f'{a:+.1f}..{b:+.1f}' for a, b in gaps]}")
+    assert SW_PWR_D <= depth, (
+        f"{half}: スイッチの奥行 {SW_PWR_D}mm がコブの内寸 {depth:.1f}mm を超える")
+    # 高さはコブの内部（電池が入る高さ）に収まること
+    assert SW_PWR_H <= BATT_H, (
+        f"{half}: スイッチの高さ {SW_PWR_H}mm がコブの内部 {BATT_H}mm を超える")
