@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from circuit import netlist  # noqa: E402
+from circuit import board_refs, netlist  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,9 +41,11 @@ def board_nets(half):
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_every_declared_part_is_on_the_board_or_listed_as_pending(half):
     """宣言した部品が、基板にあるか PENDING に書いてあるかのどちらかであること。"""
-    declared = {ref for ref, _, _ in netlist(half)}
-    # 電池線は BT1 を 2 つのランド（BT1_+ / BT1_-）として置いている
-    on_board = {r.split("_")[0] if r.startswith("BT1_") else r
+    # **基板上の名前で比べる。**リード線で繋ぐ部品（電池・電源スイッチ）は
+    # ランド 2 個に分かれるので、宣言側を circuit.board_refs で展開する。
+    declared = {b for ref, kind, pins in netlist(half)
+                for b in board_refs(ref, kind, pins)}
+    on_board = {r
                 for r in board_parts(half)}
     missing = declared - on_board - PENDING
     assert not missing, (
@@ -58,9 +60,9 @@ def test_nothing_on_the_board_is_undeclared(half):
     こちら向きも要る。基板だけに部品を足すと、回路の検査（パスコンの数など）
     をすり抜ける。
     """
-    declared = {ref for ref, _, _ in netlist(half)}
-    # 電池線は BT1 を 2 つのランド（BT1_+ / BT1_-）に分けて置いている
-    extra = {r.split("_")[0] if r.startswith("BT1_") else r
+    declared = {b for ref, kind, pins in netlist(half)
+                for b in board_refs(ref, kind, pins)}
+    extra = {r
              for r in board_parts(half)
              if not r.startswith(("H", "ST"))} - declared
     assert not extra, f"{half}: 基板にあるが回路に宣言が無い部品 {sorted(extra)}"

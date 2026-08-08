@@ -79,6 +79,21 @@ def _shift_register(ref, cols, first_col, serial_in, serial_out):
     return (ref, "74HC595", pins)
 
 
+# ケースの中で配線し、基板側はランド 2 個で受ける部品。
+#
+# **生成側（gen_pcb）と検査側の両方が使う。**別々に持つと、部品を足した
+# ときに片方だけ直して静かにずれる（実際、電源スイッチをランドに変えた
+# とき、検査 6 件が BT1 しか知らずに落ちた）。
+WIRE_PAD_KINDS = {"battery_holder", "wire_pads"}
+
+
+def board_refs(ref, kind, pins):
+    """その部品が基板上で名乗る参照名。ランド 2 個の部品は 2 つに分かれる。"""
+    if kind in WIRE_PAD_KINDS:
+        return [f"{ref}_{p}" for p in pins]
+    return [ref]
+
+
 def netlist(half):
     """その半分の回路。[(参照名, 種類, {端子: ネット}), ...] を返す。"""
     n_cols = 6 if half == "left" else 9
@@ -87,7 +102,11 @@ def netlist(half):
         ("BT1", "battery_holder", {"+": "VBATT_RAW", "-": "GND"}),
         # 参照名は SW_PWR。**SW1 にするとキースイッチの SW1 と衝突する**
         # （conformance の検査が初回に見つけた）。
-        ("SW_PWR", "slide_switch", {"1": "VBATT_RAW", "2": "VBATT_SW"}),
+        # **基板には載らない。**背面のパネルに付けて配線で繋ぐ。基板側は
+        # ランド 2 個で受ける（電池ボックスと同じ形）。基板の後端から
+        # ケース背面まで 23.3mm あり、基板上のどこに置いても手が届かない。
+        # 経緯は docs/hardware/open-gaps.md #17。
+        ("SW_PWR", "wire_pads", {"1": "VBATT_RAW", "2": "VBATT_SW"}),
         # ショットキー 1 個が「電池への充電を止める」と「USB を挿すと電池を
         # 自動で切り離す」の 2 役を兼ねる。P-MOSFET は不要。
         ("D_PWR", "schottky", {"A": "VBATT_SW", "K": "V3V3"}),

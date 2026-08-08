@@ -31,6 +31,7 @@ from interface import (
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
 from bands import BAND_Y                                           # noqa: E402
+from circuit import WIRE_PAD_KINDS                                 # noqa: E402
 import gnd_fanout                                                   # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
@@ -250,10 +251,13 @@ ELEC_FP = {
     "ffc_12p": ("Connector_FFC-FPC",
                 "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal"),
     # スライドスイッチは 9.78x4.72mm。段の間の 9.25mm 帯に収まる
-    "slide_switch": ("Button_Switch_SMD",
-                     "SW_DIP_SPSTx01_Slide_9.78x4.72mm_W8.61mm_P2.54mm"),
+    # **電源スイッチは基板に載らない。**背面のパネルに付けて配線で繋ぐ。
+    # 基板の後端から背面まで 23.3mm あり、基板上のどこに置いても手が届かない
+    # （open-gaps #17）。基板側はランド 2 個で受ける。
+    "wire_pads": ("TestPoint", "TestPoint_Pad_2.0x2.0mm"),
     "battery_holder": ("TestPoint", "TestPoint_Pad_2.0x2.0mm"),
 }
+
 
 # 参照名 → (帯の番号, 帯の中での x)。**手前の帯に電源、奥の帯に論理。**
 # 電源スイッチは手前＝手が届く側に置く。
@@ -322,12 +326,16 @@ def _place_electronics(board, half, net):
         band, x = spec[0], spec[1]
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
-        # 電池線は 2 箇所のランドとして置く
-        n = 2 if kind == "battery_holder" else 1
+        # **ケースの中で配線する部品は、基板側をランド 2 個で受ける。**
+        # 電池ボックスと電源スイッチがこれ。どちらもリード線が生えていて、
+        # 基板の上には載らない（電源スイッチは背面のパネルに付く。
+        # 基板の後端から背面まで 23.3mm あり、基板上には置けない）。
+        pin_order = list(pins)
+        n = 2 if kind in WIRE_PAD_KINDS else 1
         for k in range(n):
             fp = _load(KICAD_FP / f"{lib}.pretty", name)
             fp.SetPosition(to_kicad(x + k * 4.0, BAND_Y[band]))
-            fp.SetReference(ref if n == 1 else f"{ref}_{'+-'[k]}")
+            fp.SetReference(ref if n == 1 else f"{ref}_{pin_order[k]}")
             fp.SetValue(kind)
             board.Add(fp)
             fp.Flip(fp.GetPosition(), False)
@@ -339,8 +347,7 @@ def _place_electronics(board, half, net):
             # ここで揃えておけば、部品ごとの手当て（dy）が要らなくなる。
             _center_courtyard_in_band(fp, band)
             if n == 2:
-                pad = fp.Pads()[0]
-                pad.SetNet(net(pins["+" if k == 0 else "-"]))
+                fp.Pads()[0].SetNet(net(pins[pin_order[k]]))
         if n == 1:
             fp = board.FindFootprintByReference(ref)
             for pin, netname in pins.items():

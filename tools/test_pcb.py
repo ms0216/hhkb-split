@@ -544,7 +544,7 @@ def _courtyard_bbox(blk):
 
 # 電子部品の参照名。**接頭辞で拾わない。**`D` や `SW` で走査すると
 # ダイオード 61 個とスイッチ 61 個を巻き込む（過去 3 回やった）。
-ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR|J_DB|BT1_[+-]")
+ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR_\d|J_DB|BT1_[+-]")
 
 
 def _expected_electronics(half):
@@ -554,15 +554,15 @@ def _expected_electronics(half):
     circuit.py は基板の生成側も読んでいる宣言なので、部品が増えれば
     検査も自動で追従する。個数の下限を手で書くと、そこが嘘になる。
     """
-    from circuit import netlist
+    from circuit import board_refs, netlist
     refs = set()
-    for ref, kind, _pins in netlist(half):
+    for ref, kind, pins in netlist(half):
         if kind in ("keyswitch", "diode"):
             continue          # マトリクスの 61 個は帯の外
-        if kind == "battery_holder":
-            refs |= {f"{ref}_+", f"{ref}_-"}   # ランド 2 箇所として置かれる
-        else:
-            refs.add(ref)
+        # **展開規則は circuit.board_refs に一本化してある。**ここに
+        # 「battery_holder だけ 2 個」と書いていたため、電源スイッチを
+        # ランドに変えたとき検査が追従できなかった。
+        refs |= set(board_refs(ref, kind, pins))
     return refs
 
 
@@ -747,3 +747,32 @@ def test_both_halves_can_use_the_same_ffc_cable():
         f"1 種類のケーブルで足りない: "
         + " / ".join(f"{h} {v:.1f}mm" for h, v in need.items())
         + f" > {FFC_LENGTH}mm")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_no_user_operated_part_is_sealed_inside(half):
+    """使用者が操作する部品が、基板の上に載っていないこと。
+
+    **DRC が 0 でも、手が届かない場所にある部品は検出されない。**
+    電源スイッチを帯（段と段の間・基板の裏面）に置いていて、上は
+    プレートとキーキャップ、下はケースの床という状態になっていた
+    （open-gaps #17）。ケースを開けないと入切できない。
+
+    基板の後端からケース背面までは 23.3mm あり、**基板の上のどこに
+    置いても背面には出せない。**だから操作する部品は基板に載せず、
+    ケースのパネルに付けて配線で繋ぐ（基板側はランド 2 個）。
+
+    ここで見るのは「回路に宣言された操作部品が、基板上の実体を
+    持っていないこと」。増えたときに気づけるようにしておく。
+    """
+    from circuit import netlist
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    refs = {r for r, _ in _footprint_blocks(txt)}
+    # 使用者が指で触る部品。**キースイッチは除く**（触るのが仕事）。
+    operated = {ref for ref, kind, _ in netlist(half)
+                if kind in ("slide_switch", "push_button", "rotary_encoder")}
+    on_board = sorted(operated & refs)
+    assert not on_board, (
+        f"{half}: 使用者が操作する部品が基板に載っている: {on_board}\n"
+        "  基板の上には手が届かない（プレートとキーキャップの下）。\n"
+        "  ケースのパネルに付けて配線で繋ぐこと（kind を wire_pads にする）")
