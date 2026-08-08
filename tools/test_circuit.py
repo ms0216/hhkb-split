@@ -20,7 +20,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import (  # noqa: E402
     BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
-    MCU_MARGIN, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF, daughterboard_netlist,
+    MCU_MARGIN, MCU_V_ABSMAX, MCU_V_MAX, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF,
+    daughterboard_netlist,
     netlist,
 )
 
@@ -151,6 +152,23 @@ def test_the_mcu_still_runs_down_to_the_declared_cutoff():
     assert v >= MCU_V_MIN + MCU_MARGIN * 0.99, (
         f"電池 {BATT_V_MIN:.2f}V まで使うと マイコンへ {v:.2f}V しか届かない"
         f"（下限 {MCU_V_MIN}V）")
+
+
+def test_the_rail_never_exceeds_what_the_mcu_can_take():
+    """新品の電池でも、マイコンに入る電圧が上限を超えないこと。
+
+    **この検査が無かった。**変異検査で `BATT_CELLS` を 2→3 に書き換えても
+    271 件が全部通った。3 本なら新品で 4.95V、ショットキーを引いて 4.55V が
+    XIAO の 3V3 ピン＝ nRF52840 の VDD へ直接入る（絶対最大 3.9V）。
+    **一発で壊れる。**
+
+    それまであった `test_power_is_two_aa_cells` は電池の**寸法**を見て
+    いただけで、本数も電圧も見ていなかった。
+    """
+    v = BATT_V_MAX - SCHOTTKY_VF
+    assert v <= MCU_V_MAX, (
+        f"新品の電池でマイコンへ {v:.2f}V 入る。推奨上限 {MCU_V_MAX}V、"
+        f"絶対最大 {MCU_V_ABSMAX}V。電池の本数か降圧を見直すこと")
 
 
 def test_the_cutoff_is_not_quietly_optimistic():
