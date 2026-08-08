@@ -20,6 +20,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import (  # noqa: E402
     BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
+    BATT_ESR_END, BLE_TX_CURRENT,
     COL_DRIVER_DROP, IC_SUPPLY_RANGE, MATRIX_DIODE_IR, MATRIX_DIODE_VF,
     ROW_PULLDOWN,
     MCU_MARGIN, MCU_V_ABSMAX, MCU_V_MAX, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF,
@@ -457,3 +458,23 @@ def test_ghosting_survives_a_full_row_of_simultaneous_presses():
         assert drop <= margin, (
             f"{half}: 行の {cols} 個を同時に押すと逆漏れで {drop * 1000:.0f}mV "
             f"下がる。余裕は {margin * 1000:.0f}mV しかない。**ゴーストする。**")
+
+
+def test_the_margin_covers_the_transmit_droop():
+    """BLE 送信中の電圧降下を、マイコンの余裕が覆っていること。
+
+    `MCU_MARGIN = 0.1V` は根拠なく置かれていた値だった。**何を覆うための
+    余裕なのかが書かれていない。**送信中の降下がこれを超えると、
+    打ち止めの手前でブラウンアウトする。
+
+    降下は「電流 × 電池の内部抵抗」で決まり、**バルクコンデンサでは
+    消せない**（コンデンサが効くのは τ=R×C より短い間だけ。送信バーストは
+    数百µs、τ は 40〜150µs なので、容量を倍にしても 3mV しか変わらない）。
+    文書には「バルクを入れると使い切れる領域が広がる」と書いてあったが、
+    **これは誤り**（2026-08-08 に訂正）。
+    """
+    droop = BLE_TX_CURRENT * BATT_ESR_END
+    assert droop <= MCU_MARGIN, (
+        f"送信中に {droop * 1000:.0f}mV 下がるのに、余裕は "
+        f"{MCU_MARGIN * 1000:.0f}mV しかない。**打ち止めの手前で落ちる。**"
+        f"余裕を増やすか、打ち止めを上げること")
