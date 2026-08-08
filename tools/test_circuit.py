@@ -277,6 +277,12 @@ def test_the_rules_actually_bite():
          lambda ps: [(r, k, {**p, "1": "VBATT_RAW"} if r == "R_HI" else p)
                      for r, k, p in ps],
          test_the_divider_sits_behind_the_power_switch),
+        # 文書を写しただけの表は静かにずれる。**回路の側を動かしても
+        # 落ちること**をここで確かめる（文書を壊す向きは別に確認済み）。
+        ("ケーブルの 3 番を SCK から MOSI へ変える",
+         lambda ps: [(r, k, {**p, "3": "SPI_MOSI"} if r == "J_DB" else p)
+                     for r, k, p in ps],
+         lambda _half: test_the_cable_pinout_table_matches_the_circuit()),
     ]
     missed = []
     for label, break_it, rule in checks:
@@ -325,3 +331,38 @@ def test_the_firmware_can_be_recovered_without_opening_the_case():
     for ref, kind, pins in daughterboard_netlist():
         assert kind != "tact_switch", \
             "XIAO は RST を出していないので、押しボタンは繋げられない"
+
+
+def test_the_cable_pinout_table_matches_the_circuit():
+    """決定文書の FFC ピン表が、回路の宣言と一致していること。
+
+    **文書の表は 12 本すべてが旧い並び順のままだった。**動作には影響が
+    無かった（ファームのピン割り当ては別に合っていた）が、配線を追う人を
+    確実に間違えさせる。しかも表は「両端を GND にしてある」と書いており、
+    実際は 1 番が CS だった。
+
+    写しただけの表は静かにずれる。**機械で照合する。**
+    """
+    import re as _re
+
+    doc = (Path(__file__).resolve().parent.parent
+           / "docs/hardware/decisions/2026-08-07-daughterboard.md").read_text()
+    rows = _re.findall(
+        r"^\|\s*(\d+)\s*\|\s*`([A-Z0-9_]+)`\s*\|\s*([A-Za-z0-9]+)\s*\|",
+        doc, _re.M)
+    assert len(rows) == 12, (
+        f"文書の FFC ピン表が読めない（{len(rows)} 行しか取れなかった）。"
+        "表の形を変えたなら、この検査も直すこと")
+
+    # **BOARDS 経由で読む。**モジュール直下の netlist を掴むと、
+    # test_the_rules_actually_bite の差し替えが効かない。
+    j_db = next(p for r, _, p in BOARDS["left"]() if r == "J_DB")
+    mcu = next(p for r, _, p in daughterboard_netlist() if r == "U_MCU")
+
+    for num, net, xiao_pin in rows:
+        assert j_db[num] == net, (
+            f"FFC {num} 番: 文書は {net}、circuit.py は {j_db[num]}")
+        # XIAO のピン列も照合する。**ここがずれると実配線を間違える。**
+        assert mcu.get(xiao_pin) == net, (
+            f"FFC {num} 番: 文書は XIAO の {xiao_pin} と書いているが、"
+            f"circuit.py の {xiao_pin} は {mcu.get(xiao_pin)}（期待 {net}）")
