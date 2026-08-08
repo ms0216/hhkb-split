@@ -345,10 +345,9 @@ def test_the_drc_report_matches_the_current_board(half):
         f"python3 tools/drc.py を実行すること")
 
 
-# **まだ配線が終わっていない基板。**電子部品を段の間に置き、In2.Cu で
-# 結び始めたところ。ここに名前がある間は発注できない。
-# 空になったら、その基板は完成している。
-WIP_BOARDS = {"left", "right"}
+# **まだ配線が終わっていない基板。**ここに名前がある間は発注できない。
+# **空 = 3 基板すべて DRC 違反 0・未配線 0。**
+WIP_BOARDS = set()
 
 
 def test_the_unfinished_boards_are_declared():

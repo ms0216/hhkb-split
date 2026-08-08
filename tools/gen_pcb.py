@@ -31,6 +31,7 @@ from interface import (
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
 from bands import BAND_Y                                           # noqa: E402
+import gnd_fanout                                                   # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -385,17 +386,25 @@ PLACE = {
         # →(と R_HI)→ R_LO →(VBATT_SENSE)→ J_DB。
         # 以前は R_HI/R_LO が SW_PWR と D_PWR の間にあり、VBATT_SW が
         # 2 部品を飛び越して他のネットと交差していた。
+        # **J_DB はダイオード列を避けた隙間に置く。**
+        #
+        # 上段キーのダイオードは帯に 1.75mm 食い込み（y 61.55..66.25）、
+        # 19.05mm ピッチで並ぶ。帯の部品の中で J_DB だけ背が高く
+        # （y 65.175〜）、以前の x がちょうど D3 の列と重なっていた。
+        # Freerouting に通したときの短絡・コートヤード重なり・ROW0 未配線は
+        # 全部これが原因だった（実測）。D3..D4 の隙間へ動かし、玉突きで
+        # C_BULK・C_MCU も少しだけ空ける。
         "BT1": (0, -62.0), "SW_PWR": (0, -50.0), "D_PWR": (0, -40.0),
         "R_HI": (0, -32.0), "R_LO": (0, -27.0),
-        "J_DB": (0, -16.0),
-        "C_BULK": (0, -2.0), "C_MCU": (0, 6.0),
+        "J_DB": (0, -6.9),
+        "C_BULK": (0, 2.5), "C_MCU": (0, 7.0),
         "U1": (0, 13.0), "C_U1": (0, 26.0),
     },
     "right": {
         "BT1": (0, -78.0), "SW_PWR": (0, -66.0), "D_PWR": (0, -56.0),
         "R_HI": (0, -48.0), "R_LO": (0, -43.0),
-        "J_DB": (0, -32.0),
-        "C_BULK": (0, -18.0), "C_MCU": (0, -10.0),
+        "J_DB": (0, -23.5),
+        "C_BULK": (0, -13.0), "C_MCU": (0, -5.0),
         "U1": (0, 4.0), "C_U1": (0, 16.0),
         "U2": (0, 30.0), "C_U2": (0, 42.0),
     },
@@ -782,6 +791,12 @@ def build(half, keys, route=True):
     _place_electronics(board, half, net)
     if route:
         _route_electronics(board, half, net)
+    else:
+        # **Freerouting に渡す未配線の基板だけ、GND ファンアウトを先置きする。**
+        #
+        # 手書きルータ（_route_electronics）は自前で GND のビアを立てるので
+        # ここでは呼ばない。詳しくは tools/gnd_fanout.py。
+        gnd_fanout.place(board)
 
     # 取付穴は**もう開けない。**
     #

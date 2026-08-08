@@ -15,6 +15,7 @@ DSN が 4 層・クリアランス規則・NPTH の keepout・GND ベタ（面�
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from pathlib import Path
 import pcbnew
 
 import boardhash
+import gnd_fanout
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
@@ -82,6 +84,33 @@ def _protect_the_ground_plane(dsn):
     dsn.write_text(txt.replace(old, new, 1))
 
 
+def _strip_gnd(dsn):
+    """GND を DSN から完全に消す。
+
+    **GND は配線対象ではない。**ベタ（In1.Cu）と、配置段階で立てた
+    ファンアウトのビア（tools/gnd_fanout.py）で既に配り終えている。
+
+    「ピンだけ消してネットは残す」ような中途半端なやり方をすると、
+    **Freerouting が NullPointerException で落ちる**（実測。GUI が
+    立ち上がって例外ダイアログが出る）。ネット定義・クラスの一覧・
+    plane 宣言をまとめて消すこと。
+
+    ファンアウトのビアとスタブは `(type protect)` に変える。ネットを
+    持たない固定の障害物として渡すと、Freerouting はそこを避けて
+    配線する。**消してしまうと避けてくれない。**
+    """
+    t = dsn.read_text()
+    t = re.sub(r"\s*\(plane GND \(polygon [\s\S]*?\)\)", "", t)
+    t = re.sub(r"\s*\(net GND\s*\n\s*\(pins [^)]*\)\s*\n\s*\)", "", t)
+    t = re.sub(r"(\(class \S+ [^)]*?)\bGND\b", r"\1", t)
+    t = t.replace("(net GND)(type route)", "(type protect)")
+    if "GND" in t:
+        raise SystemExit(
+            f"{dsn.name}: GND が消しきれていない。DSN の書式が変わった"
+            "可能性がある。残すと Freerouting が NPE で落ちる")
+    dsn.write_text(t)
+
+
 def run(half):
     """未配線の基板を配線し、記録を残して返す。"""
     _check_jar()
@@ -97,7 +126,12 @@ def run(half):
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
     _protect_the_ground_plane(dsn)
+    _strip_gnd(dsn)
 
+    # Freerouting のログは終わりに「N violations」と出すが、これは
+    # protect にしたファンアウトどうしの接触を数えているだけ。
+    # **本当の判定は KiCad の DRC**（tools/drc.py）。ここの数字で
+    # 良否を決めないこと。
     subprocess.run(
         [_java(), "-jar", str(JAR), "-de", str(dsn), "-do", str(ses),
          "-mp", str(PASSES)],
@@ -107,6 +141,17 @@ def run(half):
 
     if not pcbnew.ImportSpecctraSES(board, str(ses)):
         raise SystemExit(f"{half}: SES の取り込みに失敗した")
+
+    # **ファンアウトを立て直す。**
+    #
+    # ImportSpecctraSES は既存の配線を全部作り直すので、配置段階で
+    # 立てたビアが消える（実測: 7 個 → 0 個）。GND は DSN から外して
+    # あるため SES にも入っておらず、ここで復活させないとベタに
+    # 届かないまま残る。
+    #
+    # 位置は gnd_fanout が決定的に決めるので配線前と同じところに戻り、
+    # Freerouting はそこを避けて配線済みなので衝突しない。
+    gnd_fanout.place(board)
 
     # **ゾーンを塗り直す。**
     #
