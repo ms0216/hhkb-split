@@ -8,6 +8,7 @@
 そこの根拠を更新すること。根拠なしにこのファイルを緩めない。
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -292,3 +293,24 @@ def test_fabrication_output_is_blocked_while_the_antenna_is_unresolved():
         "\n"
         "  測れないまま発注すると決めたなら、その判断を open-gaps #23 に\n"
         "  書いてから、この検査を消すこと。**黙って消さないこと。**\n")
+
+
+def test_the_prototype_shield_uses_the_production_spi_speed():
+    """**試作シールドの SPI 転送速度が本番と揃っていること。**
+
+    Task C2-b で確かめたいのは「速い打鍵で列を取りこぼさないか」で、
+    取りこぼしは転送速度で決まる。試作だけ遅くしておくと、
+    **通っても本番の保証にならない。**
+
+    実際に食い違っていた（試作 200kHz / 本番 4MHz）。C2-b を走らせる
+    直前に見つかった。
+    """
+    shields = Path(__file__).resolve().parent.parent / "config/boards/shields"
+    found = {}
+    for f in sorted(shields.rglob("*.overlay")) + sorted(shields.rglob("*.dtsi")):
+        for hit in re.findall(r"spi-max-frequency\s*=\s*<(\d+)>", f.read_text()):
+            found[str(f.relative_to(shields))] = int(hit)
+    assert found, "spi-max-frequency がどこにも無い。検査が空回りしている"
+    assert len(set(found.values())) == 1, (
+        "試作と本番で SPI の転送速度が違う。C2-b の結果を本番へ持ち越せない:\n"
+        + "\n".join(f"  {k}: {v / 1e6:g}MHz" for k, v in sorted(found.items())))

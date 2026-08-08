@@ -59,7 +59,11 @@
 		compatible = "zmk,gpio-595";
 		status = "okay";
 		gpio-controller;
-		spi-max-frequency = <200000>;
+		/* **本番（hhkb_split.dtsi）と同じ 4MHz。**
+		 * C2-b で確かめたいのは「取りこぼさずに列を駆動できるか」で、
+		 * 取りこぼしは転送速度で決まる。ここだけ 200kHz にすると
+		 * **通っても本番の保証にならない。** */
+		spi-max-frequency = <4000000>;
 		reg = <0>;
 		#gpio-cells = <2>;
 		ngpios = <8>;
