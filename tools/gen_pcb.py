@@ -55,7 +55,7 @@ STAB_FP = {11.938: "Stabilizer_Cherry_MX_2.00u", 19.05: "Stabilizer_Cherry_MX_3.
 # 取付穴は feec08b（上ケース方式）で廃止した。基板はプレートとスイッチで
 # 一体になり、上下ケースに挟まれる。ボスは基板の外にある。
 # 定数だけが使われないまま残っていたので消した。
-DIODE_FP = ("Diode_SMD", "D_SOD-123")     # JLCPCB の基本部品 1N4148W が入る
+DIODE_FP = ("Diode_SMD", "D_SOD-123")     # BAT46W（ショットキー）が入る
 
 # ダイオードの置き場所（KiCad 座標・キー中心から mm）と向き。
 #
@@ -489,7 +489,7 @@ def build(half, keys):
                                          ORIGIN[1] - ky + DIODE_OFFSET[1]))
         d.SetOrientationDegrees(DIODE_ANGLE)
         d.SetReference(f"D{i}")
-        d.SetValue("1N4148W")
+        d.SetValue("BAT46W")
         board.Add(d)
         # **Flip は board.Add の後で呼ぶ。** 基板に属していない状態で反転すると
         # segfault する（実際に落とした）。

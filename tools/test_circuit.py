@@ -20,7 +20,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import (  # noqa: E402
     BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
-    IC_SUPPLY_RANGE,
+    COL_DRIVER_DROP, IC_SUPPLY_RANGE, MATRIX_DIODE_IR, MATRIX_DIODE_VF,
+    ROW_PULLDOWN,
     MCU_MARGIN, MCU_V_ABSMAX, MCU_V_MAX, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF,
     daughterboard_netlist,
     netlist,
@@ -414,3 +415,45 @@ def test_the_cable_pinout_table_matches_the_circuit():
         assert mcu.get(xiao_pin) == net, (
             f"FFC {num} 番: 文書は XIAO の {xiao_pin} と書いているが、"
             f"circuit.py の {xiao_pin} は {mcu.get(xiao_pin)}（期待 {net}）")
+
+
+def test_the_matrix_reads_high_at_the_cutoff():
+    """打ち止めの電圧でも、押したキーが High として読めること。
+
+    列 → キー → ダイオード → 行 と流れるので、行に届くのは
+    （レール − 列ドライバの降下 − ダイオードの VF）。
+    nRF52840 の VIH は 0.7 × VDD。**ここを割ると、電池が減ったときに
+    キーが 1 つずつ反応しなくなる。**
+
+    打ち止めをマイコンの下限だけから決めていて、この経路を見ていなかった。
+    """
+    rail = BATT_V_MIN - SCHOTTKY_VF
+    row_high = rail - COL_DRIVER_DROP - MATRIX_DIODE_VF
+    vih = 0.7 * rail
+    assert row_high >= vih, (
+        f"打ち止め（レール {rail:.2f}V）で行が {row_high:.2f}V にしかならない。"
+        f"VIH は {vih:.2f}V。**キーが反応しない。**"
+        f"VF の小さいダイオードにするか、打ち止めを上げること")
+
+
+def test_ghosting_survives_a_full_row_of_simultaneous_presses():
+    """同じ行を全部同時に押しても、逆漏れでゴーストしないこと。
+
+    **ダイオード本来の役目がここ。**押されていない列側のダイオードは
+    逆バイアスされ、その漏れが行の High を引き下げる。同じ行の同時押しが
+    増えるほど足し算になる。
+
+    ショットキーはシリコンより逆漏れが桁違いに大きい。**VF だけを見て
+    ショットキーに替えると、ここを崩す**（一度 SD103AW でやりかけた）。
+    """
+    from matrix import shape
+
+    rail = BATT_V_MIN - SCHOTTKY_VF
+    row_high = rail - COL_DRIVER_DROP - MATRIX_DIODE_VF
+    margin = row_high - 0.7 * rail
+    for half in ("left", "right"):
+        _rows, cols = shape(half)
+        drop = cols * MATRIX_DIODE_IR * ROW_PULLDOWN
+        assert drop <= margin, (
+            f"{half}: 行の {cols} 個を同時に押すと逆漏れで {drop * 1000:.0f}mV "
+            f"下がる。余裕は {margin * 1000:.0f}mV しかない。**ゴーストする。**")
