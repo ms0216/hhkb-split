@@ -23,6 +23,8 @@
 NC と書く。**書き忘れと区別がつかないと、浮きピンの検査ができない。
 """
 
+import re
+
 # 電池は単3×2。新品のアルカリは 1 本 1.6V まで上がりうる。
 BATT_CELLS = 2
 BATT_V_MAX = 1.65 * BATT_CELLS
@@ -77,6 +79,17 @@ def _shift_register(ref, cols, first_col, serial_in, serial_out):
     for i, name in enumerate(_595_OUTPUTS):
         pins[name] = f"COL{first_col + i}" if i < cols else "NC"
     return (ref, "74HC595", pins)
+
+
+# 電子部品の参照名（基板上の名前）。
+#
+# **接頭辞で走査しない。**`D` や `SW` で拾うとダイオード 61 個と
+# キースイッチ 61 個を巻き込む。この案件で 4 回起きた事故。
+#
+# **生成側（gnd_fanout）と検査側（test_pcb）の両方が使う。**別々に持つと
+# 片方だけ直して静かにずれる。実際、電源スイッチが SW_PWR から
+# SW_PWR_1 / SW_PWR_2 に変わったとき、両方を直す必要があった。
+ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR_\d|J_DB|BT1_[+-]")
 
 
 # ケースの中で配線し、基板側はランド 2 個で受ける部品。

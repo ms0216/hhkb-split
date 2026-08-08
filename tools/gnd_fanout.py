@@ -23,11 +23,9 @@ DSN 経由で Freerouting に「そこは通れない障害物」として伝わ
 （`D`/`SW` で拾うと電源部を巻き込む。この案件で 3 回起きた）。
 """
 
-import re
-
 import pcbnew
 
-ELEC = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR|J_DB|BT1_[+-]")
+from circuit import ELEC_REF as ELEC
 
 # ビア半径 0.3mm + クリアランス 0.2mm + 余裕 0.05mm
 CLEARANCE_MM = 0.55

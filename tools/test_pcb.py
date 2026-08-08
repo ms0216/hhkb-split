@@ -542,9 +542,8 @@ def _courtyard_bbox(blk):
     return min(xs), min(ys), max(xs), max(ys)
 
 
-# 電子部品の参照名。**接頭辞で拾わない。**`D` や `SW` で走査すると
-# ダイオード 61 個とスイッチ 61 個を巻き込む（過去 3 回やった）。
-ELEC_REF = re.compile(r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR_\d|J_DB|BT1_[+-]")
+# 電子部品の参照名。**定義は circuit.py。**生成側と検査側で同じものを使う。
+from circuit import ELEC_REF  # noqa: E402
 
 
 def _expected_electronics(half):
