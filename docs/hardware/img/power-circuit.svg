@@ -26,8 +26,8 @@
 <polygon points="500,156 500,184 530,170" fill="#222"/>
 <line x1="530" y1="154" x2="530" y2="186" stroke="#222" stroke-width="5"/>
 <path d="M 530 154 l -8 -6 M 530 186 l 8 6" stroke="#222" stroke-width="2.5" fill="none"/>
-<text x="515" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">SB240LES</text>
-<text x="515" y="216" text-anchor="middle" font-size="10.5" fill="#666">ショットキー Vf≈0.4V</text>
+<text x="515" y="140" text-anchor="middle" font-size="12" font-weight="bold" fill="#111">1N5819（本番は B5819W）</text>
+<text x="500" y="216" text-anchor="end" font-size="10.5" fill="#666">ショットキー Vf≈0.4V</text>
 <line x1="530" y1="170" x2="700" y2="170" stroke="#222" stroke-width="2.4"/>
 <rect x="700" y="100" width="180" height="390" rx="8" fill="#1f2933" stroke="#0d1216" stroke-width="2"/>
 <text x="790" y="285" text-anchor="middle" font-size="15" fill="#c9d3dc">XIAO</text>
@@ -47,7 +47,7 @@
 <circle cx="640" cy="240" r="4.5" fill="#2b4a97"/>
 <line x1="640" y1="240" x2="640" y2="310" stroke="#2b4a97" stroke-width="2.4"/>
 <rect x="627" y="325" width="26" height="60" rx="3" fill="#fff" stroke="#2b4a97" stroke-width="2"/>
-<text x="662" y="359" font-size="11.5" font-weight="bold" fill="#2b4a97">R2 1MΩ</text>
+<text x="620" y="359" text-anchor="end" font-size="11.5" font-weight="bold" fill="#2b4a97">R2 1MΩ</text>
 <line x1="640" y1="385" x2="640" y2="420" stroke="#2b4a97" stroke-width="2.4"/>
 <circle cx="640" cy="420" r="4.5" fill="#2b4a97"/>
 <text x="470" y="266" font-size="11" fill="#2b4a97">電池電圧の測定（分圧して 1/2 にする）</text>
@@ -56,6 +56,16 @@
 <circle cx="102" cy="420" r="4.5" fill="#222"/>
 <circle cx="700" cy="420" r="4.5" fill="#222"/>
 <text x="400" y="410" text-anchor="middle" font-size="12" font-weight="bold" fill="#333">GND</text>
+<line x1="676" y1="170" x2="676" y2="296" stroke="#222" stroke-width="2.4"/>
+<rect x="668" y="234" width="16" height="12" fill="#ffffff"/>
+<line x1="656" y1="296" x2="696" y2="296" stroke="#222" stroke-width="3.2"/>
+<path d="M 656 312 Q 676 300 696 312" fill="none" stroke="#222" stroke-width="3.2"/>
+<line x1="676" y1="312" x2="676" y2="420" stroke="#222" stroke-width="2.4"/>
+<text x="670" y="288" text-anchor="end" font-size="11" font-weight="bold" fill="#111">＋</text>
+<text x="650" y="300" text-anchor="end" font-size="11.5" font-weight="bold" fill="#111">100µF</text>
+<text x="650" y="316" text-anchor="end" font-size="10.5" fill="#666">C_BULK（本番基板と同じ部品）</text>
+<circle cx="676" cy="170" r="4.5" fill="#222"/>
+<circle cx="676" cy="420" r="4.5" fill="#222"/>
 <rect x="24" y="500" width="962" height="122" rx="6" fill="#fafbfc" stroke="#dde1e5" stroke-width="1.2"/>
 <text x="44" y="526" font-size="14" font-weight="bold" fill="#111">ショットキーが 2 つの役目を兼ねている</text>
 <text x="44" y="550" font-size="12.5" fill="#3c4147">① 電池へ充電電流が流れ込むのを止める。USB 接続時は 3V3 が 3.3V になり、電池側 3.0V より高くなるため。</text>

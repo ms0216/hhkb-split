@@ -159,6 +159,115 @@ def test_the_breadboard_figure_is_generated_from_this_file():
         "  .venv/bin/python3 tools/gen_breadboard.py")
 
 
+def test_the_c4_breadboard_figure_is_generated_from_this_file():
+    """C4・C5 の配線図の SVG が、生成器の出力と一致していること。
+
+    落ちたときは `.venv/bin/python3 tools/gen_breadboard_c4.py` を実行する。
+    """
+    import gen_breadboard_c4 as g
+
+    assert g.OUT.exists(), f"{g.OUT.name} が無い。tools/gen_breadboard_c4.py を実行すること"
+    assert g.OUT.read_text() == g.SVG, (
+        f"{g.OUT.name} が tools/gen_breadboard_c4.py の出力と食い違っている。\n"
+        "  手で SVG を編集したか、生成器を直して実行し忘れている。\n"
+        "  .venv/bin/python3 tools/gen_breadboard_c4.py")
+
+
+def _c4_holes():
+    """C4 の配線から (使っている穴 → 誰が, 部品の胴体で塞がる穴) を作る。"""
+    import gen_breadboard_c4 as g
+
+    used, blocked = {}, set(g.COVERED)
+    for hole, pin in g.XIAO_PINS.items():
+        used[hole] = f"XIAO の {pin}"
+    for name, p, q, kind in g.LINKS:
+        for h in (p, q):
+            if h is None:
+                continue
+            assert h not in used, f"{h} を {used[h]} と {name} が取り合っている"
+            used[h] = name
+        if kind in ("part", "series"):
+            # 胴体が上に乗るので、両端のあいだの穴は使えない
+            lo, hi = sorted((p[0], q[0]))
+            blocked |= {(n, p[1]) for n in range(lo + 1, hi)}
+    return used, blocked
+
+
+def test_no_two_things_share_a_hole_on_the_c4_breadboard():
+    """C4 の配線で、1 つの穴を 2 つが取り合っていないこと。
+
+    **穴の取り違えは、実物を組むまで気づけない。**しかも C4 は乾電池を
+    XIAO の 3V3 へ直接入れるので、取り違えると壊れる側の間違いになる。
+    """
+    _c4_holes()  # 重複があれば assert で落ちる
+
+
+def test_the_c4_probe_points_are_reachable():
+    """測定点が、空いていて、かつ部品の胴体の下でないこと。
+
+    **ここを 2 回間違えた。**R2 が b 行を、ダイオードが d 行をふさぐので、
+    レールと D0 は a 行から取っている。図の穴番号を動かすとまた埋まる。
+    """
+    import gen_breadboard_c4 as g
+
+    used, blocked = _c4_holes()
+    bad = []
+    for letter, what, hole in g.PROBES:
+        if hole in used:
+            bad.append(f"{letter}（{what}）{hole} は {used[hole]} が使っている")
+        if hole in blocked:
+            bad.append(f"{letter}（{what}）{hole} は部品の胴体の下でテスターを挿せない")
+    assert not bad, "測定点が使えない穴を指している\n    " + "\n    ".join(bad)
+
+
+def test_the_c4_wiring_forms_the_intended_circuit():
+    """配線をたどると、意図した回路になっていること。
+
+    **図を眺めて確かめたことにしない。**ジャンパだけを短絡として列をつなぎ、
+    できた節点が設計どおりかを見る。とくに次の 2 つは安全に関わる。
+
+      * 電池 ＋ とレールが**直結していない**（かならずダイオードを通る）
+      * レールと GND が短絡していない
+    """
+    import gen_breadboard_c4 as g
+
+    parent = {n: n for n in range(1, 31)}
+
+    def find(n):
+        while parent[n] != n:
+            parent[n] = parent[parent[n]]
+            n = parent[n]
+        return n
+
+    for _name, p, q, kind in g.LINKS:
+        if kind not in ("wire", "series") or p is None or q is None:
+            continue
+        parent[find(p[0])] = find(q[0])
+
+    def same(x, y):
+        return find(x) == find(y)
+
+    batt, rail, gnd, tap, node_a = 29, 14, 12, 17, 20
+    assert not same(batt, rail), "電池 ＋ とレールが直結している。ダイオードを迂回している"
+    assert not same(rail, gnd), "レールと GND が短絡している"
+    assert not same(tap, gnd) and not same(tap, node_a), "分圧のタップが片側へ短絡している"
+    assert same(batt, node_a), "スイッチを入れても電池が節点 A に届かない"
+    assert same(gnd, 2), "GND バスが XIAO の GND（2 列）につながっていない"
+    assert same(rail, 3), "レールが XIAO の 3V3（3 列）につながっていない"
+    assert same(tap, 1), "分圧のタップが XIAO の D0（1 列）につながっていない"
+
+    # ダイオードの向き: アノードが節点 A、カソードがレール
+    (anode, cathode) = g.LINK["③ 1N5819"]
+    assert same(anode[0], node_a) and same(cathode[0], rail), (
+        "ダイオードの向きが逆。帯（カソード）はレール側でなければならない")
+    # コンデンサの極性: ＋がレール、−が GND
+    (plus, minus) = g.LINK["⑥ 100µF"]
+    assert same(plus[0], rail) and same(minus[0], gnd), "100µF の極性が逆"
+    # 分圧は タップ を挟んで レール側ではなく 節点 A 側から取る（ショットキーの手前）
+    assert same(g.LINK["④ R1 1MΩ"][0][0], node_a), "分圧の上側がショットキーの手前になっていない"
+    assert same(g.LINK["⑤ R2 1MΩ"][1][0], gnd), "分圧の下側が GND に落ちていない"
+
+
 def test_provisional_tags_sit_on_the_assignment_line():
     """`[暫定]` が代入行に書かれていること。
 
