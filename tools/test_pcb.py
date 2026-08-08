@@ -913,3 +913,40 @@ def test_the_antenna_keepout_is_actually_empty(name):
     assert not bad and n_fill == 0, (
         f"{name}: アンテナの禁止域に銅がある。"
         f"{bad[:5]}{'' if not bad else ' ほか'} / ベタの頂点 {n_fill} 点")
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_the_ground_plane_still_covers_the_board(name):
+    """GND ベタが基板の大半を覆ったままであること。
+
+    **禁止域を開けることの代償はここに出る。**地板は戻り電流の道なので、
+    穴で分断すると、その向こうの部品の戻り電流が遠回りする。
+
+    **数で見てはいけない。**最初「塗られた多角形が 1 個であること」と
+    書いたが、地板を横断する帯を故意に入れても 1 個のままだった。
+    KiCad は切り離された側を**孤島として黙って削除する**ので、
+    多角形は 1 個のまま面積だけが半分になる（頂点 12246 → 6248 で気づいた）。
+    面積で見る。
+
+    いまの左の禁止域は基板の縁から入る**切り欠き**で、内部に穴を作って
+    いない。切り欠きの向こうには部品もビアも無く、近くを通るのは
+    SW6_D と ROW0 だけ。**どちらも走査の kHz** なので遠回りは効かない。
+    """
+    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    blk = re.search(r"\(filled_polygon[\s\S]*?\n\t\t\)", text)
+    assert blk, f"{name}: GND ベタが 1 枚も塗られていない"
+    pts = [(float(a), float(b)) for a, b in
+           re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", blk.group(0))]
+    area = abs(sum(pts[i][0] * pts[(i + 1) % len(pts)][1]
+                   - pts[(i + 1) % len(pts)][0] * pts[i][1]
+                   for i in range(len(pts)))) / 2
+    xs = [(float(a), float(b)) for a, b in
+          re.findall(r"\(gr_line[\s\S]{0,120}?\(start ([-\d.]+) ([-\d.]+)\)", text)]
+    board = ((max(p[0] for p in xs) - min(p[0] for p in xs))
+             * (max(p[1] for p in xs) - min(p[1] for p in xs)))
+    ratio = area / board
+    # いまは左 86.5% / 右 89.3%。地板を割ると 39.5% まで落ちる（実測）。
+    assert ratio >= 0.80, (
+        f"{name}: GND ベタが基板の {ratio * 100:.1f}% しか覆っていない。"
+        "禁止域か配線が地板を割り、切り離された側が孤島として削除された"
+        "可能性がある。戻り電流の道が切れるので、割らない形に直すこと")
