@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+CLEARANCE_HALF = 0.1   # gen_case.CLEARANCE / 2（空所は片側 0.1mm 広い）
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_assembly import build_assembly, check  # noqa: E402
 from gen_plate import halves  # noqa: E402
@@ -117,3 +119,59 @@ def test_the_power_switch_fits_on_the_rear_panel(half):
     # 高さはコブの内部（電池が入る高さ）に収まること
     assert SW_PWR_H <= BATT_H, (
         f"{half}: スイッチの高さ {SW_PWR_H}mm がコブの内部 {BATT_H}mm を超える")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_power_switch_holder_exists_and_is_hollow(half):
+    """スイッチの受けが「足されて」いて、中身が空いていること。
+
+    **奥の壁の内側は電池室の空洞で、もともと材料が無い。**座ぐりを掘る
+    設計にしていたが、それは空気を削るだけでスイッチを受ける面ができない。
+    **故意に「彫るのをやめる」実験をしたら検査が落ちなかった**ことで
+    見つかった（壊しても落ちない＝検査していない）。
+
+    そこで見るのは 3 つ。
+      1. 空所の**まわりに壁がある**（受けの箱が足されている）
+      2. 空所そのものは**空いている**（スイッチが入る）
+      3. 操作部のスロットが**壁を貫いている**
+    """
+    import numpy as np
+    import trimesh
+    from envelopes import SW_PWR_D, SW_PWR_H, SW_PWR_W
+    from gen_case import (BUMP_DEPTH, SW_RIB, WALL, power_switch_center_z,
+                          power_switch_x_center)
+    from interface import plate_positions
+    from matrix import keymap_order
+
+    stl = Path(__file__).resolve().parent.parent / f"build/case_{half}.stl"
+    if not stl.exists():
+        pytest.skip("ケースがまだ生成されていない（tools/gen_case.py）")
+    _, (w, hb) = plate_positions(keymap_order(halves()[half]))
+    mesh = trimesh.load(stl)
+    x, z = power_switch_x_center(half, w), power_switch_center_z()
+    y_out = hb / 2 + BUMP_DEPTH
+    y_mid = y_out - WALL - SW_PWR_D / 2          # 空所の中心 y
+
+    def solid(pts):
+        return float(np.mean(mesh.contains(np.array(pts))))
+
+    cavity = [(x + dx, y_mid + dy, z + dz)
+              for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 5)
+              for dy in np.linspace(-SW_PWR_D * 0.3, SW_PWR_D * 0.3, 5)
+              for dz in np.linspace(-SW_PWR_H * 0.35, SW_PWR_H * 0.35, 3)]
+    # 受けの箱の壁（左右と上下）。**ここに材料が無ければスイッチは宙に浮く。**
+    off_w = SW_PWR_W / 2 + CLEARANCE_HALF + SW_RIB / 2
+    off_h = SW_PWR_H / 2 + CLEARANCE_HALF + SW_RIB / 2
+    walls = ([(x + s_ * off_w, y_mid, z) for s_ in (-1, 1)]
+             + [(x, y_mid, z + s_ * off_h) for s_ in (-1, 1)])
+    slot = [(x + dx, y_out - WALL / 2, z + dz)
+            for dx in np.linspace(-0.6, 0.6, 3)
+            for dz in np.linspace(-1.0, 1.0, 3)]
+
+    assert solid(walls) == 1.0, (
+        f"{half}: スイッチの受けの壁が無い（材料 {solid(walls):.0%}）。"
+        "空所を彫っただけでは、奥の壁の内側は元から空洞なので受けにならない")
+    assert solid(cavity) == 0.0, \
+        f"{half}: スイッチの空所に材料が残っている"
+    assert solid(slot) == 0.0, \
+        f"{half}: 操作部のスロットが壁を貫通していない"

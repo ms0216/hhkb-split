@@ -169,6 +169,19 @@ DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
 USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
 USB_H = 6.0
 USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
+
+# 電源スイッチ（C&K OS102011MA1QN1・右アングル）。**基板には載らない。**
+# 奥の壁のポケットへ落とし込み、操作部だけ外へ出す。
+# 経緯は docs/hardware/decisions/2026-08-08-power-switch.md。
+#
+# 寸法は envelopes.py の SW_PWR_W/D/H（暫定値。買う製品を変えたらそこを直す）。
+# アクチュエータは長さ 4.00mm・ストローク 2.00mm。壁 2.4mm を貫いて
+# 1.6mm 出る。スロットはストロークぶん長くする。
+SW_SLOT_W = 2.6          # 操作部が通るスロットの幅（アクチュエータ + 逃げ）
+# スロットの長さ = ストローク 2.0 + アクチュエータの断面 約2.5 + 逃げ。
+# **本体の高さではない。**本体ぶん開けると穴が無駄に大きくなる。
+SW_SLOT_LEN = 5.0
+SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷できる最小側）
 # RESET のボタンは**載せられない。**
 # XIAO nRF52840 の裏面に出ているパッドは VUSB/GND/3V3/10/9/8/7・0〜6（側面ピンの
 # 複製）と BAT +/−、NFC だけで、**RST は出ていない**（実機の写真で確認）。
@@ -182,7 +195,8 @@ USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心�
 # 「当たらない」ことしか見ない干渉検査では気づけず、噛み合いを直接見る
 # test_the_rear_hook_is_actually_captured が検出した。
 
-from envelopes import PCB_T, PLATE_TO_PCB, SOCKET_DROP  # noqa: E402
+from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
+                       SW_PWR_D, SW_PWR_H, SW_PWR_W)
 
 
 # --------------------------------------------------------------------------
@@ -387,6 +401,38 @@ def build_case(keys, half):
             Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
+        # 6-0b. 電源スイッチのポケットとスロット（奥の壁）
+        #
+        # スイッチは基板に載らない。右アングルなので、壁の内側に掘った
+        # ポケットへ落とし込むと操作部が壁のスロットから外へ出る。
+        # 経緯は docs/hardware/decisions/2026-08-08-power-switch.md。
+        #
+        # **ここは「彫る」のではなく「足す」。**
+        #
+        # 奥の壁の内側は電池室の空洞で、もともと材料が無い。座ぐりを
+        # 掘っても空気を削るだけで、スイッチを受ける面ができない
+        # （最初そう書いて、故意に壊す検査が「壊しても落ちない」形で
+        # 見つけた）。**受けの箱を足してから、中身を抜く。**
+        #
+        # 順序: 箱を足す → スイッチの空所を抜く → 操作部のスロットを貫く。
+        sw_x = power_switch_x_center(half, w)
+        sw_z = power_switch_center_z()
+        y_rear_inner = y_rear_outer - WALL
+        holder_d = SW_PWR_D + SW_RIB          # 奥側にも壁を残す
+        with Locations((sw_x, y_rear_inner - holder_d / 2, sw_z)):
+            Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d,
+                SW_PWR_H + CLEARANCE + SW_RIB * 2,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 中身を抜く。**内側（手前）は開けたまま**にして、そこから挿す。
+        with Locations((sw_x, y_rear_inner - SW_PWR_D / 2, sw_z)):
+            Box(SW_PWR_W + CLEARANCE, SW_PWR_D + SW_RIB, SW_PWR_H + CLEARANCE,
+                mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        with Locations((sw_x, y_rear_outer, sw_z)):
+            Box(SW_SLOT_W, WALL * 4, SW_SLOT_LEN,
+                mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+
 
 
         ox, oy, ow, oh = _lid_opening(half, w, h_body)
@@ -499,6 +545,44 @@ def daughterboard_x_center(half, w):
             f"{half}: 子基板の場所が {hi - lo:.1f}mm しかない（{DB_W}mm 必要）")
     # **電池から最も遠い位置（＝内側の壁ぎわ）に寄せる。**アンテナのため。
     return s * (hi - DB_W / 2)
+
+
+def power_switch_x_center(half, w):
+    """電源スイッチの中心 X。**電池と子基板の隙間に置く。**
+
+    奥の壁ぎわは電池（幅 BATT_X）と子基板が占めていて、置けるのは
+    その左右の隙間だけ。左半分は 10.6mm しか無いので、**いちばん広い
+    隙間の中央**を選ぶ。手で決め打ちにすると、電池や子基板を動かした
+    ときに黙って重なる。
+    """
+    from envelopes import SW_PWR_W
+    s_ = inner_sign(half)
+    bx, dx = battery_x_center(half, w), daughterboard_x_center(half, w)
+    obstacles = sorted([(bx - BATT_X / 2, bx + BATT_X / 2),
+                        (dx - DB_W / 2, dx + DB_W / 2)])
+    gaps, cur = [], -w / 2 + WALL
+    for a, b in obstacles:
+        if a > cur:
+            gaps.append((cur, a))
+        cur = max(cur, b)
+    if w / 2 - WALL > cur:
+        gaps.append((cur, w / 2 - WALL))
+    lo, hi = max(gaps, key=lambda g: g[1] - g[0])
+    if hi - lo < SW_PWR_W + CLEARANCE * 2:
+        raise RuntimeError(
+            f"{half}: 電源スイッチの場所が {hi - lo:.1f}mm しかない "
+            f"（{SW_PWR_W + CLEARANCE * 2:.1f}mm 必要）")
+    del s_
+    return (lo + hi) / 2
+
+
+def power_switch_center_z():
+    """電源スイッチの中心高さ。電池の中心に合わせる。
+
+    コブの中で電池と同じ高さ帯に置けば、上下に余裕が残る。
+    """
+    from envelopes import AA_D
+    return FLOOR + AA_D / 2
 
 
 def usb_center_z():

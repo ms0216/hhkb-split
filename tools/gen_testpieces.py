@@ -10,6 +10,10 @@
   2. height_gauge.stl  — 各列のキートップ高さを段にしたブロック。
                           実機の横に立てて、段の高さが合うか見る。
   3. keycap_row_*.stl  — 参考: 各列のキャップ断面を立体にしたもの。
+  4. clearance_coupon.stl — **はめ合いの逃げを決めるクーポン。**
+                          穴・軸・ポケットを逃げ違いで並べたもの。
+                          K1 Max ＋ 実際のフィラメントで 1 枚刷り、
+                          どの逃げが「入るが緩くない」かを見る。
 
 いずれも数分で刷れる大きさ。材料はどれでもよい。
 """
@@ -19,10 +23,15 @@ from math import radians, tan
 from pathlib import Path
 
 from build123d import (
+    Align,
     Axis,
+    Box,
     BuildLine,
     BuildPart,
     BuildSketch,
+    Cylinder,
+    Locations,
+    Mode,
     Plane,
     Polyline,
     add,
@@ -92,6 +101,44 @@ def build_height_gauge():
     return p.part, heights
 
 
+# はめ合いのクーポン（open-gaps #11）
+#
+# **CLEARANCE = 0.2 は実測でなく仮定。**蓋のレール・脚のピン・
+# インサートナット・子基板・電源スイッチのポケットが全部これを使っている。
+# 3Dプリントは穴が縮み、XY と Z で収縮量も違う。1 枚刷れば決まる。
+#
+# 相手方の代表寸法。実際に使っている数値から採る。
+COUPON_CLEARANCES = [0.0, 0.1, 0.2, 0.3, 0.4]
+COUPON_PEG_D = 4.0        # 脚のピン相当（丸）
+COUPON_SLOT = (8.6, 4.4)  # 電源スイッチ相当（角）
+COUPON_T = 4.0            # 板厚
+COUPON_PITCH = 14.0
+
+
+def build_clearance_coupon():
+    """逃げ違いの穴を並べた板。丸穴と角穴の両方を見る。
+
+    **丸と角で縮み方が違う。**角は隅に材料が寄るので、同じ逃げでも
+    きつくなる。片方だけ見て決めると、もう片方で外す。
+    """
+    n = len(COUPON_CLEARANCES)
+    w = COUPON_PITCH * n + 6.0
+    with BuildPart() as coupon:
+        Box(w, COUPON_PITCH * 2 + 6.0, COUPON_T,
+            align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for i, c in enumerate(COUPON_CLEARANCES):
+            x = -w / 2 + 3.0 + COUPON_PITCH * (i + 0.5)
+            with Locations((x, COUPON_PITCH / 2, 0)):
+                Cylinder(( COUPON_PEG_D + c) / 2, COUPON_T * 3,
+                         mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            with Locations((x, -COUPON_PITCH / 2, 0)):
+                Box(COUPON_SLOT[0] + c, COUPON_SLOT[1] + c, COUPON_T * 3,
+                    mode=Mode.SUBTRACT,
+                    align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    return coupon.part
+
+
 def main():
     BUILD.mkdir(exist_ok=True)
 
@@ -108,6 +155,15 @@ def main():
         title=f"front edge test piece  lean={LEAN_ANGLES[1]} deg",
         annotate_count=False,
     )
+
+    print("\nはめ合いクーポン（1 枚刷って CLEARANCE を決める / open-gaps #11）")
+    part = build_clearance_coupon()
+    mesh, stl = to_mesh(part, "clearance_coupon")
+    assert_watertight(mesh, stl.name)
+    print(f"  丸穴 φ{COUPON_PEG_D}  角穴 {COUPON_SLOT[0]}x{COUPON_SLOT[1]}mm")
+    print("  逃げ " + " / ".join(f"{c:.1f}" for c in COUPON_CLEARANCES) + "mm（左から）")
+    bb = part.bounding_box().size
+    print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
 
     print("\n高さゲージ（実機の横に立てて各列の高さを見比べる）")
     part, heights = build_height_gauge()
