@@ -16,7 +16,7 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 "$KPY" tools/gen_pcb.py          # 未配線の基板を pcb/unrouted/ に出す
 "$KPY" tools/autoroute.py        # Freerouting で配線（数分）
 .venv/bin/python3 tools/drc.py   # 確かめる
-.venv/bin/pytest tools -q        # 253 件
+.venv/bin/pytest tools -q        # 258 件
 ```
 
 Java（`brew install openjdk`）と Freerouting v2.3.0 の jar
@@ -35,8 +35,14 @@ tools/autoroute.py   DSN → Freerouting → SES → ゾーン塗り直し
 tools/drc.py         ハッシュつきで記録
 ```
 
-例外は `tools/gnd_fanout.py` だけ。**GND は配線せずベタで受ける**方針で、
-パッドからベタへ落とすビアは位置が決まっているので配置段階に置く。
+例外は**決まりきった局所配線**の 2 つだけ。どちらも経路に選択の余地が無く、
+自動配線器に任せると却って悪くなる。DSN からはネットごと外し、配線材は
+`(type protect)` で「避けるべき障害物」として渡す。
+
+| | |
+|---|---|
+| スイッチ → ダイオード | `gen_pcb.prewire_switch_diode`。裏面の L 字 2 本。ビア 0 |
+| GND のパッド → ベタ | `tools/gnd_fanout.py`。パッドの長軸方向へビア 1 個 |
 
 ---
 
@@ -77,14 +83,15 @@ GND ベタは `In1.Cu` の 1 層だけ、GND パッドは全部 `B.Cu` の SMD�
 → `tools/gnd_fanout.py` が配置段階に決定的に立てる。向きは**パッドの長軸**
 （支配軸でやると FFC の横並びパッドで隣に刺さる。実際にやった）。
 
-**`ImportSpecctraSES` は既存の配線を作り直すので、取り込みのたびに
-ファンアウトが消える**（実測 7 個 → 0 個）。`autoroute.py` が立て直す。
+**`ImportSpecctraSES` は既存の配線を全部作り直すので、取り込みのたびに
+自分で引いたものが消える**（実測: GND のビア 7 個 → 0 個）。
+`autoroute.py` が上の 2 つとも立て直す。
 
 ### 3. DSN に GND を残すと Freerouting が NPE で落ちる
 
 ピンだけ消してネット定義を残す、のような中途半端なやり方をすると
 `NullPointerException` で GUI ごと落ちる。ネット定義・クラスの一覧・
-plane 宣言を**まとめて**消すこと（`_strip_gnd`）。
+plane 宣言を**まとめて**消すこと（`_strip_prewired`）。
 
 ファンアウトの配線材は `(type protect)` に変えて、ネットを持たない
 固定障害物として渡す。**消すと避けてくれない。**
@@ -100,6 +107,8 @@ plane 宣言を**まとめて**消すこと（`_strip_gnd`）。
 | `test_the_electronics_fit_inside_their_band` | 帯 9.25mm からのはみ出し。走査の正解は `circuit.py` の宣言から導く |
 | `test_the_board_declares_the_netclass_used_for_routing` | **自動配線器はネットクラスしか見ない。**既定値頼みにしない |
 | `test_the_routing_was_made_from_the_current_placement` | 配置を変えたのに配線し直していない状態 |
+| `test_the_ffc_cable_reaches_the_daughterboard` | FFC が子基板まで届くこと。**部品を動かすと黙って届かなくなる** |
+| `test_both_halves_can_use_the_same_ffc_cable` | 左右で同じケーブルが使えること（部品表を 2 種類にしない） |
 
 いずれも**故意に壊して落ちることを確認してから**足した。
 
@@ -110,14 +119,18 @@ plane 宣言を**まとめて**消すこと（`_strip_gnd`）。
 | | 左 | 右 |
 |---|---|---|
 | DRC 違反 | 33 → **0** | 32 → **0** |
-| 総長 | 1817 → **1574mm** | 2290 → **1940mm** |
-| ビア | 58 → 68 | 68 → **111** |
+| 総長 | 1817 → **1538mm** | 2290 → **1902mm** |
+| ビア | 58 → **40** | 68 → **51** |
 | 遠回りの最大 | 2.3 → **1.6** | 2.3 → **1.6** |
 | `In1.Cu` の配線 | 0 → 0 | 0 → 0 |
 | GND の島 | 1 → 1 | 1 → 1 |
 
-**ビアは増えた**（右で +63%）。自動配線器は層を渡ることを厭わない。
-機能・製造上の問題は無いが、気になるなら見るところ。
+**ビアは手書きより減った。**一度は左 68・右 111 まで増えたが、原因は
+`SW*_D`（スイッチ → ダイオード）だった。数 mm の接続のために自動配線器が
+内層へ往復し、左 30 個・右 62 個をそこに使っていた。**この配線は経路に
+選択の余地が無い**ので `prewire_switch_diode` で自分で引き、DSN から
+外した。左右の比（51/40 = 1.28）がキー数の比（34/27 = 1.26）とほぼ
+一致し、非対称は規模差だけで説明がつくようになった。
 
 **`F.Cu` は 0 本。**信号は `In2.Cu` と `B.Cu` で足りている。4 層をやめられる
 という意味ではない（`In1.Cu` の GND ベタは分割の 2.4GHz のために残す）が、
@@ -153,8 +166,10 @@ plane 宣言を**まとめて**消すこと（`_strip_gnd`）。
 ## 次にやること
 
 1. ガーバー・BOM・CPL を出す（`kicad-cli pcb export gerbers` ほか）
-2. **`J_DB` が 9.1mm（左）/ 8.5mm（右）動いた。**FFC ケーブルの長さと
-   子基板側コネクタとの位置関係を確かめること。**未検証**
+2. **FFC ケーブルを決める。**`FFC_LENGTH` / `FFC_SLACK` は暫定値
+   （[provisional-values](provisional-values.md)）。届くことは
+   `test_the_ffc_cable_reaches_the_daughterboard` が見ている
+   （左 92.1mm / 右 78.5mm 要る。100mm なら足りる）
 
 ---
 

@@ -162,6 +162,42 @@ JLC = {
 }
 
 
+def prewire_switch_diode(board):
+    """スイッチ → ダイオードを裏面の L 字 2 本で結ぶ。**ビアを使わない。**
+
+    ソケットの端子 2 とダイオードのアノードは同じ x に並べてある
+    （DIODE_OFFSET はそのために選んだ値）。どちらも B.Cu の SMD なので、
+    横 1 本・縦 1 本で届く。**経路に選択の余地が無い。**
+
+    自動配線器に任せると、数 mm の接続のために内層へ往復してビアを
+    2 個使う。実測で左 30 個・右 62 個がこれに費やされていた
+    （右が多いのは列のバスが 9 本あって裏面が混むため）。
+    ビアは穴あけ費用と信頼性の両方に効くので、ここは自分で引く。
+
+    **autoroute.py も SES 取り込みのあとに呼ぶ。**取り込みは既存の配線を
+    全部作り直すので、ここで引いたものが消えるため。
+    """
+    # **接頭辞で走査しない。**`SW` で拾うと電源のスライドスイッチ
+    # （SW_PWR）を巻き込む。この案件で 4 回起きた事故。
+    keys = sorted(int(m.group(1)) for m in
+                  (re.fullmatch(r"SW(\d+)", fp.GetReference())
+                   for fp in board.GetFootprints()) if m)
+    for i in keys:
+        a = board.FindFootprintByReference(f"SW{i}").FindPadByNumber("2")
+        b = board.FindFootprintByReference(f"D{i}").FindPadByNumber("2")
+        corner = pcbnew.VECTOR2I(b.GetPosition().x, a.GetPosition().y)
+        for p, q in ((a.GetPosition(), corner), (corner, b.GetPosition())):
+            if p == q:
+                continue
+            t = pcbnew.PCB_TRACK(board)
+            t.SetStart(p)
+            t.SetEnd(q)
+            t.SetWidth(pcbnew.FromMM(TRACK_W))
+            t.SetLayer(pcbnew.B_Cu)
+            t.SetNet(a.GetNet())
+            board.Add(t)
+
+
 def _apply_jlcpcb_rules(board):
     d = board.GetDesignSettings()
     mm = pcbnew.FromMM
@@ -429,10 +465,13 @@ def build(half, keys):
     # **このファイルは配置・ネット・ゾーン・設計規則だけを持つ。**
     # 配線は tools/autoroute.py が Freerouting に委ねる。
     #
-    # 例外は GND のファンアウトだけ。GND は配線せずベタ（In1.Cu）で受ける
-    # 方針で、パッドからベタへ落とすビアは位置が決まっている。
-    # 自動配線器に任せると混んだ区画で失敗するので、ここで決定的に立てる
-    # （理由は tools/gnd_fanout.py）。
+    # 例外は**決まりきった局所配線**の 2 つだけ。どちらも経路に選択の
+    # 余地が無く、自動配線器に任せると却って悪くなる。DSN からはネットごと
+    # 外し、配線材は (type protect) で「避けるべき障害物」として渡す。
+    #
+    #   1. スイッチ → ダイオード（prewire_switch_diode）
+    #   2. GND のパッド → ベタ（tools/gnd_fanout.py）
+    prewire_switch_diode(board)
     _place_electronics(board, half, net)
     gnd_fanout.place(board)
 

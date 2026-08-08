@@ -684,3 +684,66 @@ def test_the_routing_was_made_from_the_current_placement(half):
         f"{half}: 配置が変わったのに配線し直していない。"
         'KiCad の Python で "tools/gen_pcb.py" のあと '
         '"tools/autoroute.py" を実行すること')
+
+
+# --------------------------------------------------------------------------
+# 本体基板と子基板をつなぐ FFC
+# --------------------------------------------------------------------------
+
+def ffc_span(half):
+    """J_DB（本体）と J_MAIN（子基板）の平面距離 mm。
+
+    **左右で別の値になる。**子基板の左右位置が半分ごとに違うため。
+    """
+    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
+                          daughterboard_x_center)
+    from interface import plate_positions
+    _, (w, h) = plate_positions(HALVES[half])
+    # **footprints() を使わない。**あの正規表現は `.*?` で最初に見つかった
+    # (at ...) を拾うため、部品によって別の座標を返す（J_DB では左が
+    # 誤った値・右が空になった）。括弧の対応で切り出す方を使う。
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    blk = next(b for r, b in _footprint_blocks(txt) if r == "J_DB")
+    at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)", blk)
+    jx, jy = float(at.group(1)) - ORIGIN[0], ORIGIN[1] - float(at.group(2))
+    # 子基板は奥の壁ぎわ。J_MAIN は子基板の中心から手前へ 11.0mm
+    # （pcb/hhkb_split_daughterboard.kicad_pcb で実測。外形中心 y=100、
+    #   J_MAIN は y=111 で KiCad は Y 下向きなので手前側）。
+    dbx = daughterboard_x_center(half, w)
+    dby = h / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+    return math.hypot(dbx - jx, (dby - 11.0) - jy)
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_ffc_cable_reaches_the_daughterboard(half):
+    """FFC が本体基板から子基板まで、余裕を持って届くこと。
+
+    **部品を動かすと静かに届かなくなる。**実際、自動配線のために
+    J_DB を左 9.1mm・右 8.5mm 動かしたとき、これを見る検査が無かった。
+    ケーブルは発注品なので、合わないと分かるのが組み立て時になる。
+
+    ケーブルを張った状態では使えないので、直線距離に FFC_SLACK
+    （垂直の落差・両端の曲げ・抜け止めの遊び）を足して見る。
+    **どちらも暫定値**（docs/hardware/provisional-values.md）。
+    """
+    from envelopes import FFC_LENGTH, FFC_SLACK
+    need = ffc_span(half) + FFC_SLACK
+    assert need <= FFC_LENGTH, (
+        f"{half}: FFC が届かない。直線 {ffc_span(half):.1f}mm + 余裕 "
+        f"{FFC_SLACK}mm = {need:.1f}mm > ケーブル {FFC_LENGTH}mm。"
+        "J_DB か子基板を近づけるか、長いケーブルを選ぶこと")
+
+
+def test_both_halves_can_use_the_same_ffc_cable():
+    """左右で同じ長さの FFC が使えること。
+
+    **違う長さが要ると、部品表と在庫が 2 種類になる。**組み立てで
+    取り違えると、短い方が届かない。左右で子基板の位置が違うので、
+    ここは黙って壊れうる。
+    """
+    from envelopes import FFC_LENGTH, FFC_SLACK
+    need = {h: ffc_span(h) + FFC_SLACK for h in NAMES}
+    assert max(need.values()) <= FFC_LENGTH, (
+        f"1 種類のケーブルで足りない: "
+        + " / ".join(f"{h} {v:.1f}mm" for h, v in need.items())
+        + f" > {FFC_LENGTH}mm")
