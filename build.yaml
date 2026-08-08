@@ -15,6 +15,15 @@ include:
     shield: proto_split_left    # Task C3 用（BLE 分割だけを切り出した治具・左）
   - board: xiao_ble//zmk
     shield: proto_split_right   # Task C3 用（同・右）
+  # **ボンド（BLE の結合情報）を消すための救済用。**
+  # 「リストには出るのに接続できない」の最も多い原因は、ホストと装置の
+  # どちらか片方だけが相手を覚えている状態。装置側から消すには
+  # `&bt BT_CLR` を割り当てたキーが要るが、C4 の治具にはキーが無い。
+  # これを焼くと設定領域ごと消えるので、キー無しで復旧できる。
+  # **消したあとは本来のファームを焼き直すこと。**
+  - board: xiao_ble//zmk
+    shield: settings_reset
+
   - board: xiao_ble//zmk
     shield: hhkb_split_left
   - board: xiao_ble//zmk
