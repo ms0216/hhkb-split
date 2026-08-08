@@ -135,3 +135,25 @@ def test_the_provisional_list_shows_the_same_numbers_as_the_code():
         "暫定値の文書とコードで数値が食い違っている\n    "
         + "\n    ".join(bad)
         + "\n  文書を見て部品を買うと間違える。どちらかを直すこと")
+
+
+def test_the_breadboard_figure_is_generated_from_this_file():
+    """配線図の SVG が、生成器の出力と一致していること。
+
+    docs/hardware/img/ の他の図は手書きだが、C2-b の全体図だけは
+    2 枚のブレッドボードと板をまたぐ 7 本の配線があって手では追えないので
+    tools/gen_breadboard.py で生成している。
+
+    **手で SVG を直すと、生成器と食い違って次の変更で消える。**
+    配線を変えるときは生成器を直して実行すること。
+
+    落ちたときは `.venv/bin/python3 tools/gen_breadboard.py` を実行する。
+    """
+    import gen_breadboard
+
+    svg = gen_breadboard.OUT
+    assert svg.exists(), f"{svg.name} が無い。tools/gen_breadboard.py を実行すること"
+    assert svg.read_text() == gen_breadboard.SVG, (
+        f"{svg.name} が tools/gen_breadboard.py の出力と食い違っている。\n"
+        "  手で SVG を編集したか、生成器を直して実行し忘れている。\n"
+        "  .venv/bin/python3 tools/gen_breadboard.py")

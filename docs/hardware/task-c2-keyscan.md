@@ -297,6 +297,10 @@ XIAO が 1〜7 列・列バスが 8〜9 列・スイッチとダイオードが 
 
 <img src="img/breadboard-c2b-full.svg" alt="1 枚目と 2 枚目を並べた全体配線図。1 枚目から D6・D5 のジャンパ 2 本を外し、その穴に 2 枚目の 595 の QA・QB をつなぐ。3V3・GND・D10・D8・D7 の 5 本が板をまたぐ" width="100%">
 
+この図は [tools/gen_breadboard.py](../../tools/gen_breadboard.py) が生成する。
+**SVG を手で編集しない。**配線を変えるときは生成器を直して実行する
+（`.venv/bin/python3 tools/gen_breadboard.py`）。
+
 **1 枚目の 3V3・GND は空きが 1 穴ずつしかない**（XIAO 本体が h・g・f 行を
 塞ぎ、ピンは i 行に刺さっているので、使えるのは j 行だけ）。VCC と MR、
 OE とピン 8 の GND はどちらも 2 か所へ配る必要があるので、**2 枚目の側に
