@@ -197,7 +197,13 @@ DB_BOSS_POS = [(-8.0, -13.5), (8.0, 13.5)]
 DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
 USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
 USB_H = 6.0
-USB_Z_ABOVE_PCB = 1.6    # 子基板の上面から USB-C コネクタの中心まで
+# 子基板の上面から切り欠きの中心まで。**XIAO の積み上げの真ん中に合わせる。**
+#
+# 以前は 1.6 と直書きしていた。それだと切り欠きの上端と XIAO の上面の
+# 隙間が **0.10mm** しかなかった。実測値は「4.5 ぐらい」と概数で渡された
+# ものなので、0.1mm は余裕とは呼べない。真ん中に合わせると上下 0.75mm ずつ。
+# test_the_usb_opening_clears_the_connector が余裕を見張る。
+# 値は usb_center_z() で DB_STACK_H から導く（envelopes の import は下）。
 
 # 電源スイッチ（C&K OS102011MA1QN1・右アングル）。**基板には載らない。**
 # 奥の壁のポケットへ落とし込み、操作部だけ外へ出す。
@@ -620,8 +626,13 @@ def usb_center_z():
 
     子基板の載る高さから導く。数値を直接書くと、ボスの高さを変えたときに
     穴だけ取り残される。
+
+    **XIAO の積み上げの真ん中に合わせる。**以前は「子基板の上面から 1.6mm」
+    と直書きしていて、切り欠きの上端と XIAO の上面の隙間が 0.10mm しか
+    無かった。実測は「4.5 ぐらい」の概数なので、それでは足りない。
     """
-    return FLOOR + DB_BOSS_H + DB_T + USB_Z_ABOVE_PCB
+    from envelopes import DB_STACK_H
+    return FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2
 
 
 def _lid_opening(half, w, h_body):

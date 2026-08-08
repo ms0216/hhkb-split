@@ -76,8 +76,10 @@ XIAO_H_WITH_USB = 4.5                            # [確定] 実測。USB コネ�
 # 当初は「キー領域全体を覆う一枚の板」として粗く見積もっていたが、
 # 取付ネジをキーの隙間へ移したところ、その粗さがボスとの干渉として出た。
 # ソケットは各キーの下にしか無いので、実物どおりキーごとに置く。
-SOCKET_X0, SOCKET_X1 = -9.0, 7.8
-SOCKET_Y0, SOCKET_Y1 = -2.6, 7.2
+# **出所は bands.py。**ここにも同じ数字を書いていて、変異検査でどちらも
+# 生き残った（＝片方だけ直しても誰も気づかない状態だった）。
+from bands import (SOCK_HI as SOCKET_Y1, SOCK_LO as SOCKET_Y0,  # noqa: E402
+                   SOCK_X_HI as SOCKET_X1, SOCK_X_LO as SOCKET_X0)
 
 
 def pcb_envelope(w, h_plate, half, keys):

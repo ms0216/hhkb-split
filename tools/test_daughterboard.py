@@ -150,3 +150,29 @@ def test_the_connector_spec_matches_the_board():
             f"{where}: 実基板は {n.group(1)} ピン、文書は {pins} ピン"
         assert float(p.group(1)) == pitch, \
             f"{where}: 実基板は {p.group(1)}mm ピッチ、文書は {pitch}mm ピッチ"
+
+
+def test_the_firmware_and_the_circuit_agree_on_the_battery_divider():
+    """ファームの分圧宣言が、回路の抵抗値と一致すること。
+
+    ZMK の `zmk,battery-voltage-divider` は `output-ohms` と `full-ohms` から
+    実電圧を復元する。**回路とファームで別々に書かれていて、一致を見る検査が
+    無かった。**片方だけ変えても DRC も検査も通り、**残量表示だけが静かに
+    狂う。**電池が空なのに 60% と出る、あるいはその逆になる。
+
+    変異検査で `DIVIDER_R_HIGH` を 1MΩ → 1.1MΩ にしても 271 件が全部通った。
+    """
+    dtsi = _strip((SHIELD / "hhkb_split.dtsi").read_text())
+    m = re.search(r"battery-voltage-divider[\s\S]*?output-ohms\s*=\s*<(\d+)>"
+                  r"[\s\S]*?full-ohms\s*=\s*<(\d+)>", dtsi)
+    assert m, "ファームに battery-voltage-divider の宣言が見つからない"
+    output_ohms, full_ohms = int(m.group(1)), int(m.group(2))
+
+    from circuit import DIVIDER_R_HIGH, DIVIDER_R_LOW
+
+    assert output_ohms == DIVIDER_R_LOW, (
+        f"ファームの output-ohms={output_ohms} が、回路の下側抵抗 "
+        f"{DIVIDER_R_LOW} と違う")
+    assert full_ohms == DIVIDER_R_HIGH + DIVIDER_R_LOW, (
+        f"ファームの full-ohms={full_ohms} が、回路の合計 "
+        f"{DIVIDER_R_HIGH + DIVIDER_R_LOW} と違う")

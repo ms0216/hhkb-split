@@ -354,3 +354,31 @@ def test_the_m2_inserts_fit_the_bosses():
     assert M2_INSERT_L <= deepest, (
         f"M2 インサートの長さ {M2_INSERT_L}mm が、子基板のボスに掘った "
         f"{deepest}mm を超える。短いものを買うか、DB_BOSS_H を深くすること")
+
+
+def test_the_usb_opening_clears_the_connector():
+    """USB-C の切り欠きが、XIAO の積み上げを余裕を持って囲むこと。
+
+    **USB は書き込みに要る。**ここがずれると、組み上げてからケーブルが
+    挿さらないと分かる。
+
+    以前は「子基板の上面から 1.6mm」と直書きしていて、**上側の余裕が
+    0.10mm しか無かった。**XIAO の厚み 4.5mm は「ぐらい」で渡された概数
+    なので、0.1mm は余裕ではない。`XIAO_H_WITH_USB` は記録されていただけで
+    どこからも使われておらず、変異検査でも生き残った。
+    """
+    import gen_case as g
+    from envelopes import DB_STACK_H, XIAO_H_WITH_USB
+
+    assert DB_STACK_H >= XIAO_H_WITH_USB, (
+        f"積み上げ {DB_STACK_H}mm が XIAO 単体 {XIAO_H_WITH_USB}mm より薄い。"
+        "ソケットを挟むならもっと高いはず")
+
+    bottom = g.FLOOR + g.DB_BOSS_H + g.DB_T
+    center = g.usb_center_z()
+    lo, hi = center - g.USB_H / 2, center + g.USB_H / 2
+    margin = min(bottom - lo, hi - (bottom + DB_STACK_H))
+    assert margin >= 0.5, (
+        f"USB 切り欠きの余裕が {margin:.2f}mm しかない"
+        f"（切り欠き {lo:.2f}〜{hi:.2f} / XIAO {bottom:.2f}〜"
+        f"{bottom + DB_STACK_H:.2f}）")

@@ -775,3 +775,87 @@ def test_no_user_operated_part_is_sealed_inside(half):
         f"{half}: 使用者が操作する部品が基板に載っている: {on_board}\n"
         "  基板の上には手が届かない（プレートとキーキャップの下）。\n"
         "  ケースのパネルに付けて配線で繋ぐこと（kind を wire_pads にする）")
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_the_declared_socket_envelope_contains_the_real_footprint(name):
+    """`bands.SOCK_LO/HI` が、実フットプリントを本当に囲んでいること。
+
+    帯の位置と高さは、この 2 つの数字から導いている。**手で書いた数字なので、
+    外の事実に繋いでおかないと静かにずれる。**フットプリントのライブラリを
+    別のものに差し替えたときが危ない。
+
+    **これが無いと帯の検査は空回りする。**帯を広げれば「帯に収まっている」は
+    通りやすくなるだけで、部品がソケットに乗ることは誰も見ない。実際、
+    変異検査で `BAND_H` を 9.25 → 10.175 にしても 271 件が全部通った。
+    """
+    from bands import SOCK_HI, SOCK_LO, SOCK_X_HI, SOCK_X_LO
+
+    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    worst_lo, worst_hi, worst_ref = 0.0, 0.0, None
+    worst_x_lo, worst_x_hi = 0.0, 0.0
+    seen = 0
+    for blk in re.split(r"\n\t\(footprint ", text)[1:]:
+        ref = re.search(r'\(property "Reference" "(SW\d+)"', blk)
+        if not ref:
+            continue
+        seen += 1
+        ys, xs = [], []
+        # パッド（半田付けする実体）
+        for seg in re.findall(r"\(pad [\s\S]*?\n\t\t\)", blk):
+            at = re.search(r"\(at ([-\d.]+) ([-\d.]+)", seg)
+            sz = re.search(r"\(size ([\d.]+) ([\d.]+)\)", seg)
+            if at and sz:
+                x, w = float(at.group(1)), float(sz.group(1))
+                y, h = float(at.group(2)), float(sz.group(2))
+                xs += [x - w / 2, x + w / 2]
+                ys += [y - h / 2, y + h / 2]
+        # 裏面のコートヤード（ソケット本体の占有）
+        for seg in re.findall(r"\((?:fp_line|fp_arc)\b[\s\S]*?\n\t\t\)", blk):
+            if '(layer "B.CrtYd")' in seg:
+                for a, b in re.findall(
+                        r"\((?:start|mid|end) ([-\d.]+) ([-\d.]+)\)", seg):
+                    xs.append(float(a))
+                    ys.append(float(b))
+        if not ys:
+            continue
+        worst_x_lo = min(worst_x_lo, min(xs))
+        worst_x_hi = max(worst_x_hi, max(xs))
+        # KiCad は Y 下向き。レイアウト座標（Y 上向き）へ直す。
+        lo, hi = -max(ys), -min(ys)
+        if lo < worst_lo or worst_ref is None:
+            worst_lo, worst_ref = lo, ref.group(1)
+        worst_hi = max(worst_hi, hi)
+
+    assert seen >= 27, f"{name}: スイッチが {seen} 個しか見つからない。走査が壊れている"
+    assert SOCK_LO <= worst_lo, (
+        f"{name}: 宣言 SOCK_LO={SOCK_LO} より実物が下へ出ている（{worst_lo:.2f}"
+        f"・{worst_ref}）")
+    assert worst_hi <= SOCK_HI, (
+        f"{name}: 宣言 SOCK_HI={SOCK_HI} より実物が上へ出ている（{worst_hi:.2f}）")
+
+    # **緩い方向も見る。**囲めているかだけを見ると、宣言を広げ放題になる。
+    # 広げると帯 BAND_H が痩せるので発注前に気づく…とは限らない。実際、
+    # 変異検査で SOCK_LO を -2.6 → -2.86 にしても検査が全部通った。
+    # 左右方向も同じ要領で。**ここを見ないと SOCK_X_LO/HI が測られない。**
+    # ボスとの干渉に効く数字なので、囲めているかは確かめる必要がある。
+    assert SOCK_X_LO <= worst_x_lo, (
+        f"{name}: 宣言 SOCK_X_LO={SOCK_X_LO} より実物が外へ出ている"
+        f"（{worst_x_lo:.2f}）")
+    assert worst_x_hi <= SOCK_X_HI, (
+        f"{name}: 宣言 SOCK_X_HI={SOCK_X_HI} より実物が外へ出ている"
+        f"（{worst_x_hi:.2f}）")
+
+    SLACK = 1.0
+    assert worst_lo - SOCK_LO <= SLACK, (
+        f"{name}: SOCK_LO={SOCK_LO} が実物（{worst_lo:.2f}）より "
+        f"{worst_lo - SOCK_LO:.2f}mm も余っている。帯を無駄に痩せさせている")
+    assert SOCK_HI - worst_hi <= SLACK, (
+        f"{name}: SOCK_HI={SOCK_HI} が実物（{worst_hi:.2f}）より "
+        f"{SOCK_HI - worst_hi:.2f}mm も余っている。帯を無駄に痩せさせている")
+    assert worst_x_lo - SOCK_X_LO <= SLACK, (
+        f"{name}: SOCK_X_LO={SOCK_X_LO} が実物（{worst_x_lo:.2f}）より "
+        f"{worst_x_lo - SOCK_X_LO:.2f}mm も余っている")
+    assert SOCK_X_HI - worst_x_hi <= SLACK, (
+        f"{name}: SOCK_X_HI={SOCK_X_HI} が実物（{worst_x_hi:.2f}）より "
+        f"{SOCK_X_HI - worst_x_hi:.2f}mm も余っている")

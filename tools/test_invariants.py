@@ -242,7 +242,7 @@ def test_the_antenna_record_cannot_be_silently_deleted():
     **有効な対策が見つからず、実測で判断すると決めた。**
 
     この検査が守るのは「**測る前に記録だけ消える**」こと。
-    消してよいのは Task C3 の §6-3 で実測し、結果を書いたときだけ。
+    消してよいのは Task C3 の §6-6 で実測し、結果を書いたときだけ。
     """
     doc = (Path(__file__).resolve().parent.parent
            / "docs/hardware/open-gaps.md").read_text()
@@ -286,7 +286,7 @@ def test_fabrication_output_is_blocked_while_the_antenna_is_unresolved():
         "  **実測で判断すると決めた。まだ測っていない。**\n"
         "\n"
         "  発注前にやること:\n"
-        "    1. Task C3 の §6-3 で RSSI を測る\n"
+        "    1. Task C3 の §6-6 で RSSI を測る\n"
         "       （①単体 →②＋子基板 →③＋ケーブル →④＋組み立て を\n"
         "         **同じ日に続けて**。日を分けると比較にならない）\n"
         "    2. 左右 20〜40cm・手を鍵盤に乗せて高速打鍵し、切れないか見る\n"
