@@ -82,7 +82,21 @@ TILT_DEG = 7.3           # 打鍵面の傾斜。topre_key の実測値
 # 以後は目標から逆算する。キャップの実測が入れば自動でここが動く。
 TARGET_KEYTOP_HOME = 31.6    # 実機のホーム段キートップ高さ（dimensions.md §4.5）
 CAP_LIFT = 6.2               # [暫定] プレート上面 → キーキャップ底面（MX ＋ キャップ）
-CAP_H_HOME = 6.7             # [暫定] ホーム段のキャップ高さ
+# ホーム段のキャップ高さ。**DSA プロファイルの暫定候補。**
+#
+# 実機（Topre）は 6.7mm（reference_hhkb.ROWS）。MX で選べる主なプロファイルを
+# 入れて組み立て検査を回したところ、**入るのは DSA だけだった**:
+#
+#   6.7 実機   → PLATE_TOP_FRONT 11.78  OK
+#   7.6 DSA    → PLATE_TOP_FRONT 10.88  OK
+#   9.1 XDA    → PLATE_TOP_FRONT  9.38  NG 基板と 230mm^3 食い込み
+#   9.4 Cherry → PLATE_TOP_FRONT  9.08  NG 基板と 368mm^3 食い込み
+#
+# 背の高いキャップほどプレートが下がり、ケースが基板を噛む。
+# **まだ適用していない。**7.6 にすると実機再現の検査 2 件が落ちる
+# （数字段が実機より 3.5mm 低くなる）。受け入れるかは判断待ち。
+# 詳しくは open-gaps #21。
+CAP_H_HOME = 6.7             # [暫定] ホーム段のキャップ高さ（実機 Topre の値）
 _Y_HOME = 6.375 + 2.5 * 19.05          # ホーム段のキー中心（手前から）
 PLATE_TOP_FRONT = round(
     TARGET_KEYTOP_HOME - CAP_LIFT - CAP_H_HOME - _Y_HOME * tan(radians(TILT_DEG)), 2)
