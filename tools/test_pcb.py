@@ -657,3 +657,30 @@ def test_every_ground_pad_reaches_the_plane(half):
     assert not far, (
         f"{half}: ベタに届いていない GND パッド\n" +
         "\n".join(f"  {r} ({x:.2f}, {y:.2f})" for r, x, y in far))
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_the_routing_was_made_from_the_current_placement(half):
+    """配線が、いまの未配線基板から作られたものであること。
+
+    **配置を変えたのに配線し直していない状態を検出する。**
+    drc.py が「基板を変えたのに DRC をかけ直していない」を見るのと
+    同じ型を、一段手前に置いたもの。
+
+    **バイト列ではなく指紋で比べる。** KiCad は保存のたびに UUID と
+    フットプリントの並び順を変えるので、バイトの sha256 だと
+    「再生成しただけ」で落ちてしまい、何も変わっていないのに
+    Freerouting（数分）を回し直すことになる（tools/boardhash.py）。
+    """
+    import json
+    from boardhash import fingerprint
+    rec_path = PCB / f"route_{half}.json"
+    assert rec_path.exists(), \
+        f"{half}: 配線の記録が無い。tools/autoroute.py を実行すること"
+    rec = json.loads(rec_path.read_text())
+    src = PCB / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
+    assert src.exists(), f"{half}: 未配線の基板が無い: {src}"
+    assert rec["unrouted_fingerprint"] == fingerprint(src), (
+        f"{half}: 配置が変わったのに配線し直していない。"
+        'KiCad の Python で "tools/gen_pcb.py" のあと '
+        '"tools/autoroute.py" を実行すること')

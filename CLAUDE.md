@@ -7,7 +7,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 
 | | |
 |---|---|
-| **[docs/hardware/pcb-routing-handover.md](docs/hardware/pcb-routing-handover.md)** | **いまの作業の続き。**本体基板の引き回しが残っている |
+| **[docs/hardware/pcb-routing-handover.md](docs/hardware/pcb-routing-handover.md)** | 基板の作り方と、配線を自動配線器に移した経緯。**3 基板とも DRC 0** |
 | [docs/hardware/open-gaps.md](docs/hardware/open-gaps.md) | 実機と違うところ・未解決のもの。**差があること自体は悪くない。気づけないことが悪い** |
 | [docs/hardware/decisions/](docs/hardware/decisions/) | なぜそう決めたかの記録。覆す前に読む |
 | [docs/hardware/provisional-values.md](docs/hardware/provisional-values.md) | まだ実測していない値の一覧 |
@@ -43,7 +43,8 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 
 # 基板の生成は KiCad の Python で
 KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3.9
-"$KPY" tools/gen_pcb.py
+"$KPY" tools/gen_pcb.py          # 未配線の基板を pcb/unrouted/ に出す
+"$KPY" tools/autoroute.py        # Freerouting で配線して pcb/ に出す（数分）
 "$KPY" tools/gen_daughterboard.py
 ```
 
