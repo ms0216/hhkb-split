@@ -230,10 +230,11 @@ a(f'<rect x="600" y="{LY-26}" width="386" height="130" rx="6" fill="#fafbfc" '
   'stroke="#dde1e5" stroke-width="1.2"/>')
 txt(618, LY, "押すと出る文字", "#111", 14, "start")
 for i, t in enumerate((
-        "左 proto_split_left  …… 10 列 → a ／ 14 列 → b",
+        "左 proto_split_left  …… 10 列 → Shift ／ 14 列 → b",
         "右 proto_split_right …… 10 列 → c ／ 14 列 → d",
         "",
-        "左だけ USB で Mac へ。右は電源が入っていればよい。")):
+        "左だけ USB で Mac へ。右は電源が入っていればよい。",
+        "左の Shift ＋ 右の c で **C** が出れば本命は合格。")):
     txt(618, LY + 26 + i * 22, t, "#3c4147", 12.5, "start", bold=False)
 
 a('</svg>')

@@ -423,8 +423,9 @@
 <text x="44" y="738" text-anchor="start" font-size="12.5" fill="#3c4147">・押したときだけ鳴る 2 本をテスターで確かめる（この手持ち品は 2 マス）。</text>
 <rect x="600" y="620" width="386" height="130" rx="6" fill="#fafbfc" stroke="#dde1e5" stroke-width="1.2"/>
 <text x="618" y="646" text-anchor="start" font-size="14" font-weight="bold" fill="#111">押すと出る文字</text>
-<text x="618" y="672" text-anchor="start" font-size="12.5" fill="#3c4147">左 proto_split_left  …… 10 列 → a ／ 14 列 → b</text>
+<text x="618" y="672" text-anchor="start" font-size="12.5" fill="#3c4147">左 proto_split_left  …… 10 列 → Shift ／ 14 列 → b</text>
 <text x="618" y="694" text-anchor="start" font-size="12.5" fill="#3c4147">右 proto_split_right …… 10 列 → c ／ 14 列 → d</text>
 <text x="618" y="716" text-anchor="start" font-size="12.5" fill="#3c4147"></text>
 <text x="618" y="738" text-anchor="start" font-size="12.5" fill="#3c4147">左だけ USB で Mac へ。右は電源が入っていればよい。</text>
+<text x="618" y="760" text-anchor="start" font-size="12.5" fill="#3c4147">左の Shift ＋ 右の c で **C** が出れば本命は合格。</text>
 </svg>
