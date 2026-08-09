@@ -29,8 +29,8 @@ import gen_breadboard_c4 as C4
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "docs/hardware/img/breadboard-right-current.svg"
 
-VW, H = 1010, 1130
-DY = 470                      # 2 枚目（右のボード）の縦オフセット
+VW, H = 1010, 1280
+DY = 560                      # 2 枚目の縦オフセット。板の間に電池箱と橋渡し 2 本が入る
 
 BLUE, RED, GREY = "#2b4a97", "#c0392b", "#8c959d"
 DIM, DIMB = "#c9ced3", "#eef0f2"   # 既存の配線・部品は薄く描く
@@ -62,6 +62,18 @@ def wire(pts, color, halo=True, dash=None):
       + 'stroke-linejoin="round" stroke-linecap="round"/>')
     for x, y in (pts[0], pts[-1]):
         a(f'<circle cx="{x}" cy="{y}" r="4.5" fill="{color}"/>')
+
+
+def curve(p0, p1, sag, color):
+    """板の下へ弧を描いて逃がす。**直線で描くと、同じ行の複数のジャンパが
+    一直線に並んで「1 本の連続した線」に見える**（2026-08-09 に指摘された）。"""
+    (x0, y0), (x1, y1) = p0, p1
+    a(f'<path d="M {x0} {y0} C {x0} {sag}, {x1} {sag}, {x1} {y1}" fill="none" '
+      f'stroke="#ffffff" stroke-width="7"/>')
+    a(f'<path d="M {x0} {y0} C {x0} {sag}, {x1} {sag}, {x1} {y1}" fill="none" '
+      f'stroke="{color}" stroke-width="2.4"/>')
+    for x, y in (p0, p1):
+        a(f'<circle cx="{x}" cy="{y}" r="4" fill="{color}"/>')
 
 
 def board(dy, title, sub, tx=110):
@@ -117,7 +129,7 @@ a(f'<rect width="{VW}" height="{H}" fill="#ffffff"/>')
 txt(24, 32, "右半分（ペリフェラル）の電流を測る", size=18, anchor="start")
 txt(24, 54, "C4 の治具から線 2 本で右のボードへ給電する。XIAO は載せ替えない（右のキーを残すため）。",
     "#666", 12.5, "start", bold=False)
-txt(24, 112, "薄いものは組んであるので触らない。濃いものが今つなぐもの。", "#666", 12, "start", bold=False)
+txt(24, 96, "薄いものは組んであるので触らない。濃いものが今つなぐもの。", "#666", 12, "start", bold=False)
 txt(24, 74, "⚠️ 測る前に、右の 10 列・14 列を押して c・d が出ることを確かめる。"
             "接続していないペリフェラルを測ると、待機電流ではなく広告中の電流になる。",
     RED, 12.5, "start")
@@ -159,10 +171,12 @@ for x in (col(_sp[0]), col(_sq[0])):
     a(f'<circle cx="{x}" cy="{row("c")}" r="4" fill="{RED}"/>')
 
 # 電池
-BATY = 500
-a(f'<rect x="560" y="{BATY}" width="298" height="52" rx="7" fill="#f2f4f6" '
+# **− は 12 列、＋ は 29 列**。両方が箱に届くよう、箱を 12 列より左から始める。
+BATY = 540
+_bx0, _bx1 = col(12) - 26, col(29) + 54
+a(f'<rect x="{_bx0}" y="{BATY}" width="{_bx1-_bx0}" height="52" rx="7" fill="#f2f4f6" '
   'stroke="#8c959d" stroke-width="1.6"/>')
-txt(709, BATY + 32, "単3 × 2（直列 3.0V）", "#111", 12)
+txt((_bx0 + _bx1) / 2, BATY + 32, "単3 × 2（直列 3.0V）", "#111", 12)
 for nm in ("電池 −（黒）", "電池 ＋（赤）"):
     _, h = C4.LINK[nm]
     wire([(col(h[0]), row(h[1])), (col(h[0]), BATY)], DIM, halo=False)
@@ -171,9 +185,21 @@ for nm in ("電池 −（黒）", "電池 ＋（赤）"):
 # 左端は治具から来る 2 本が通るので、見出しは右へ寄せる
 board(DY, "2 枚目 — Task C3 の右（そのまま使う）", "USB は抜く。電源は 1 枚目から来る", tx=300)
 draw_xiao(DY, C3.XIAO_PINS, "XIAO（proto_split_right）")
+# **a 行の 3 本は板の下へ逃がす。**直線だと一直線に並んで 1 本に見える。
+_sag = {"ジャンパ（D1 → スイッチ 1）": 1040,
+        "ジャンパ（スイッチ 1 → GND バス）": 1066,
+        "ジャンパ（スイッチ 2 → GND バス）": 1092}
 for name, p, q, kind in C3.LINKS:
-    if kind == "wire":
-        wire([(col(p[0]), row(p[1]) + DY), (col(q[0]), row(q[1]) + DY)], DIM, halo=False)
+    if kind != "wire":
+        continue
+    p2 = (col(p[0]), row(p[1]) + DY)
+    q2 = (col(q[0]), row(q[1]) + DY)
+    if name in _sag:
+        curve(p2, q2, _sag[name], DIM)
+    else:
+        wire([p2, q2], DIM, halo=False)
+txt(986, 1108, "a 行の 3 本は板の下へ逃がして描いてある（実物は板の上）",
+    "#9aa1a8", 10, "end", bold=False)
 for lo, hi, mark in ((10, 12, "c"), (14, 16, "d")):
     x0, x1 = col(lo) - 13, col(hi) + 13
     y0, y1 = row("e") + DY - 13, row("b") + DY + 13
@@ -184,23 +210,25 @@ for lo, hi, mark in ((10, 12, "c"), (14, 16, "d")):
             a(f'<circle cx="{col(n)}" cy="{row(r)+DY}" r="4.5" fill="{GOLD}"/>')
     txt((x0 + x1) / 2, (y0 + y1) / 2 + 6, mark, "#eef2f5", 17)
     txt((x0 + x1) / 2, y1 + 18, f"押すと {mark}", RED, 10)
-txt(col(18), row("a") + DY + 26, "GND バス", "#9aa1a8", 10)
+txt(col(18) + 30, row("a") + DY + 4, "GND バス", "#9aa1a8", 10, "start")
 
 # ================= つなぐ 2 本 =================
-for (name, p, q, c), band in zip(BRIDGE, (512, 488)):
+for (name, p, q, c), band, jog in zip(BRIDGE, (512, 488), (0, -12)):
     x0, y0 = col(p[0]), row(p[1])
     x1, y1 = col(q[0]), row(q[1]) + DY
-    wire([(x0, y0), (x0, band), (x1, band), (x1, y1)], c)
+    # jog: 電池のリードと同じ列を降りると線が重なって見えるので少し寄せる
+    pts = ([(x0, y0), (x0 + jog, y0 + 12)] if jog else [(x0, y0)])
+    wire(pts + [(x0 + jog, band), (x1, band), (x1, y1)], c)
     txt(x1 - 14, band - 8, f"{name}：{p[0]} 列 {p[1]} 行 → {q[0]} 列 {q[1]} 行", c, 11, "start")
 
 # ================= 下段 =================
-LY = 990
+LY = 1150
 a(f'<rect x="24" y="{LY-26}" width="962" height="118" rx="6" fill="#fafbfc" '
   'stroke="#dde1e5" stroke-width="1.2"/>')
 txt(44, LY, "手順", "#111", 14, "start")
 for i, t in enumerate((
         "1. 右のブレッドボードの USB を抜く　2. 上の 2 本をつなぐ　3. 治具の電源スイッチを入れる",
-        "4. 左（USB 給電）を Mac につなぐ　5. **右の 10 列・14 列を押して c・d が出ることを確認**（接続の証拠）",
+        "4. 左（USB 給電）を Mac につなぐ　5. 右の 10 列・14 列を押して c・d が出ることを確認 ← 接続の証拠",
         "6. 10 秒ほど触らずに置いてから、治具のテスターを読む",
         "※ 治具の分圧（1MΩ×2）は右半分の消費に含めて数える。本番の右基板にも分圧は載るため。")):
     txt(44, LY + 24 + i * 21, t, "#3c4147", 12, "start", bold=False)
