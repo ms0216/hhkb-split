@@ -244,7 +244,8 @@ SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷でき�
 # test_the_rear_hook_is_actually_captured が検出した。
 
 from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
-                       DB_STACK_H, SW_PWR_D, SW_PWR_H, SW_PWR_W,
+                       DB_STACK_H, SCREW_HEAD_D, SCREW_HEAD_H,
+                       SW_PWR_D, SW_PWR_H, SW_PWR_W,
                        USB_PLUG_H, USB_PLUG_W, USB_SHELL_EXPOSED,
                        USB_SHELL_H, USB_SHELL_W)
 from interface import XIAO_OUTLINE_W, XIAO_OVERHANG  # noqa: E402
@@ -295,7 +296,19 @@ RUBBER_INSET = 12.0      # 縁からの距離
 FOOT_INSET_REAR = 10.0   # 後縁から脚中心までの距離
 FOOT_D = 12.0            # 脚の直径
 FOOT_PEG_D = 4.0         # 差し込みピンの径
-FOOT_PEG_H = 4.0
+# ピンの長さ。**4.0 → 2.4（open-gaps #29 の発見で短縮）。**
+#
+# 子基板側の脚は、**子基板の裏に 2.1mm 出る FFC コネクタ J_MAIN
+# （床上 4.31mm まで下がる）の真下**にある。ピン 4.0mm のときの盲穴ボス
+# （床から 5.6mm）は左右とも 49.3mm^3 食い込んでいた。子基板の裏面部品を
+# モデルに入れて初めて見えた。脚の位置は動かせない（_foot_positions の注記）
+# ので、ピンを床厚 2.4mm と同じにし、キャップ 1.2mm（0.4mm×3 層）を足して
+# ボス頂 3.6mm に抑える。コネクタとの余裕 0.71mm。
+#
+# **φ4×2.4mm のピンで脚が保持できるかは暫定扱い。印刷して確かめること**
+# （provisional-values.md に登録済み）。
+FOOT_PEG_H = 2.4         # [暫定] 保持力は印刷して確かめる（上の注記）
+FOOT_BOSS_CAP = 1.2      # 盲穴ボスのキャップ厚。1.6 だとボス頂がコネクタに近づく
 # 脚は**後ろの隅**に差し、そこが設置点になる。実機の折りたたみ脚と同じ役割。
 # 0° 用の短い脚も作るので、脚は常に 2 個使う（外すのではなく差し替える）。
 # 当初は脚を内側に置き、電池室と蓋の中にボスが立っていた。
@@ -563,11 +576,13 @@ def build_case(keys, half):
             with Locations((fx, fy, 0)):
                 Cylinder(RUBBER_D / 2, RUBBER_RECESS, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # ピン穴は床(2.0mm)より深い(4.0mm)ので、そのまま開けると内部へ貫通する。
+        # ピン穴は床(2.4mm)と同深なので、そのまま開けると内部へ貫通する。
         # メッシュの種数が 4 になって発覚した。内側にボスを立てて盲穴にする。
+        # キャップは FOOT_BOSS_CAP。**ボス頂は 3.6mm に抑える**（真上に
+        # J_MAIN コネクタが 4.31mm まで下がってくる。FOOT_PEG_H の注記）。
         for fx, fy in _foot_positions(w, h_body):
             with Locations((fx, fy, 0)):
-                Cylinder(FOOT_PEG_D / 2 + 2.0, FOOT_PEG_H + 1.6,
+                Cylinder(FOOT_PEG_D / 2 + 2.0, FOOT_PEG_H + FOOT_BOSS_CAP,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         for fx, fy in _foot_positions(w, h_body):
             with Locations((fx, fy, 0)):
@@ -716,6 +731,13 @@ def _foot_positions(w, h_body):
     内側に寄せると電池室と電池蓋の中にボスが立つ。実際にそうなっており、
     断面図で「電池室の中に 2 本の柱」として見えて発覚した。
     隅なら電池（幅 109mm）にも蓋の開口にも当たらない。
+
+    **位置はここから動かせない**（open-gaps #29 で全部並べた）:
+      奥へ寄せる → 電池側の脚のボスが電池の占有空間に入る（左右とも）
+      内へ寄せる → 支持多角形が狭まり、隅のキーを打つと傾く
+      左右で y を変える → 脚の高さが左右で別になり、部品が倍・取り違えも起きる
+    子基板側の脚のボスは J_MAIN コネクタの真下に来るが、それは
+    **ボスを低くして**逃がす（FOOT_PEG_H の注記）。
     """
     y = h_body / 2 - RUBBER_INSET
     x = w / 2 - RUBBER_INSET
@@ -784,10 +806,19 @@ def build_topcase(keys, half):
                              key_h + BEZEL_OPENING_GAP * 2, 1.5)
         extrude(amount=z_max, mode=Mode.SUBTRACT)
         # ネジ穴（手前 3 箇所）。頭は座ぐりに沈める。
+        # **座ぐりは長らくコメントだけで、実装されていなかった。**ネジを
+        # 実物として組み立てに置いたら（open-gaps #29）、頭がベゼル上面
+        # ——掌の乗る手前の面——に 1.6mm 出ているのが絵で見えた。
+        # 座ぐりは傾いたベゼル上面から掘る（垂直穴の座ぐりを水平に切ると
+        # 傾斜ぶん深さが波打つが、頭の高さ+0.4mm 掘れば足りる）。
         for bx, by in _boss_positions(half):
             with Locations((bx, by, 0)):
                 Cylinder(M2_CLEAR_D / 2, z_max * 2, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            z_top = BEZEL_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG))
+            with Locations((bx, by, z_top - SCREW_HEAD_H - 0.4)):
+                Cylinder(SCREW_HEAD_D / 2 + 0.3, z_max, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
     return top.part, (w, h_body)
 
 

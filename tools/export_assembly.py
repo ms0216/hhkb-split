@@ -9,15 +9,16 @@
   {half}_iso.png        全体を色分けして重ねた絵
   {half}_section_*.png  子基板の位置で切った断面
 
-**Blender で見るとき**は、File > Import > STL で
-build/assembly/left_*.stl を**全部まとめて選ぶ**（位置は入っているので
-そのまま組み上がる）。
+**Blender で見るとき**は、続けて tools/blend_assembly.sh を叩く。
+色とカメラの付いた build/assembly/{half}.blend が出るので、それを開く。
+（Blender の操作は要らない。import も色付けも向こうがやる）
 
-⚠️ **ここに出るのは「モデルに入っているもの」だけ。**キースイッチも
-キーキャップも本体基板の実装部品も FFC ケーブルも入っていない
-（open-gaps #29）。**出てこない＝検査もされていない。**
+⚠️ **ここに出るのは「モデルに入っているもの」だけ。出てこない＝検査も
+されていない。**#29 で「製品として存在する物」を一通り入れた（23 部品）。
+入れない物とその理由は open-gaps #29 の表にある。
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -40,13 +41,43 @@ STYLE = {
     "lid":     ("#a8b6c4", 0.60),
     "db":      ("#3f7fd0", 0.95),   # 子基板
     "xiao":    ("#e0752c", 1.00),   # 板からはみ出した XIAO の端
-    "foot0":   ("#8d8d8d", 0.90),
-    "foot1":   ("#8d8d8d", 0.90),
+    "foot":    ("#8d8d8d", 0.90),   # foot0 / foot1
+    # ---- open-gaps #29 で足した実物 ----
+    "sockets":   ("#4a7d3a", 0.85),  # Kailh ホットスワップ（保守的な箱）
+    "pcb_parts": ("#2f2f2f", 1.00),  # 本体基板の実装部品（KiCad STEP の bbox）
+    "db_parts":  ("#5a3d8a", 1.00),  # 子基板裏の FFC コネクタとコンデンサ
+    "switches":  ("#c9c9d4", 0.70),  # キースイッチ（上下 2 段の箱）
+    "keycaps":   ("#f2ead0", 0.55),  # DSA キーキャップ
+    "stabs":     ("#7a5230", 1.00),  # スタビライザのハウジング
+    "sw_pwr":    ("#d04040", 1.00),  # 電源スイッチの実物
+    "usb_plug":  ("#20a0a0", 1.00),  # 利用者が挿す USB プラグ（挿さった状態）
+    "ffc":       ("#e0a020", 0.90),  # FFC ケーブルの占有空間（経路は暫定）
+    "inserts":   ("#b08d20", 1.00),  # M2 熱圧入インサート
+    "screws":    ("#606870", 1.00),  # M2 ネジ
+    "nut":       ("#8090a0", 1.00),  # 1/4-20 六角ナット（テンティング）
+    "rubber":    ("#303030", 1.00),  # ゴム足
+    # ---- 実形状（視覚確認用。KiCad の STEP を組み立て位置に置いたもの）----
+    "pcb_real":  ("#1f4d18", 1.00),  # 本体基板＋全実装部品＋ソケット＋スタビ
+    "db_real":   ("#1a2f80", 1.00),  # 子基板＋J_MAIN＋C1（XIAO はモデルが無い）
 }
+
+
+def style_for(name):
+    """部品名 → (色, 透明度)。無ければ None。
+
+    **色は種類ごとに 1 つ。**`foot0`/`foot1` は末尾の番号を落として
+    `foot` を引く。#29 でスイッチが 61 個入っても、書く色は 1 行でよい。
+    **知らない部品には既定色を与えない。**灰色は「落ちない見落とし」に
+    なるので、test_assembly が色の無い部品を検出して止める。
+    """
+    return STYLE.get(name) or STYLE.get(name.rstrip("0123456789").rstrip("_"))
 
 
 def export(half="left"):
     OUT.mkdir(parents=True, exist_ok=True)
+    # 色は Blender 側（blend_assembly.py）でも使う。**そちらは build123d が
+    # 無い Blender の Python で動く**ので、import ではなく JSON で渡す。
+    (OUT / "style.json").write_text(json.dumps(STYLE, indent=2))
     keys = halves()[half]
     parts, _ = build_assembly(keys, half)
     written = []
@@ -54,7 +85,58 @@ def export(half="left"):
         path = OUT / f"{half}_{name}.stl"
         export_stl(part, str(path))
         written.append(path)
+    written += export_real(half)
     return parts, written
+
+
+def export_real(half):
+    """**実形状**（KiCad の STEP そのまま）を組み立て位置で STL に出す。
+
+    視覚確認は完成品と同等の形で見たい（利用者の要望・open-gaps #29）。
+    干渉検査は保守的な箱（予約地）が受け持ち、**見る方はこちら**を使う。
+    Blender（blend_assembly.sh）が {half}_*.stl を全部拾うので、
+    箱と実形状が同じ .blend に別レイヤーとして入る。
+
+    ⚠️ XIAO は KiCad にモデルが無いので実形状にも出ない（#29 の表）。
+    kicad-cli が無い環境では出せない。**黙って飛ばさず、その旨を出す。**
+    """
+    import pcb_parts
+
+    if not Path(pcb_parts.KICAD_CLI).exists():
+        print("      kicad-cli が無いので実形状（_pcb_real / _db_real）は出ていない")
+        return []
+    from build123d import Location
+    from envelopes import place_pcb
+    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_D, DB_FROM_REAR, FLOOR,
+                          PLATE_TOP_FRONT, WALL, daughterboard_x_center)
+    from interface import PLATE_T, plan_depth
+
+    keys = halves()[half]
+    _, (w, h_plate) = plate_positions(keys)
+    rim_front = PLATE_TOP_FRONT - PLATE_T
+
+    comp = pcb_parts.real_compound(half)
+    board = max(comp.solids(), key=lambda s: s.volume)
+    top_z = board.bounding_box().max.Z
+    moved = Location((-pcb_parts.ORIGIN[0], pcb_parts.ORIGIN[1], -top_z)) * comp
+    # 許容差は粗く。既定（1e-3）だとソケットのフィレットが細分化されて
+    # **1 ファイル 900MB** になった。0.05mm あれば目視には十分
+    out = []
+    path = OUT / f"{half}_pcb_real.stl"
+    export_stl(place_pcb(moved, h_plate, rim_front), str(path),
+               tolerance=0.05, angular_tolerance=0.3)
+    out.append(path)
+
+    h_case = plan_depth(h_plate)
+    db_x = daughterboard_x_center(half, w)
+    db_center_y = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+    dbc = pcb_parts.real_compound("db")
+    moved = Location((db_x - pcb_parts.ORIGIN[0], db_center_y + pcb_parts.ORIGIN[1],
+                      FLOOR + DB_BOSS_H)) * dbc
+    path = OUT / f"{half}_db_real.stl"
+    export_stl(moved, str(path), tolerance=0.05, angular_tolerance=0.3)
+    out.append(path)
+    return out
 
 
 def render(half, parts):
@@ -72,7 +154,7 @@ def render(half, parts):
     meshes = {n: pv.read(str(OUT / f"{half}_{n}.stl")) for n in parts}
     shots = []
 
-    layers = [(meshes[n], *STYLE.get(n, ("#888888", 0.8))) for n in parts]
+    layers = [(meshes[n], *(style_for(n) or ("#888888", 0.8))) for n in parts]
     for view in ("iso", "bottom"):
         out = OUT / f"{half}_{view}.png"
         # **図中の文字は英数字だけ。**VTK の既定フォントに日本語が無く、
@@ -99,7 +181,7 @@ def render(half, parts):
         p = render3d._plot((1500, 950))
         for n in parts:
             m = meshes[n]
-            color, opacity = STYLE.get(n, ("#888888", 0.8))
+            color, opacity = style_for(n) or ("#888888", 0.8)
             kept = m.clip(normal="x", origin=(x, 0, 0), invert=True)
             if kept.n_points:
                 p.add_mesh(kept, color=color, opacity=opacity, smooth_shading=False)
@@ -129,8 +211,8 @@ def main(argv=None):
         for shot in render(half, parts):
             print(f"      {shot.name}")
     print("\n**ここに出るのはモデルに入っているものだけ。**"
-          "キースイッチ・キーキャップ・本体基板の実装部品・FFC ケーブル・"
-          "電源スイッチの実物は入っていない（open-gaps #29）。")
+          "#29 でスイッチ・キャップ・実装部品・FFC・電源スイッチ・ネジ類まで"
+          "入った。入れない物とその理由は open-gaps #29 の表。")
     return 0
 
 

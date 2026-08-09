@@ -83,22 +83,36 @@ from bands import (SOCK_HI as SOCKET_Y1, SOCK_LO as SOCKET_Y0,  # noqa: E402
 
 
 def pcb_envelope(w, h_plate, half, keys):
-    """基板とソケットが占有する空間（プレート座標系、原点は板の中心）。
+    """基板（板だけ）が占有する空間（プレート座標系、原点は板の中心）。
 
     基板はプレートと平行に、その下へ入る。取付ネジの位置には穴が要る
-    （ケースのボスが貫くため）。ソケットはキーごとに置く。
-    """
-    from gen_plate import plate_positions
+    （ケースのボスが貫くため）。
 
-    positions, _ = plate_positions(keys)
+    **ソケットは socket_envelope に分けた**（open-gaps #29）。ソケットは
+    実物（Kailh の部品）であって板の一部ではないし、箱は保守的に太らせて
+    あるので、実体のダイオードとの重なりを板と区別して扱う必要がある。
+    """
     with BuildPart() as env:
-        # 基板そのもの
         with BuildSketch():
             RectangleRounded(w - PCB_INSET * 2, h_plate - PCB_INSET * 2, CORNER_R)
             with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=-PCB_T)
-        # ソケットはキーの下だけ。まとめて 1 つのスケッチにして一度に押し出す。
+    return env.part
+
+
+def socket_envelope(keys):
+    """Kailh ホットスワップソケットの占有空間（プレート座標系・キーごと）。
+
+    KiCad に 3D モデルが無く STEP に出てこない（#29 で確認）ので、
+    フットプリント実測＋はんだ余裕の**保守的な箱**として置く。
+    実体より太いことを前提に扱うこと（ダイオードとの離隔の実体検査は
+    基板の DRC コートヤードが担っている）。
+    """
+    from gen_plate import plate_positions
+
+    positions, _ = plate_positions(keys)
+    with BuildPart() as env:
         with BuildSketch(Plane.XY.offset(-PCB_T)):
             for kx, ky in positions:
                 with Locations((kx + (SOCKET_X0 + SOCKET_X1) / 2,
@@ -219,6 +233,121 @@ FFC_LENGTH = 100.0       # [暫定] FFC ケーブルの長さ
 # **実測ではなく見積もり。**ケーブルを張った状態で使ってはいけないので、
 # 直線距離ぴったりでは足りない。
 FFC_SLACK = 25.0         # [暫定] FFC に要る直線距離以外の余裕
+
+
+# --------------------------------------------------------------------------
+# キーの上下に付く実物（open-gaps #29。物として置いて初めて検査になる）
+# --------------------------------------------------------------------------
+# MX スイッチの外形。**データシートの代表値。現物を測ったら差し替える。**
+SW_BODY_W = 15.6         # [暫定] 上部ハウジングのつば（プレートの上に載る）
+SW_UNDER_W = 14.0        # [暫定] プレート下の下部ハウジング（開口 14.0 を通る）
+# **プレートの板厚の中と、基板の穴の中は置かない。**開口 14.0 に対して
+# 本体 14.0（隙間 0）なので、置くと接触ノイズだけが出る。中心ピンと端子も
+# 実基板には穴があるが、pcb の占有空間（穴の無い板）に当たるので置かない。
+# → 置くのは「プレート上のつば〜キャップ底」と「プレート下面〜基板上面」の 2 段。
+
+# キーキャップ（DSA・暫定候補 open-gaps #21）。
+# 幅 = キーの u 数 × 19.05 − CAP_GAP。1u で 18.4mm になる（DSA の公称）。
+CAP_GAP = 0.65           # [暫定] 隣のキャップとの隙間（DSA 公称 18.4 から逆算）
+
+# スタビライザ（2u/3u キーの下、基板に載る）。KiCad に 3D モデルが無く
+# STEP に出てこないので、ここで箱として置く。
+STAB_BODY_D = 7.0        # [暫定] 前後方向の占有
+STAB_BODY_XPAD = 4.0     # [暫定] ワイヤ両端の外側余裕
+# スタビライザの足は実基板の穴を貫くが、pcb の占有空間には穴が無いので
+# 置かない（スイッチの端子と同じ扱い）。
+
+# 利用者の USB プラグが「完全に挿さった」ときの金属の進入量。
+# メスの奥行（XIAO のコネクタ 約7.4mm）に対しプラグ金属 6.5mm のうち
+# 外に USB_SHELL_EXPOSED だけ見えて残りが入る、の関係から置いた概数。
+USB_MATE_DEPTH = 6.0     # [暫定] 金属シェルがメスの前面から入る深さ
+USB_PLUG_BODY_L = 10.0   # [暫定] 樹脂胴体の長さ。検査で効くのは前面の位置だけ
+
+# FFC ケーブル（12 芯 0.5mm ピッチ）。リボンの幅と、経路の占有厚み。
+FFC_RIBBON_W = 7.0       # [暫定] 6.0mm 幅＋振れの余裕
+
+# M2 なべ小ネジ。**まだ買っていない。**長さは幾何から選んだ候補。
+SCREW_HEAD_D = 3.8       # [暫定] 頭の直径
+SCREW_HEAD_H = 1.6       # [暫定] 頭の高さ
+SCREW_L_MAIN = 12.0      # [暫定] 上ケース → プレート → ボスのインサートまで
+SCREW_L_DB = 5.0         # [暫定] 子基板 → 子基板ボスのインサートまで
+
+# ゴム足（前 2 箇所・買う部品）。座ぐり（gen_case.RUBBER_D=10.0）と
+# 別に持つのは、これは「買う足の寸法」で座ぐりは「ケースの造作」だから。
+# 一致は test_assembly が見張る。
+RUBBER_FOOT_D = 10.0     # [暫定] 買うゴム足の直径
+RUBBER_FOOT_T = 2.0      # [暫定] 同・厚み（gen_case.RUBBER_T と同値のこと）
+
+# テンティング用 1/4-20 六角ナット（規格品）。ポケットは gen_case 側
+# （NUT_AF=11.4, NUT_T=5.7 は逃げ込み）。
+NUT_QUARTER_AF = 11.1    # [確定] 二面幅（規格）
+NUT_QUARTER_T = 5.5      # [確定] 厚み（規格）
+
+
+def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
+    """キースイッチ（2 段）とキーキャップの占有空間。プレート座標系。
+
+    z=0 がプレートの下面、z=plate_t が上面（gen_assembly.plate_placement が
+    プレートを置くのと同じ基準）。戻りは (switches, keycaps) の 2 部品。
+    61 個を 1 部品にまとめる（部品対の数を増やさないため。自己交差は無い）。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+
+    with BuildPart() as sw:
+        for (kx, ky), _k in zip(positions, keys):
+            with Locations((kx, ky, -PLATE_TO_PCB)):
+                Box(SW_UNDER_W, SW_UNDER_W, PLATE_TO_PCB,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((kx, ky, plate_t)):
+                Box(SW_BODY_W, SW_BODY_W, cap_lift,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+    with BuildPart() as caps:
+        for (kx, ky), k in zip(positions, keys):
+            with Locations((kx, ky, plate_t + cap_lift)):
+                Box(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP, cap_h,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return sw.part, caps.part
+
+
+def stab_envelope(stabs):
+    """スタビライザの占有空間（プレート座標系・z=0 がプレート下面）。
+
+    stabs は [((x, y), s), ...]。s はワイヤ半間隔（interface.stab_offset_for）。
+    **ハウジングはワイヤの両端（キー中心から ±s）に 1 個ずつ。**キー中心には
+    スイッチ本体が居るので、全幅の 1 本棒で置くとスイッチと重なって
+    偽の干渉になる（実際になった）。ワイヤ自体は φ2 程度で基板のすぐ上を
+    通るため、ハウジングの箱に含めて別には置かない。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+
+    with BuildPart() as env:
+        for (kx, ky), s in stabs:
+            for side in (-1, 1):
+                with Locations((kx + side * s, ky, -PLATE_TO_PCB)):
+                    Box(STAB_BODY_XPAD * 2, STAB_BODY_D, PLATE_TO_PCB,
+                        align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return env.part
+
+
+def usb_plug_envelope(x, y_recept, z_center):
+    """完全に挿さった USB プラグ（ケース座標系）。open-gaps #28 の再発防止。
+
+    **メス（y_recept = XIAO の奥端面）から位置を導く。**壁から導くと、
+    XIAO が奥まっても「挿さったことにされる」——#28 はまさにそれだった。
+    メスが壁から遠のくと、樹脂の胴体が壁に食い込む形で検査に出る。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+
+    tip = y_recept - USB_MATE_DEPTH
+    shell_l = 6.5            # [確定] USB Type-C プラグの金属部の長さ（規格）
+    with BuildPart() as env:
+        with Locations((x, tip, z_center)):
+            Box(USB_SHELL_W, shell_l, USB_SHELL_H,
+                align=(Align.CENTER, Align.MIN, Align.CENTER))
+        with Locations((x, tip + shell_l, z_center)):
+            Box(USB_PLUG_W, USB_PLUG_BODY_L, USB_PLUG_H,
+                align=(Align.CENTER, Align.MIN, Align.CENTER))
+    return env.part
 
 
 def daughterboard_envelope(center, w, d, t):

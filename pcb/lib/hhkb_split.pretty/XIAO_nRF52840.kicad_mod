@@ -28,4 +28,9 @@
   (fp_line (start -9.15 10.75) (end -9.15 -10.75) (layer F.CrtYd) (width 0.05))
   (fp_line (start -4 -9.5) (end 4 -9.5) (layer F.SilkS) (width 0.3))
   (fp_text user "USB" (at 0 -7.6) (layer F.SilkS) (effects (font (size 0.8 0.8) (thickness 0.12))))
+  (model "${KIPRJMOD}/lib/hhkb_split.3dshapes/XIAO_nRF52840.step"
+    (offset (xyz 6.111 -1.804 0.165))
+    (scale (xyz 1 1 1))
+    (rotate (xyz -90 0 -90))
+  )
 )

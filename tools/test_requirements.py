@@ -20,6 +20,8 @@ REQ = ROOT / "requirements-dev.txt"
 DIST = {"PIL": "pillow", "yaml": "PyYAML", "mpl_toolkits": "matplotlib"}
 # KiCad 同梱の Python でしか使わないもの（CI には入れない）
 KICAD_ONLY = {"pcbnew"}
+# Blender 同梱の Python でしか使わないもの（pip では入らない）
+BLENDER_ONLY = {"bpy", "mathutils"}
 # 任意（入っていなくても検証は通る）
 OPTIONAL = {"pyvista"}
 
@@ -35,7 +37,8 @@ def external_imports():
             elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
                 mods.add(n.module.split(".")[0])
     return {m for m in mods if m not in std and m not in local
-            and m not in KICAD_ONLY and m not in OPTIONAL}
+            and m not in KICAD_ONLY and m not in BLENDER_ONLY
+            and m not in OPTIONAL}
 
 
 def listed():
