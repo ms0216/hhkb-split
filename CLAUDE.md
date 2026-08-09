@@ -67,6 +67,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 .venv/bin/pytest tools -q                      # 全検査（289 件）
 .venv/bin/python3 tools/gen_case.py            # ケース・上ケース・蓋・脚
 .venv/bin/python3 tools/gen_assembly.py        # 組み立て干渉（0 でなければならない）
+.venv/bin/python3 tools/export_assembly.py     # **組み立てを目で見る。**STL を部品ごとに build/assembly/ へ（Blender で全部まとめて開ける）と絵を出す
 .venv/bin/python3 tools/slice_check.py         # K1 Max でスライスできるか
 .venv/bin/python3 tools/drc.py                 # 基板の DRC（記録も更新）
 .venv/bin/python3 tools/mutate.py              # 定数を壊して検査が気づくか測る（遅い）
