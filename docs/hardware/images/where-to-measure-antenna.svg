@@ -3,8 +3,8 @@
   <rect width="961" height="962" fill="#fdfdfa"/>
   <text x="28" y="40" font-size="22" font-weight="bold" fill="#111">XIAO の青い部品（アンテナ）の位置を測ってほしい</text>
   <text x="28" y="70" font-size="16" fill="#333">① <tspan font-weight="bold">青い部品が見える面</tspan>を上にして、<tspan font-weight="bold">USB を奥（図の上）</tspan>に向ける</text>
-  <text x="46" y="94" font-size="14" fill="#666">この向きだと、手前の左に「TX」、右に「RX」と印刷されています</text>
-  <text x="28" y="122" font-size="16" fill="#333">② 下の <tspan font-weight="bold" fill="#c0392b">★ の矢印</tspan>（左の縁 → 青い部品の中心）を測る。定規は 1mm 刻みで十分</text>
+  <text x="46" y="94" font-size="14" fill="#666">※ 基板を裏返したり回したりすると左右が入れ替わります。「TX」の側から測るのが正しい向きです</text>
+  <text x="28" y="122" font-size="16" fill="#333">② <tspan font-weight="bold" fill="#c0392b">「TX」と印刷されている側の縁</tspan>から、青い部品の中心までを測る（★ の矢印）</text>
   <text x="28" y="150" font-size="16" fill="#333">③ その値が <tspan font-weight="bold" fill="#c0392b">7.8mm</tspan> より小さいか大きいかを教えてください</text>
 
   <!-- USB コネクタ -->
@@ -16,6 +16,14 @@
   <rect x="150.0" y="250.0" width="391.6" height="462.0"
         rx="10" fill="#2b2b2b" stroke="#111" stroke-width="2"/>
   <rect x="154.4" y="301.3" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="318.4" font-size="15" fill="#eee">D0</text><rect x="502.0" y="301.3" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="318.4" font-size="15" fill="#eee" text-anchor="end">5V</text><rect x="154.4" y="357.1" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="374.2" font-size="15" fill="#eee">D1</text><rect x="502.0" y="357.1" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="374.2" font-size="15" fill="#eee" text-anchor="end">GND</text><rect x="154.4" y="413.0" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="430.1" font-size="15" fill="#eee">D2</text><rect x="502.0" y="413.0" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="430.1" font-size="15" fill="#eee" text-anchor="end">3V3</text><rect x="154.4" y="468.9" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="486.0" font-size="15" fill="#eee">D3</text><rect x="502.0" y="468.9" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="486.0" font-size="15" fill="#eee" text-anchor="end">D10</text><rect x="154.4" y="524.8" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="541.9" font-size="15" fill="#eee">D4</text><rect x="502.0" y="524.8" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="541.9" font-size="15" fill="#eee" text-anchor="end">D9</text><rect x="154.4" y="580.7" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="597.8" font-size="15" fill="#eee">D5</text><rect x="502.0" y="580.7" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="597.8" font-size="15" fill="#eee" text-anchor="end">D8</text><rect x="154.4" y="636.5" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="198.4" y="653.6" font-size="15" fill="#eee">D6 (TX)</text><rect x="502.0" y="636.5" width="35.2" height="24.2" rx="3" fill="#d9a441" stroke="#8a6a20"/><text x="493.2" y="653.6" font-size="15" fill="#eee" text-anchor="end">D7 (RX)</text>
+
+  <!-- TX / RX の縁を強調 -->
+  <line x1="150.0" y1="250.0" x2="150.0" y2="712.0" stroke="#c0392b" stroke-width="6"/>
+  <text x="136.0" y="481.0" font-size="18" font-weight="bold" fill="#c0392b"
+        text-anchor="end" transform="rotate(-90 136.0 481.0)">TX と書いてある側の縁</text>
+  <line x1="541.6" y1="250.0" x2="541.6" y2="712.0" stroke="#888" stroke-width="6"/>
+  <text x="557.6" y="481.0" font-size="16" fill="#888"
+        transform="rotate(-90 557.6 481.0)">RX と書いてある側の縁</text>
 
   <!-- アンテナ（推定位置）と不確かさ -->
   <rect x="247.9" y="654.8"
@@ -44,7 +52,7 @@
   <text x="229.2" y="826.4" font-size="17" font-weight="bold"
         fill="#111" text-anchor="middle">★ ここを測る</text>
   <text x="229.2" y="850.6" font-size="14" fill="#333"
-        text-anchor="middle">左の縁から、青い部品の中心まで</text>
+        text-anchor="middle">「TX」側の縁から、青い部品の中心まで</text>
 
   <!-- 判定 -->
   <g transform="translate(582,294)">
