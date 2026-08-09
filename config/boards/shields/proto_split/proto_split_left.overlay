@@ -26,6 +26,15 @@
 	};
 };
 
+/* **`status` を明示するのも要る。**
+ *
+ * ボードの dtsi は uart0 を okay にしているが、`.config` に
+ * `CONFIG_UART_NRFX` が入っていなかった（＝ nrfx の UARTE ドライバが
+ * 組み込まれていない＝ uart0 のデバイスが存在しない）。この状態で
+ * console を uart0 に向けると `__device_dts_ord_128 undeclared` で
+ * ビルドが落ちる（2026-08-09・実際に落ちた）。
+ */
 &uart0 {
+	status = "okay";
 	current-speed = <1000000>;
 };
