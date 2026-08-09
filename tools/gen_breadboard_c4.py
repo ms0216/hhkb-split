@@ -96,8 +96,15 @@ XIAO_ROWS = ("h", "d")   # 上側 / 下側のピンが刺さる行
 XIAO_PINS = {(n, XIAO_ROWS[0]): t for n, t in enumerate(("5V", "GND", "3V3", "D10", "D9", "D8", "D7"), 1)}
 XIAO_PINS.update({(n, XIAO_ROWS[1]): t for n, t in enumerate(("D0", "D1", "D2", "D3", "D4", "D5", "D6"), 1)})
 
-# 本体が上に乗って使えなくなる穴。XIAO は 1〜7 列の g〜e、スイッチは 23〜25 の b。
-COVERED = {(n, r) for n in range(1, 8) for r in "gfe"} | {(n, "b") for n in (23, 24, 25)}
+# **本体が乗って使えなくなる穴。**
+#
+# XIAO は 21.0 x 18.0mm（[envelopes.py](../tools/envelopes.py) の実測値）。
+# ピンの端から端は 6 ピッチ＝15.24mm しかないので、
+#   長辺 21.0mm → 両端に 2.88mm（**1.1 列ぶん**）はみ出す → **8 列にもかぶさる**
+#   短辺 18.0mm → ピンの行より 1.4mm 外まで → h・d 行の上に乗るが c・i 行には届かない
+# **一度 1〜7 列で止めていた。**8 列を空いていると誤って読む余地が残っていた。
+COVERED = ({(n, r) for n in range(1, 9) for r in "hgfed"} - set(XIAO_PINS)
+           | {(n, "b") for n in (23, 24, 25)})
 
 # 測定点。**部品の胴体が乗った穴は使えない**ので、レールと分圧の中点は
 # a 行から取る。

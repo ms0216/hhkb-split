@@ -173,7 +173,7 @@ def test_the_c4_breadboard_figure_is_generated_from_this_file():
         "  .venv/bin/python3 tools/gen_breadboard_c4.py")
 
 
-@pytest.mark.parametrize("module", ["gen_breadboard", "gen_breadboard_c4"])
+@pytest.mark.parametrize("module", ["gen_breadboard", "gen_breadboard_c3", "gen_breadboard_c4"])
 def test_the_xiao_straddles_the_gutter_by_its_real_pin_pitch(module):
     """配線図の XIAO が、実際に挿さる行に描かれていること。
 
@@ -195,10 +195,11 @@ def test_the_xiao_straddles_the_gutter_by_its_real_pin_pitch(module):
         f"{pitch[top] - pitch[bottom]} ピッチでは挿さらない（0.6 インチ＝6 ピッチ）")
 
 
-def _c4_holes():
-    """C4 の配線から (使っている穴 → 誰が, 部品の胴体で塞がる穴) を作る。"""
-    import gen_breadboard_c4 as g
+def _holes(module):
+    """配線から (使っている穴 → 誰が, 部品の胴体で塞がる穴) を作る。"""
+    import importlib
 
+    g = importlib.import_module(module)
     used, blocked = {}, set(g.COVERED)
     for hole, pin in g.XIAO_PINS.items():
         used[hole] = f"XIAO の {pin}"
@@ -212,16 +213,93 @@ def _c4_holes():
             # 胴体が上に乗るので、両端のあいだの穴は使えない
             lo, hi = sorted((p[0], q[0]))
             blocked |= {(n, p[1]) for n in range(lo + 1, hi)}
+    for h in getattr(g, "SWITCH_FEET", ()):
+        used.setdefault(h, "スイッチの足")
     return used, blocked
 
 
-def test_no_two_things_share_a_hole_on_the_c4_breadboard():
-    """C4 の配線で、1 つの穴を 2 つが取り合っていないこと。
+def _c4_holes():
+    return _holes("gen_breadboard_c4")
+
+
+@pytest.mark.parametrize("module", ["gen_breadboard_c3", "gen_breadboard_c4"])
+def test_no_two_things_share_a_hole(module):
+    """1 つの穴を 2 つが取り合っていないこと。
 
     **穴の取り違えは、実物を組むまで気づけない。**しかも C4 は乾電池を
     XIAO の 3V3 へ直接入れるので、取り違えると壊れる側の間違いになる。
     """
-    _c4_holes()  # 重複があれば assert で落ちる
+    _holes(module)  # 重複があれば assert で落ちる
+
+
+@pytest.mark.parametrize("module", ["gen_breadboard_c3", "gen_breadboard_c4"])
+def test_nothing_is_plugged_into_a_hole_under_a_part(module):
+    """部品やジャンパを、本体の下に隠れる穴へ挿していないこと。
+
+    **XIAO は 21.0 x 18.0mm で、ピンの端から端（6 ピッチ＝15.24mm）より
+    大きい。**両端に 1.1 列ぶんはみ出すので、8 列にもかぶさる。
+    タクトスイッチも胴体が間の列を覆う。
+
+    図の上では穴が空いて見えるので、**実物を組むまで気づけない。**
+    """
+    import importlib
+
+    g = importlib.import_module(module)
+    used, blocked = _holes(module)
+    feet = set(getattr(g, "SWITCH_FEET", ()))
+    bad = [f"{name}: {h} は本体の下" for name, p, q, _k in g.LINKS
+           for h in (p, q) if h is not None and h in blocked and h not in feet]
+    assert not bad, "本体の下の穴に挿している\n    " + "\n    ".join(bad)
+
+
+def test_the_c3_wiring_forms_the_intended_circuit():
+    """C3 の配線をたどると、意図した回路になっていること。
+
+    **2 列は上下で別の節点**（上半分が GND、下半分が D1）。列だけで
+    数えると同じに見えるので、溝で分けて数える。
+
+    **C1 の図をそのまま使うと D0 につないでしまい、キーが一生反応しない。**
+    Task C5 で D0 を ADC に取られてキーを D1・D2 へ移したのに、C3 の
+    配線表が C1 のままだった（2026-08-09 に直した）。ここで見張る。
+    """
+    import gen_breadboard_c3 as g
+
+    parent = {}
+
+    def find(n):
+        parent.setdefault(n, n)
+        while parent[n] != n:
+            parent[n] = parent[parent[n]]
+            n = parent[n]
+        return n
+
+    def union(x, y):
+        parent[find(x)] = find(y)
+
+    def node(h):
+        return (h[0], g.half(h[1]))
+
+    for _name, p, q, kind in g.LINKS:
+        if kind == "wire":
+            union(node(p), node(q))
+
+    pin = {t: node((n, r)) for (n, r), t in g.XIAO_PINS.items()}
+    same = lambda x, y: find(x) == find(y)
+
+    assert not same(pin["D1"], pin["GND"]), "押していないのに D1 が GND に落ちている"
+    assert not same(pin["D2"], pin["GND"]), "押していないのに D2 が GND に落ちている"
+    assert not same(pin["D1"], pin["D2"]), "D1 と D2 が短絡している"
+    assert not same(pin["GND"], pin["5V"]), "GND と 5V が短絡している"
+    assert not same(pin["GND"], pin["3V3"]), "GND と 3V3 が短絡している"
+    assert not same(pin["D0"], pin["GND"]), (
+        "D0 に配線が届いている。**C1 の図を流用したときの典型的な間違い。**"
+        "いまのファームは D1・D2 を使う")
+
+    # スイッチを押すと、狙ったピンが GND へ落ちること
+    for name, want in (("① スイッチ 1", "D1"), ("② スイッチ 2", "D2")):
+        p, q = g.LINK[name]
+        assert same(node(p), pin[want]), f"{name} の片側が {want} につながっていない"
+        assert same(node(q), pin["GND"]), f"{name} のもう片側が GND につながっていない"
 
 
 def test_the_c4_probe_points_are_reachable():
