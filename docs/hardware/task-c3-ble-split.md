@@ -433,9 +433,8 @@ latency が効くので、すでに軽いはず」と書いたが、**効いて�
 **要素 4（ホスト側の間隔）が生き返った。**latency 0 なので 67 回/秒を
 消費している。ただし払うのは**いちばん大きい遅延項**なので、分割側より分が悪い。
 
-> **⚠️ この測定は USB を繋いだ状態。**ZMK は HID を USB へ流していたので、
-> **macOS が「BLE だけで使っているとき」に別のパラメータを使う可能性は残る。**
-> → UART ログで測り直す（下記）。
+> **この測定は USB を繋いだ状態だった。**「BLE だけのときは違うかもしれない」
+> という疑いが残ったので、**UART ログで測り直した（下記）。同じ値だった。**
 
 ### 分割リンクの PHY は測らない（設定から決まる）
 
@@ -455,33 +454,88 @@ ZMK は上書きしていない
 > リングバッファが溢れ、**1.48 秒でログが止まり、ホストとの BLE 接続まで
 > 確立しなくなった**（2026-08-09 に実際に起きた）。**測定器が測定対象を壊す形。**
 
-### 続き: UART ログで測り直す（**ここから未実施**）
+### UART ログで測り直した（2026-08-09・**完了**）
 
-**USB ログでは測れないものが 2 つある。**
+**USB を挿していると測れないものが 2 つあった。**
 
 | | |
 |---|---|
 | ① BLE だけのときの接続パラメータ | USB を挿すと ZMK は HID を USB へ流す |
 | ② ログを取りながらの消費電流 | **USB 給電だと電池側に電流が流れない。原理的に同時に測れない** |
 
-→ **ログを UART（D6・P1.11）へ出し、Saleae で読む。**D6 は治具でも本番
-シールドでも未使用。**速度は 1Mbps**（115200 では ZMK のログ量に足りない）。
+→ **ログを UART（D6・P1.11）へ出し、Saleae で読んだ。**
 
-**「J-Link が要る」と一度書いたが誤り。**手元の道具（Saleae Logic 8）を
-数えずに、無い道具を前提に「できない」と言っていた。
+**「J-Link が要る」と一度書いたが誤り。**手元の道具（Saleae）を数えずに、
+無い道具を前提に「できない」と言っていた。
 
-**状態（2026-08-09 時点）**
+**結果 — USB の有無で変わらなかった。**
+
+```
+[00:00:01.256] le_param_updated: 3C:A6:F6:3F:0B:48 (public): interval 12 latency 0 timeout 72
+[00:00:05.348] le_param_updated: 3C:A6:F6:3F:0B:48 (public): interval 12 latency 0 timeout 72
+[00:00:05.439] le_param_updated: 3C:A6:F6:3F:0B:48 (public): interval 12 latency 0 timeout 72
+```
+
+| | USB あり | **BLE のみ** |
+|---|---|---|
+| 接続間隔 | 12（15ms） | **12（15ms）** |
+| latency | 0 | **0** |
+| タイムアウト | 72（720ms） | **72（720ms）** |
+
+**macOS は USB の有無で扱いを変えていない。**前回の測定は歪んでいなかった。
+**ホストリンクは 67 回/秒を消費している**という結論はそのまま立つ。
+
+分割リンク側も同じログで取れた。**設計どおり。**
+
+```
+split_central_process_connection: New connection params: Interval: 6, Latency: 30, PHY: 1
+```
+
+#### **ここで 3 回つまずいた。すべて「設定しただけでは効いていない」**
+
+**1 回目 — ログの出口。**`CONFIG_LOG_BACKEND_UART=y` と書いても、
+**Zephyr はこれを `zephyr,console` が指すデバイスへ出す。**XIAO の既定は
+`xiao_ble_common.dtsi` が `common/usb/cdc_acm_serial.dtsi` を include して
+いるので **USB CDC**。充電器給電では受け手が居ない。
+
+→ overlay で `chosen { zephyr,console = &uart0; }` を書いて向け直した。
+
+**2 回目 — ドライバが入っていない。**console を uart0 に向けたらビルドが
+落ちた（`__device_dts_ord_128 undeclared`）。`.config` に
+`CONFIG_UART_NRFX` が無かった。**ボードの dtsi は `status = "okay"` と
+書いているのに、デバイスの実体が無い。**
+
+→ overlay で `&uart0 { status = "okay"; }` を明示して引き込んだ。
+
+**3 回目 — ログ水準。**読みたい `le_param_updated` は ZMK の `LOG_DBG`。
+既定の INFO ではコンパイル時に消える。`CONFIG_ZMK_USB_LOGGING` はこれを
+暗黙に上げていたので USB のときは出ていた。**USB から UART へ移したときに
+その副作用を引き継いでいなかった。**
+
+→ `CONFIG_ZMK_LOG_LEVEL_DBG=y`。**装置を壊した `BT_CONN_LOG_LEVEL_DBG`
+とは別物**（あちらは Zephyr の BT スタック・133 回/秒）。
+
+**切り分けに効いた手は 1 つ。**「リセットしても 1 ビットも動かない」を
+確かめたこと。**ブートのメッセージは INFO なので、線が生きていれば必ず
+出る。**出ないなら配線ではなく、喋っていないほうが疑わしい。
+
+#### 測ったときの構成
 
 | | |
 |---|---|
-| 焼いてあるファーム | `fe341dd`・**左のみ**・UART ログ有効 |
-| 配線 | Saleae CH0 → 左の **7 列**（D6）、GND → 左の **18 列**（GND バス） |
-| Saleae | Async Serial / **1000000 bps** / 8N1 / LSB first / 12.5MS/s |
+| ファーム | `9080501`・**左のみ**・UART ログ有効 |
+| 配線 | Saleae **CH0 → XIAO の `D6`**、**GND → XIAO の `GND`** |
+| Saleae | Async Serial / **1000000 bps** / 8N1 / LSB first / 24MS/s |
 | 電源 | 左は **USB 充電器**（Mac には繋がない）。右も電源オン |
-| 読む行 | `le_param_updated: ... interval ?? latency ?? timeout ??` |
-| 比較対象 | USB 接続時は **interval 12 / latency 0 / timeout 72** |
 
-**済んだら `proto_split_left.conf` と `.overlay` の [一時的] を消すこと。**
+**XIAO のピンは 14 本。**番号ではなく**基板の印字**で挿すこと（数え方が
+食い違って往復した）。
+
+**ログは 2 か所で溢れた**（`--- 72 messages dropped ---`）。1Mbps でも
+起動直後の数百行には足りない。**読みたい行が残ったので追わなかったが、
+起動直後を詳しく見るなら `CONFIG_LOG_BUFFER_SIZE` を上げる必要がある。**
+
+**⚠️ `proto_split_left.conf` と `.overlay` の [一時的] は消すこと。**
 
 ### 遅延の鎖（要素 1 を判断するための土台）
 
