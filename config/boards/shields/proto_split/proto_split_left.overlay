@@ -7,8 +7,25 @@
  * （毎秒 100 行級）に足りず、溢れて止まる。1Mbps なら Saleae Logic 8 で
  * 余裕をもって読める（4MS/s あれば 4 倍の過剰標本化）。
  *
- * TX は P1.11 = D6。治具でも本番シールドでも未使用のピン。
+ * TX は P1.11 = D6（Zephyr の xiao_ble-pinctrl.dtsi で確認）。治具でも
+ * 本番シールドでも未使用のピン。
+ *
+ * **`chosen` を uart0 に向け直すのが要。**
+ *
+ * `CONFIG_LOG_BACKEND_UART` は `zephyr,console` が指すデバイスへ出す。
+ * XIAO の既定はそれが **USB CDC**（xiao_ble_common.dtsi が
+ * common/usb/cdc_acm_serial.dtsi を include している）。
+ *
+ * **だから `CONFIG_LOG_BACKEND_UART=y` だけでは USB へ出ていた。**
+ * 充電器に挿しているだけなので受け手が居らず、D6 は 15 秒間 1 度も
+ * 動かなかった（2026-08-09 に実測）。**配線もピンも正しかった。**
  */
+/ {
+	chosen {
+		zephyr,console = &uart0;
+	};
+};
+
 &uart0 {
 	current-speed = <1000000>;
 };
