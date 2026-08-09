@@ -234,11 +234,12 @@ def test_the_c4_probe_points_are_reachable():
 
     used, blocked = _c4_holes()
     bad = []
-    for letter, what, hole in g.PROBES:
-        if hole in used:
-            bad.append(f"{letter}（{what}）{hole} は {used[hole]} が使っている")
-        if hole in blocked:
-            bad.append(f"{letter}（{what}）{hole} は部品の胴体の下でテスターを挿せない")
+    for what, p, q in g.PROBES:
+        for hole in (p, q):
+            if hole in used:
+                bad.append(f"{what} の {hole} は {used[hole]} が使っている")
+            if hole in blocked:
+                bad.append(f"{what} の {hole} は部品の胴体の下でテスターを挿せない")
     assert not bad, "測定点が使えない穴を指している\n    " + "\n    ".join(bad)
 
 

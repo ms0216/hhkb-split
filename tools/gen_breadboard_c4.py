@@ -99,9 +99,18 @@ XIAO_PINS.update({(n, XIAO_ROWS[1]): t for n, t in enumerate(("D0", "D1", "D2", 
 # 本体が上に乗って使えなくなる穴。XIAO は 1〜7 列の g〜e、スイッチは 23〜25 の b。
 COVERED = {(n, r) for n in range(1, 8) for r in "gfe"} | {(n, "b") for n in (23, 24, 25)}
 
-# 測定点。**部品の胴体が乗った穴は使えない**ので、レールと D0 は a 行から取る。
-PROBES = (("A", "電池電圧", (29, "e")), ("B", "シャント両端", (29, "b")), ("B", "シャント両端", (27, "b")),
-          ("C", "レール（3V3）", (14, "a")), ("D", "D0（分圧後）", (17, "a")), ("E", "共通 GND", (12, "d")))
+# 測定点。**部品の胴体が乗った穴は使えない**ので、レールと分圧の中点は
+# a 行から取る。
+#
+# **記号（Ⓐ Ⓑ …）で呼ばない。**一度そうしたが、台の上では毎回
+# 「Ⓓ はどこだったか」と図に戻る手間になった。**穴の名前で呼ぶ。**
+#
+#   (測るもの, 赤を当てる穴, 黒を当てる穴)
+GND_HOLE = (12, "d")
+PROBES = (("電池電圧", (29, "e"), GND_HOLE),
+          ("シャント両端", (29, "b"), (27, "b")),
+          ("レール（3V3）", (14, "a"), GND_HOLE),
+          ("分圧の中点（D0 へ行く電圧）", (17, "a"), GND_HOLE))
 
 
 def span(name):
@@ -286,20 +295,17 @@ for nm, cc, lb in (("電池 −（黒）", BLK, "−（黒）"), ("電池 ＋（
     txt(col(h[0]) - 12, BY - 12, f"{lb} → {h[0]} 列 {h[1]} 行", cc, 11, "end")
 
 # ================= 測定点 =================
-for t, _what, (n, r) in PROBES:
+for n, r in sorted({h for _w, p, q in PROBES for h in (p, q)}):
     x, y = col(n), row(r)
-    a(f'<circle cx="{x}" cy="{y}" r="8.5" fill="#ffffff" stroke="{RED}" stroke-width="2"/>')
-    txt(x, y + 4, t, RED, 11)
+    a(f'<circle cx="{x}" cy="{y}" r="8.5" fill="none" stroke="{RED}" stroke-width="2"/>')
+    txt(x, y - 13, f"{n}{r}", RED, 9)
 
-_by_letter = {}
-for t, what, h in PROBES:
-    _by_letter.setdefault((t, what), []).append(f"{h[0]} 列 {h[1]} 行")
 PROBE_ROWS = tuple(
-    f"{t} {what} …… " + (" ↔ ".join(hs) if len(hs) > 1 else hs[0] if t == "E" else f"{hs[0]} ↔ E")
-    for (t, what), hs in _by_letter.items())
+    f"{what} …… 赤 {p[0]} 列 {p[1]} 行 ／ 黒 {q[0]} 列 {q[1]} 行"
+    for what, p, q in PROBES)
 a(f'<rect x="470" y="196" width="376" height="{22+len(PROBE_ROWS)*17}" rx="6" '
   'fill="#ffffff" fill-opacity="0.94" stroke="#e2c3bd" stroke-width="1.2"/>')
-txt(484, 214, "測定点（テスター／オシロを当てる穴）", RED, 11.5, "start")
+txt(484, 214, f"測定点（黒は {GND_HOLE[0]} 列 {GND_HOLE[1]} 行 に置いたままでよい）", RED, 11.5, "start")
 for i, t in enumerate(PROBE_ROWS):
     txt(484, 232 + i * 17, t, "#3c4147", 10.5, "start", bold=False)
 

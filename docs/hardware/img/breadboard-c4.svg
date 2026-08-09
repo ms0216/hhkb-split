@@ -461,25 +461,24 @@
 <circle cx="804" cy="432" r="4" fill="#c0392b"/>
 <circle cx="804" cy="588" r="4" fill="#c0392b"/>
 <text x="792" y="576" text-anchor="end" font-size="11" font-weight="bold" fill="#c0392b">＋（赤） → 29 列 a 行</text>
-<circle cx="804" cy="336" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="804" y="340" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">A</text>
-<circle cx="804" cy="408" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="804" y="412" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">B</text>
-<circle cx="756" cy="408" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="756" y="412" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">B</text>
-<circle cx="444" cy="432" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="444" y="436" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">C</text>
-<circle cx="516" cy="432" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="516" y="436" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">D</text>
-<circle cx="396" cy="360" r="8.5" fill="#ffffff" stroke="#c0392b" stroke-width="2"/>
-<text x="396" y="364" text-anchor="middle" font-size="11" font-weight="bold" fill="#c0392b">E</text>
-<rect x="470" y="196" width="376" height="107" rx="6" fill="#ffffff" fill-opacity="0.94" stroke="#e2c3bd" stroke-width="1.2"/>
-<text x="484" y="214" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">測定点（テスター／オシロを当てる穴）</text>
-<text x="484" y="232" text-anchor="start" font-size="10.5" fill="#3c4147">A 電池電圧 …… 29 列 e 行 ↔ E</text>
-<text x="484" y="249" text-anchor="start" font-size="10.5" fill="#3c4147">B シャント両端 …… 29 列 b 行 ↔ 27 列 b 行</text>
-<text x="484" y="266" text-anchor="start" font-size="10.5" fill="#3c4147">C レール（3V3） …… 14 列 a 行 ↔ E</text>
-<text x="484" y="283" text-anchor="start" font-size="10.5" fill="#3c4147">D D0（分圧後） …… 17 列 a 行 ↔ E</text>
-<text x="484" y="300" text-anchor="start" font-size="10.5" fill="#3c4147">E 共通 GND …… 12 列 d 行</text>
+<circle cx="396" cy="360" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="396" y="347" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">12d</text>
+<circle cx="444" cy="432" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="444" y="419" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">14a</text>
+<circle cx="516" cy="432" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="516" y="419" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">17a</text>
+<circle cx="756" cy="408" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="756" y="395" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">27b</text>
+<circle cx="804" cy="408" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="804" y="395" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">29b</text>
+<circle cx="804" cy="336" r="8.5" fill="none" stroke="#c0392b" stroke-width="2"/>
+<text x="804" y="323" text-anchor="middle" font-size="9" font-weight="bold" fill="#c0392b">29e</text>
+<rect x="470" y="196" width="376" height="90" rx="6" fill="#ffffff" fill-opacity="0.94" stroke="#e2c3bd" stroke-width="1.2"/>
+<text x="484" y="214" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">測定点（黒は 12 列 d 行 に置いたままでよい）</text>
+<text x="484" y="232" text-anchor="start" font-size="10.5" fill="#3c4147">電池電圧 …… 赤 29 列 e 行 ／ 黒 12 列 d 行</text>
+<text x="484" y="249" text-anchor="start" font-size="10.5" fill="#3c4147">シャント両端 …… 赤 29 列 b 行 ／ 黒 27 列 b 行</text>
+<text x="484" y="266" text-anchor="start" font-size="10.5" fill="#3c4147">レール（3V3） …… 赤 14 列 a 行 ／ 黒 12 列 d 行</text>
+<text x="484" y="283" text-anchor="start" font-size="10.5" fill="#3c4147">分圧の中点（D0 へ行く電圧） …… 赤 17 列 a 行 ／ 黒 12 列 d 行</text>
 <rect x="24" y="674" width="556" height="192" rx="6" fill="#fafbfc" stroke="#dde1e5" stroke-width="1.2"/>
 <text x="44" y="700" text-anchor="start" font-size="14" font-weight="bold" fill="#111">要点</text>
 <text x="44" y="726" text-anchor="start" font-size="12.5" fill="#3c4147">① シャントは電池の＋側（29→27 列）。GND 側に入れてはいけない。</text>
