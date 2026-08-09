@@ -9,6 +9,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 |---|---|
 | **[docs/hardware/pcb-routing-handover.md](docs/hardware/pcb-routing-handover.md)** | 基板の作り方と、配線を自動配線器に移した経緯。**3 基板とも DRC 0** |
 | [docs/hardware/open-gaps.md](docs/hardware/open-gaps.md) | 実機と違うところ・未解決のもの。**差があること自体は悪くない。気づけないことが悪い** |
+| **[open-gaps.md #23](docs/hardware/open-gaps.md)** | **★発注前に決めることが 1 つ残っている。**アンテナが地板に挟まれている件。`export_fab.py` が門で止めている |
 | [docs/hardware/decisions/](docs/hardware/decisions/) | なぜそう決めたかの記録。覆す前に読む |
 | [docs/hardware/fab-checklist.md](docs/hardware/fab-checklist.md) | **発注の直前に見るもの。**記録が無いと検査が落ちる |
 | [docs/hardware/parts-audit.md](docs/hardware/parts-audit.md) | 部品ごとの「効く条件」と、何で確かめたか |
