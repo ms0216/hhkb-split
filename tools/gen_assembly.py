@@ -110,7 +110,7 @@ def build_assembly(keys, half):
     from math import cos
     from build123d import BuildSketch, Cylinder, Plane, RegularPolygon, extrude
     from envelopes import (FFC_RIBBON_W, NUT_QUARTER_AF, NUT_QUARTER_T,
-                           PCB_T, PLATE_TO_PCB, RUBBER_FOOT_D, RUBBER_FOOT_T,
+                           PCB_T, PLATE_TO_PCB,
                            SCREW_HEAD_D, SCREW_HEAD_H, SCREW_L_DB, SCREW_L_MAIN,
                            SW_PWR_D, SW_PWR_H, SW_PWR_W, M2_INSERT_L,
                            key_stack_envelopes, stab_envelope, usb_plug_envelope)
@@ -257,12 +257,17 @@ def build_assembly(keys, half):
         extrude(amount=NUT_QUARTER_T)
     parts["nut"] = _nut.part
 
-    # ゴム足（前の 2 箇所。座ぐり 0.6mm に沈む）
-    from gen_case import RUBBER_RECESS
+    # ゴム足（前の 2 箇所。座ぐり RUBBER_RECESS に沈む）。
+    # **寸法は gen_case の 1 つの出所から取る。**一度 envelopes 側に
+    # RUBBER_FOOT_D/T を別に持たせ、「RUBBER_T と同値のこと」と
+    # コメントで縛ったが、**一致は誰も確かめていなかった**（変異検査で
+    # RUBBER_FOOT_T を 3mm 太らせても何も落ちなかった）。bands.py で
+    # 同じ轍を踏んでいる。重複を持たない。
+    from gen_case import RUBBER_D, RUBBER_RECESS, RUBBER_T
     with BuildPart() as _rub:
         for fx, fy in _rubber_positions(w, h_case):
             with Locations((fx, fy, RUBBER_RECESS)):
-                Cylinder(envelopes.RUBBER_FOOT_D / 2, RUBBER_FOOT_T,
+                Cylinder(RUBBER_D / 2, RUBBER_T,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
     parts["rubber"] = _rub.part
 

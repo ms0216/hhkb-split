@@ -239,7 +239,11 @@ MUTATIONS = [
     ("inserts",  "envelopes", "M2_INSERT_L", +10.0),
     ("screws",   "envelopes", "SCREW_L_MAIN", +10.0),
     ("nut",      "envelopes", "NUT_QUARTER_AF", +2.0),
-    ("rubber",   "envelopes", "RUBBER_FOOT_D", +4.0),
+    # **ゴム足は変異検査にかけられない。**寸法も位置も座ぐり（ケース側）から
+    # 導かれるので、定数を動かすと座ぐりも一緒に動いて自己整合してしまう
+    # （RUBBER_D / RUBBER_T / RUBBER_RECESS / RUBBER_INSET の 4 つで確認）。
+    # 干渉の観点では絵のための部品。**代わりに効く制約**は下の
+    # test_the_rubber_feet_actually_touch_the_desk が見る。
 ]
 
 
@@ -557,3 +561,28 @@ def test_real_component_boxes_do_not_collide():
                                 f"{ov[0] * ov[1] * ov[2]:.2f}mm^3 "
                                 f"at x~{(A[0] + A[3]) / 2:.1f} y~{(A[1] + A[4]) / 2:.1f}")
         assert not hits, f"{name}: 実部品の bbox が重なる\n  " + "\n  ".join(hits[:10])
+
+
+def test_the_rubber_feet_actually_touch_the_desk():
+    """ゴム足が座ぐりより厚く、床から出ていること。
+
+    **買う足が薄いと、足は座ぐりに沈んだままで接地しない。**ケースの底が
+    机に当たり、前を支点にする傾斜も狂う。`RUBBER_T` を 0.5mm（座ぐり
+    0.6mm より薄い）にしても、足と傾斜まわりの検査は **7 件とも通った**
+    （2026-08-10 に確認）。買う製品を変えるときに効く検査が無かった。
+
+    出っ張り = `RUBBER_T` − `RUBBER_RECESS` = `FOOT_BASE_H` で、これは
+    **0° のチルト脚の高さでもある**（前後を同じ高さにするため）。
+    """
+    from gen_case import FOOT_BASE_H, RUBBER_RECESS, RUBBER_T
+
+    stick_out = RUBBER_T - RUBBER_RECESS
+    # **1.0mm は判断であって実測ではない。**印刷した底面のうねりより
+    # 小さい出っ張りは足として働かない、という理由で置いている。
+    # 実測でうねり量が分かったらこの数字を差し替えること。
+    assert stick_out >= 1.0, (
+        f"ゴム足 {RUBBER_T}mm − 座ぐり {RUBBER_RECESS}mm = {stick_out:.2f}mm しか"
+        "床から出ない。接地せず、傾斜も狂う")
+    assert abs(FOOT_BASE_H - stick_out) < 1e-9, (
+        "0° のチルト脚の高さ（FOOT_BASE_H）とゴム足の出っ張りが違う。"
+        "前後で高さが揃わず、傾斜が設計値からずれる")
