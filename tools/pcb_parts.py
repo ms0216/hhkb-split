@@ -84,6 +84,13 @@ def _classify(sx, sy, sz):
     return f"unknown_{a}x{b}"
 
 
+def board_sha256(name):
+    """基板ファイルのハッシュ。**KiCad が無くても計算できる。**"""
+    import hashlib
+
+    return hashlib.sha256((ROOT / BOARDS[name]).read_bytes()).hexdigest()
+
+
 def extract(name):
     """kicad-cli で STEP を出し、板と部品の bbox を返す。"""
     from build123d import import_step
@@ -130,6 +137,10 @@ def extract(name):
 
     return {
         "source": BOARDS[name],
+        # **盤面のハッシュ。**記録が古いまま基板だけ変わると、検査は昔の
+        # 部品を検査し続ける。KiCad の無い環境（CI）でも、ここを突き合わせる
+        # だけで「古い記録を検査している」ことに気づける（drc.py と同じ型）。
+        "board_sha256": board_sha256(name),
         "solids": len(solids),
         "board_bbox": box(board),
         "board_step_thickness": round(bb.size.Z, 2),

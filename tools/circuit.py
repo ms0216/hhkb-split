@@ -29,7 +29,7 @@ from pathlib import Path
 # 電池は単3×2。新品のアルカリは 1 本 1.6V まで上がりうる。
 BATT_CELLS = 2
 BATT_V_MAX = 1.65 * BATT_CELLS
-BATT_V_NOMINAL = 1.5 * BATT_CELLS
+BATT_V_NOMINAL = 1.5 * BATT_CELLS   # [記録のみ] 公称値。判定は V_MAX / V_MIN で行う
 
 # ショットキーの順方向電圧降下。**設計上の保守値。実測前。**
 #

@@ -400,3 +400,81 @@ def test_provisional_tags_sit_on_the_assignment_line():
     assert not bad, (
         "`[暫定]` が代入行の外に書かれている。この書き方だと一覧に載らず、"
         "**暫定値が見えないまま残る**:\n  " + "\n  ".join(bad))
+
+
+# --------------------------------------------------------------------------
+# 「書いたのに効いていない」定数を見つける（2026-08-10）
+# --------------------------------------------------------------------------
+# **この案件で実際に高くついた型。**`XIAO_H_WITH_USB` はどこからも読まれて
+# おらず、そのせいで USB 切り欠きの余裕が 0.10mm しか無いことに誰も
+# 気づかなかった（tools/mutate.py の冒頭に記録がある）。
+#
+# 定数は「制約を宣言したつもり」になりやすい。読まれていなければ、
+# それは**記録**であって制約ではない。どちらなのかを書かせる。
+
+def _module_constants_and_uses():
+    """(定義: 名前→(モジュール, 行番号), 使用: 名前→{モジュール})
+
+    **使用側は検査ファイルも数える。**定数の多くは「検査が読んで守る」
+    形で効いている（`BATT_V_MAX` など）。tools/*.py だけを見て数えると、
+    効いている定数を「読まれていない」と誤って責める。
+    """
+    defined, used = {}, {}
+    for path in sorted(TOOLS.glob("*.py")):
+        tree = ast.parse(path.read_text())
+        for node in (tree.body if path in MODULES else []):
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    names = ([t.id] if isinstance(t, ast.Name)
+                             else [e.id for e in getattr(t, "elts", [])
+                                   if isinstance(e, ast.Name)])
+                    for n in names:
+                        if n.isupper() and len(n) > 2:
+                            defined.setdefault(n, (path, node.lineno))
+        # 読まれ方は 3 通り: 名前・属性（envelopes.X）・from import
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                used.setdefault(node.id, set()).add(path.name)
+            elif isinstance(node, ast.Attribute):
+                used.setdefault(node.attr, set()).add(path.name)
+            elif isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    used.setdefault(a.name, set()).add(path.name)
+    return defined, used
+
+
+def _marked_record_only(path, lineno):
+    """定義行、または直上の連続したコメント行に [記録のみ] があるか。"""
+    lines = path.read_text().split("\n")
+    if "[記録のみ]" in lines[lineno - 1]:
+        return True
+    i = lineno - 2
+    while i >= 0 and lines[i].lstrip().startswith("#"):
+        if "[記録のみ]" in lines[i]:
+            return True
+        i -= 1
+    return False
+
+
+def test_every_constant_is_either_used_or_marked_as_a_record():
+    """読まれていない定数は **[記録のみ]** と書いてあること。
+
+    読まれていない定数は設計を縛らない。名前と単位が本物らしいだけに、
+    **効いていると思い込ませる。**消すか、記録だと明記するかの二択にする。
+    """
+    defined, used = _module_constants_and_uses()
+    silent = []
+    for name, (path, lineno) in sorted(defined.items()):
+        if used.get(name, set()) - {path.name}:
+            continue                       # 別モジュールから読まれている
+        tree = ast.parse(path.read_text())
+        reads = sum(1 for n in ast.walk(tree)
+                    if isinstance(n, ast.Name) and n.id == name
+                    and isinstance(n.ctx, ast.Load))
+        if reads:
+            continue                       # 同じモジュール内で読まれている
+        if not _marked_record_only(path, lineno):
+            silent.append(f"{path.name}:{lineno} {name}")
+    assert not silent, (
+        "読まれていないのに [記録のみ] が無い定数:\n  " + "\n  ".join(silent)
+        + "\n  効かせるか、消すか、[記録のみ] と書くこと")

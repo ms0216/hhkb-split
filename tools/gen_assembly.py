@@ -281,53 +281,54 @@ def check(keys, half, label="", focus=None):
     parts, (w, h_case) = build_assembly(keys, half)
     problems, notes = [], []
 
-    # 1. 干渉。**設計上の接触**は許し、食い込みは許さない。
+    # 1. 干渉。**設計上の食い込み**だけを、実測した量ぶんだけ許す。
     #
-    #    面どうしが接すると、ブーリアン演算とテッセレーションの誤差で
-    #    わずかな重なりとして出る。支え合う関係にある組は許容量を広げる。
-    #    許容を広げるのは「接触が設計意図である」と言える組だけにする。
+    # **許容は「実測 + わずかな余白」にする。**以前はここに 30.0 が並んで
+    # いたが、実測すると 30 組のうち 17 組は重なり 0 だった。つまり
+    # 30mm^3 の窓が開いたままで、その下の回帰は永久に見えなかった。
+    # 実際、傾斜面で切られたボスに水平な円柱を置いた誤り（インサートが
+    # 上ケースへ 0.19mm 食い込む）は、既定の 1.0mm^3 の下に潜っていた。
+    #
+    # **表の値を疑うときは、実測し直して比べること**（2026-08-10 実施）:
+    #     parts, _ = build_assembly(halves()[half], half)
+    #     intersection_volume(parts[a], parts[b])
+    # 実測より大きく広げてよいのは、**なぜその量が要るかを書ける**ときだけ。
+    #
+    # 面どうしがぴったり接する組は、厳密な B-rep 演算では 0 になる
+    # （左右 68 組で確認）。だから接触するだけの組は表に載せず、既定へ落とす。
+    DEFAULT = 0.1        # 接するだけの組の許容。0.19mm^3 の食い込みを捕まえる
     CONTACT = {
-        frozenset({"case", "pcb"}): 30.0,    # 基板はネジボスの上に載る
-        frozenset({"case", "plate"}): 30.0,  # プレートはリムに載る
-        frozenset({"case", "lid"}): 30.0,    # 蓋はレールの段に載る
-        frozenset({"case", "topcase"}): 30.0,   # 上ケースは下ケースの壁に載る
-        frozenset({"plate", "topcase"}): 30.0,  # 上ケースはプレートを押さえる
-        frozenset({"sockets", "batt"}): 30.0,   # 電池はソケットの下端に触れうる
-        # ---- open-gaps #29 で足した実物の、設計上の接触・嵌合 ----
-        frozenset({"pcb", "sockets"}): 30.0,     # ソケットは基板の裏面に載る
-        frozenset({"pcb", "pcb_parts"}): 30.0,   # 部品は基板の面に載る
-                                                 # （STEP の板厚 1.51 と公称 1.6 の差 0.09 を含む）
+        # 値の後ろは 2026-08-10 の実測（左 / 右）。
+        frozenset({"case", "pcb"}): 30.0,        # 基板はネジボスの上に載る 26.5/26.5
+        frozenset({"plate", "topcase"}): 30.0,   # 上ケースがプレートを押さえる 21.9/27.4
         # **ソケットの箱は実体より太い**（フットプリント実測＋はんだ余裕）。
         # 実体のダイオード（STEP）はその余白に入るので重なって見えるが、
-        # 基板上の部品どうしの離隔は DRC のコートヤード（違反 0）が実体で
-        # 検査している。実測 左 111 / 右 140mm^3（ダイオード 1 個 4.1）。
+        # 基板上の部品どうしの離隔は DRC のコートヤード（違反 0）と
+        # test_real_board_parts_do_not_collide_in_3d が実体で検査している。
+        # **ここだけ余白が広い**（右 138.7 に対し 170）。1 個 4.1mm^3 なので
+        # 実質「ダイオード 7 個ぶん」の窓が開いている。狭めるには箱ではなく
+        # 実物のソケット断面が要る（現物のノギス待ち）。
         frozenset({"sockets", "pcb_parts"}): 170.0,
-        frozenset({"db", "db_parts"}): 30.0,     # 部品は子基板の裏面に載る
-        frozenset({"pcb", "switches"}): 30.0,    # 下部ハウジングが基板上面に載る
-        frozenset({"plate", "switches"}): 30.0,  # つばがプレート上面に載る
-        frozenset({"switches", "keycaps"}): 30.0,   # ステムがキャップに入る
-        frozenset({"pcb", "stabs"}): 30.0,       # スタビは基板の上に載る
-        frozenset({"plate", "stabs"}): 30.0,
-        frozenset({"case", "sockets"}): 5.0,     # 仕切り壁の頭はソケット下端の
-                                                 # 面で切ってある（接面ノイズ）
-        # 折り下げの幕がソケットの保守的な箱の角に触れるぶん（上の注記）
-        frozenset({"sockets", "ffc"}): 10.0,
-        frozenset({"case", "inserts"}): 5.0,     # 下穴と同径。ノイズだけ許す
-        frozenset({"inserts", "screws"}): 80.0,  # ねじ込み（嵌合）。5 本で
-                                                 # π·1^2·(4.0×3+3.4×2) ≈ 59
-        frozenset({"topcase", "screws"}): 30.0,  # 頭が座面に載る
-        frozenset({"plate", "screws"}): 5.0,     # バカ穴 φ2.4 を軸 φ2 が通る
-        frozenset({"case", "screws"}): 5.0,      # インサート下の下穴を通る
-        frozenset({"db", "screws"}): 60.0,       # 頭が板に載り、軸が板を貫く
-                                                 # （占有空間の箱には穴が無い。
-                                                 #   2 本で実測 46.3）
-        frozenset({"case", "rubber"}): 30.0,     # 座ぐりに収まる（同径）
-        frozenset({"case", "nut"}): 5.0,         # ポケットに収まる（逃げあり）
-        frozenset({"xiao", "usb_plug"}): 45.0,   # 金属がメスに入る（嵌合）
-        frozenset({"db", "usb_plug"}): 100.0,    # メスの奥は db の占有空間の中
-        frozenset({"pcb_parts", "ffc"}): 30.0,   # ケーブルがコネクタに触れる
-        frozenset({"db_parts", "ffc"}): 30.0,    # 先端がコネクタに入る（嵌合）
-        frozenset({"case", "sw_pwr"}): 5.0,      # 受け箱の中（逃げ 0.2）
+        frozenset({"db", "usb_plug"}): 95.0,     # メスの奥は db の箱の中 89.7
+        frozenset({"inserts", "screws"}): 65.0,  # ねじ込み（嵌合）59.1
+        frozenset({"db", "screws"}): 50.0,       # 頭が載り軸が板を貫く 46.3
+                                                 # （占有空間の箱には穴が無い）
+        frozenset({"xiao", "usb_plug"}): 42.0,   # 金属がメスに入る（嵌合）38.4
+        frozenset({"db_parts", "ffc"}): 14.0,    # 先端がコネクタに入る（嵌合）12.0
+        frozenset({"sockets", "ffc"}): 10.0,     # 折り下げの幕が箱の角に触れる 8.8/8.7
+        frozenset({"pcb", "pcb_parts"}): 3.0,    # 部品が基板の面に載る 1.4/1.7
+                                                 # （STEP の板厚 1.51 と公称 1.6 の差 0.09）
+        frozenset({"case", "sockets"}): 2.0,     # 仕切り壁の頭をソケット下端の
+                                                 # 面で切ってある 1.3/1.2
+        # **占有空間は実基板より 2.3mm 手前まで張り出している**（envelope の
+        # 手前端 y=-51.0 に対し実基板 -48.7）。インサート φ3.2 が、その
+        # 張り出しぶんと逃げ穴 φ2.4 の差を削る。**実基板とは 1.2mm 離れて
+        # いるので実物の衝突ではない**（2026-08-10 に STEP で確認）。
+        frozenset({"pcb", "inserts"}): 0.5,      # 0.19/0.19
+        # 同径の円筒どうし（母線が一致する）。解析的には 0 だが、演算系が
+        # 変わるとごく薄い欠片が出うるので、ここだけ保険を残す。実測 0.0。
+        frozenset({"case", "inserts"}): 0.5,     # 下穴 φ3.2 とインサート φ3.2
+        frozenset({"case", "rubber"}): 0.5,      # 座ぐり φ10 とゴム足 φ10
     }
     names = list(parts)
     # bbox が離れている組は体積 0 で確定なので、ブーリアン演算を省く。
@@ -347,10 +348,11 @@ def check(keys, half, label="", focus=None):
             if not _bb_touch(a, b):
                 continue
             v = intersection_volume(parts[a], parts[b])
-            limit = CONTACT.get(frozenset({a, b}), 1.0)
+            limit = CONTACT.get(frozenset({a, b}), DEFAULT)
             if v > limit:
-                kind = "接触の域を超えて" if limit > 1.0 else ""
-                problems.append(f"{a} と {b} が {kind}{v:.1f}mm^3 食い込んでいる")
+                kind = "接触の域を超えて" if limit > DEFAULT else ""
+                problems.append(
+                    f"{a} と {b} が {kind}{v:.2f}mm^3 食い込んでいる（許容 {limit}）")
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。

@@ -52,7 +52,7 @@ STRIP_WIDTH = 25.0        # 短冊の幅（指で摘める程度）
 STRIP_DEPTH = 30.0        # 前縁から奥へどこまで作るか
 LEAN_ANGLES = [8.0, 12.0, 16.0]   # 前面の傾き候補。目測値 12° を挟む
 GAUGE_STEP_W = 12.0       # 段の幅
-GAUGE_BASE = 3.0          # 台座の厚み
+GAUGE_BASE = 3.0          # [記録のみ] 台座の厚み（いまの治具では使っていない）
 
 
 def front_edge_profile(lean_deg, r=FRONT_TOP_R, h=H_FRONT, depth=STRIP_DEPTH):

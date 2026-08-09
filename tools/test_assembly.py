@@ -90,6 +90,19 @@ def test_the_check_actually_detects_a_collision(half):
 # 電源スイッチが背面パネルに収まるか
 # --------------------------------------------------------------------------
 
+def _case_stl(half):
+    """ケースの STL のパス。**無ければその場で作る**（約 10 秒）。
+
+    飛ばすと「通った」が「調べていない」の同義語になる。
+    """
+    stl = Path(__file__).resolve().parent.parent / f"build/case_{half}.stl"
+    if not stl.exists():
+        import gen_case
+        gen_case.main()
+    assert stl.exists(), f"{stl} を作れなかった"
+    return stl
+
+
 def rear_panel_gaps(half):
     """背面パネルぞいの、障害物が無い x 区間と、使える奥行を返す。
 
@@ -164,9 +177,11 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     from interface import plate_positions
     from matrix import keymap_order
 
-    stl = Path(__file__).resolve().parent.parent / f"build/case_{half}.stl"
-    if not stl.exists():
-        pytest.skip("ケースがまだ生成されていない（tools/gen_case.py）")
+    # **無ければ自分で作る。飛ばさない。**
+    # ここは「彫るのをやめても落ちなかった」ことで足した検査なのに、
+    # `build/` は .gitignore なので **CI では毎回黙って飛んでいた**
+    # （2026-08-10 に発覚）。10 秒で作れるものを、無いからと飛ばしていた。
+    stl = _case_stl(half)
     _, (w, hb) = plate_positions(keymap_order(halves()[half]))
     mesh = trimesh.load(stl)
     x, z = power_switch_x_center(half, w), power_switch_center_z()
@@ -430,7 +445,10 @@ def test_real_board_parts_do_not_collide_in_3d():
     from pcb_parts import _classify
 
     if not Path(pcb_parts.KICAD_CLI).exists():
-        pytest.skip("kicad-cli が無い環境（実形状の検査は手元でやる）")
+        # **飛んでも穴が開かないようにしてある。**同じ範囲を、記録だけで
+        # 走る test_real_component_boxes_do_not_collide（bbox 粒度）が
+        # CI で見る。厳密な形状の判定だけが手元に残る。
+        pytest.skip("kicad-cli 無し。bbox 版が代わりに走る（厳密版は手元で）")
 
     # **設計どおりの嵌合はブーリアン演算ごと省く**（全対を測ると 4 分かかる。
     # 内訳は上の docstring の実測値。ここで見たいのは「部品をまたぐ干渉」）。
@@ -469,3 +487,73 @@ def test_real_board_parts_do_not_collide_in_3d():
                     bad.append(f"{li} x {lj}: {v:.2f}mm^3 "
                                f"(x~{(bi.min.X + bi.max.X) / 2 - 150:.1f})")
         assert not bad, f"{half}: 実形状の干渉\n  " + "\n  ".join(bad)
+
+
+# --------------------------------------------------------------------------
+# **KiCad が無い環境（CI）でも実形状を検査する**（2026-08-10・利用者の提案）
+# --------------------------------------------------------------------------
+# 厳密な B-rep の総当たり（test_real_board_parts_do_not_collide_in_3d）は
+# kicad-cli が要るので **CI では黙って飛んでいた。**飛んだ検査は
+# 「無い」のと同じなので、記録（pcb_parts.json）だけで走る版をここに置く。
+#
+#   手元  … 実形状を出し直して厳密に見る＋記録の中身が古くないか見る
+#   CI    … 記録の**ハッシュ**が今の盤面と一致するか＋部品 bbox の総当たり
+#
+# ハッシュを見るので「古い記録を検査して通す」ことは起こらない。
+
+def test_the_recorded_step_data_matches_the_current_board_files():
+    """記録が、いまの基板ファイルから出たものであること（KiCad 不要）。
+
+    **これが無いと、CI は古い記録を検査して緑を出す。**基板を変えたのに
+    `pcb_parts.py --write` を忘れた、をここで止める。
+    """
+    import pcb_parts
+
+    stale = []
+    for name in pcb_parts.BOARDS:
+        rec = pcb_parts.load()[name].get("board_sha256")
+        now = pcb_parts.board_sha256(name)
+        if rec != now:
+            stale.append(f"{name}: 記録 {str(rec)[:12]} / いまの盤面 {now[:12]}")
+    assert not stale, (
+        "pcb_parts.json が今の基板と一致しない:\n  " + "\n  ".join(stale)
+        + "\n  tools/pcb_parts.py --write で作り直すこと")
+
+
+def test_real_component_boxes_do_not_collide():
+    """基板に載る実部品どうしが、bbox の粒度で当たらないこと（KiCad 不要）。
+
+    モデルの bbox は**占有空間の箱より遥かに実物に近い**ので、これだけでも
+    「新しい部品が既存の部品に乗った」は捕まる。厳密な形状での判定は
+    手元の test_real_board_parts_do_not_collide_in_3d が担当。
+    """
+    import pcb_parts
+
+    # 設計どおりの嵌合（厳密版と同じ理由。あちらの SKIP を参照）
+    SKIP = {
+        frozenset({"kailh_socket", "kailh_socket_leg"}),
+        frozenset({"kailh_socket", "board"}),
+        frozenset({"stab_housing", "board"}), frozenset({"stab_insert", "board"}),
+        frozenset({"stab_wire", "stab_insert"}), frozenset({"stab_wire", "stab_housing"}),
+        frozenset({"stab_insert", "stab_housing"}),
+        frozenset({"ffc_conn"}),
+        # XIAO は 84 立体でできた**1 つの完成モジュール**。内部の部品どうしが
+        # 入れ子になるのは当たり前で、ここで見るものではない。
+        frozenset({"xiao_asm"}),
+    }
+    data = pcb_parts.load()
+    for name in pcb_parts.BOARDS:
+        comps = data[name]["components"]
+        hits = []
+        for i in range(len(comps)):
+            for j in range(i + 1, len(comps)):
+                a, b = comps[i], comps[j]
+                if frozenset({a["label"], b["label"]}) in SKIP:
+                    continue
+                A, B = a["bbox"], b["bbox"]
+                ov = [min(A[k + 3], B[k + 3]) - max(A[k], B[k]) for k in range(3)]
+                if all(o > 0 for o in ov):
+                    hits.append(f"{a['label']} x {b['label']} "
+                                f"{ov[0] * ov[1] * ov[2]:.2f}mm^3 "
+                                f"at x~{(A[0] + A[3]) / 2:.1f} y~{(A[1] + A[4]) / 2:.1f}")
+        assert not hits, f"{name}: 実部品の bbox が重なる\n  " + "\n  ".join(hits[:10])
