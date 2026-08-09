@@ -130,15 +130,36 @@ nRF52840 の RX 4.6mA から、スキャンだけで 2.3mA 級になる
 3. 左右がペアリングするのを待つ（数秒〜十数秒）
 4. **左のテスターの mA を読む**
 
-### 記録欄
+### 実測結果（2026-08-09）
 
-| 状態 | 実測 | 平均電流（8.5h/日） | 寿命 |
-|---|---|---|---|
-| 右が居ない（C4 で実測） | **3.7mA** | 1.31mA | 2.1 ヶ月 |
-| **右がつながっている** | mA | mA | ヶ月 |
+| 状態 | 実測 |
+|---|---|
+| 右が居ない | **3.7mA**（3.7〜5.0mA を上下） |
+| **右がつながっている** | **0.66mA。安定** |
 
-**下がらなければ、スキャンは原因ではなかった**ということ。その場合は
-[open-gaps #26](open-gaps.md) の判断が変わる。
+**5.6 分の 1 になった。**スキャンが原因だったことが実測で確定。
+
+**「上下が止まる」ことがペアリング成立の合図**として使えた。接続に失敗して
+再スキャンに戻るループが電流に出るので、**テスターが診断器として働く。**
+
+### ここまでで確定したこと
+
+**ペアリングは成立する**（キーが無くても左右はつながる）。
+2 個目の XIAO・ケーブル・書き込みも同時に健全と分かった。
+
+### 引っかかったこと
+
+**右が別のセントラルとのボンドを持っていて、繋がらなかった。**
+左は右を見つけているのに接続できず、電流が 3.7〜5.0mA を上下し続けた。
+`settings_reset` → `proto_split_right` の 2 回焼きで解けた。
+
+ソースにそう書いてある（[central.c](https://github.com/zmkfirmware/zmk/blob/main/app/src/split/bluetooth/central.c) の `split_central_eir_found`）。
+
+> Once the central has bonded to its peripherals, the peripheral MAC
+> addresses will be validated internally and the slot reservation will
+> fail if there is a mismatch.
+
+**新品でも中古でも、まず `settings_reset` を通してから始めるほうが速い。**
 
 ---
 
