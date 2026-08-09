@@ -152,6 +152,30 @@ def pcb_bottom_at(y, h_plate, rim_front):
 # 4.0 は直付けの実測 4.5mm すら下回っていた（2026-08-08 に 4.5 へ）。
 DB_STACK_H = 4.5         # [暫定] 子基板の上面から XIAO の頭まで（USB 込み・ソケット未定）
 
+# 利用者が挿す USB-C ケーブルの、**オス側プラグの樹脂の胴体**（open-gaps #28）。
+#
+# **金属のシェル（8.34 x 2.56mm・規格値）ではない。**壁の穴を通るかどうかを
+# 決めるのはこの樹脂で、金属ではない。ここを取り違えていて、
+# 「開口 10 x 6mm で足りる」としていた。
+#
+# 利用者が手持ちのケーブル数本を測った**最大値**（分解能 1mm の器具・2026-08-09）。
+USB_PLUG_W = 12.0        # [暫定] 実測（幅）
+USB_PLUG_H = 7.0         # [暫定] 実測（厚さ）
+
+# **壁の穴の大きさを決めるのは、樹脂ではなく金属のほう。**
+#
+# 一度「完全に挿さると樹脂の面がメスの面に突き当たる」と書いたが、**誤り**。
+# 実機（HHKB Professional HYBRID）に挿した写真を見ると、
+# **樹脂は完全にケースの外にあり、金属が 1mm ほど見えたまま**挿さっている。
+# 実機の穴も、金属の形そのもの（細いスリット）で、樹脂が入る大きさではない。
+# **実物を見ずに推測で書いていた。**
+USB_SHELL_W = 8.34       # [確定] USB Type-C プラグの金属シェル（規格値）
+USB_SHELL_H = 2.56       # [確定] 同上
+# 完全に挿さった状態で、樹脂の面からケース表面までに見えている金属の長さ。
+# **メスをこの長さまで奥へ引っ込めても、樹脂は外に残る。**
+# 利用者が実機に挿して測った値（2026-08-09）。
+USB_SHELL_EXPOSED = 1.0  # [暫定] 実測（実機 ＋ 手持ちのケーブル 1 本）
+
 # 電源スイッチ。**基板には載らない。**ケース背面のパネルに付けて
 # リード線で基板のランド（SW_PWR_1 / SW_PWR_2）へ繋ぐ（open-gaps #17）。
 #
@@ -208,4 +232,22 @@ def daughterboard_envelope(center, w, d, t):
     with BuildPart() as env:
         with Locations(center):
             Box(w, d, t + DB_STACK_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return env.part
+
+
+def xiao_overhang_envelope(x, y_board_rear, z_board_top):
+    """**子基板の奥端から外へ出た XIAO の端**が占める空間（open-gaps #28）。
+
+    子基板の占有空間（daughterboard_envelope）は板の外形までしか無いので、
+    はみ出したぶんは**そこに入っていない**。壁のポケットが足りているかは
+    ここを別に置かないと検査できない（＝検査対象に入っていない部品は、
+    検査していないのと同じ）。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+    from interface import XIAO_OUTLINE_W, XIAO_OVERHANG
+
+    with BuildPart() as env:
+        with Locations((x, y_board_rear + XIAO_OVERHANG / 2, z_board_top)):
+            Box(XIAO_OUTLINE_W, XIAO_OVERHANG, DB_STACK_H,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
     return env.part

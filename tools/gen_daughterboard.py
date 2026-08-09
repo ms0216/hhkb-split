@@ -63,7 +63,7 @@ from gen_pcb import ORIGIN  # noqa: E402
 
 # 外形はケース側の造作と一致させる（tools/gen_case.py の DB_W / DB_D）。
 DB_W, DB_D = 21.0, 32.0
-DB_BOSS_POS = [(-8.0, -13.5), (8.0, 13.5)]
+DB_BOSS_POS = [(-8.0, -13.5), (8.0, -13.5)]
 
 XIAO_FP = (ROOT / "pcb/lib/hhkb_split.pretty", "XIAO_nRF52840")
 
@@ -96,11 +96,23 @@ def build():
     # XIAO。USB は CAD の +Y（奥）を向く。フットプリントの y=-7.62 側が
     # USB 端なので、回転させずに置けばそのまま奥を向く。
     #
-    # **中央に置く。**奥へ寄せてアンテナを本体基板の下から出す案を検討したが、
-    # USB の隙間 2.9mm が要るうえ奥側の取付穴が入らなくなり（帯 2.90mm、
-    # M2 は 4.4mm 必要）、得られるのは 1.1mm だけだった。open-gaps #23。
+    # **奥端へ寄せ、さらに板から XIAO_OVERHANG だけはみ出させる。**
+    # 理由は 2 つあり、どちらも同じ向きに効く。
+    #
+    #   open-gaps #28 … 中央に置くと USB のメスが奥壁の外面から 8.9mm 奥になり、
+    #                   プラグの金属 6.5mm では届かない（＝ケーブルが挿さらない）
+    #   open-gaps #23 … アンテナは USB と反対の端にあるので、奥へ寄せるほど
+    #                   本体基板の全面 GND ベタの下から出る
+    #
+    # **一度この案を「得られるのは 1.1mm だけ」として捨てていた。**理由は
+    # 「奥側の取付穴が入らなくなる」だったが、ケースは 3D プリントなので
+    # ネジをやめて壁のポケットで受ければよい。前提のほうが間違っていた。
+    #
+    # 位置は interface.xiao_y_offset が唯一の出所（ケース側の壁のポケットと
+    # 同じ式から取る）。**片方だけ動かすと壁を突き破る。**
+    from interface import xiao_y_offset
     x = _load(*XIAO_FP)
-    x.SetPosition(to_kicad(0, 0))
+    x.SetPosition(to_kicad(0, xiao_y_offset(DB_D)))
     x.SetReference("U_MCU")
     x.SetValue("XIAO nRF52840")
     board.Add(x)
@@ -144,12 +156,65 @@ def build():
             pad.SetNet(net(netname))
 
     _route(board)
+    _antenna_keepout(board)
     _pour_ground(board, net("GND"))
 
     OUT.mkdir(exist_ok=True)
     path = OUT / "hhkb_split_daughterboard.kicad_pcb"
     board.Save(str(path))
     return path, len(nets)
+
+
+def _antenna_keepout(board):
+    """**アンテナの真下の銅を、両面とも抜く**（open-gaps #23）。
+
+    アンテナを塞いでいたものは 3 つあった。上（本体基板の地板 4.09mm）と
+    横（FFC コネクタ 0.5mm）は、XIAO を奥端へ寄せたことで外れた
+    （#28 と同じ変更）。**残るのが、この子基板自身の地板 1.6mm。**
+
+    一度この案は「アンテナの影 3mm のうち 2mm が FFC コネクタの下なので、
+    空くのは 1mm 幅だけ」として捨てられていた。**XIAO が奥へ動いた今、
+    コネクタはアンテナから 7mm 以上離れており、影の下には何も無い。**
+
+    位置は interface.antenna_y_span（ケース側と同じ式）から取る。
+    """
+    from interface import XIAO_OUTLINE_W, antenna_y_span
+
+    lo, hi = antenna_y_span(DB_D / 2)         # 板の中心を原点とした座標
+    # **奥側の限界は「いちばん端のパッド」。**式で決め打ちにすると、
+    # フットプリントが変わったときに黙ってパッドへ掛かる（実際に掛かった）。
+    u = board.FindFootprintByReference("U_MCU")
+    pad_front = min((ORIGIN[1] - pcbnew.ToMM(pad.GetPosition().y))
+                    - pcbnew.ToMM(pad.GetSize().y) / 2 for pad in u.Pads())
+    hi = min(hi, pad_front - 0.3)
+    if hi <= lo:
+        raise RuntimeError("アンテナの下に銅を抜ける余地が無い")
+    margin = 1.0                              # 手前側だけ少し広げる
+    zone = pcbnew.ZONE(board)
+    # **抜くのはベタだけ。配線は通す。**
+    #
+    # FFC コネクタ（板の手前）から XIAO のパッドへ行く 12 本は、
+    # **必ずこの帯を横切る**（アンテナが XIAO の先端にあるため）。
+    # 配線まで禁止すると 14 件の違反になり、迂回路も無い（帯が板の全幅）。
+    #
+    # アンテナに効くのは**面積の大きい地板**で、0.25mm の線 12 本とは
+    # 桁が違う。**「完全な禁止域」ではない。**そう書かないこと。
+    zone.SetIsRuleArea(True)
+    zone.SetDoNotAllowZoneFills(True)
+    # **既定は「全部禁止」。**明示的に許可しないと配線まで止まる（14 件出た）。
+    zone.SetDoNotAllowTracks(False)
+    zone.SetDoNotAllowVias(False)
+    zone.SetDoNotAllowPads(False)
+    layers = pcbnew.LSET()
+    for lay in (pcbnew.F_Cu, pcbnew.B_Cu):
+        layers.addLayer(lay)
+    zone.SetLayerSet(layers)
+    pts = pcbnew.VECTOR_VECTOR2I()
+    w = XIAO_OUTLINE_W / 2
+    for dx, dy in ((-w, lo - margin), (w, lo - margin), (w, hi), (-w, hi)):
+        pts.append(to_kicad(dx, dy))
+    zone.AddPolygon(pts)
+    board.Add(zone)
 
 
 def _pour_ground(board, gnd):
@@ -206,7 +271,20 @@ def _route(board):
     # **6.9 だと XIAO のパッド列（原点から 7.62）に 0.72mm まで寄り、
     # ビアがパッドに当たる。**間隔 0.55 もビアの対角が 0.778mm で、
     # φ0.6 のビアどうしが 0.178mm しか離れない（規則は 0.2）。
-    LANE0, LANE_STEP = 6.0, 0.7
+    LANE0, LANE_STEP = 6.4, 0.7   # 6.5 は D6 のパッドと 0.17mm（規則 0.2）で落ちた
+    # **アンテナの真下を通さない**（open-gaps #23）。
+    #
+    # 縦のレーンは表面を走り、アンテナの y 帯を必ず横切る。だが**横切る
+    # 場所（x）は選べる。**アンテナは 3.5mm 角の小さな部品で、XIAO の
+    # 全幅 18.3mm のうち 2 割弱しか占めていない。**その帯だけ空ければよい。**
+    #
+    # 一度「迂回路が無い」と書いたが、**アンテナが XIAO の全幅にあるという
+    # 誤った前提**で考えていた。利用者の実測（3.5x1.5mm）で覆った。
+    from interface import antenna_x_band
+    BAND_LO, BAND_HI = antenna_x_band()
+    # ビアの間隔。**x を詰めるぶん、y を離す。**同じ量で詰めると
+    # ビアの対角が 0.778mm になり、φ0.6 どうしが 0.178mm しか離れない（規則 0.2）。
+    ROW_STEP = 0.9
     used = []
 
     for sign in (-1, +1):               # 左の列 / 右の列
@@ -224,16 +302,30 @@ def _route(board):
                     targets.append((pcbnew.ToMM(xp.GetPosition().y), pad, xp))
         # FFC は手前（KiCad の +y）にある。手前に近いパッドから順に外側へ。
         targets.sort(key=lambda t: -t[0])
+        # **レーンの x を先に決める。**外から内へ 0.7mm 刻み。
+        #
+        # 内側ほどアンテナに近づく。**帯に入る候補を飛ばして外側だけ使う**
+        # ことも試したが、飛んだ 1 本が他のレーンと交差して DRC が落ちた。
+        # 間隔を詰める方法も駄目（ビア φ0.6 と隣の配線が 0.11mm。必要 0.6mm）。
+        #
+        # **いまは LANE0 を 6.0 → 6.5 へ動かして全体を外へ寄せてある。**
+        # それでも、この側の**いちばん内側の 1 本はアンテナの下に残る**
+        # （open-gaps #23。アンテナの正確な位置が実測できたら詰める）。
+        lanes = [sign * (LANE0 - k * LANE_STEP) for k in range(len(targets))]
+        under = [x for x in lanes if BAND_LO <= x <= BAND_HI]
+        if under:
+            print(f"      ⚠ アンテナの帯に入るレーン {len(under)} 本: "
+                  f"{[round(x, 2) for x in under]}")
         for i, (ty, fpad, xpad) in enumerate(targets):
             # **絶対座標にする。**相対値のまま fx/ty（絶対）と混ぜていて、
             # 145.9mm の配線ができていた。DRC の「配線の長さ」が異常値だった
             # ことで気づいた。
-            lane = ORIGIN[0] + sign * (LANE0 - i * LANE_STEP)
+            lane = ORIGIN[0] + lanes[i]
             fx = pcbnew.ToMM(fpad.GetPosition().x)
             fy = pcbnew.ToMM(fpad.GetPosition().y)
             tx = pcbnew.ToMM(xpad.GetPosition().x)
             net = fpad.GetNet()
-            row = fy - (1.4 + i * LANE_STEP)  # 外側へ行くものほど手前で曲げる
+            row = fy - (1.4 + i * ROW_STEP)   # 外側へ行くものほど手前で曲げる
 
             # 1. 裏面でファンアウト（縦 → 横）。**順序のおかげで交差しない。**
             #    先に曲がるのは外側のレーンへ行くもので、その横枝は

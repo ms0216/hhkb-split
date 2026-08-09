@@ -124,6 +124,7 @@ FLOOR = 2.4              # 底板。0.4mm の 6 倍。
                          # 当初 2.0mm にしていたが、蓋(1.6mm)をレールに落とし込むと
                          # 床の内面より上に出て電池に食い込んだため厚くした。
 CLEARANCE = 0.2          # 収縮を見込んだ嵌合の逃げ
+PORT_CLEAR = 0.6         # 抜き差しする穴の逃げ。嵌合より広くとる（印刷の公差＋挿しやすさ）
 
 # --------------------------------------------------------------------------
 # 内部に収めるもの
@@ -191,12 +192,24 @@ DB_ANTENNA_KEEPOUT = 10.0
 DB_D = 32.0
 DB_T = 1.6
 DB_BOSS_H = 4.0          # 床からの高さ。これが USB-C の高さを決める
-# 取付ボスは**対角に 2 本**。XIAO のパッド列（x=±7.62）と本体を避けると
-# ここしか残らない。中心線上に 2 本だと回ってしまうので対角にする。
-DB_BOSS_POS = [(-8.0, -13.5), (8.0, 13.5)]
-DB_FROM_REAR = 1.0       # 奥の壁の内側と子基板の隙間
-USB_W = 10.0             # 奥の壁の切り欠き（USB-C プラグの外形）
-USB_H = 6.0
+# **ネジは手前の 2 本だけ。奥は壁のポケットが受ける**（open-gaps #28）。
+#
+# 以前は対角（-8,-13.5）と（8,+13.5）だった。XIAO を奥へ寄せた（#28）ので、
+# 奥のネジは XIAO の真下に入ってしまう。奥端は、壁に掘ったポケットへ
+# XIAO の端を差し込む形で受ける。**組み立ては「奥を斜めに差してから手前を下ろす」。**
+DB_BOSS_POS = [(-8.0, -13.5), (8.0, -13.5)]
+# 奥の壁の内側と子基板の隙間。**1.0 → 0.4mm**（open-gaps #28）。
+# メスを壁へ近づけるため。**ここは公差が食い合う場所**で、印刷 ±0.2mm と
+# 基板外形 ±0.2mm が重なる。きつすぎれば入らない。クーポンで確かめること。
+DB_FROM_REAR = 0.4
+# 奥の壁の切り欠き。**2 段になる**（open-gaps #28）。
+#
+#   外側 … 利用者のケーブルの**樹脂の胴体**が入るぶん。実測 12x7mm ＋ 逃げ
+#   内側 … **XIAO の端**が入るポケット。外からは見えない
+#
+# 以前は 10x6mm の 1 段で、しかも「XIAO のコネクタを囲めているか」しか
+# 検査していなかった。**利用者が挿すケーブルは検査の対象外だった。**
+# 値は envelopes.USB_PLUG_W / USB_PLUG_H（実測）から導く。下の import のあと。
 # 子基板の上面から切り欠きの中心まで。**XIAO の積み上げの真ん中に合わせる。**
 #
 # 以前は 1.6 と直書きしていた。それだと切り欠きの上端と XIAO の上面の
@@ -231,7 +244,26 @@ SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷でき�
 # test_the_rear_hook_is_actually_captured が検出した。
 
 from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
-                       SW_PWR_D, SW_PWR_H, SW_PWR_W)
+                       DB_STACK_H, SW_PWR_D, SW_PWR_H, SW_PWR_W,
+                       USB_PLUG_H, USB_PLUG_W, USB_SHELL_EXPOSED,
+                       USB_SHELL_H, USB_SHELL_W)
+from interface import XIAO_OUTLINE_W, XIAO_OVERHANG  # noqa: E402
+
+# 奥の壁の切り欠き。**外から見えるのは「金属が通る穴」だけ。**実機と同じ姿。
+#
+# 一度ここを「樹脂が通る大きさ（12.4x7.4mm）」にしていたが、**誤りだった。**
+# 実機の写真では樹脂は完全に外にあり、金属が 1mm ほど見えたまま挿さっている。
+# 穴を樹脂の大きさにすると、壁に不要な大きな口が開く。
+USB_W = USB_SHELL_W + PORT_CLEAR * 2
+USB_H = USB_SHELL_H + PORT_CLEAR * 2
+# メスが外面からどれだけ奥にいるか。XIAO を外へ出すほど 0 に近づく。
+USB_PLUG_ENTRY = WALL + DB_FROM_REAR - XIAO_OVERHANG
+# **保険の座ぐり。**手持ちのケーブルは金属が 1.0mm 見えていたが、
+# **ケーブルによってはもっと短い。**その場合は樹脂がわずかに壁へ入る必要がある。
+# ここを 0 にすると「このケーブルでしか挿さらないキーボード」になる。
+USB_COUNTERBORE = 0.5    # 樹脂用の浅い座ぐり（外側だけ）
+# 内側のポケット（XIAO の端を受ける）の深さ。
+XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 
 
 # --------------------------------------------------------------------------
@@ -441,9 +473,27 @@ def build_case(keys, half):
             with Locations((db_x + dx, db_y + dy, FLOOR)):
                 Cylinder(M2_INSERT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥の壁を貫く。壁の厚みより長い立体で切らないと薄皮が残る。
-        with Locations((db_x, y_rear_outer, usb_center_z())):
-            Box(USB_W, WALL * 4, USB_H, mode=Mode.SUBTRACT,
+        # 奥の壁の USB-C。**2 段に切る**（open-gaps #28）。
+        #
+        #   外側 USB_PLUG_ENTRY … ケーブルの樹脂の胴体が入るぶん（12.4x7.4mm）
+        #   内側 XIAO_POCKET_D  … XIAO の端を受けるポケット（外からは見えない）
+        #
+        # **1 段で貫くと、樹脂が入る大きさの穴が壁を貫通する。**外から見て
+        # 大きな口が開き、ほこりも入る。段にすれば、外に見えるのは
+        # 普通の機器と同じ大きさの穴だけで済む。
+        with Locations((db_x, y_rear_outer - USB_PLUG_ENTRY / 2, usb_center_z())):
+            Box(USB_W, USB_PLUG_ENTRY, USB_H, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 樹脂用の浅い座ぐり（外面から USB_COUNTERBORE mm だけ）
+        with Locations((db_x, y_rear_outer - USB_COUNTERBORE / 2, usb_center_z())):
+            Box(USB_PLUG_W + CLEARANCE * 2, USB_COUNTERBORE,
+                USB_PLUG_H + CLEARANCE * 2, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 内側のポケット。**幅は XIAO の外形＋逃げ。**深さは残りの壁。
+        with Locations((db_x, y_rear_outer - WALL + XIAO_POCKET_D / 2,
+                        FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2)):
+            Box(XIAO_OUTLINE_W + CLEARANCE * 2, XIAO_POCKET_D,
+                DB_STACK_H + CLEARANCE * 2, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
         # 6-0b. 電源スイッチのポケットとスロット（奥の壁）

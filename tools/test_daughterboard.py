@@ -245,3 +245,79 @@ def test_the_cable_interface_is_frozen():
 def _import_netlist(half):
     from circuit import netlist
     return netlist(half)
+
+
+def test_the_mcu_sits_where_the_case_expects_it():
+    """**実基板の XIAO の位置**が、ケースが空けたポケットと合っていること。
+
+    XIAO は子基板の奥端から `XIAO_OVERHANG` だけ外へ出る（open-gaps #28）。
+    ケース側は、その端を受けるポケットを奥の壁に掘っている。
+    **片方だけ動かすと、XIAO の端が壁を突き破るか、逆にメスが届かなくなる。**
+
+    ここは「自分の生成物どうしの一致」ではなく、**実基板のファイルから
+    読んだ座標**を、基板の外形そのものを基準にして測り、ケースが使う式と
+    突き合わせている。
+    """
+    from interface import XIAO_OUTLINE_L, XIAO_PAD_INSET, xiao_y_offset
+    from gen_case import DB_D
+
+    text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
+
+    # 基板の外形（Edge.Cuts）から、板の中心を出す。**式ではなく実ファイルから。**
+    ys = []
+    for blk_ in re.split(r"\n\t\(gr_", text)[1:]:
+        if '"Edge.Cuts"' not in blk_.split("(gr_")[0][:400]:
+            continue
+        ys += [float(v) for v in re.findall(r"\((?:start|end|center) [-\d.]+ ([-\d.]+)\)",
+                                            blk_.split("(stroke")[0])]
+    assert ys, "基板の外形（Edge.Cuts）が読めない"
+    y_center_kicad = (min(ys) + max(ys)) / 2
+
+    blk = [b for b in re.split(r"\n\t\(footprint ", text)[1:]
+           if '(property "Reference" "U_MCU"' in b]
+    assert len(blk) == 1, "子基板に U_MCU が 1 個見つからない"
+    m = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)", blk[0])
+    assert m, "U_MCU の座標が読めない"
+
+    y_cad = y_center_kicad - float(m.group(2))     # KiCad は Y 下向き
+    want = xiao_y_offset(DB_D)
+    assert abs(y_cad - want) < 0.05, (
+        f"実基板の XIAO は板の中心から y={y_cad:.2f}、"
+        f"ケースが期待するのは y={want:.2f}")
+
+    pad_edge = y_cad + XIAO_OUTLINE_L / 2 - XIAO_PAD_INSET
+    assert pad_edge <= DB_D / 2 - 0.5, (
+        f"いちばん奥のパッド y={pad_edge:.2f} が板の端 {DB_D/2:.1f} に近すぎる")
+
+
+def test_the_ground_pour_is_actually_absent_under_the_antenna():
+    """子基板の地板が、アンテナの真下から**本当に**消えていること。
+
+    **設定しただけでは効いていない。**ルール領域を置いても、塗り直しが
+    走らなければベタは残る。本体基板では Freerouting が禁止域を無視した
+    前例がある（open-gaps #23）。宣言ではなく、塗られた多角形で見る。
+
+    ここは**ベタだけを禁止し、配線は通している。**FFC から XIAO への
+    12 本は、アンテナが XIAO の先端にある以上、必ずこの帯を横切る
+    （迂回路が無い）。面積の大きい地板と 0.25mm の線 12 本では桁が違う。
+    **「完全な禁止域」ではない。**
+    """
+    text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
+
+    m = re.search(r'\(zone[\s\S]*?\(keepout[\s\S]*?\)\s*\(polygon[\s\S]*?\n\t\t\)', text)
+    assert m, "子基板にアンテナのルール領域（キープアウト）が無い"
+    ka = [(float(a), float(b)) for a, b in
+          re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", m.group(0))]
+    x_lo, x_hi = min(p[0] for p in ka), max(p[0] for p in ka)
+    y_lo, y_hi = min(p[1] for p in ka), max(p[1] for p in ka)
+    assert (x_hi - x_lo) > 15.0 and (y_hi - y_lo) > 2.0, \
+        f"キープアウトが小さすぎる（{x_hi-x_lo:.1f} x {y_hi-y_lo:.1f}mm）"
+
+    EPS = 0.01      # 境界ちょうどはベタの回り込みの頂点が載るので内側で見る
+    n = 0
+    for zp in re.findall(r"\(filled_polygon[\s\S]*?\n\t\t\)", text):
+        for xs, ys in re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", zp):
+            x, y = float(xs), float(ys)
+            if x_lo + EPS <= x <= x_hi - EPS and y_lo + EPS <= y <= y_hi - EPS:
+                n += 1
+    assert n == 0, f"アンテナの真下にベタの頂点が {n} 点ある"

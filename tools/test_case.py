@@ -1,6 +1,6 @@
 """ボトムケースが物理的に成立することを検証する。"""
 import pytest
-from build123d import Align, Box, Location
+from build123d import Align, Box, BuildPart, Location, Locations
 from gen_case import (
     AA_D, AA_L, BATT_H, BATT_W, FLOOR, PLATE_T, PLATE_TOP_FRONT, TILT_DEG,
     build_case, case_heights,
@@ -356,84 +356,89 @@ def test_the_m2_inserts_fit_the_bosses():
         f"{deepest}mm を超える。短いものを買うか、DB_BOSS_H を深くすること")
 
 
-def test_the_usb_opening_clears_the_connector():
-    """USB-C の切り欠きが、XIAO の積み上げを余裕を持って囲むこと。
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_a_real_cable_can_reach_the_socket(name):
+    """**利用者が挿す本物のケーブル**が、壁を通ってメスまで届くこと。
 
-    **USB は書き込みに要る。**ここがずれると、組み上げてからケーブルが
-    挿さらないと分かる。
+    以前ここは「切り欠きが XIAO の積み上げを囲めているか」しか見ていなかった。
+    **利用者が挿すケーブルは検査の対象に入っていなかった**（open-gaps #28）。
 
-    以前は「子基板の上面から 1.6mm」と直書きしていて、**上側の余裕が
-    0.10mm しか無かった。**XIAO の厚み 4.5mm は「ぐらい」で渡された概数
-    なので、0.1mm は余裕ではない。`XIAO_H_WITH_USB` は記録されていただけで
-    どこからも使われておらず、変異検査でも生き残った。
+    穴の大きさを決めるのは**金属のシェル**であって樹脂ではない。
+    実機の写真では、樹脂は完全にケースの外にあり、金属が 1mm ほど見えたまま
+    挿さっている。**一度ここを樹脂の大きさ（12.4x7.4mm）で作っていたが誤り。**
     """
     import gen_case as g
-    from envelopes import DB_STACK_H, XIAO_H_WITH_USB
+    from envelopes import (DB_STACK_H, USB_PLUG_H, USB_PLUG_W,
+                           USB_SHELL_EXPOSED, USB_SHELL_H, USB_SHELL_W,
+                           XIAO_H_WITH_USB)
+    from gen_plate import plate_positions
 
-    assert DB_STACK_H >= XIAO_H_WITH_USB, (
-        f"積み上げ {DB_STACK_H}mm が XIAO 単体 {XIAO_H_WITH_USB}mm より薄い。"
-        "ソケットを挟むならもっと高いはず")
+    part, (w, h_body), _ = build_case(HALVES[name], name)
+    _, (pw, _ph) = plate_positions(HALVES[name])
+    y_out = h_body / 2 + g.BUMP_DEPTH
+    x = g.daughterboard_x_center(name, pw)
+    z = g.usb_center_z()
 
+    def probe(dw, dh, depth):
+        with BuildPart() as b:
+            with Locations((x, y_out - depth / 2, z)):
+                Box(dw, dh, depth, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        return intersection_volume(b.part, part)
+
+    # 1. 金属のシェルが、メスまで貫通できること
+    v = probe(USB_SHELL_W, USB_SHELL_H, g.USB_PLUG_ENTRY)
+    assert v < 1.0, f"{name}: プラグの金属が壁に {v:.1f}mm^3 当たる"
+
+    # 2. 樹脂は座ぐりのぶんだけ入れること（露出の短いケーブルへの保険）
+    v = probe(USB_PLUG_W, USB_PLUG_H, g.USB_COUNTERBORE)
+    assert v < 1.0, f"{name}: 樹脂が座ぐりに {v:.1f}mm^3 当たる"
+
+    # 3. **穴が大きすぎないこと。**樹脂が壁を貫通できてはいけない
+    #    （貫通できる＝実機と違う大きな口が開いている）。
+    v = probe(USB_PLUG_W, USB_PLUG_H, g.WALL)
+    assert v > 1.0, (
+        f"{name}: 樹脂が壁を素通りする。穴が大きすぎる"
+        f"（外から見える口が {g.USB_W:.1f}x{g.USB_H:.1f}mm を超えている）")
+
+    # 4. 実測したケーブルが挿さること
+    need = g.USB_PLUG_ENTRY - g.USB_COUNTERBORE
+    assert need <= USB_SHELL_EXPOSED, (
+        f"金属の露出が {USB_SHELL_EXPOSED}mm のケーブルでは {need:.2f}mm 足りない")
+
+    # 5. 高さ方向の余裕（XIAO の積み上げに対して）
+    assert DB_STACK_H >= XIAO_H_WITH_USB
     bottom = g.FLOOR + g.DB_BOSS_H + g.DB_T
-    center = g.usb_center_z()
-    lo, hi = center - g.USB_H / 2, center + g.USB_H / 2
-    margin = min(bottom - lo, hi - (bottom + DB_STACK_H))
-    assert margin >= 0.5, (
-        f"USB 切り欠きの余裕が {margin:.2f}mm しかない"
-        f"（切り欠き {lo:.2f}〜{hi:.2f} / XIAO {bottom:.2f}〜"
-        f"{bottom + DB_STACK_H:.2f}）")
+    lo, hi = z - g.USB_H / 2, z + g.USB_H / 2
+    assert lo >= bottom - 1.0 and hi <= bottom + DB_STACK_H + 1.0, (
+        f"穴 {lo:.2f}〜{hi:.2f} が XIAO の積み上げ "
+        f"{bottom:.2f}〜{bottom + DB_STACK_H:.2f} から外れている")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
-def test_the_antenna_keepout_covers_the_real_antenna(name):
-    """本体基板に開けた禁止域が、本物のアンテナの真上にあること。
+def test_the_antenna_is_no_longer_under_the_main_board(name):
+    """XIAO のアンテナが、本体基板の下から出ていること（open-gaps #23）。
 
-    禁止域の位置は interface.ANTENNA_KEEPOUT に数字で書いてある。
-    **書いただけでは、そこにアンテナがある保証にならない。**子基板の
-    位置はケース側（電池の寄せ方・壁厚）から決まるので、そちらが動くと
-    黙ってずれる。ここで両方から計算して突き合わせる。
+    **これがこの案件の中心にある問題。**アンテナの上 4.09mm に本体基板の
+    全面 GND ベタがあり、チップアンテナの指針（全層 5〜10mm の禁止域）を
+    真上で破っていた。XIAO を子基板の中央から奥端へ寄せ、さらに板から
+    はみ出させることで、アンテナは基板の後端より奥へ出る。
 
-    右は入れられなかった（None）。裏面を列のバス 9 本が横断しており、
-    子基板の x をどこに置いても配線が掛かる。理由は interface.py。
+    **アンテナの位置は interface.antenna_y_span が唯一の出所。**
+    ケース側（電池の寄せ方・壁厚・XIAO の位置）が動けばここが落ちる。
     """
-    from interface import ANTENNA_KEEPOUT
-    from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
-                          daughterboard_x_center)
+    from gen_case import BUMP_DEPTH, DB_FROM_REAR, WALL
     from gen_plate import plate_positions
+    from interface import PCB_INSET_Y, antenna_y_span, plan_depth
 
-    spec = ANTENNA_KEEPOUT[name]
-    if spec is None:
-        return
-    cx, cy, w, h = spec
-    _, (pw, ph) = plate_positions(HALVES[name])
-
-    # 本物のアンテナ（ケース座標）。子基板の前端 3mm、幅は XIAO の 18mm。
-    dbx = daughterboard_x_center(name, pw)
-    db_hi = ph / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
-    ant_x_lo, ant_x_hi = dbx - 9.0, dbx + 9.0
-    ant_y_lo = db_hi - DB_D
-    ant_y_hi = ant_y_lo + 3.0
-
-    # 基板の座標系はケースと同じ原点・同じ向き（どちらも中心・Y 上向き）
-    # ではない。基板の y=0 は基板の中心、ケースの y=0 は本体の中心。
-    # 基板は PCB_INSET_Y ぶん前後を詰めてあるので、後端どうしで合わせる。
-    from interface import PCB_INSET_Y
-    pcb_rear_case_y = ph / 2 - PCB_INSET_Y          # 基板の後端（ケース座標）
-    pcb_h = ph - 2 * PCB_INSET_Y
-    def to_pcb_y(case_y):
-        return case_y - (pcb_rear_case_y - pcb_h / 2)
-
-    ky_lo, ky_hi = to_pcb_y(ant_y_lo), to_pcb_y(ant_y_hi)
-    kx_lo, kx_hi = ant_x_lo, ant_x_hi
-
-    lo_x, hi_x = cx - w / 2, cx + w / 2
-    lo_y, hi_y = cy - h / 2, cy + h / 2
-    assert lo_x <= kx_lo and kx_hi <= hi_x, (
-        f"{name}: 禁止域 x {lo_x:.1f}〜{hi_x:.1f} が"
-        f" アンテナ x {kx_lo:.1f}〜{kx_hi:.1f} を覆っていない")
-    assert lo_y <= ky_lo and ky_hi <= hi_y, (
-        f"{name}: 禁止域 y {lo_y:.1f}〜{hi_y:.1f} が"
-        f" アンテナ y {ky_lo:.1f}〜{ky_hi:.1f} を覆っていない")
+    _, (_pw, ph) = plate_positions(HALVES[name])
+    h_body = plan_depth(ph)
+    db_rear = h_body / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
+    ant_lo, ant_hi = antenna_y_span(db_rear)
+    pcb_rear = ph / 2 - PCB_INSET_Y
+    assert ant_lo >= pcb_rear, (
+        f"{name}: アンテナ y {ant_lo:.2f}〜{ant_hi:.2f} が"
+        f" 本体基板の後端 {pcb_rear:.2f} より手前"
+        f"（{pcb_rear - ant_lo:.2f}mm 潜っている）")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 900" width="990" height="900"
+     font-family="'Hiragino Sans','Yu Gothic',sans-serif">
+  <defs>
+    <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#999" stroke-width="2"/>
+    </pattern>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#333"/>
+    </marker>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="1.2" xChannelSelector="R" yChannelSelector="G"/></filter>
+  </defs>
+  <rect width="990" height="900" fill="#fdfdfa"/>
+  <text x="28" y="34" font-size="20" font-weight="bold" fill="#111">XIAO を子基板の奥端へ寄せた（open-gaps #23 ／ #28）</text>
+  <text x="28" y="56" font-size="13" fill="#555">横から見た断面。座標は設計値から生成（縮尺 13px/mm）。左＝キーボードの手前、右＝奥（電池コブ側）。</text>
+
+  <text x="28" y="96" font-size="16" font-weight="bold" fill="#c0392b">① 変更前</text>
+  <g filter="url(#rough)">
+    <polygon points="70.0,192.7249578161596 443.10000000000014,144.92974550972417 443.10000000000014,124.12974550972416 70.0,171.9249578161596" fill="#c8d8c0" stroke="#4a7a3a" stroke-width="2"/>
+    <rect x="709.1" y="44.0" width="31.2" height="286" fill="url(#hatch)" stroke="#333" stroke-width="2"/>
+    <rect x="70.0" y="298.8" width="670" height="31" fill="#eee" stroke="#999" stroke-width="1.5"/>
+    <rect x="280.1" y="226.0" width="416.0" height="20.8" fill="#dfe9f5" stroke="#2c5f9e" stroke-width="2"/>
+    <rect x="348.4" y="187.0" width="279.5" height="39.0" fill="#3b3b3b" stroke="#111" stroke-width="2"/>
+    <rect x="588.9" y="184.4" width="39.0" height="41.6" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <rect x="348.4" y="171.4" width="39.0" height="15.6" fill="#e67e22" stroke="#a04000" stroke-width="2"/>
+  </g>
+  <line x1="348.4" y1="180.5" x2="348.4" y2="304.0" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="478.2" y1="180.5" x2="478.2" y2="304.0" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <line x1="348.4" y1="291.0" x2="478.2" y2="291.0" stroke="#c0392b" stroke-width="2" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="318" y="317" font-size="14" font-weight="bold" fill="#c0392b">アンテナは本体基板の下に 7.3mm 潜っている</text>
+  <line x1="356" y1="197" x2="288" y2="166" stroke="#e67e22" stroke-width="2"/>
+  <text x="208" y="166" font-size="13" font-weight="bold" fill="#e67e22">アンテナ</text>
+  <text x="403" y="145" font-size="13" fill="#c0392b">真上 4.09mm に地板</text>
+  <text x="668" y="252" font-size="13" font-weight="bold" fill="#c0392b">メスが壁の外面から 8.7mm 奥</text>
+  <text x="668" y="272" font-size="13" font-weight="bold" fill="#c0392b">→ 金属 6.5mm では届かない</text>
+  <text x="290" y="273" font-size="12" fill="#2c5f9e">子基板（GND ベタ）</text>
+  <text x="80" y="154" font-size="12" fill="#4a7a3a">本体基板（4 層・内層 1 が全面 GND ベタ）</text>
+
+  <text x="28" y="526" font-size="16" font-weight="bold" fill="#1a6b3c">② 変更後（XIAO を奥端へ ＋ 板を壁へ 0.6mm ＋ 板から 1.8mm はみ出させる）</text>
+  <g filter="url(#rough)">
+    <polygon points="70.0,622.7249578161595 443.10000000000014,574.9297455097242 443.10000000000014,554.1297455097242 70.0,601.9249578161596" fill="#c8d8c0" stroke="#4a7a3a" stroke-width="2"/>
+    <rect x="709.1" y="474.0" width="31.2" height="286" fill="url(#hatch)" stroke="#333" stroke-width="2"/>
+    <rect x="70.0" y="728.8" width="670" height="31" fill="#eee" stroke="#999" stroke-width="1.5"/>
+    <rect x="287.9" y="656.0" width="416.0" height="20.8" fill="#dfe9f5" stroke="#2c5f9e" stroke-width="2"/>
+    <rect x="447.8" y="617.0" width="279.5" height="39.0" fill="#3b3b3b" stroke="#111" stroke-width="2"/>
+    <rect x="688.3" y="614.4" width="39.0" height="41.6" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <rect x="447.8" y="601.4" width="39.0" height="15.6" fill="#e67e22" stroke="#a04000" stroke-width="2"/>
+  </g>
+  <line x1="478.2" y1="610.5" x2="478.2" y2="734.0" stroke="#1a6b3c" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="198" y="747" font-size="14" font-weight="bold" fill="#1a6b3c">アンテナは基板の外へ出た（潜り込み 0）</text>
+  <text x="428" y="596" font-size="13" fill="#1a6b3c">地板の最も近い点まで 6.24mm</text>
+  <text x="745" y="682" font-size="13" font-weight="bold" fill="#1a6b3c">メスの奥まり 1.00mm</text>
+  <text x="298" y="703" font-size="12" fill="#2c5f9e">子基板（アンテナの下だけベタを抜いた）</text>
+  <text x="28" y="866" font-size="13" fill="#333">確かめ方: 組み立て干渉 0mm³ ／ DRC 違反 0・未配線 0（3 基板）／ 検査 320 件。いずれも故意に壊して落ちることを確認済み。</text>
+</svg>

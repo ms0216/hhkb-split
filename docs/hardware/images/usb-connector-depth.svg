@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 860" width="900" height="860"
+     font-family="'Hiragino Sans','Yu Gothic',sans-serif">
+  <defs>
+    <!-- 手書きっぽく見せるための、わずかな線のゆらぎ -->
+    <filter id="rough" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#888" stroke-width="2"/>
+    </pattern>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#333"/>
+    </marker>
+    <marker id="arR" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#c0392b"/>
+    </marker>
+  </defs>
+
+  <rect width="900" height="860" fill="#fdfdfa"/>
+
+  <text x="30" y="38" font-size="21" font-weight="bold" fill="#111">
+    USB-C のメスが奥まりすぎている（open-gaps #28）
+  </text>
+  <text x="30" y="62" font-size="14" fill="#555">
+    横から見た断面。縮尺 1mm = 6px。壁の外＝左、ケースの中＝右。
+  </text>
+
+  <!-- ================= パネル 1: 普通の機器 ================= -->
+  <g filter="url(#rough)">
+    <text x="30" y="105" font-size="17" font-weight="bold" fill="#1a6b3c">① 普通の機器（HHKB もこれ）</text>
+
+    <!-- 壁 -->
+    <rect x="430" y="120" width="14" height="120" fill="url(#hatch)" stroke="#333" stroke-width="2"/>
+    <!-- メスのコネクタ（壁の位置まで来ている） -->
+    <rect x="430" y="155" width="52" height="50" fill="#dfe9f5" stroke="#2c5f9e" stroke-width="2.5"/>
+    <text x="490" y="176" font-size="13" fill="#2c5f9e">メス（基板側）</text>
+    <text x="490" y="194" font-size="13" fill="#2c5f9e">＝ 壁のすぐ内側</text>
+    <!-- プラグの金属 -->
+    <rect x="432" y="172" width="39" height="16" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <!-- プラグの樹脂 -->
+    <rect x="310" y="159" width="122" height="42" rx="5" fill="#3b3b3b" stroke="#111" stroke-width="2"/>
+    <text x="330" y="185" font-size="14" fill="#fff">樹脂の胴体</text>
+    <!-- ケーブル -->
+    <line x1="310" y1="180" x2="240" y2="180" stroke="#3b3b3b" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <text x="240" y="228" font-size="14" fill="#1a6b3c">↑ 樹脂は壁の外で止まる。中へ入るのは金属だけ</text>
+  <text x="620" y="140" font-size="13" fill="#666">← ケース外</text>
+  <text x="620" y="160" font-size="13" fill="#666">ケース内 →</text>
+
+  <!-- ================= パネル 2: いまの設計 ================= -->
+  <g filter="url(#rough)">
+    <text x="30" y="300" font-size="17" font-weight="bold" fill="#c0392b">② いまのこの設計（挿さらない）</text>
+
+    <rect x="430" y="320" width="14" height="120" fill="url(#hatch)" stroke="#333" stroke-width="2"/>
+    <!-- メスは 8.9mm 奥 -->
+    <rect x="483" y="355" width="52" height="50" fill="#dfe9f5" stroke="#2c5f9e" stroke-width="2.5"/>
+    <text x="543" y="376" font-size="13" fill="#2c5f9e">メス（XIAO）は</text>
+    <text x="543" y="394" font-size="13" fill="#2c5f9e">壁から 8.9mm 奥</text>
+    <!-- プラグ：樹脂を壁の外面に当てた状態 -->
+    <rect x="432" y="372" width="39" height="16" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <rect x="310" y="359" width="122" height="42" rx="5" fill="#3b3b3b" stroke="#111" stroke-width="2"/>
+    <text x="330" y="385" font-size="14" fill="#fff">樹脂の胴体</text>
+    <line x1="310" y1="380" x2="240" y2="380" stroke="#3b3b3b" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <!-- 寸法：8.9mm -->
+  <line x1="430" y1="452" x2="483" y2="452" stroke="#333" stroke-width="1.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="424" y="472" font-size="13" fill="#333">8.9mm（壁 2.4 ＋ 隙間 1.0 ＋ XIAO が板の中央 5.5）</text>
+  <!-- 寸法：金属 6.5mm -->
+  <line x1="432" y1="336" x2="471" y2="336" stroke="#333" stroke-width="1.5" marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="330" y="332" font-size="13" fill="#333">金属は 6.5mm しかない</text>
+  <!-- 届かない 2.4mm -->
+  <line x1="471" y1="380" x2="483" y2="380" stroke="#c0392b" stroke-width="2.5" marker-end="url(#arR)"/>
+  <text x="470" y="420" font-size="14" font-weight="bold" fill="#c0392b">2.4mm 届かない</text>
+
+  <text x="30" y="500" font-size="14" fill="#c0392b">
+    → 届かせるには「樹脂ごと 2.4mm 押し込む」しかない。ところが樹脂は 12×7mm、壁の穴は 10×6mm。入らない
+  </text>
+  <text x="30" y="522" font-size="14" fill="#c0392b">
+    → 私はここで「穴を広げよう」と言っていた。直すべきは穴ではなく、メスの位置
+  </text>
+
+  <!-- ================= パネル 3: 直し方 ================= -->
+  <g filter="url(#rough)">
+    <text x="30" y="580" font-size="17" font-weight="bold" fill="#1a6b3c">③ 直し方：メスを壁まで持ってくる（費用 ¥0）</text>
+
+    <rect x="430" y="600" width="14" height="120" fill="url(#hatch)" stroke="#333" stroke-width="2"/>
+    <rect x="436" y="635" width="52" height="50" fill="#dfe9f5" stroke="#2c5f9e" stroke-width="2.5"/>
+    <rect x="432" y="652" width="39" height="16" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <rect x="310" y="639" width="122" height="42" rx="5" fill="#3b3b3b" stroke="#111" stroke-width="2"/>
+    <text x="330" y="665" font-size="14" fill="#fff">樹脂の胴体</text>
+    <line x1="310" y1="660" x2="240" y2="660" stroke="#3b3b3b" stroke-width="9" stroke-linecap="round"/>
+  </g>
+  <text x="500" y="660" font-size="13" fill="#1a6b3c">樹脂は外に残る＝①と同じ姿</text>
+  <text x="30" y="742" font-size="14" fill="#333">寄せる手（どれも ¥0）：</text>
+  <text x="46" y="764" font-size="14" fill="#333">1. XIAO を子基板の奥端へ寄せる（案 C。5.5mm → 0.5mm）</text>
+  <text x="46" y="786" font-size="14" fill="#333">2. 子基板と壁の隙間を詰める（1.0mm → 0.4mm）</text>
+  <text x="46" y="808" font-size="14" fill="#333">3. 穴のまわりだけ壁を薄くする、または XIAO を板から少しはみ出させる</text>
+
+  <!-- ================= 断面の比較 ================= -->
+  <g transform="translate(560,730)">
+    <text x="0" y="-10" font-size="14" font-weight="bold" fill="#111">正面から見た大きさ（2026-08-09 訂正）</text>
+    <rect x="0" y="0" width="72" height="42" fill="none" stroke="#888" stroke-width="2" stroke-dasharray="5 3"/>
+    <text x="80" y="16" font-size="12" fill="#888">樹脂 12×7mm（実測）</text>
+    <text x="80" y="32" font-size="12" fill="#888">→ 壁は貫通しない</text>
+    <rect x="18" y="12" width="50" height="16" fill="#b9c4cc" stroke="#333" stroke-width="2"/>
+    <text x="80" y="56" font-size="12" fill="#1a6b3c">実際に開ける穴 9.54 × 3.76mm</text>
+    <text x="80" y="72" font-size="12" fill="#1a6b3c">＝ 金属 8.34×2.56 ＋ 逃げ 0.6</text>
+    <text x="0" y="96" font-size="12" fill="#c0392b">樹脂用の浅い座ぐり 0.5mm だけ外側に付ける</text>
+    <text x="0" y="112" font-size="12" fill="#c0392b">（金属の露出が短いケーブルへの保険）</text>
+  </g>
+</svg>

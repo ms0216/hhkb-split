@@ -29,7 +29,7 @@ from gen_case import (  # noqa: E402
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from envelopes import (  # noqa: E402
     battery_envelope, daughterboard_envelope, pcb_bottom_at, pcb_envelope,
-    place_pcb,
+    place_pcb, xiao_overhang_envelope,
 )
 from interface import PLATE_T  # noqa: E402
 
@@ -85,10 +85,13 @@ def build_assembly(keys, half):
     # 関数から座標を取るので、片方だけ動かしてもずれない。
     from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_D, DB_FROM_REAR, DB_T, DB_W,
                           WALL, daughterboard_x_center)
+    db_x = daughterboard_x_center(half, w)
+    db_rear = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
     parts["db"] = daughterboard_envelope(
-        (daughterboard_x_center(half, w),
-         h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2,
-         FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
+        (db_x, db_rear - DB_D / 2, FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
+    # **子基板の外形からはみ出した XIAO の端**（open-gaps #28）。
+    # 壁のポケットが足りているかは、これを置かないと検査できない。
+    parts["xiao"] = xiao_overhang_envelope(db_x, db_rear, FLOOR + DB_BOSS_H + DB_T)
 
     # 上ケース（ベゼル）。プレートを押さえ、手前端を実機の 17mm にする。
     from gen_case import build_topcase
