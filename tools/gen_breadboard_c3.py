@@ -125,7 +125,7 @@ a(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {VW} {H}" width="{VW}" 
   'font-family="Helvetica, Arial, sans-serif">')
 a(f'<rect width="{VW}" height="{H}" fill="#ffffff"/>')
 txt(24, 32, "Task C3 — ブレッドボード上の配置（左右とも同じ）", size=18, anchor="start")
-txt(24, 54, "違うのは書き込むファームだけ。左 proto_split_left（a・b）／右 proto_split_right（c・d）。",
+txt(24, 54, "違うのは書き込むファームだけ。左 proto_split_left（Shift・b）／右 proto_split_right（c・d）。",
     "#666", 12.5, "start", bold=False)
 txt(24, 74, "⚠️ 使うのは D1・D2。C1（proto_direct）の D0・D1 とは 1 つずれる。"
             "D0 は Task C5 で電池電圧の ADC に使うため空けてある。", RED, 12.5, "start")

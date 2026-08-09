@@ -383,3 +383,45 @@ def test_the_prototype_shield_uses_the_production_spi_speed():
     assert len(set(found.values())) == 1, (
         "試作と本番で SPI の転送速度が違う。C2-b の結果を本番へ持ち越せない:\n"
         + "\n".join(f"  {k}: {v / 1e6:g}MHz" for k, v in sorted(found.items())))
+
+
+def test_fabrication_output_requires_the_placement_preview_check():
+    """**部品の向きを配置プレビューで見たと記録してから、発注すること。**
+
+    KiCad のフットプリントの向きと JLCPCB のライブラリの向きは一致しない。
+    `export_fab.py` は共有されている補正表を当てているが、**それが JLCPCB に
+    とって正しいかは、こちらからは検証できない。**機械で確かめられない以上、
+    「人が見た」という記録を要求するしかない。
+
+    ずれると **74LVC595 が 90 度回って載る**か、**ダイオード 61 個が逆向きに
+    なって 1 つも反応しない**。FFC コネクタとホットスワップソケットは
+    補正表にすら無い。
+
+    書く場所は docs/hardware/fab-checklist.md の第 1 節。
+    """
+    root = Path(__file__).resolve().parent.parent
+    fab = sorted(
+        str(q.relative_to(root))
+        for pat in ("**/*.gbr", "**/*.gtl", "**/*.gbl", "**/*.drl", "**/*.gm1")
+        for q in root.glob(pat)
+        if ".superpowers" not in str(q))
+    if not fab:
+        return                      # まだ出していない
+
+    doc = (root / "docs/hardware/fab-checklist.md").read_text()
+    assert "### 配置プレビューを確認した" in doc, (
+        "\n"
+        "  ★ 部品の向きを確認した記録が無いまま製造ファイルが出ている ★\n"
+        f"  {fab[:3]}\n"
+        "\n"
+        "  **KiCad と JLCPCB でフットプリントの向きが一致しない。**\n"
+        "  補正表は当てたが、正しいかは機械では確かめられない。\n"
+        "\n"
+        "  JLCPCB の発注ページの**配置プレビュー**で、次の 4 つを見ること:\n"
+        "    - 74LVC595（U1・右は U2 も）… 270 度の補正を当てている\n"
+        "    - ダイオード 61 個 … **逆だと 1 つも反応しない**\n"
+        "    - FFC コネクタ（J_DB）… **補正表に無い。未確認**\n"
+        "    - ホットスワップソケット 61 個 … **補正表に無い。未確認**\n"
+        "\n"
+        "  見たら docs/hardware/fab-checklist.md の第 1 節に\n"
+        "  「### 配置プレビューを確認した」の見出しを作り、日付と結果を書く。\n")

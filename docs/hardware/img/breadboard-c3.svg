@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 800" width="1010" height="800" font-family="Helvetica, Arial, sans-serif">
 <rect width="1010" height="800" fill="#ffffff"/>
 <text x="24" y="32" text-anchor="start" font-size="18" font-weight="bold" fill="#111">Task C3 — ブレッドボード上の配置（左右とも同じ）</text>
-<text x="24" y="54" text-anchor="start" font-size="12.5" fill="#666">違うのは書き込むファームだけ。左 proto_split_left（a・b）／右 proto_split_right（c・d）。</text>
+<text x="24" y="54" text-anchor="start" font-size="12.5" fill="#666">違うのは書き込むファームだけ。左 proto_split_left（Shift・b）／右 proto_split_right（c・d）。</text>
 <text x="24" y="74" text-anchor="start" font-size="12.5" font-weight="bold" fill="#c0392b">⚠️ 使うのは D1・D2。C1（proto_direct）の D0・D1 とは 1 つずれる。D0 は Task C5 で電池電圧の ADC に使うため空けてある。</text>
 <rect x="102" y="168" width="756" height="290" rx="9" fill="#f7f8f9" stroke="#ccd2d8" stroke-width="2"/>
 <rect x="102" y="304" width="756" height="20" fill="#e6eaee"/>

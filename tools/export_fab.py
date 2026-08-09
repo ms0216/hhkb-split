@@ -193,6 +193,9 @@ def main():
         n_gbr = len(list(outdir.glob("*.g*"))) + len(list(outdir.glob("*.drl")))
         print(f"OK {name}: ガーバー等 {n_gbr} 個 / BOM {n_bom} 行 / CPL {n_cpl} 点")
     print(f"\n→ {OUT}")
+    print("\n**発注する前に docs/hardware/fab-checklist.md を開くこと。**")
+    print("  部品の向きは機械では確かめられない。配置プレビューで目視確認し、")
+    print("  結果を書くまで pytest が落ちる。")
 
 
 if __name__ == "__main__":
