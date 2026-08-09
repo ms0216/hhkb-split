@@ -49,6 +49,12 @@ LAYERS = [
 ]
 
 
+# 回転補正は export_fab_rotation.py にある（pcbnew 抜きで検査するため）。
+from export_fab_rotation import (  # noqa: E402
+    ROTATION_UNVERIFIED, rotation_for_jlcpcb,
+)
+
+
 def _gate_antenna():
     """アンテナの risk を承知した記録があること。"""
     doc = (ROOT / "docs/hardware/open-gaps.md").read_text()
@@ -122,21 +128,28 @@ def _plot(board, outdir):
 
 def _cpl(board, outdir, kinds):
     """実装機用の座標表（CPL）。**基板に載る部品だけ。**"""
-    rows = []
+    rows, unverified = [], set()
     for fp in board.GetFootprints():
         ref = fp.GetReference()
         kind = kinds.get(ref)
         if kind is None or kind in NOT_ASSEMBLED:
             continue
         p = fp.GetPosition()
+        bottom = fp.IsFlipped()
+        name = fp.GetFPIDAsString().split(":")[-1]
+        if any(name.startswith(u) for u in ROTATION_UNVERIFIED):
+            unverified.add(name)
         rows.append({
             "Designator": ref,
             "Mid X": f"{pcbnew.ToMM(p.x):.4f}mm",
             "Mid Y": f"{pcbnew.ToMM(p.y):.4f}mm",
-            "Layer": "bottom" if fp.IsFlipped() else "top",
-            "Rotation": f"{fp.GetOrientationDegrees() % 360:.1f}",
+            "Layer": "bottom" if bottom else "top",
+            "Rotation": f"{rotation_for_jlcpcb(name, fp.GetOrientationDegrees(), bottom):.1f}",
         })
     rows.sort(key=lambda r: r["Designator"])
+    for name in sorted(unverified):
+        print(f"  ⚠ 回転が未確認: {name}"
+              f" — 発注ページの配置プレビューで目視確認すること")
     path = outdir / f"{outdir.name}-cpl.csv"
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))

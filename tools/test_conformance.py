@@ -147,3 +147,31 @@ def test_every_part_that_gets_assembled_has_a_row_in_the_parts_table():
     assert not extra, (
         f"もう使っていない部品が表に残っている: {extra}\n"
         "  tools/parts.py から消すこと")
+
+
+def test_the_cpl_rotation_is_corrected_for_jlcpcb():
+    """CPL の回転が JLCPCB の向きに直されていること。
+
+    **KiCad のフットプリントの向きと JLCPCB のライブラリの向きは一致しない。**
+    補正せずに出すと部品が 90/180 度ずれて載る。基板が使えなくなる。
+
+    私たちが使うフットプリントで補正が要るのは **TSSOP（270 度）** だけ
+    （出典: matthewlai/JLCKicadTools の cpl_rotations_db.csv）。
+    さらに**裏面は補正の符号が逆**で、そのあと `(-rot + 180) % 360` が要る。
+    電子部品はすべて裏面にあるので、この 2 段目は全部に効く。
+    """
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from export_fab_rotation import rotation_for_jlcpcb
+
+    # 表面・補正なし → そのまま
+    assert rotation_for_jlcpcb("D_SOD-123", 90, bottom=False) == 90
+    # 裏面・補正なし → (-90 + 180) = 90
+    assert rotation_for_jlcpcb("D_SOD-123", 90, bottom=True) == 90
+    # 裏面・補正なし・0 度 → 180
+    assert rotation_for_jlcpcb("D_SOD-123", 0, bottom=True) == 180
+    # **TSSOP は 270 度の補正。**裏面なので引く
+    #   (0 - 270) % 360 = 90 → (-90 + 180) % 360 = 90
+    assert rotation_for_jlcpcb("TSSOP-16_4.4x5mm_P0.65mm", 0, bottom=True) == 90
+    # 補正を忘れると 180 になる。**90 度違う**
+    assert rotation_for_jlcpcb("D_SOD-123", 0, bottom=True) == 180
