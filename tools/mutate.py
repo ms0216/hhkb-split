@@ -85,6 +85,12 @@ def mutate(value):
 
 
 def main():
+    # SIGTERM（pkill 等）でも復元の finally が走るように例外へ変換する。
+    # **既定の SIGTERM は finally を飛ばして即死する**ので、途中で殺すと
+    # 変異がファイルに残る（2026-08-10 に実際に CORNER_R 3.0→3.3 が残り、
+    # 並行していた検査が汚染された）。
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     print("**実行中は tools/*.py が書き換わる。同時に編集しないこと。**\n",
           flush=True)
     only = sys.argv[1] if len(sys.argv) > 1 else None

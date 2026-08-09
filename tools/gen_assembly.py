@@ -212,10 +212,15 @@ def build_assembly(keys, half):
             Box(6.0, 2.5, 0.8, align=(Align.CENTER, Align.CENTER, Align.MIN))
     parts["ffc"] = _ffc.part
 
-    # M2 熱圧入インサート（本体ボス 3＋子基板ボス 2）
+    # M2 熱圧入インサート（本体ボス 3＋子基板ボス 2）。
+    # **本体ボスの頭は 7.3° の傾斜面で切られている**ので、水平な上面の
+    # 円柱を面の中心高さに置くと、後ろ半分が r·tan(7.3°)=0.21mm 突き出て
+    # 上ケース・プレートに 0.19mm 食い込む（隙間レポートで発覚。体積が
+    # 0.8mm^3 で検査の閾値 1.0 の下に潜っていた）。実物は面より下へ押し
+    # 込むので、傾斜の振れぶん 0.25mm 沈めて置く。
     with BuildPart() as _ins:
         for bx, by in _boss_positions(half):
-            top = rim_front + (by + h_case / 2) * tilt
+            top = rim_front + (by + h_case / 2) * tilt - 0.25
             with Locations((bx, by, top)):
                 Cylinder(M2_INSERT_D / 2, M2_INSERT_L,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
