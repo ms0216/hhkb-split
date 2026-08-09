@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from interface import (  # noqa: E402
     BEZEL_OPENING_GAP,
+    CLEARANCE,
     BEZEL_TOP_FRONT,
     BEZEL_WALL,
     PLATE_MARGIN_X,
@@ -123,7 +124,8 @@ WALL = 2.4               # 側壁。0.4mm の 6 倍
 FLOOR = 2.4              # 底板。0.4mm の 6 倍。
                          # 当初 2.0mm にしていたが、蓋(1.6mm)をレールに落とし込むと
                          # 床の内面より上に出て電池に食い込んだため厚くした。
-CLEARANCE = 0.2          # 収縮を見込んだ嵌合の逃げ
+# CLEARANCE（嵌合の逃げ 0.2）は interface.py から読む。プレートも同じ値で
+# 上ケースの座ぐりに落とし込むので、出所を 2 つ持たない。
 PORT_CLEAR = 0.6         # 抜き差しする穴の逃げ。嵌合より広くとる（印刷の公差＋挿しやすさ）
 
 # --------------------------------------------------------------------------
@@ -378,7 +380,9 @@ def build_case(keys, half):
     cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
-    cutter_pcb = tilted_cutter(w, h_body, rim_front - PLATE_TO_PCB - PCB_T)
+    from envelopes import under_pcb_base
+    cutter_pcb = tilted_cutter(w, h_body, under_pcb_base(
+        h_plate, rim_front, PLATE_TO_PCB + PCB_T))
     # ボスも外で作って外で切る。**ネジは基板を通らない。**基板に取付穴は
     # 無く（feec08b で廃止）、ボスは基板の外に立っている。切る高さは
     # 20 行ほど下で「プレートの下面（リム）」に決めている。
@@ -403,8 +407,8 @@ def build_case(keys, half):
     # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
     # BATT_H いっぱいに立てると傾いた基板を突き上げる（186mm^3 の食い込みとして
     # 組み立て検査が検出）。ボスと同じく、コンテキストの外で作って外で切る。
-    cutter_under_pcb = tilted_cutter(
-        w, h_body, rim_front - PLATE_TO_PCB - PCB_T - SOCKET_DROP)
+    cutter_under_pcb = tilted_cutter(w, h_body, under_pcb_base(
+        h_plate, rim_front, PLATE_TO_PCB + PCB_T + SOCKET_DROP))
     y_div = (battery_center(h_body) - BATT_W / 2 - WALL / 2 - CLEARANCE)
     with BuildPart() as _d:
         with Locations((battery_x_center(half, w), y_div, FLOOR)):

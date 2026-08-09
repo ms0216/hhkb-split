@@ -41,16 +41,47 @@ def test_thickness(name):
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
-def test_outline_size_matches_keys_plus_margin(name):
+def test_outline_covers_the_keys(name):
+    """プレートがキーの並びを覆い、縁まで材料が残っていること。"""
     keys = HALVES[name]
     part, (w, h), _ = build_plate(keys, name)
     span_x = max(k.right_u for k in keys) - min(k.left_u for k in keys)
-    # **プレートはケースより上ケースの壁ぶん小さい。**
-    # かつては同じだった（プレートが天板だったため）。
-    from interface import BEZEL_WALL
-    assert w == pytest.approx(span_x * UNIT + 2 * PLATE_MARGIN_X - 2 * BEZEL_WALL)
-    assert h == pytest.approx(5 * UNIT + 2 * PLATE_MARGIN_Y - 2 * BEZEL_WALL)
+    # 端のキーの開口の外側に残る材料。ここが 0 になると縁が抜ける。
+    margin_x = (w - (span_x * UNIT - UNIT + SWITCH_CUTOUT)) / 2
+    margin_y = (h - (5 * UNIT - UNIT + SWITCH_CUTOUT)) / 2
+    assert margin_x > 1.0 and margin_y > 1.0, (
+        f"{name}: 開口から縁までの材料が {margin_x:.2f} / {margin_y:.2f}mm しかない")
     assert_bbox(part, expect_x=w, expect_y=h, label=f"{name}: ")
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_tilted_plate_fits_inside_the_bezel(name):
+    """**傾けた**プレートが、上ケースの座ぐりに隙間を持って収まること。
+
+    **平面図で比べる。**平らな寸法どうしで比べると 2 つ取りこぼす:
+      - 傾けると奥行が cos(7.3°) 倍に縮む
+      - 板厚のぶん平面での占有が sin(7.3°) 倍だけ増える（1.5 → 0.19mm）
+
+    実際、プレートは平らな奥行から壁を引いて作られ、上ケースの座ぐりは
+    平面図の奥行から引かれていたため、**プレートが 0.217mm 大きく、
+    手前の縁が壁に当たって座ぐりに落ちなかった**（2026-08-10 に発見）。
+    左右方向も隙間 0 だった。**式を写すのではなく、収まるかどうかを見る。**
+    """
+    from math import cos, radians, sin
+    from interface import (BEZEL_WALL, CLEARANCE, TILT_DEG, plan_depth,
+                           plate_positions)
+
+    keys = HALVES[name]
+    _, (case_w, case_h) = plate_positions(keys)
+    _, (w, h), _ = build_plate(keys, name)
+    t = radians(TILT_DEG)
+    plan_w, plan_h = w, h * cos(t) + PLATE_T * sin(t)   # 傾けた平面図での占有
+    cavity_w = case_w - BEZEL_WALL * 2                   # 上ケースの壁の内側
+    cavity_h = plan_depth(case_h) - BEZEL_WALL * 2
+    for axis, gap in (("X", cavity_w - plan_w), ("Y", cavity_h - plan_h)):
+        assert gap == pytest.approx(CLEARANCE, abs=1e-6), (
+            f"{name}: {axis} 方向の隙間が {gap:+.3f}mm（設計は {CLEARANCE}mm）。"
+            "負なら座ぐりに落ちない。0 なら公差で当たる")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])

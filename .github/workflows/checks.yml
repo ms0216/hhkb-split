@@ -20,3 +20,43 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: テスト（配列・キーマップ・プレート・ケース・基板・組み立て）
         run: pytest tools -q
+
+  # **実形状の検査。**KiCad の 3D モデルから基板の実物を起こし、
+  # 部品どうしが立体で当たらないかを厳密に見る（DRC は 2D で高さを見ない）。
+  #
+  # 重いので本体とは別のジョブにする。**ここが落ちても上の結果は隠れない。**
+  # 手元では kicad-cli があれば同じものが走り、無ければ飛ぶ。
+  #
+  # **3D モデルの在り処は環境変数だけで解決する**（2026-08-10 に手元で確認）。
+  # 基板ファイルは ${KICAD10_3DMODEL_DIR} と ${KICAD6_3RD_PARTY} を参照して
+  # いるので、KiCad の版が違っても、この 2 つを指してやれば同じ結果になる。
+  # **これをしないと、KiCad はモデルを警告なしに飛ばして立体数が減る**
+  # （数を数える検査が落ちて気づける）。
+  real-shape:
+    runs-on: ubuntu-latest
+    env:
+      KICAD10_3DMODEL_DIR: /usr/share/kicad/3dmodels
+      KICAD6_3RD_PARTY: /tmp/kicad-3rdparty
+      KICAD_CLI: /usr/bin/kicad-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-dev.txt
+      - name: KiCad を入れる
+        run: |
+          sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends kicad
+      - name: キースイッチの 3D モデルを入れる
+        # 出所と選定理由は docs/hardware/decisions/2026-08-09-third-party-3d-models.md
+        run: |
+          git clone --depth 1 https://github.com/kiswitch/kiswitch.git /tmp/kiswitch
+          D="$KICAD6_3RD_PARTY/3dmodels/com_github_perigoso_keyswitch-kicad-library/3d-library.3dshapes"
+          mkdir -p "$D"
+          cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/SW_Hotswap_Kailh_MX.{wrl,stp} "$D/"
+          cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/Stabilizer_Cherry_MX_2.00u.{wrl,stp} "$D/"
+          cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/Stabilizer_Cherry_MX_3.00u.{wrl,stp} "$D/"
+      - name: 実形状の検査（記録が今の盤面から出たものかも含む）
+        run: pytest tools/test_assembly.py -q -k "real or step_data"

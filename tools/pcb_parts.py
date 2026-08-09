@@ -171,13 +171,33 @@ def load():
 
 
 def component_boxes(name):
-    """記録済みの部品 bbox を [(x0,y0,z0,x1,y1,z1), ...] で返す。
+    """部品の bbox を、**物理的に正しい高さに直して**返す。
 
     **ソケット・スタビ（KEYSWITCH_LABELS）は除く。**基板を貫く部品なので、
     穴の無い板の占有空間と必ず重なる。組み立てでは専用の箱が受け持つ。
+
+    高さの直し方: KiCad の STEP が描く板は**誘電体だけで 1.51mm**、公称の
+    1.6mm には外層の銅とレジストが含まれる。裏面の部品は STEP では
+    −1.51 の面に載っているが、**実物は公称の下面（−1.6）に載る**ので、
+    その差 0.09mm ぶん下げる。直さないと、裏面の部品が板の占有空間へ
+    0.09mm 潜り込んで見える（許容値でごまかしていた 1.35mm^3 の正体）。
+
+    **記録（json）そのものは STEP のありのままにしておく。**直すのはここ。
     """
-    return [tuple(c["bbox"]) for c in load()[name]["components"]
-            if c["label"] not in KEYSWITCH_LABELS]
+    from envelopes import PCB_T
+
+    rec = load()[name]
+    step_t = rec["board_step_thickness"]
+    drop = PCB_T - step_t                      # 0.09mm
+    out = []
+    for c in rec["components"]:
+        if c["label"] in KEYSWITCH_LABELS:
+            continue
+        x0, y0, z0, x1, y1, z1 = c["bbox"]
+        if z1 <= -step_t + 1e-6:               # 板の下面より下＝裏面の部品
+            z0, z1 = z0 - drop, z1 - drop
+        out.append((x0, y0, z0, x1, y1, z1))
+    return out
 
 
 def keyswitch_boxes(name, label):

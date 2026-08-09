@@ -586,3 +586,35 @@ def test_the_rubber_feet_actually_touch_the_desk():
     assert abs(FOOT_BASE_H - stick_out) < 1e-9, (
         "0° のチルト脚の高さ（FOOT_BASE_H）とゴム足の出っ張りが違う。"
         "前後で高さが揃わず、傾斜が設計値からずれる")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_screws_engage_enough_of_the_insert(half):
+    """ネジがインサートに**十分な長さ噛み合っている**こと。
+
+    インサートを筒にして「ネジが穴を通る」形にした（2026-08-10）。
+    干渉の許容は 0 になったが、**それだけでは「ゆるくて効かないネジ」を
+    止められない。**通っているかではなく、どれだけ噛んでいるかを見る。
+
+    下限 3.0mm は **M2 の呼び径 2.0 × 1.5** という一般則で、実測では
+    ない。インサートの製品を決めたら、メーカーの推奨噛み合い長さに
+    差し替えること。
+    """
+    from envelopes import SCREW_SHAFT_D
+
+    parts, _ = build_assembly(HALVES[half], half)
+    need = SCREW_SHAFT_D * 1.5
+    short = []
+    for ins in parts["inserts"].solids():
+        ib = ins.bounding_box()
+        best = 0.0
+        for scr in parts["screws"].solids():
+            sb = scr.bounding_box()
+            if (abs(sb.center().X - ib.center().X) > 1.0
+                    or abs(sb.center().Y - ib.center().Y) > 1.0):
+                continue
+            best = max(best, min(sb.max.Z, ib.max.Z) - max(sb.min.Z, ib.min.Z))
+        if best < need:
+            short.append(f"({ib.center().X:+.1f},{ib.center().Y:+.1f}) 噛み合い {best:.2f}mm")
+    assert not short, (
+        f"{half}: ネジの噛み合いが {need}mm に足りない\n  " + "\n  ".join(short))

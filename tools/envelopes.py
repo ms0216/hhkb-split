@@ -84,6 +84,9 @@ from bands import (SOCK_HI as SOCKET_Y1, SOCK_LO as SOCKET_Y0,  # noqa: E402
                    SOCK_X_HI as SOCKET_X1, SOCK_X_LO as SOCKET_X0)
 
 
+_BOARD_KEY = {"left": "left", "right": "right"}
+
+
 def pcb_envelope(w, h_plate, half, keys):
     """基板（板だけ）が占有する空間（プレート座標系、原点は板の中心）。
 
@@ -94,41 +97,82 @@ def pcb_envelope(w, h_plate, half, keys):
     実物（Kailh の部品）であって板の一部ではないし、箱は保守的に太らせて
     あるので、実体のダイオードとの重なりを板と区別して扱う必要がある。
     """
+    # **外形は実基板から取る。**以前は「プレートの外形 − PCB_INSET」で
+    # 概算していたが、実基板より奥行が 4.6mm・手前側で 2.3mm 大きく、
+    # ネジボスやケースと重なって見えていた（許容値でごまかしていた）。
+    # 基板が設計済みになった今、概算を持つ理由は無い。
+    # **記録（pcb_parts.json）から読むので KiCad は要らない。**
+    import pcb_parts
+
+    x0, y0, _z0, x1, y1, _z1 = pcb_parts.load()[_BOARD_KEY[half]]["board_bbox"]
     with BuildPart() as env:
         with BuildSketch():
-            RectangleRounded(w - PCB_INSET * 2, h_plate - PCB_INSET * 2, CORNER_R)
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
+                RectangleRounded(x1 - x0, y1 - y0, CORNER_R)
             with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=-PCB_T)
     return env.part
 
 
-def socket_envelope(keys):
-    """Kailh ホットスワップソケットの占有空間（プレート座標系・キーごと）。
+def socket_envelope(half):
+    """Kailh ホットスワップソケットが基板の裏に占める空間（プレート座標系）。
 
-    KiCad に 3D モデルが無く STEP に出てこない（#29 で確認）ので、
-    フットプリント実測＋はんだ余裕の**保守的な箱**として置く。
-    実体より太いことを前提に扱うこと（ダイオードとの離隔の実体検査は
-    基板の DRC コートヤードが担っている）。
+    **平面の形は実物のモデルから、深さだけ保守的に取る。**
+    以前は平面も「フットプリント＋はんだ余裕」で太らせていて、隣に載る
+    実物のダイオードと 110〜139mm^3 重なって見えていた（許容値でごまかして
+    いた）。**実物の形が手に入った今、太らせる理由は平面には無い。**
+
+    深さ（SOCKET_DROP）だけは実測待ちのまま保守側に残す。ケースの床や
+    電池との取り合いを決めるのはこの深さで、確定するのは現物のノギス。
+    データシート（PG151101S11: 板下 1.80）とモデル（端子込み 2.01）には
+    一致を確認済みで、3.2 はそれより 1.19mm 深い。
+
+    **記録（pcb_parts.json）から読むので KiCad は要らない。**
     """
-    from gen_plate import plate_positions
+    import pcb_parts
 
-    positions, _ = plate_positions(keys)
+    boxes = (pcb_parts.keyswitch_boxes(half, "kailh_socket")
+             + pcb_parts.keyswitch_boxes(half, "kailh_socket_leg"))
     with BuildPart() as env:
         with BuildSketch(Plane.XY.offset(-PCB_T)):
-            for kx, ky in positions:
-                with Locations((kx + (SOCKET_X0 + SOCKET_X1) / 2,
-                                ky + (SOCKET_Y0 + SOCKET_Y1) / 2)):
-                    Rectangle(SOCKET_X1 - SOCKET_X0, SOCKET_Y1 - SOCKET_Y0)
+            for x0, y0, _z0, x1, y1, _z1 in boxes:
+                with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
+                    Rectangle(x1 - x0, y1 - y0)
         extrude(amount=-SOCKET_DROP)
     return env.part
 
 
 def place_pcb(env, h_plate, rim_front):
-    """基板の占有空間を、傾いたプレートの下へ置く。"""
+    """基板の占有空間を、傾いたプレートの下へ置く。
+
+    **持ち上げ量は平面図の奥行で決める。**平らな奥行（108）で決めると、
+    ケース側の造作（tilted_cutter は平面図の奥行 107.12 を使う）と
+    0.056mm ずれる。**この案件で 4 回目の「平ら／平面図」の取り違え**
+    （電池蓋 0.42mm、プレートの覆い、プレートの座ぐり、そしてここ）。
+    ずれは小さいが、三脚ナットの座がソケットへ 0.54mm^3 食い込む形で出た。
+    """
     mid_z = rim_front + (h_plate / 2) * tan(radians(TILT_DEG))
     return (Location((0, 0, mid_z), (TILT_DEG, 0, 0))
             * Location((0, 0, -PLATE_TO_PCB)) * env)
+
+
+def under_pcb_base(h_plate, rim_front, drop):
+    """**place_pcb で置いた基板の「下から drop の面」**を、tilted_cutter に
+    渡すための base（前縁での高さ）。
+
+    ケース側は「rim_front − drop」で切っていたが、**基板は傾いた面に対して
+    垂直に drop だけ下がる**ので、実際の面はさらに drop×(1/cos−1) 低い。
+    さらに平らな奥行と平面図の奥行の取り違えが重なり、両者は 0.068mm
+    ずれていた。三脚ナットの座がソケットへ食い込む形で出た（2026-08-10）。
+    **切る面は、置き方から導く。**別々に計算しない。
+    """
+    from math import cos
+    from interface import plan_depth
+
+    t = radians(TILT_DEG)
+    mid_z = rim_front + (h_plate / 2) * tan(t)
+    return mid_z - (plan_depth(h_plate) / 2) * tan(t) - drop / cos(t)
 
 
 def battery_envelope(center):
@@ -269,6 +313,7 @@ USB_PLUG_BODY_L = 10.0   # [暫定] 樹脂胴体の長さ。検査で効くの�
 FFC_RIBBON_W = 7.0       # [暫定] 6.0mm 幅＋振れの余裕
 
 # M2 なべ小ネジ。**まだ買っていない。**長さは幾何から選んだ候補。
+SCREW_SHAFT_D = 2.0      # [確定] M2 の呼び径（軸）。インサートの穴もこの径
 SCREW_HEAD_D = 3.8       # [暫定] 頭の直径
 SCREW_HEAD_H = 1.6       # [暫定] 頭の高さ
 SCREW_L_MAIN = 12.0      # [暫定] 上ケース → プレート → ボスのインサートまで
@@ -346,7 +391,22 @@ def usb_plug_envelope(x, y_recept, z_center):
     return env.part
 
 
-def daughterboard_envelope(center, w, d, t):
+def _usb_cavity(x, y_face, z_center):
+    """**差込口の空洞。**プラグの金属はここに入る。実物のレセプタクルは
+    中空（Seeed の公式モデルで確認）なのに、占有空間を中身の詰まった箱で
+    描いていたため、挿さったプラグが常に「食い込んでいる」ことになり、
+    許容値でごまかしていた（db 90 / xiao 38mm^3）。
+    """
+    from build123d import Align, Box, BuildPart, Locations
+
+    with BuildPart() as cav:
+        with Locations((x, y_face - USB_MATE_DEPTH / 2, z_center)):
+            Box(USB_SHELL_W + 0.2, USB_MATE_DEPTH + 0.2, USB_SHELL_H + 0.2,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    return cav.part
+
+
+def daughterboard_envelope(center, w, d, t, holes=(), usb=None):
     """子基板と、その上に載る XIAO が占める空間。
 
     **基板だけでなく XIAO の高さを含める。** 基板の板厚だけで検査すると、
@@ -354,13 +414,24 @@ def daughterboard_envelope(center, w, d, t):
     """
     from build123d import Box, BuildPart, Locations, Align
 
+    from build123d import Cylinder, Mode
+
     with BuildPart() as env:
         with Locations(center):
             Box(w, d, t + DB_STACK_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    return env.part
+        # 取付穴。**実物には穴がある。**塞いだ箱にするとネジが必ず食い込む
+        for hx, hy in holes:
+            with Locations((hx, hy, center[2])):
+                Cylinder(SCREW_HEAD_D / 2 + 0.2, t + DB_STACK_H, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+    part = env.part
+    if usb is not None:
+        from gen_case import usb_center_z
+        part = part - _usb_cavity(usb[0], usb[1], usb_center_z())
+    return part
 
 
-def xiao_overhang_envelope(x, y_board_rear, z_board_top):
+def xiao_overhang_envelope(x, y_board_rear, z_board_top, usb_x=None, usb_face=None):
     """**子基板の奥端から外へ出た XIAO の端**が占める空間（open-gaps #28）。
 
     子基板の占有空間（daughterboard_envelope）は板の外形までしか無いので、
@@ -375,4 +446,8 @@ def xiao_overhang_envelope(x, y_board_rear, z_board_top):
         with Locations((x, y_board_rear + XIAO_OVERHANG / 2, z_board_top)):
             Box(XIAO_OUTLINE_W, XIAO_OVERHANG, DB_STACK_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-    return env.part
+    part = env.part
+    if usb_x is not None:
+        from gen_case import usb_center_z
+        part = part - _usb_cavity(usb_x, usb_face, usb_center_z())
+    return part

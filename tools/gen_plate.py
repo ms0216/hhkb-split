@@ -31,14 +31,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from layout import bounds_mm, load_layout, split_halves  # noqa: E402
 
 from interface import (
-    BEZEL_WALL,
     CORNER_R,
     M2_CLEAR_D,
+    PLATE_MARGIN_X,
+    PLATE_MARGIN_Y,
     plate_positions,
     PLATE_T,
     SWITCH_CUTOUT,
     boss_positions,
     stab_offset_for,
+    switch_plate_size,
 )
 
 SPLIT = "layout/hhkb_split.json"
@@ -93,10 +95,11 @@ def build_plate(keys, half):
     half は "left" / "right"。取付ネジの位置が左右で違うため必須。
     """
     positions, (case_w, case_h) = plate_positions(keys)
-    # **プレートはケースより上ケースの壁ぶん小さい。**
-    # かつては両者が同じで、プレートがそのまま天板だった。
-    w = case_w - BEZEL_WALL * 2
-    h = case_h - BEZEL_WALL * 2
+    # **寸法は interface.switch_plate_size が 1 つだけ持つ。**
+    # ここで自前に計算していたせいで、上ケースの座ぐりとの整合が崩れていた
+    # （あちらの注記を読むこと）。
+    w, h = switch_plate_size(case_w - PLATE_MARGIN_X * 2,
+                             case_h - PLATE_MARGIN_Y * 2)
     stabs = [(pos, stab_offset_for(k.w_u)) for pos, k in zip(positions, keys)]
     stabs = [(pos, s) for pos, s in stabs if s is not None]
 

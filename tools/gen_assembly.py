@@ -46,7 +46,7 @@ def plate_placement(w, h):
     return Location((0, 0, mid_z), (TILT_DEG, 0, 0))
 
 
-def build_assembly(keys, half):
+def build_assembly(keys, half, real=False):
     """組み上げた各部品を、名前つきで返す。
 
     奥行には 2 種類あるので取り違えないこと。
@@ -69,7 +69,7 @@ def build_assembly(keys, half):
     # Kailh ホットスワップソケット。KiCad に 3D モデルが無く STEP に出ない
     # 実物なので、保守的な箱として別部品で置く（open-gaps #29）
     from envelopes import socket_envelope
-    parts["sockets"] = place_pcb(socket_envelope(keys), h_plate, rim_front)
+    parts["sockets"] = place_pcb(socket_envelope(half), h_plate, rim_front)
 
     # 電池蓋はレールの段に載る。開口の中心へ、レールの高さに置く。
     ox, oy, _, oh = _lid_opening(half, w, h_case)
@@ -88,15 +88,21 @@ def build_assembly(keys, half):
 
     # 子基板。**取付ボスの上に載る位置**に置く。ケース側の造作と同じ
     # 関数から座標を取るので、片方だけ動かしてもずれない。
-    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_D, DB_FROM_REAR, DB_T, DB_W,
+    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_BOSS_POS as DB_BOSS_POS_,
+                          DB_D, DB_FROM_REAR, DB_T, DB_W,
                           WALL, daughterboard_x_center)
+    from interface import XIAO_OVERHANG as XIAO_OVERHANG_
     db_x = daughterboard_x_center(half, w)
     db_rear = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
     parts["db"] = daughterboard_envelope(
-        (db_x, db_rear - DB_D / 2, FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T)
+        (db_x, db_rear - DB_D / 2, FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T,
+        holes=[(db_x + hx, db_rear - DB_D / 2 + hy) for hx, hy in DB_BOSS_POS_],
+        usb=(db_x, db_rear + XIAO_OVERHANG_))
     # **子基板の外形からはみ出した XIAO の端**（open-gaps #28）。
     # 壁のポケットが足りているかは、これを置かないと検査できない。
-    parts["xiao"] = xiao_overhang_envelope(db_x, db_rear, FLOOR + DB_BOSS_H + DB_T)
+    parts["xiao"] = xiao_overhang_envelope(db_x, db_rear, FLOOR + DB_BOSS_H + DB_T,
+                                           usb_x=db_x,
+                                           usb_face=db_rear + XIAO_OVERHANG_)
 
     # 上ケース（ベゼル）。プレートを押さえ、手前端を実機の 17mm にする。
     from gen_case import build_topcase
@@ -108,10 +114,12 @@ def build_assembly(keys, half):
     # ----------------------------------------------------------------------
     import pcb_parts
     from math import cos
-    from build123d import BuildSketch, Cylinder, Plane, RegularPolygon, extrude
+    from build123d import (BuildSketch, Cylinder, Mode, Plane, RegularPolygon,
+                           extrude)
     from envelopes import (FFC_RIBBON_W, NUT_QUARTER_AF, NUT_QUARTER_T,
                            PCB_T, PLATE_TO_PCB,
-                           SCREW_HEAD_D, SCREW_HEAD_H, SCREW_L_DB, SCREW_L_MAIN,
+                           SCREW_HEAD_D, SCREW_HEAD_H, SCREW_SHAFT_D,
+                           SCREW_L_DB, SCREW_L_MAIN,
                            SW_PWR_D, SW_PWR_H, SW_PWR_W, M2_INSERT_L,
                            key_stack_envelopes, stab_envelope, usb_plug_envelope)
     import envelopes
@@ -180,9 +188,13 @@ def build_assembly(keys, half):
     rec = pcb_parts.load()
     jdb = [c["bbox"] for c in rec[half]["components"] if c["label"] == "ffc_conn"]
     jx = (min(b[0] for b in jdb) + max(b[3] for b in jdb)) / 2
-    jy = min(b[1] for b in jdb)                        # 口（手前端）
+    from interface import to_plan
+    jy = to_plan((jx, min(b[1] for b in jdb)))[1]      # 口（手前端・平面図）
+    # **端子も含める。**本体だけ見て経路を決めたら、端子に当たった
+    sock_boxes = (pcb_parts.keyswitch_boxes(half, "kailh_socket")
+                  + pcb_parts.keyswitch_boxes(half, "kailh_socket_leg"))
     jm = [c["bbox"] for c in rec["db"]["components"] if c["label"] == "ffc_conn"]
-    jm_y = db_center_y + min(b[1] for b in jm)         # J_MAIN の口（手前端）
+    jm_y = db_center_y + min(b[1] for b in jm)         # J_MAIN の口（子基板は水平）
     z_board_bottom = (rim_front + (jy + h_plate / 2) * tilt
                       - PLATE_TO_PCB - PCB_T)
     z_lo = FLOOR + 1.9                                 # 走行部は床の少し上
@@ -191,12 +203,24 @@ def build_assembly(keys, half):
         # J_DB の口の前で下へ折り下げる幕。**薄く（1.0mm）**。
         # 口の 1.1mm 手前からソケットの保守的な箱（はんだ余裕込み）が
         # 始まるので、ケーブルは口を出てすぐ折れる必要がある（FFC の
-        # 静的な折りなら可能）。折りの膨らみが箱の角に触れるぶんは
-        # CONTACT の {sockets, ffc} で根拠つきで許す。
+        # 静的な折りなら可能）。
         # 上端は基板の下面の少し手前で止める（平面近似の誤差で板を
         # 突かないため。コネクタの口 −3.6〜−1.6 は覆えている）。
-        with Locations((jx, jy - 0.5, z_lo)):
-            Box(FFC_RIBBON_W, 1.0, z_board_bottom - 0.5 - z_lo,
+        # **折り下げる場所は、置いたあとのソケットの形から決める。**
+        # 帯（キーの列の間）にコネクタがあり、その手前にはすぐ後ろの列の
+        # ソケットが来る。**記録の座標（平らなプレート）と組み立ての座標
+        # （平面図）を混ぜて計算し、0.2mm ずれて当たった。**置いた部品から
+        # 直接測る。
+        near = [b for b in (s_.bounding_box() for s_ in parts["sockets"].solids())
+                if b.min.X < jx + FFC_RIBBON_W / 2
+                and b.max.X > jx - FFC_RIBBON_W / 2 and b.max.Y < jy]
+        y_free = max((b.max.Y for b in near), default=jy - 1.0)
+        drop_d = jy - y_free
+        assert drop_d > 0.3, (
+            f"{half}: J_DB の口とソケットの間が {drop_d:.2f}mm しかなく、"
+            "FFC を折り下げる場所が無い")
+        with Locations((jx, (y_free + jy) / 2, z_lo)):
+            Box(FFC_RIBBON_W, drop_d, z_board_bottom - 0.5 - z_lo,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 床の上を左右方向へ走る
         x0, x1 = sorted((jx, db_x))
@@ -207,9 +231,10 @@ def build_assembly(keys, half):
         with Locations((db_x, (jy - 4.0 + jm_y) / 2, z_lo)):
             Box(FFC_RIBBON_W, jm_y - (jy - 4.0), 1.8,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # J_MAIN へ差し込まれる先端（設計上の嵌合）
-        with Locations((db_x, jm_y + 1.25, FLOOR + DB_BOSS_H - 1.6)):
-            Box(6.0, 2.5, 0.8, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # **差込口ぴったりで止める。**中まで描くと、塞がった箱に食い込む
+        # ことになり、許容値でごまかす羽目になる（上の走行部の終端が
+        # そのまま J_MAIN の口の面）。**届くかどうか**はケーブルの長さの
+        # 検査（test_pcb の FFC 長）が別に見る。
     parts["ffc"] = _ffc.part
 
     # M2 熱圧入インサート（本体ボス 3＋子基板ボス 2）。
@@ -218,15 +243,21 @@ def build_assembly(keys, half):
     # 上ケース・プレートに 0.19mm 食い込む（隙間レポートで発覚。体積が
     # 0.8mm^3 で検査の閾値 1.0 の下に潜っていた）。実物は面より下へ押し
     # 込むので、傾斜の振れぶん 0.25mm 沈めて置く。
+    # **筒として描く。**中身の詰まった棒にすると、通したネジが必ず
+    # 「食い込んでいる」ことになり、許容値でごまかす羽目になる。
+    # 穴の径はネジの軸と同じにする（実物はここがネジ山で噛み合う）。
     with BuildPart() as _ins:
-        for bx, by in _boss_positions(half):
-            top = rim_front + (by + h_case / 2) * tilt - 0.25
-            with Locations((bx, by, top)):
+        seats = [(bx, by, rim_front + (by + h_case / 2) * tilt - 0.25)
+                 for bx, by in _boss_positions(half)]
+        seats += [(db_x + dx_, db_center_y + dy_, FLOOR + DB_BOSS_H)
+                  for dx_, dy_ in DB_BOSS_POS]
+        for x_, y_, z_ in seats:
+            with Locations((x_, y_, z_)):
                 Cylinder(M2_INSERT_D / 2, M2_INSERT_L,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
-        for dx_, dy_ in DB_BOSS_POS:
-            with Locations((db_x + dx_, db_center_y + dy_, FLOOR + DB_BOSS_H)):
-                Cylinder(M2_INSERT_D / 2, M2_INSERT_L,
+        for x_, y_, z_ in seats:
+            with Locations((x_, y_, z_)):
+                Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
     parts["inserts"] = _ins.part
 
@@ -239,14 +270,14 @@ def build_assembly(keys, half):
             with Locations((bx, by, zt)):
                 Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-                Cylinder(1.0, SCREW_L_MAIN,
+                Cylinder(SCREW_SHAFT_D / 2, SCREW_L_MAIN,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
         for dx_, dy_ in DB_BOSS_POS:
             with Locations((db_x + dx_, db_center_y + dy_,
                             FLOOR + DB_BOSS_H + DB_T)):
                 Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-                Cylinder(1.0, SCREW_L_DB,
+                Cylinder(SCREW_SHAFT_D / 2, SCREW_L_DB,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
     parts["screws"] = _scr.part
 
@@ -271,7 +302,42 @@ def build_assembly(keys, half):
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
     parts["rubber"] = _rub.part
 
+    if real:
+        parts = _swap_in_real_boards(parts, half, h_plate, rim_front,
+                                     db_x, db_center_y)
     return parts, (w, h_case)
+
+
+def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
+    """基板まわりの**近似の箱を、KiCad の実形状に差し替える**。
+
+    箱（占有空間）は「まだ設計していないものの場所取り」だった。基板は
+    設計済みなので、**正確に見るときは実物を置く。**GitHub Actions の
+    実形状ジョブがこちらを使う（kicad-cli が要る）。
+
+    差し替えるのは基板とその上の部品だけ。ケース・プレート・上ケース・
+    蓋・脚・ネジ・インサート・ゴム足は**元から実物の形**なのでそのまま。
+    """
+    from build123d import Location
+    import pcb_parts
+    from envelopes import place_pcb
+    from gen_case import DB_BOSS_H, FLOOR
+
+    ox, oy = pcb_parts.ORIGIN
+    main = pcb_parts.real_compound(half)
+    board = max(main.solids(), key=lambda s_: s_.volume)
+    parts = dict(parts)
+    for name in ("pcb", "sockets", "pcb_parts"):
+        parts.pop(name, None)
+    parts["pcb_real"] = place_pcb(
+        Location((-ox, oy, -board.bounding_box().max.Z)) * main, h_plate, rim_front)
+
+    dbc = pcb_parts.real_compound("db")
+    for name in ("db", "xiao", "db_parts"):
+        parts.pop(name, None)
+    parts["db_real"] = Location((db_x - ox, db_center_y + oy,
+                                 FLOOR + DB_BOSS_H)) * dbc
+    return parts
 
 
 def check(keys, half, label="", focus=None):
@@ -286,55 +352,26 @@ def check(keys, half, label="", focus=None):
     parts, (w, h_case) = build_assembly(keys, half)
     problems, notes = [], []
 
-    # 1. 干渉。**設計上の食い込み**だけを、実測した量ぶんだけ許す。
+    # 1. 干渉。**許容値は無い。0 が合格。**
     #
-    # **許容は「実測 + わずかな余白」にする。**以前はここに 30.0 が並んで
-    # いたが、実測すると 30 組のうち 17 組は重なり 0 だった。つまり
-    # 30mm^3 の窓が開いたままで、その下の回帰は永久に見えなかった。
-    # 実際、傾斜面で切られたボスに水平な円柱を置いた誤り（インサートが
-    # 上ケースへ 0.19mm 食い込む）は、既定の 1.0mm^3 の下に潜っていた。
+    # **以前はここに許容値の表があった。**「設計上ここは接する」と称して
+    # 30mm^3 まで許していたが、実測すると 30 組のうち 17 組は重なり 0 で、
+    # 窓だけが開いていた。そして**実物どうしの組にまで許容が掛かっていて、
+    # プレートが上ケースに 0.217mm 食い込む不具合を黙って通していた。**
     #
-    # **表の値を疑うときは、実測し直して比べること**（2026-08-10 実施）:
-    #     parts, _ = build_assembly(halves()[half], half)
-    #     intersection_volume(parts[a], parts[b])
-    # 実測より大きく広げてよいのは、**なぜその量が要るかを書ける**ときだけ。
+    # 許容値が要るように見えたときは、**例外なくモデルが実物と違っている。**
+    # 実際、13 組すべてが次のどれかだった（2026-08-10 に全部潰した）:
+    #   - 中空を実体で描いていた（インサート・USB の差込口・取付穴）
+    #   - 予約の箱が実物より太かった（基板の外形・ソケット）
+    #   - 基準面がずれていた（板厚 1.51 と 1.6／平らな奥行と平面図の奥行）
+    #   - 差し込んだ先を塞がった箱に入れていた（FFC）
+    #   - **本物の不具合**（プレート）
+    # **許容値を足す前に、どれに当たるかを必ず先に調べること。**
     #
-    # 面どうしがぴったり接する組は、厳密な B-rep 演算では 0 になる
-    # （左右 68 組で確認）。だから接触するだけの組は表に載せず、既定へ落とす。
-    DEFAULT = 0.1        # 接するだけの組の許容。0.19mm^3 の食い込みを捕まえる
-    CONTACT = {
-        # 値の後ろは 2026-08-10 の実測（左 / 右）。
-        frozenset({"case", "pcb"}): 30.0,        # 基板はネジボスの上に載る 26.5/26.5
-        frozenset({"plate", "topcase"}): 30.0,   # 上ケースがプレートを押さえる 21.9/27.4
-        # **ソケットの箱は実体より太い**（フットプリント実測＋はんだ余裕）。
-        # 実体のダイオード（STEP）はその余白に入るので重なって見えるが、
-        # 基板上の部品どうしの離隔は DRC のコートヤード（違反 0）と
-        # test_real_board_parts_do_not_collide_in_3d が実体で検査している。
-        # **ここだけ余白が広い**（右 138.7 に対し 170）。1 個 4.1mm^3 なので
-        # 実質「ダイオード 7 個ぶん」の窓が開いている。狭めるには箱ではなく
-        # 実物のソケット断面が要る（現物のノギス待ち）。
-        frozenset({"sockets", "pcb_parts"}): 170.0,
-        frozenset({"db", "usb_plug"}): 95.0,     # メスの奥は db の箱の中 89.7
-        frozenset({"inserts", "screws"}): 65.0,  # ねじ込み（嵌合）59.1
-        frozenset({"db", "screws"}): 50.0,       # 頭が載り軸が板を貫く 46.3
-                                                 # （占有空間の箱には穴が無い）
-        frozenset({"xiao", "usb_plug"}): 42.0,   # 金属がメスに入る（嵌合）38.4
-        frozenset({"db_parts", "ffc"}): 14.0,    # 先端がコネクタに入る（嵌合）12.0
-        frozenset({"sockets", "ffc"}): 10.0,     # 折り下げの幕が箱の角に触れる 8.8/8.7
-        frozenset({"pcb", "pcb_parts"}): 3.0,    # 部品が基板の面に載る 1.4/1.7
-                                                 # （STEP の板厚 1.51 と公称 1.6 の差 0.09）
-        frozenset({"case", "sockets"}): 2.0,     # 仕切り壁の頭をソケット下端の
-                                                 # 面で切ってある 1.3/1.2
-        # **占有空間は実基板より 2.3mm 手前まで張り出している**（envelope の
-        # 手前端 y=-51.0 に対し実基板 -48.7）。インサート φ3.2 が、その
-        # 張り出しぶんと逃げ穴 φ2.4 の差を削る。**実基板とは 1.2mm 離れて
-        # いるので実物の衝突ではない**（2026-08-10 に STEP で確認）。
-        frozenset({"pcb", "inserts"}): 0.5,      # 0.19/0.19
-        # 同径の円筒どうし（母線が一致する）。解析的には 0 だが、演算系が
-        # 変わるとごく薄い欠片が出うるので、ここだけ保険を残す。実測 0.0。
-        frozenset({"case", "inserts"}): 0.5,     # 下穴 φ3.2 とインサート φ3.2
-        frozenset({"case", "rubber"}): 0.5,      # 座ぐり φ10 とゴム足 φ10
-    }
+    # EPS は設計上の許容ではなく、**ブーリアン演算の分解能**。面どうしが
+    # ちょうど接する組は厳密には 0 になるが、円筒と平面が 1 点で触れる
+    # ような退化した接触では 1e-8mm^3 級の欠片が出る（一辺 0.004mm）。
+    EPS = 1e-6
     names = list(parts)
     # bbox が離れている組は体積 0 で確定なので、ブーリアン演算を省く。
     # 部品が 10 → 22 個になり、総当たり 231 組を全部計算すると遅すぎる。
@@ -353,11 +390,8 @@ def check(keys, half, label="", focus=None):
             if not _bb_touch(a, b):
                 continue
             v = intersection_volume(parts[a], parts[b])
-            limit = CONTACT.get(frozenset({a, b}), DEFAULT)
-            if v > limit:
-                kind = "接触の域を超えて" if limit > DEFAULT else ""
-                problems.append(
-                    f"{a} と {b} が {kind}{v:.2f}mm^3 食い込んでいる（許容 {limit}）")
+            if v > EPS:
+                problems.append(f"{a} と {b} が {v:.3f}mm^3 食い込んでいる")
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。

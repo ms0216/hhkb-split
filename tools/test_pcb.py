@@ -950,3 +950,56 @@ def test_the_ground_plane_still_covers_the_board(name):
         f"{name}: GND ベタが基板の {ratio * 100:.1f}% しか覆っていない。"
         "禁止域か配線が地板を割り、切り離された側が孤島として削除された"
         "可能性がある。戻り電流の道が切れるので、割らない形に直すこと")
+
+
+# --------------------------------------------------------------------------
+# フットプリントを**メーカーのデータシート**と突き合わせる（2026-08-10）
+# --------------------------------------------------------------------------
+# 実形状の検査で、Kailh ソケットのモデルが基板に 0.13mm^3 食い込んでいた。
+# **どちらが間違っているのかを、第三者のモデルどうしでは決められない。**
+# 決めるのはメーカーの図面。突き合わせた結果「基板は正しく、モデルが
+# 実物より大きい」と分かったので、その組は比べないことにした。
+#
+# **その判断の根拠をここに残す。**根拠が検査になっていないと、
+# 「モデルが大きいだけ」は次の人にとってただの言い訳になる。
+#
+# 出典: Kailh PG151101S11 製品規格書 KH-PS1607-10 Rev.B の
+#       「9. Recommended PCB Layout」（φ3.00 の穴 2 つ・間隔 6.35 と 2.54、
+#        パッド 2.5 x 2.55mm）。
+
+def test_the_hotswap_footprint_matches_the_kailh_datasheet():
+    """ホットスワップソケットのフットプリントが、データシートどおりであること。"""
+    import re
+
+    fp = (ROOT / "pcb/lib/keyswitch.pretty/SW_Hotswap_Kailh_MX_1.00u.kicad_mod").read_text()
+    # **1 行ごとに at / size / drill を別々に拾う。**まとめて 1 つの正規表現で
+    # 取ろうとすると、SMD パッドの (layers ...) を挟んだ形に当たらず、
+    # 「パッド 0 枚」と誤って報告した（2026-08-10）。
+    pads = []
+    for line in fp.splitlines():
+        if "(pad " not in line:
+            continue
+        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)", line)
+        size = re.search(r"\(size ([\d.]+) ([\d.]+)\)", line)
+        drill = re.search(r"\(drill ([\d.]+)", line)
+        if at and size:
+            pads.append((float(at.group(1)), float(at.group(2)),
+                         float(size.group(1)), float(size.group(2)),
+                         float(drill.group(1)) if drill else None))
+    holes = [(x, y, d) for x, y, _w, _h, d in pads if d]
+    # ソケットの端子が入る穴（φ3.05）。MX 軸の穴（φ4 / φ1.75）とは別。
+    sock = sorted((h for h in holes if 2.9 <= h[2] <= 3.2), key=lambda h: h[0])
+    assert len(sock) == 2, f"ソケットの穴が {len(sock)} 個（2 個のはず）"
+    (x0, y0, d0), (x1, y1, d1) = sock
+    assert 3.00 <= d0 <= 3.15 and 3.00 <= d1 <= 3.15, (
+        f"穴径 {d0}/{d1}mm。データシートは φ3.00（実物が入る側に少しだけ大きく）")
+    assert abs(x1 - x0) == pytest.approx(6.35, abs=0.01), (
+        f"穴の左右間隔 {abs(x1 - x0):.3f}mm。データシートは 6.35mm")
+    assert abs(y1 - y0) == pytest.approx(2.54, abs=0.01), (
+        f"穴の前後のずれ {abs(y1 - y0):.3f}mm。データシートは 2.54mm")
+    # はんだ付けするパッド 2.5 x 2.55mm
+    solder = [(w, h) for _x, _y, w, h, d in pads if d is None and 2.0 < w < 3.5]
+    assert len(solder) == 2, f"はんだパッドが {len(solder)} 枚（2 枚のはず）"
+    for w, h in solder:
+        assert {round(w, 2), round(h, 2)} == {2.55, 2.5}, (
+            f"パッド {w}x{h}mm。データシートは 2.5 x 2.55mm")
