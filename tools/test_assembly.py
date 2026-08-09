@@ -22,6 +22,25 @@ from gen_plate import halves  # noqa: E402
 
 HALVES = halves()
 
+
+def _require_kicad(what):
+    """kicad-cli が無ければ飛ばす。**ただし REQUIRE_KICAD=1 なら失敗にする。**
+
+    GitHub Actions の実形状ジョブはこれを 1 にして走らせる。**飛んだ検査は
+    無いのと同じ**で、KiCad のインストールに失敗しても緑になってしまう
+    ——この案件で実際に起きた（build/ が無くて電源スイッチの検査が
+    毎回飛んでいた）。
+    """
+    import os
+    import pcb_parts
+
+    if Path(pcb_parts.KICAD_CLI).exists():
+        return
+    if os.environ.get("REQUIRE_KICAD") == "1":
+        pytest.fail(f"{what}: kicad-cli が見つからない（{pcb_parts.KICAD_CLI}）。"
+                    "このジョブは飛ばしてはいけない")
+    pytest.skip(f"{what}: kicad-cli が無い環境")
+
 # 組み立てに含まれていなければならない部品。
 # 名前を書いておくことで、あとから足した部品が検査から漏れるのを防ぐ。
 REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db", "topcase",
@@ -391,8 +410,7 @@ def test_the_recorded_step_data_is_fresh():
     """
     import pcb_parts
 
-    if not Path(pcb_parts.KICAD_CLI).exists():
-        pytest.skip("kicad-cli が無い環境（記録の突き合わせは手元でやる）")
+    _require_kicad("記録の突き合わせ")
     fresh = pcb_parts.extract("left")
     rec = pcb_parts.load()["left"]
     assert fresh["counts"] == rec["counts"], (
@@ -448,11 +466,7 @@ def test_real_board_parts_do_not_collide_in_3d():
     import pcb_parts
     from pcb_parts import _classify
 
-    if not Path(pcb_parts.KICAD_CLI).exists():
-        # **飛んでも穴が開かないようにしてある。**同じ範囲を、記録だけで
-        # 走る test_real_component_boxes_do_not_collide（bbox 粒度）が
-        # CI で見る。厳密な形状の判定だけが手元に残る。
-        pytest.skip("kicad-cli 無し。bbox 版が代わりに走る（厳密版は手元で）")
+    _require_kicad("実形状の総当たり")
 
     # **設計どおりの嵌合はブーリアン演算ごと省く**（全対を測ると 4 分かかる。
     # 内訳は上の docstring の実測値。ここで見たいのは「部品をまたぐ干渉」）。
@@ -618,3 +632,51 @@ def test_the_screws_engage_enough_of_the_insert(half):
             short.append(f"({ib.center().X:+.1f},{ib.center().Y:+.1f}) 噛み合い {best:.2f}mm")
     assert not short, (
         f"{half}: ネジの噛み合いが {need}mm に足りない\n  " + "\n  ".join(short))
+
+
+# --------------------------------------------------------------------------
+# **全部品を実形状にして、全組み合わせを許容ゼロで見る**（GitHub Actions）
+# --------------------------------------------------------------------------
+# 箱（占有空間）は場所取りで、実物とは違う。基板が設計済みになった今、
+# 正確に見るときは実物を置く。重い（片側 4〜5 分）ので GitHub Actions の
+# 別ジョブに任せ、手元では走らせない。
+
+def _all_pair_overlaps(parts):
+    from itertools import combinations
+    from verify import intersection_volume
+
+    out = []
+    for a, b in combinations(parts, 2):
+        v = intersection_volume(parts[a], parts[b])
+        if v > 1e-6:
+            out.append((v, a, b))
+    return sorted(out, reverse=True)
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_real_shapes_do_not_overlap_anywhere(half):
+    """**実形状の全部品・全組み合わせで重なり 0。**許容値は無い。"""
+    _require_kicad("実形状の全組み合わせ")
+    parts, _ = build_assembly(HALVES[half], half, real=True)
+    hits = _all_pair_overlaps(parts)
+    assert not hits, (f"{half}: 実形状で重なっている\n  "
+                      + "\n  ".join(f"{v:.3f}mm^3 {a} x {b}" for v, a, b in hits))
+
+
+def test_the_real_shape_check_actually_detects_a_collision():
+    """**この検査が生きていることを、毎回わざと壊して確かめる。**
+
+    検査器が壊れて何も見ていなくても緑になる——それが一番危ない。
+    緑の意味を「検査器が生きていて、そのうえで何も無かった」にする。
+    """
+    _require_kicad("実形状の自己確認")
+    import gen_case
+
+    original = gen_case.NUT_BOSS_H
+    try:
+        gen_case.NUT_BOSS_H = original + 8.0      # 三脚ナットの座を突き上げる
+        parts, _ = build_assembly(HALVES["left"], "left", real=True)
+        assert _all_pair_overlaps(parts), \
+            "ナットの座を 8mm 高くしても何も検出されない。検査が効いていない"
+    finally:
+        gen_case.NUT_BOSS_H = original

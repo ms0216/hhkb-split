@@ -323,6 +323,15 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     from envelopes import place_pcb
     from gen_case import DB_BOSS_H, FLOOR
 
+    from build123d import Compound
+
+    def _moved(compound, loc):
+        """**立体ごとに動かしてから 1 つにまとめる。**Compound に Location を
+        掛けただけだと、交差の結果が元の（KiCad の生の）座標を持ったまま
+        返り、まったく別の場所で重なったように見える（2026-08-10 に踏んだ）。
+        """
+        return Compound(children=[s_.moved(loc) for s_ in compound.solids()])
+
     ox, oy = pcb_parts.ORIGIN
     main = pcb_parts.real_compound(half)
     board = max(main.solids(), key=lambda s_: s_.volume)
@@ -330,13 +339,14 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     for name in ("pcb", "sockets", "pcb_parts"):
         parts.pop(name, None)
     parts["pcb_real"] = place_pcb(
-        Location((-ox, oy, -board.bounding_box().max.Z)) * main, h_plate, rim_front)
+        _moved(main, Location((-ox, oy, -board.bounding_box().max.Z))),
+        h_plate, rim_front)
 
     dbc = pcb_parts.real_compound("db")
     for name in ("db", "xiao", "db_parts"):
         parts.pop(name, None)
-    parts["db_real"] = Location((db_x - ox, db_center_y + oy,
-                                 FLOOR + DB_BOSS_H)) * dbc
+    parts["db_real"] = _moved(dbc, Location((db_x - ox, db_center_y + oy,
+                                             FLOOR + DB_BOSS_H)))
     return parts
 
 
