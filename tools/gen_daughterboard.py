@@ -333,11 +333,20 @@ def _route(board):
             for a, b in (((fx, fy), (fx, row)), ((fx, row), (lane, row))):
                 if a != b:
                     _track(board, mm(*a), mm(*b), pcbnew.B_Cu, net)
-            _via(board, mm(lane, row), net)
 
-            # 2. 表面で縦に走る（レーンごとに x が違うので交差しない）
-            _track(board, mm(lane, row), mm(lane, ty), pcbnew.F_Cu, net)
-            _via(board, mm(lane, ty), net)
+            # 2. 縦に走る（レーンごとに x が違うので交差しない）。
+            #
+            # **アンテナの帯に入るレーンだけ、裏面のまま走らせる。**
+            # 表面（F.Cu）はアンテナから 1.6mm、裏面（B.Cu）は 3.2mm。
+            # **金属を消せないなら、せめて倍の距離へ離す。**
+            # 板厚 1.6mm ぶん遠ざかるだけだが、**あとから直せない場所**なので
+            # 無料でできることはやっておく（open-gaps #23）。
+            if BAND_LO <= lanes[i] <= BAND_HI:
+                _track(board, mm(lane, row), mm(lane, ty), pcbnew.B_Cu, net)
+            else:
+                _via(board, mm(lane, row), net)
+                _track(board, mm(lane, row), mm(lane, ty), pcbnew.F_Cu, net)
+                _via(board, mm(lane, ty), net)
 
             # 3. 裏面でパッドへ。**FFC のパッド列より外側なので、
             #    裏面の縦線とも交差しない。**

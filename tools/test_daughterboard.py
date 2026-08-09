@@ -321,3 +321,64 @@ def test_the_ground_pour_is_actually_absent_under_the_antenna():
             if x_lo + EPS <= x <= x_hi - EPS and y_lo + EPS <= y <= y_hi - EPS:
                 n += 1
     assert n == 0, f"アンテナの真下にベタの頂点が {n} 点ある"
+
+
+def test_no_copper_on_the_near_layer_under_the_antenna():
+    """**アンテナに近いほうの層（F.Cu）**に、真下の銅が 1 つも無いこと。
+
+    アンテナは XIAO の上面にあり、子基板の表面（F.Cu）まで 1.6mm、
+    裏面（B.Cu）まで 3.2mm（open-gaps #23）。FFC から XIAO への 12 本は
+    アンテナの y 帯を必ず横切るが、**x は選べる**。アンテナの実測位置
+    （TX 側の縁から 7.0mm）で計算すると、6 本のうち 2 本がどうしても
+    真下に入る。
+
+    **消せないので、遠いほうの層へ逃がしてある。**距離が倍になる。
+    ここは**基板が届いてからでは直せない**（配線は XIAO の下に隠れる）。
+
+    ⚠️ この検査が守るのは「近い層に無いこと」だけ。**B.Cu には 2 本ある。**
+    それが何 dB 効くかは測っていない（#23 の「実機で無線がおかしいとき」）。
+    """
+    from interface import ANTENNA_W, ANTENNA_X, antenna_y_span
+    from gen_case import DB_D
+
+    text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
+    ys, xs = [], []
+    for blk in re.split(r"\n\t\(gr_", text)[1:]:
+        if '"Edge.Cuts"' not in blk:
+            continue
+        for m in re.finditer(r"\((?:start|end) ([-\d.]+) ([-\d.]+)\)",
+                             blk.split("(stroke")[0]):
+            xs.append(float(m.group(1)))
+            ys.append(float(m.group(2)))
+    assert xs, "基板の外形が読めない"
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+
+    y_lo, y_hi = antenna_y_span(DB_D / 2)          # 板の中心を原点とした CAD 座標
+    x_lo, x_hi = ANTENNA_X - ANTENNA_W / 2, ANTENNA_X + ANTENNA_W / 2
+
+    def inside(x_abs, y_abs):
+        x, y = x_abs - cx, cy - y_abs              # KiCad は Y 下向き
+        return x_lo <= x <= x_hi and y_lo <= y <= y_hi
+
+    bad = []
+    for seg in re.findall(r"\n\t\(segment[\s\S]*?\n\t\)", text):
+        lay = re.search(r'\(layer "([^"]+)"\)', seg)
+        if not lay or lay.group(1) != "F.Cu":
+            continue
+        a = re.search(r"\(start ([-\d.]+) ([-\d.]+)\)", seg)
+        b = re.search(r"\(end ([-\d.]+) ([-\d.]+)\)", seg)
+        if not (a and b):
+            continue
+        x1, y1 = float(a.group(1)), float(a.group(2))
+        x2, y2 = float(b.group(1)), float(b.group(2))
+        if any(inside(x1 + (x2 - x1) * i / 40, y1 + (y2 - y1) * i / 40)
+               for i in range(41)):
+            bad.append(f"配線({x1:.1f},{y1:.1f})-({x2:.1f},{y2:.1f})")
+    for via in re.findall(r"\n\t\(via[\s\S]*?\n\t\)", text):
+        a = re.search(r"\(at ([-\d.]+) ([-\d.]+)\)", via)
+        if a and inside(float(a.group(1)), float(a.group(2))):
+            bad.append("ビア")
+
+    assert not bad, (
+        f"アンテナの真下（近いほうの層）に銅がある: {bad[:4]}"
+        f"{' ほか' if len(bad) > 4 else ''}")
