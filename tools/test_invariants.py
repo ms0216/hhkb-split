@@ -303,6 +303,31 @@ def test_fabrication_output_requires_an_accepted_antenna_risk():
         "  **この検査を消して通すこと。それは記録を消すのと同じ。**\n")
 
 
+def test_the_production_battery_divider_matches_the_resistors():
+    """**本番シールドの分圧が 1MΩ + 1MΩ のままであること。**
+
+    治具 `proto_split` の `full-ohms` は 2026-08-09 に一時的に 2.5 倍へ
+    ずらしてある（[open-gaps #26]）。ZMK の残量 % は 3450mV 以下が一律 0%
+    なので、**乾電池では ADC が生きていても死んでいても 0% になり、
+    確認にならない**ため。
+
+    **その値が本番へ漏れると、実機の電池電圧が 1.25 倍で報告される。**
+    ここは本番側だけを見張る（治具側は意図的に違うので見張れない）。
+
+    抵抗の実測は R1 = 976kΩ / R2 = 987kΩ で、どちらも ±5% 以内。
+    ZMK の設定を実測値へ入れ直す必要は無い（Task C4・C5 の §8）。
+    """
+    dtsi = (Path(__file__).resolve().parent.parent
+            / "config/boards/shields/hhkb_split/hhkb_split.dtsi").read_text()
+    found = dict(re.findall(r"(output-ohms|full-ohms)\s*=\s*<(\d+)>", dtsi))
+    assert found.get("output-ohms") == "1000000", (
+        f"本番の output-ohms が 1MΩ でない: {found.get('output-ohms')}")
+    assert found.get("full-ohms") == "2000000", (
+        f"本番の full-ohms が 2MΩ でない: {found.get('full-ohms')}。\n"
+        "  治具の一時的な値（2500000）が漏れていないか確認すること。\n"
+        "  漏れると実機の電池電圧が 1.25 倍で報告される。")
+
+
 def test_the_prototype_shield_sleeps_like_the_production_one():
     """**試作シールドのスリープ設定が本番と揃っていること。**
 
