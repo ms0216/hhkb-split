@@ -35,6 +35,19 @@ from envelopes import (  # noqa: E402
 from interface import PLATE_T  # noqa: E402
 
 
+# real 層で実形状に置き換わる（＝bbox 層にしか無い）部品。
+# CI の checks ジョブは、**この部品が絡む組だけ**を bbox 層で見る（#31。
+# 両端とも real 層と同一形状の組は、実形状ジョブが同じ形で計算する完全な
+# 重複だった——この集合での実測は右側だけで 456 組）。
+# **一覧が実際より少ないと穴になる**（置き換わる部品の予約の箱 × ケースの
+# 組を checks が黙って落とし、実形状ジョブはその箱を持っていない）。
+# 多いぶんには余計に見るだけ。ずれたら
+# test_the_replaced_by_real_list_matches_reality が実形状ジョブで落ちて教える
+# （switches_real が入ったら "switches" をここに足す）。
+REPLACED_BY_REAL = {"pcb", "sockets", "stabs", "db", "xiao",
+                    "pcb_parts", "db_parts"}
+
+
 def plate_placement(w, h):
     """プレートをリム面に載せる位置。
 
@@ -395,12 +408,19 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     return parts
 
 
-def check(keys, half, label="", focus=None, real=False):
+def check(keys, half, label="", focus=None, real=False, proxy_only=False):
     """組み立て状態を検査し、問題の一覧を返す。
 
     focus に部品名を渡すと、**その部品が絡む組だけ**を検査する。
     変異検査（故意に壊して検出できるか）が全組 253 を回すと遅すぎるため。
     通常の検査（focus=None）は必ず全組を見る。
+
+    proxy_only=True は **CI の checks ジョブ専用**（#31「重複なく 1 回」）。
+    REPLACED_BY_REAL が絡む組だけを見る。両端とも real 層と同一形状の組は
+    実形状ジョブが同じ形で計算するので、checks で回すと完全な重複になる
+    （実測・右側 456 組）。**手元では使わない**——kicad-cli の無い
+    環境では bbox 層が唯一の検査で、絞ると case × plate などが
+    誰にも見られなくなる。
     """
     from verify import (load_interference_memo, memoized_intersection_volume,
                         save_interference_memo)
@@ -502,6 +522,9 @@ def check(keys, half, label="", focus=None, real=False):
             if focus is not None and focus not in (la.split("#")[0],
                                                    lb.split("#")[0]):
                 continue
+            if proxy_only and la.split("#")[0] not in REPLACED_BY_REAL \
+                    and lb.split("#")[0] not in REPLACED_BY_REAL:
+                continue
             if _board_and_its_own_part(la, lb):
                 continue
             if not _bb_touch(ba, bb_):
@@ -575,7 +598,8 @@ def main(argv=None):
     elif real and "--both" not in argv:
         names = [STRICT_HALF]
         print(f"実形状で {STRICT_HALF} だけ検査する"
-              f"（両側は CI の実形状ジョブが毎回見る。手元で両側: --both）")
+              f"（両側は CI の実形状ジョブが、形に関わる push のたびに見る。"
+              f"手元で両側: --both）")
     ok = True
     for name in names:
         keys = halves()[name]

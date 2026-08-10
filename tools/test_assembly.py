@@ -72,20 +72,38 @@ def test_nothing_bites_into_anything_else(half):
 
     - kicad-cli がある手元: 実形状。ただし重いので**厳しい側だけ**。
       緩い側は記録の bbox 層に落とす（今日までのローカルの網羅を下げない。
-      緩い側の実形状は CI の実形状ジョブが毎回見る。利用者の決定・2026-08-11）
-    - kicad-cli が無い環境（CI の checks ジョブなど): 記録の bbox＋予約の箱で
-      両側。**これはモード B の重複ではない**——安全余裕の箱 × ケースの組は
-      この層にしか出ない（#31 の「前提の穴」）
+      緩い側の実形状は **CI の実形状ジョブが、形に関わる push のたびに見る**。
+      文書だけの push では `changed` ゲートで飛ぶが、形の入力（tools/
+      layout/ pcb/）はすべてゲートの中なので、飛ぶ push では形が変わらない。
+      利用者の決定・2026-08-11）
+    - CI の checks ジョブ（kicad-cli 無し）: 記録の bbox＋予約の箱で両側。
+      ただし**置き換え対象（REPLACED_BY_REAL）が絡む組だけ**。両端とも
+      real 層と同一形状の組は実形状ジョブと完全な重複になる（#31
+      「重複なく 1 回」。実測では右側だけで 456 組が二重だった）
+    - CI 以外の kicad-cli 無し環境: bbox 層が唯一の検査なので**全組**見る
     """
     import os
 
     import pcb_parts
     from gen_assembly import STRICT_HALF
 
+    # STRICT_HALF が壊れたとき（綴りの誤りなど）、**静かに bbox 層へ
+    # 落ちるだけ**にならないよう、まず値そのものを検める。
+    assert STRICT_HALF in HALVES, f"STRICT_HALF={STRICT_HALF!r} が半分の名前でない"
+
     real = pcb_parts.kicad_available()
     if real and os.environ.get("REQUIRE_KICAD") != "1" and half != STRICT_HALF:
         real = False                      # 緩い側は bbox 層（実形状は CI で）
-    problems, _ = check(HALVES[half], half, real=real)[:2]
+    proxy_only = (os.environ.get("GITHUB_ACTIONS") == "true"
+                  and os.environ.get("REQUIRE_KICAD") != "1")
+    problems, _, parts = check(HALVES[half], half, real=real,
+                               proxy_only=proxy_only)
+    if real:
+        # **実形状に切り替わったことを、緑の条件にする。**差し替えが黙って
+        # 失敗しても bbox 層で緑になれてしまうと、この検査の緑が
+        # 「実物を見た」を意味しなくなる。
+        assert "pcb_real" in parts and "db_real" in parts, \
+            "real=True なのに実形状が組に入っていない"
     assert not problems, f"{half}:\n  " + "\n  ".join(problems)
 
 
@@ -520,6 +538,26 @@ def test_the_product_group_record_gatekeeper_actually_works(tmp_path, monkeypatc
     fake.write_text(_json.dumps(rec))
     assert pcb_parts.product_groups("left", solids)[1] == [[1, 2], [3]], \
         "指紋が合わないのに記録が使われた（嘘の組分けを黙って作る）"
+
+
+def test_the_replaced_by_real_list_matches_reality():
+    """`REPLACED_BY_REAL`（checks ジョブが bbox 層で見る組の絞り込み）が、
+    **実際に real 層で置き換わる部品の集合と一致する**こと。
+
+    一覧が**過大**だと checks が組を黙って落とし、**過小**だと重複が戻る。
+    どちらも静かに起きるので、実形状を組める環境で毎回突き合わせる。
+    スイッチが実形状になった日（2026-08-11）にも、この集合は 1 つ増えた。
+    """
+    _github_actions_only("置き換え一覧の突き合わせ")
+    _require_kicad("置き換え一覧の突き合わせ")
+    from gen_assembly import REPLACED_BY_REAL
+
+    pb, _ = build_assembly(HALVES["right"], "right", real=False)
+    pr, _ = build_assembly(HALVES["right"], "right", real=True)
+    actual = set(pb) - set(pr)
+    assert actual == REPLACED_BY_REAL, (
+        f"一覧とのずれ: 一覧に無い {sorted(actual - REPLACED_BY_REAL)} / "
+        f"実際は置き換わらない {sorted(REPLACED_BY_REAL - actual)}")
 
 
 def test_the_xiao_envelope_rejects_a_wrong_record(monkeypatch):
