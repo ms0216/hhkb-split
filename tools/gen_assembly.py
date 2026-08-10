@@ -336,29 +336,47 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
           報告される。**重ならないものはまとめない**（まとめた瞬間に
           製品どうしの重なりが見えなくなる）。
         """
-        from build123d import Part
+        from verify import intersection_volume
 
         sols = [s_.moved(loc) for s_ in compound.solids()]
-        boxes = [(s_, s_.bounding_box()) for s_ in sols]
-        groups = []
-        for s_, b in boxes:
-            hit = [g for g in groups
-                   if any(b.min.X < o.max.X and o.min.X < b.max.X
-                          and b.min.Y < o.max.Y and o.min.Y < b.max.Y
-                          and b.min.Z < o.max.Z and o.min.Z < b.max.Z
-                          for _s2, o in g)]
-            if hit:
-                merged = [(s_, b)]
-                for g in hit:
-                    merged += g
-                    groups.remove(g)
-                groups.append(merged)
-            else:
-                groups.append([(s_, b)])
-        out = []
-        for g in groups:
-            fused = g[0][0]
-            for s2, _b in g[1:]:
+        # **板そのものはまとめる対象から外す。**板は全部品と接するので、
+        # 入れた瞬間に基板が丸ごと 1 個の塊になり、部品どうしの重なりが
+        # また見えなくなる（2026-08-10 に実際にそうなった）。
+        board = max(sols, key=lambda s_: s_.volume)
+        rest = [s_ for s_ in sols if s_ is not board]
+
+        # **bbox ではなく、実際に交差しているかでまとめる。**bbox は
+        # 大きい部品で破綻する（板の bbox は全部品を含む）。
+        bbs = [s_.bounding_box() for s_ in rest]
+
+        def _near(i, j):
+            a, b = bbs[i], bbs[j]
+            return (a.min.X < b.max.X and b.min.X < a.max.X
+                    and a.min.Y < b.max.Y and b.min.Y < a.max.Y
+                    and a.min.Z < b.max.Z and b.min.Z < a.max.Z)
+
+        parent = list(range(len(rest)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for i in range(len(rest)):
+            for j in range(i + 1, len(rest)):
+                if find(i) == find(j) or not _near(i, j):
+                    continue
+                if intersection_volume(rest[i], rest[j]) > 1e-6:
+                    parent[find(j)] = find(i)      # 実際に食い込む＝1 製品
+
+        groups = {}
+        for i in range(len(rest)):
+            groups.setdefault(find(i), []).append(rest[i])
+        out = [board]
+        for g in groups.values():
+            fused = g[0]
+            for s2 in g[1:]:
                 fused = fused + s2
             out.append(fused)
         return Compound(children=out)
