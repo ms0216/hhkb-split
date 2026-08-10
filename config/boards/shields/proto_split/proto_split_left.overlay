@@ -1,18 +1,2 @@
 /* 左（セントラル）。列 0・1 を使うので col-offset は不要。 */
 #include "proto_split.dtsi"
-
-/* ⚠️ [一時的] 段 2 の測定用。済んだら消す（2026-08-10）
- *
- * TX は P1.11 = D6。**`chosen` を uart0 に向けるのと、`status = "okay"` の
- * 両方が要る**（2026-08-09 に 2 回はまった）。
- */
-/ {
-	chosen {
-		zephyr,console = &uart0;
-	};
-};
-
-&uart0 {
-	status = "okay";
-	current-speed = <1000000>;
-};
