@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 860" width="1180" height="860" font-family="Helvetica, Arial, sans-serif">
+<rect width="1180" height="860" fill="#ffffff"/>
+<text x="24" y="34" text-anchor="start" font-size="18" font-weight="bold" fill="#111">ホストリンク（左 ↔ Mac）— 遅延を払わずに 32% 減らせた</text>
+<text x="24" y="56" text-anchor="start" font-size="12" fill="#666">2026-08-10 実測。分割リンクは既定の 7.5ms で固定し、ホスト側だけを動かした。</text>
+<text x="118" y="96" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">① latency 0 で間隔を振る（ホストリンクを大きいまま測る）</text>
+<rect x="118" y="116" width="352" height="284" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
+<line x1="118" y1="400.0" x2="470" y2="400.0" stroke="#e8ecef"/>
+<text x="108" y="404.0" text-anchor="end" font-size="10" fill="#8c959d">0.0</text>
+<line x1="118" y1="359.4" x2="470" y2="359.4" stroke="#e8ecef"/>
+<text x="108" y="363.42857142857144" text-anchor="end" font-size="10" fill="#8c959d">0.1</text>
+<line x1="118" y1="318.9" x2="470" y2="318.9" stroke="#e8ecef"/>
+<text x="108" y="322.85714285714283" text-anchor="end" font-size="10" fill="#8c959d">0.2</text>
+<line x1="118" y1="278.3" x2="470" y2="278.3" stroke="#e8ecef"/>
+<text x="108" y="282.2857142857143" text-anchor="end" font-size="10" fill="#8c959d">0.3</text>
+<line x1="118" y1="237.7" x2="470" y2="237.7" stroke="#e8ecef"/>
+<text x="108" y="241.7142857142857" text-anchor="end" font-size="10" fill="#8c959d">0.4</text>
+<line x1="118" y1="197.1" x2="470" y2="197.1" stroke="#e8ecef"/>
+<text x="108" y="201.14285714285714" text-anchor="end" font-size="10" fill="#8c959d">0.5</text>
+<line x1="118" y1="156.6" x2="470" y2="156.6" stroke="#e8ecef"/>
+<text x="108" y="160.57142857142856" text-anchor="end" font-size="10" fill="#8c959d">0.6</text>
+<line x1="118" y1="116.0" x2="470" y2="116.0" stroke="#e8ecef"/>
+<text x="108" y="120.0" text-anchor="end" font-size="10" fill="#8c959d">0.7</text>
+<text x="74" y="258.0" text-anchor="middle" font-size="11" fill="#8c959d">mA</text>
+<line x1="149.0" y1="116" x2="149.0" y2="400" stroke="#e8ecef"/>
+<text x="149.00346526826277" y="420" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">15ms</text>
+<line x1="299.2" y1="116" x2="299.2" y2="400" stroke="#e8ecef"/>
+<text x="299.1770351197857" y="420" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">30ms</text>
+<line x1="387.0" y1="116" x2="387.0" y2="400" stroke="#e8ecef"/>
+<text x="387.02294208235577" y="420" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">45ms</text>
+<line x1="449.4" y1="116" x2="449.4" y2="400" stroke="#e8ecef"/>
+<text x="449.3506049713086" y="420" text-anchor="middle" font-size="11" font-weight="bold" fill="#111">60ms</text>
+<text x="294.0" y="442" text-anchor="middle" font-size="11.5" fill="#666">ホストリンクの接続間隔</text>
+<path d="M 118.0 133.6 L 122.1 135.2 L 126.2 136.8 L 130.2 138.2 L 134.1 139.7 L 137.9 141.1 L 141.7 142.4 L 145.4 143.7 L 149.0 144.9 L 152.6 146.1 L 156.1 147.3 L 159.6 148.5 L 163.0 149.5 L 166.3 150.6 L 169.7 151.6 L 172.9 152.6 L 176.1 153.6 L 179.3 154.6 L 182.4 155.5 L 185.5 156.4 L 188.5 157.2 L 191.5 158.1 L 194.4 158.9 L 197.3 159.7 L 200.2 160.5 L 203.1 161.2 L 205.8 161.9 L 208.6 162.7 L 211.3 163.4 L 214.0 164.0 L 216.7 164.7 L 219.3 165.4 L 221.9 166.0 L 224.5 166.6 L 227.0 167.2 L 229.5 167.8 L 232.0 168.4 L 234.4 169.0 L 236.8 169.5 L 239.2 170.0 L 241.6 170.6 L 244.0 171.1 L 246.3 171.6 L 248.6 172.1 L 250.8 172.6 L 253.1 173.1 L 255.3 173.5 L 257.5 174.0 L 259.7 174.4 L 261.8 174.9 L 264.0 175.3 L 266.1 175.7 L 268.2 176.1 L 270.2 176.5 L 272.3 176.9 L 274.3 177.3 L 276.4 177.7 L 278.3 178.1 L 280.3 178.4 L 282.3 178.8 L 284.2 179.2 L 286.2 179.5 L 288.1 179.9 L 290.0 180.2 L 291.8 180.5 L 293.7 180.8 L 295.5 181.2 L 297.4 181.5 L 299.2 181.8 L 301.0 182.1 L 302.8 182.4 L 304.5 182.7 L 306.3 183.0 L 308.0 183.3 L 309.7 183.5 L 311.5 183.8 L 313.2 184.1 L 314.8 184.4 L 316.5 184.6 L 318.2 184.9 L 319.8 185.1 L 321.5 185.4 L 323.1 185.6 L 324.7 185.9 L 326.3 186.1 L 327.9 186.4 L 329.5 186.6 L 331.0 186.8 L 332.6 187.1 L 334.1 187.3 L 335.6 187.5 L 337.2 187.7 L 338.7 187.9 L 340.2 188.1 L 341.7 188.4 L 343.1 188.6 L 344.6 188.8 L 346.1 189.0 L 347.5 189.2 L 349.0 189.4 L 350.4 189.6 L 351.8 189.7 L 353.2 189.9 L 354.6 190.1 L 356.0 190.3 L 357.4 190.5 L 358.8 190.7 L 360.1 190.8 L 361.5 191.0 L 362.9 191.2 L 364.2 191.3 L 365.5 191.5 L 366.9 191.7 L 368.2 191.8 L 369.5 192.0 L 370.8 192.2 L 372.1 192.3 L 373.4 192.5 L 374.6 192.6 L 375.9 192.8 L 377.2 192.9 L 378.4 193.1 L 379.7 193.2 L 380.9 193.4 L 382.2 193.5 L 383.4 193.7 L 384.6 193.8 L 385.8 193.9 L 387.0 194.1 L 388.2 194.2 L 389.4 194.3 L 390.6 194.5 L 391.8 194.6 L 393.0 194.7 L 394.1 194.9 L 395.3 195.0 L 396.4 195.1 L 397.6 195.2 L 398.7 195.4 L 399.9 195.5 L 401.0 195.6 L 402.1 195.7 L 403.3 195.9 L 404.4 196.0 L 405.5 196.1 L 406.6 196.2 L 407.7 196.3 L 408.8 196.4 L 409.8 196.5 L 410.9 196.6 L 412.0 196.8 L 413.1 196.9 L 414.1 197.0 L 415.2 197.1 L 416.3 197.2 L 417.3 197.3 L 418.3 197.4 L 419.4 197.5 L 420.4 197.6 L 421.4 197.7 L 422.5 197.8 L 423.5 197.9 L 424.5 198.0 L 425.5 198.1 L 426.5 198.2 L 427.5 198.3 L 428.5 198.4 L 429.5 198.5 L 430.5 198.5 L 431.5 198.6 L 432.5 198.7 L 433.4 198.8 L 434.4 198.9 L 435.4 199.0 L 436.3 199.1 L 437.3 199.2 L 438.2 199.2 L 439.2 199.3 L 440.1 199.4 L 441.1 199.5 L 442.0 199.6 L 442.9 199.7 L 443.9 199.7 L 444.8 199.8 L 445.7 199.9 L 446.6 200.0 L 447.5 200.1 L 448.4 200.1 L 449.4 200.2 L 450.3 200.3 L 451.1 200.4 L 452.0 200.4 L 452.9 200.5 L 453.8 200.6 L 454.7 200.7 L 455.6 200.7 L 456.5 200.8 L 457.3 200.9 L 458.2 201.0 L 459.1 201.0 L 459.9 201.1 L 460.8 201.2 L 461.6 201.2 L 462.5 201.3 L 463.3 201.4 L 464.2 201.4 L 465.0 201.5 L 465.9 201.6 L 466.7 201.6 L 467.5 201.7 L 468.4 201.8 L 469.2 201.8 L 470.0 201.9" fill="none" stroke="#c0392b" stroke-width="2" opacity="0.55"/>
+<circle cx="149.0" cy="144.4" r="6" fill="#c0392b"/>
+<text x="162.00346526826277" y="135.4" text-anchor="start" font-size="11" font-weight="bold" fill="#c0392b">0.63</text>
+<circle cx="387.0" cy="197.1" r="6" fill="#c0392b"/>
+<text x="400.02294208235577" y="188.14285714285714" text-anchor="start" font-size="11" font-weight="bold" fill="#c0392b">0.50</text>
+<circle cx="449.4" cy="197.1" r="6" fill="#c0392b"/>
+<text x="462.3506049713086" y="188.14285714285714" text-anchor="start" font-size="11" font-weight="bold" fill="#c0392b">0.50</text>
+<circle cx="149.0" cy="224.5" r="7" fill="#1e8449"/>
+<text x="163.00346526826277" y="229.5285714285714" text-anchor="start" font-size="11" font-weight="bold" fill="#1e8449">候補 A 0.43mA（15ms・latency 30）</text>
+<line x1="149.0" y1="144.4" x2="149.0" y2="224.5" stroke="#1e8449" stroke-width="1.6" stroke-dasharray="4 3"/>
+<text x="128" y="379.7142857142857" text-anchor="start" font-size="11" font-weight="bold" fill="#111">式: 0.447 ＋ 2.725 ÷ 間隔[ms]（残差 0.008 以内）</text>
+<text x="540" y="96" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">② 0.63mA の内訳（推論を使わずに割れた）</text>
+<rect x="540" y="116" width="600" height="284" rx="8" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
+<text x="560" y="152" text-anchor="start" font-size="12" font-weight="bold" fill="#111">いま（ZMK の既定・latency 0）</text>
+<rect x="560.0" y="162" width="25.7" height="34" fill="#8fa3bf" stroke="#ffffff" stroke-width="1"/>
+<rect x="585.7" y="162" width="61.7" height="34" fill="#5f7391" stroke="#ffffff" stroke-width="1"/>
+<text x="616.5714285714286" y="184" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.072</text>
+<rect x="647.4" y="162" width="295.7" height="34" fill="#d35400" stroke="#ffffff" stroke-width="1"/>
+<text x="795.2857142857142" y="184" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.345</text>
+<rect x="943.1" y="162" width="155.7" height="34" fill="#c0392b" stroke="#ffffff" stroke-width="1"/>
+<text x="1021.0" y="184" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.182</text>
+<text x="1108.857142857143" y="184" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">合計 0.63mA（実測 0.63）</text>
+<rect x="560" y="204" width="11" height="11" fill="#8fa3bf"/>
+<text x="576" y="214" text-anchor="start" font-size="10" fill="#444">CPU・DC/DC</text>
+<rect x="676" y="204" width="11" height="11" fill="#5f7391"/>
+<text x="692" y="214" text-anchor="start" font-size="10" fill="#444">BLE スタック</text>
+<rect x="782" y="204" width="11" height="11" fill="#d35400"/>
+<text x="798" y="214" text-anchor="start" font-size="10" fill="#444">分割リンク 7.5ms</text>
+<rect x="918" y="204" width="11" height="11" fill="#c0392b"/>
+<text x="934" y="214" text-anchor="start" font-size="10" fill="#444">ホストリンク 15ms</text>
+<text x="560" y="260" text-anchor="start" font-size="12" font-weight="bold" fill="#111">候補 A（15ms・latency 30）</text>
+<rect x="560.0" y="270" width="25.7" height="34" fill="#8fa3bf" stroke="#ffffff" stroke-width="1"/>
+<rect x="585.7" y="270" width="61.7" height="34" fill="#5f7391" stroke="#ffffff" stroke-width="1"/>
+<text x="616.5714285714286" y="292" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.072</text>
+<rect x="647.4" y="270" width="295.7" height="34" fill="#d35400" stroke="#ffffff" stroke-width="1"/>
+<text x="795.2857142857142" y="292" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.345</text>
+<rect x="943.1" y="270" width="5.0" height="34" fill="#1e8449" stroke="#ffffff" stroke-width="1"/>
+<text x="958.1658986175115" y="292" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">式から 0.45mA ／ 実測 0.43mA</text>
+<rect x="560" y="312" width="11" height="11" fill="#8fa3bf"/>
+<text x="576" y="322" text-anchor="start" font-size="10" fill="#444">CPU・DC/DC</text>
+<rect x="676" y="312" width="11" height="11" fill="#5f7391"/>
+<text x="692" y="322" text-anchor="start" font-size="10" fill="#444">BLE スタック</text>
+<rect x="782" y="312" width="11" height="11" fill="#d35400"/>
+<text x="798" y="322" text-anchor="start" font-size="10" fill="#444">分割リンク 7.5ms</text>
+<rect x="918" y="312" width="11" height="11" fill="#1e8449"/>
+<text x="934" y="322" text-anchor="start" font-size="10" fill="#444">ホスト</text>
+<text x="560" y="378" text-anchor="start" font-size="12" font-weight="bold" fill="#111">latency を効かせると、ホストリンクが 30 分の 1 になる。打鍵の遅延は 1ms も増えない。</text>
+<text x="560" y="398" text-anchor="start" font-size="11" fill="#666">latency は「送るものが無ければ聞かなくてよい」仕組み。押せば次の接続イベントで送れる。</text>
+<text x="24" y="470" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">③ なぜ今まで効いていなかったか — ZMK の既定が Apple の規則に違反していた</text>
+<rect x="24" y="484" width="1132" height="132" rx="8" fill="#fef6ec" stroke="#d35400" stroke-width="1.5"/>
+<text x="44" y="510" text-anchor="start" font-size="12" font-weight="bold" fill="#111">Apple Accessory Design Guidelines（2026-06-08 版）§58.6 より</text>
+<text x="44" y="532" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">✕ Interval Min ≥ 15 ms・15 ms の倍数</text>
+<text x="700" y="532" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">ZMK の既定は 7.5 ms</text>
+<text x="44" y="556" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">◯ Peripheral Latency ≤ 30</text>
+<text x="700" y="556" text-anchor="start" font-size="11.5" fill="#444">30</text>
+<text x="44" y="580" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">◯ Supervision Timeout ＞ Interval Max ×(Latency+1)×3</text>
+<text x="700" y="580" text-anchor="start" font-size="11.5" fill="#444">6,000 ＞ 1,395</text>
+<text x="44" y="606" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">→ 要求ごと捨てられ、macOS の初期値（15ms・latency 0）のまま動いていた。latency 30 は一度も効いていなかった。</text>
+<text x="24" y="640" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">④ 何を払って何を得るか</text>
+<text x="44" y="662" text-anchor="start" font-size="11" fill="#666">設定</text>
+<text x="300" y="662" text-anchor="start" font-size="11" fill="#666">電流</text>
+<text x="450" y="662" text-anchor="start" font-size="11" fill="#666">打鍵の遅延（左/右）</text>
+<text x="700" y="662" text-anchor="start" font-size="11" fill="#666">寿命</text>
+<text x="850" y="662" text-anchor="start" font-size="11" fill="#666">左右差</text>
+<line x1="34" y1="670" x2="1150" y2="670" stroke="#d5dae0" stroke-width="1.5"/>
+<text x="44" y="698" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">いま（ZMK の既定）</text>
+<text x="300" y="698" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.63mA</text>
+<text x="450" y="698" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">10.5 / 14.25ms</text>
+<text x="700" y="698" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">4.4 ヶ月</text>
+<text x="850" y="698" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">3.75ms</text>
+<rect x="34" y="714" width="1116" height="36" rx="5" fill="#eafaf1" stroke="#1e8449" stroke-width="1.5"/>
+<text x="44" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">候補 A（15ms・latency 30）</text>
+<text x="300" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.43mA</text>
+<text x="450" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">10.5 / 14.25ms</text>
+<text x="700" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">6.3 ヶ月</text>
+<text x="850" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">3.75ms</text>
+<text x="44" y="790" text-anchor="start" font-size="12.5" font-weight="bold" fill="#1e8449">分割リンクには一切触っていない。遅延も左右差も変わらない。</text>
+<text x="44" y="812" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 未解決: 60ms を要求したとき、電流が 0.50 ⇄ 0.65mA を行き来した。0.65 は macOS の初期値の電流と同じ。</text>
+<text x="44" y="832" text-anchor="start" font-size="11.5" fill="#666">→ 接続パラメータが行き来している疑い。ログで確かめる。今日ずっと追ってきた「低い側」の謎と繋がるかもしれない。</text>
+</svg>
