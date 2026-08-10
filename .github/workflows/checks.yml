@@ -103,6 +103,11 @@ jobs:
           cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/SW_Hotswap_Kailh_MX.{wrl,stp} "$D/"
           cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/Stabilizer_Cherry_MX_2.00u.{wrl,stp} "$D/"
           cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/Stabilizer_Cherry_MX_3.00u.{wrl,stp} "$D/"
+          # **フットプリントは参照していないが、検査が要る。**スイッチ本体は
+          # 基板に載らない（載るのはホットスワップソケット）ので STEP には
+          # 出てこない。`test_the_switch_boxes_match_the_real_switch` が
+          # 「箱が実物と一致しているか」を測るのに使う。
+          cp /tmp/kiswitch/library/3dmodels/3d-library.3dshapes/SW_Cherry_MX_Plate.stp "$D/"
       # **全部品を実形状にして、全組み合わせを許容ゼロで見る。**
       # 同じジョブに「わざと壊して落ちるか」の自己確認が入っている
       # （test_the_real_shape_check_actually_detects_a_collision）。

@@ -391,10 +391,17 @@ def check(keys, half, label="", focus=None, real=False):
     変異検査（故意に壊して検出できるか）が全組 253 を回すと遅すぎるため。
     通常の検査（focus=None）は必ず全組を見る。
     """
-    from verify import intersection_volume
+    from verify import (load_interference_memo, memoized_intersection_volume,
+                        save_interference_memo)
 
     parts, (w, h_case) = build_assembly(keys, half, real=real)
     problems, notes = [], []
+
+    # **結果の記憶**（#31・利用者の決定 2026-08-11）。鍵は 2 立体の
+    # BRep（形＋位置）のハッシュ。基準を持たない内容アドレスなので、
+    # 基準が古くなる型が入らない。詳細は verify.load_interference_memo。
+    memo, touched, digests = load_interference_memo(), set(), {}
+    memo_n0 = len(memo)
 
     # 1. 干渉。**許容値は無い。0 が合格。**
     #
@@ -478,7 +485,7 @@ def check(keys, half, label="", focus=None, real=False):
                 continue
             if not _bb_touch(ba, bb_):
                 continue
-            v = intersection_volume(sa, sb)
+            v = memoized_intersection_volume(sa, sb, memo, touched, digests)
             if v > EPS:
                 # **同じ名前の組は 1 行にまとめるが、隠さず数える。**
                 # 以前は 2 件目以降を黙って捨てていたので、1 件直すたびに
@@ -496,6 +503,9 @@ def check(keys, half, label="", focus=None, real=False):
             if line.startswith(f"{key[0]}") and f" と {key[1]}" in line:
                 problems[k] = line + f"（ほかに同じ組が {n} 件）"
                 break
+
+    if len(memo) != memo_n0:
+        save_interference_memo(memo, touched)
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。
@@ -525,11 +535,32 @@ def check(keys, half, label="", focus=None, real=False):
     return problems, notes, parts
 
 
-def main():
+# ローカルの既定で検査する側。**干渉検査は実形状に一本化した**（#31。
+# 占有空間は「品番未定」と「意図的な余裕」の 2 条件だけに使う）。
+# 実形状は片側 2 分半かかるので、手元の既定は**厳しい側だけ**・両側は
+# GitHub Actions の実形状ジョブが毎回見る（利用者の決定・2026-08-11）。
+# 「厳しい」は実測で決めた（2026-08-11・実形状）: right が全指標で上
+#   立体 277 vs 240 / 全組 38,079 vs 28,549 / bbox 近接 <0.1mm 1,011 vs 871
+STRICT_HALF = "right"
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    import pcb_parts
+    real = pcb_parts.kicad_available()
+    names = list(halves())
+    if argv and argv[0] in names:
+        names = [argv[0]]
+    elif real and "--both" not in argv:
+        names = [STRICT_HALF]
+        print(f"実形状で {STRICT_HALF} だけ検査する"
+              f"（両側は CI の実形状ジョブが毎回見る。手元で両側: --both）")
     ok = True
-    for name, keys in halves().items():
-        problems, notes, parts = check(keys, name, name)
-        print(f"{'OK ' if not problems else 'NG '}{name}  部品 {len(parts)} 個")
+    for name in names:
+        keys = halves()[name]
+        problems, notes, parts = check(keys, name, name, real=real)
+        print(f"{'OK ' if not problems else 'NG '}{name}  部品 {len(parts)} 個"
+              f"（{'実形状' if real else '記録の bbox（kicad-cli 無し）'}）")
         for n in notes:
             print(f"      {n}")
         for p in problems:

@@ -380,9 +380,17 @@ def test_a_real_cable_can_reach_the_socket(name):
     z = g.usb_center_z()
 
     def probe(dw, dh, depth):
+        """幅 dw・高さ dh の角柱を、奥面から depth だけ差し込んで当たりを測る。
+
+        ⚠️ **Box は (X, Y, Z) の順。**ここは Y が奥行・Z が高さなので
+        `Box(dw, depth, dh)`。以前は `Box(dw, dh, depth)` と書いていて
+        **高さと奥行が入れ替わっていた**（2026-08-10 に発覚）。
+        そのため差し込み棒は 7mm も奥へ伸び、測っていたのは壁ではなく
+        XIAO のポケットだった。**#28 の見張り役が、見張る場所を間違えていた。**
+        """
         with BuildPart() as b:
             with Locations((x, y_out - depth / 2, z)):
-                Box(dw, dh, depth, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+                Box(dw, depth, dh, align=(Align.CENTER, Align.CENTER, Align.CENTER))
         return intersection_volume(b.part, part)
 
     # 1. 金属のシェルが、メスまで貫通できること
@@ -495,3 +503,46 @@ def test_the_zero_degree_state_is_actually_level():
         lever = h - RUBBER_INSET * 2
         err = math.degrees(math.atan((rear - front) / lever))
         assert abs(err) < 0.05, f"{name}: 「0°」なのに {err:+.2f}° 傾いている"
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_usb_receptacle_does_not_stick_out_of_the_case(name):
+    """**USB-C のメスがケースの外へ出ていないこと。**
+
+    2026-08-10 に実形状の総当たりで、メスが奥面から **0.26mm はみ出す**
+    ことが分かった。**モデルの誤りではなく、完成品がそうなる。**
+    飛び出したコネクタは抜き差しの外力を直に受け、もぎ取れる原因になる。
+
+    はみ出し量は `WALL + DB_FROM_REAR` だけで決まる（コブを深くすると
+    子基板も一緒に奥へ動くので `BUMP_DEPTH` は効かない）。
+
+    ⚠️ **直し方に制約がある。子基板を前へ動かしてはいけない。**
+    アンテナは XIAO の反対端にあり、本体基板の後端より 0.11mm 外に
+    出ているだけ（#23）。前へ動かせばアンテナが基板の下へ戻る。
+    だから `DB_FROM_REAR` を増やし、**同じだけコブを深くして**
+    子基板の絶対位置を保っている。片方だけ動かすとどちらかが落ちる
+    （もう片方は `test_the_antenna_is_no_longer_under_the_main_board`）。
+
+    メスの寸法は KiCad の STEP の記録（`pcb_parts.usb_receptacle`）で、
+    ケースの奥面は**実際に作った立体の bbox**から取る。
+    """
+    from gen_case import DB_FROM_REAR, USB_RECESS, WALL, build_case
+    import pcb_parts
+
+    rec = pcb_parts.load()["db"]
+    out = pcb_parts.usb_receptacle()[4] - rec["board_bbox"][4]   # 板の端からの張り出し
+
+    # ケースの奥面までの距離（子基板の奥端 → 壁の外面）
+    room = WALL + DB_FROM_REAR
+    assert out <= room - USB_RECESS + 1e-9, (
+        f"{name}: USB-C のメスが奥面から {out - room:+.3f}mm 出る"
+        f"（メスの張り出し {out:.3f} / 壁まで {room:.3f} / "
+        f"引っ込めたい量 {USB_RECESS}）")
+
+    # 作った立体でも確かめる。**定数の計算どうしの一致では検証にならない。**
+    case, (_, h_body), _ = build_case(HALVES[name], name)
+    from gen_case import BUMP_DEPTH
+    outer = case.bounding_box().max.Y
+    nominal = h_body / 2 + BUMP_DEPTH
+    assert abs(outer - nominal) < 0.01, (
+        f"{name}: ケースの奥面 {outer:.3f} が設計値 {nominal:.3f} と違う")

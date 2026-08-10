@@ -107,6 +107,11 @@ def _export_step(name, out):
             f"  stdout: {r.stdout.strip()}")
 
 
+def kicad_available():
+    """kicad-cli が使えるか。**実形状を作れる環境かの判定はここに一本化。**"""
+    return Path(KICAD_CLI).exists()
+
+
 def board_sha256(name):
     """基板ファイルのハッシュ。**KiCad が無くても計算できる。**"""
     import hashlib

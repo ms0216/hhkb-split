@@ -68,7 +68,24 @@ REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db", "topcase",
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_nothing_bites_into_anything_else(half):
-    problems, _ = check(HALVES[half], half)[:2]
+    """干渉 0。**作れる環境ではかならず実形状で見る**（#31 で一本化）。
+
+    - kicad-cli がある手元: 実形状。ただし重いので**厳しい側だけ**。
+      緩い側は記録の bbox 層に落とす（今日までのローカルの網羅を下げない。
+      緩い側の実形状は CI の実形状ジョブが毎回見る。利用者の決定・2026-08-11）
+    - kicad-cli が無い環境（CI の checks ジョブなど): 記録の bbox＋予約の箱で
+      両側。**これはモード B の重複ではない**——安全余裕の箱 × ケースの組は
+      この層にしか出ない（#31 の「前提の穴」）
+    """
+    import os
+
+    import pcb_parts
+    from gen_assembly import STRICT_HALF
+
+    real = pcb_parts.kicad_available()
+    if real and os.environ.get("REQUIRE_KICAD") != "1" and half != STRICT_HALF:
+        real = False                      # 緩い側は bbox 層（実形状は CI で）
+    problems, _ = check(HALVES[half], half, real=real)[:2]
     assert not problems, f"{half}:\n  " + "\n  ".join(problems)
 
 
@@ -505,6 +522,31 @@ def test_the_product_group_record_gatekeeper_actually_works(tmp_path, monkeypatc
         "指紋が合わないのに記録が使われた（嘘の組分けを黙って作る）"
 
 
+def test_the_interference_memo_gatekeeper_actually_works():
+    """結果の記憶（#31）の門番を、**わざと壊して**確かめる。
+
+    - 記憶が合えば使われる（毒入りの値がそのまま返る＝読んでいる証拠。
+      これが壊れていると毎回の実測に戻り、記憶が腐っても気づけない）
+    - 0.001mm でも動かすと鍵（BRep のハッシュ）が変わり、記憶を使わず
+      実測する（これが壊れていると**嘘の緑**を作る。こちらが本丸）
+    """
+    from build123d import Box, Location
+
+    import verify
+
+    a = Box(10, 10, 10).solids()[0]
+    b = a.moved(Location((20, 0, 0)))           # 離れている: 実測は 0
+    memo, touched = {}, set()
+    assert verify.memoized_intersection_volume(a, b, memo, touched) == 0.0
+    assert len(memo) == 1
+    memo[next(iter(memo))] = 123.0              # 毒を入れる
+    assert verify.memoized_intersection_volume(a, b, memo, touched) == 123.0, \
+        "記憶が使われていない（毎回の実測に戻る）"
+    b2 = a.moved(Location((20, 0, 0.001)))      # 1/1000mm 動かす
+    assert verify.memoized_intersection_volume(a, b2, memo, touched) == 0.0, \
+        "形が違うのに記憶が使われた（嘘の緑を作る）"
+
+
 def test_the_socket_box_contains_the_third_party_model():
     """保守的なソケットの箱が、kiswitch のモデルを包含していること。
 
@@ -907,3 +949,77 @@ def test_the_hotswap_cups_fit_the_drilled_holes():
             bad.append(f"({cx:+.2f},{cy:+.2f}) カップ φ{cd:.2f} > 穴 φ{hd:.2f}")
     assert not bad, ("ソケットのカップが穴に入らない\n  " + "\n  ".join(bad)
                      + "\n  実測: " + " / ".join(drift))
+
+
+def test_the_switch_boxes_match_the_real_switch():
+    """**キースイッチの箱が、実物のモデルと寸法で一致していること。**
+
+    `switches` は箱のまま置いている（open-gaps #29 の表）。**足さない理由:**
+
+      - **箱は近似ではない。**実物モデルの断面を測ると、プレートを通る部分は
+        きっちり 14.00 角、プレートの上は 15.60 角で、`SW_UNDER_W` /
+        `SW_BODY_W` と一致する（下でそれを毎回確かめる）
+      - 実形状に替えて増えるのは**ステム・ピン・LED 窓**だけで、どれも
+        設計上ほかの部品の**内側**にある。ステムはキャップの空洞、
+        ピンはソケットの中
+      - しかも**嵌合なので必ず重なる。**ソケットのカップと同じで、
+        例外を 2 つ増やすことになる（ピン↔ソケット、爪↔プレート）
+      - 総当たりは立体数の 2 乗で効く。61 個 × 7 立体を足すと、
+        いまでも 43 分の実形状ジョブが実用外になる
+
+    **その代わり、箱が実物からずれたら落ちるようにする。**
+    ここが無いと「箱で十分」という判断の根拠が消える。
+
+    ついでに**箱では見えないもの**も 1 つ見る: 実物のステムの頭が、
+    キーキャップの空洞に収まっていること（`CAP_TOP_T` を厚くしすぎると
+    天井がステムに当たる）。
+    """
+    _require_kicad("スイッチの箱と実物の突き合わせ")
+    import pcb_parts
+    from build123d import Align, Box, Location, import_step
+    from envelopes import (CAP_TOP_T, CAP_WALL, PLATE_TO_PCB, SW_BODY_W,
+                           SW_UNDER_W)
+    from gen_case import CAP_LIFT, OUR_CAPS
+    from interface import PLATE_T
+
+    model = pcb_parts.third_party_model("SW_Cherry_MX_Plate")
+    if model is None:
+        import os
+
+        if os.environ.get("REQUIRE_KICAD") == "1":
+            pytest.fail("SW_Cherry_MX_Plate.stp が無い。このジョブは飛ばせない")
+        pytest.skip("kiswitch のスイッチモデルが無い環境")
+
+    sw = import_step(str(model))          # z=0 が基板の上面
+
+    def widest(z):
+        """高さ z での、いちばん大きい断面の一辺。"""
+        slab = Location((0, 0, z)) * Box(60, 60, 0.02,
+                                         align=(Align.CENTER,) * 3)
+        best = 0.0
+        for s in sw.solids():
+            r = s.intersect(slab)
+            if r is None:
+                continue
+            for t in r.solids():
+                b = t.bounding_box()
+                best = max(best, b.size.X, b.size.Y)
+        return best
+
+    # プレートの中（開口 SWITCH_CUTOUT を通る部分）
+    through = widest(PLATE_TO_PCB + PLATE_T / 2)
+    assert through == pytest.approx(SW_UNDER_W, abs=0.05), (
+        f"プレートを通る部分が {through:.2f}mm。SW_UNDER_W={SW_UNDER_W} と違う")
+
+    # プレートのすぐ上（つばが載る部分）
+    flange = widest(PLATE_TO_PCB + PLATE_T + 0.3)
+    assert flange == pytest.approx(SW_BODY_W, abs=0.05), (
+        f"プレートの上のつばが {flange:.2f}mm。SW_BODY_W={SW_BODY_W} と違う")
+
+    # **箱では見えないもの。**ステムの頭がキャップの空洞に収まるか。
+    plate_top = PLATE_TO_PCB + PLATE_T
+    stem_top = sw.bounding_box().max.Z - plate_top       # プレート上面から
+    ceiling = CAP_LIFT + OUR_CAPS["home"] - CAP_TOP_T    # 空洞の天井
+    assert stem_top < ceiling, (
+        f"実物のステムの頭 {stem_top:.2f}mm が、キャップの空洞の天井 "
+        f"{ceiling:.2f}mm に当たる（CAP_TOP_T={CAP_TOP_T} が厚すぎる）")

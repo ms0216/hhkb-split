@@ -157,9 +157,11 @@ BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
 # 収めるためにコブを持っているのと、まったく同じ事情**が分割版にも当てはまる。
 #
 # 実機は本体 108mm ＋ コブ 12mm ＝ 奥行 120mm（PFU 公称）。同じ 12mm を採る。
-BUMP_DEPTH = 18.0                # 実機は 12mm。MX ＋ ソケットが Topre より
+_BUMP_BASE = 18.0                # 実機は 12mm。MX ＋ ソケットが Topre より
                                  # 5mm 厚いぶん、6mm 深くなる。12/14/16 では
                                  # 電池が基板に食い込むことを検査で確認した
+# **USB-C のメスを引っ込めるぶん、さらに深くする。**下の DB_FROM_REAR を参照。
+# 定義は import のあと（メスの実寸が要る）。ここでは名前だけ予約する。
 
 # --------------------------------------------------------------------------
 # 子基板（XIAO を載せる小さな別基板）
@@ -203,7 +205,45 @@ DB_BOSS_POS = [(-8.0, -13.5), (8.0, -13.5)]
 # 奥の壁の内側と子基板の隙間。**1.0 → 0.4mm**（open-gaps #28）。
 # メスを壁へ近づけるため。**ここは公差が食い合う場所**で、印刷 ±0.2mm と
 # 基板外形 ±0.2mm が重なる。きつすぎれば入らない。クーポンで確かめること。
-DB_FROM_REAR = 0.4
+DB_FROM_REAR_MIN = 0.4
+
+# --------------------------------------------------------------------------
+# USB-C のメスが**ケースの外へはみ出さない**こと（2026-08-10）
+#
+# XIAO のメスは子基板の奥端より 3.055mm 出ている（`pcb_parts.usb_receptacle`）。
+# 壁の外面までは WALL + DB_FROM_REAR = 2.8mm しか無く、**実物が 0.26mm
+# 外へ顔を出していた。**モデルの誤りではなく完成品がそうなる。飛び出した
+# コネクタは外力を直に受け、もぎ取れる原因になるので許容しない。
+#
+# **はみ出し量は WALL + DB_FROM_REAR だけで決まる**（BUMP_DEPTH は効かない。
+# コブを深くすると子基板も一緒に奥へ動くため）。だから DB_FROM_REAR を
+# 増やして必要量を作り、**同じだけコブを深くして子基板を元の位置に戻す。**
+#
+# ⚠️ **子基板を前へ動かしてはいけない。**アンテナは XIAO の反対端にあり、
+# いまは本体基板の後端より **0.11mm** 外に出ているだけ（#23 を案 A で解いた
+# ときの余裕）。前へ 0.3mm 動かせばアンテナは基板の下へ戻る。
+# `test_case.py` の #23 の検査が見張っている。
+USB_RECESS = 0.3         # メスの面を外面より引っ込める量（印刷公差 ±0.2 を見て）
+
+
+def _usb_receptacle_size():
+    """XIAO の USB-C メスの (幅, 高さ, 子基板の奥端からの張り出し, 板上面からの中心高さ)。
+
+    **KiCad の STEP から数えた実寸**（`pcb_parts.usb_receptacle`）。
+    ここを定数で持つと、XIAO の向きや型番を変えたときに穴だけ取り残される。
+    """
+    import pcb_parts
+
+    x0, y0, z0, x1, y1, z1 = pcb_parts.usb_receptacle()
+    rec = pcb_parts.load()["db"]
+    t = rec["board_step_thickness"]              # STEP の板厚（1.51）
+    return (x1 - x0, z1 - z0, y1 - rec["board_bbox"][4], (z0 + z1) / 2 - t)
+
+
+_RECEPT = _usb_receptacle_size()
+DB_FROM_REAR = max(DB_FROM_REAR_MIN, _RECEPT[2] + USB_RECESS - WALL)
+# 子基板を動かさないための帳尻。**この 2 行は必ず対で動かす。**
+BUMP_DEPTH = _BUMP_BASE + (DB_FROM_REAR - DB_FROM_REAR_MIN)
 # 奥の壁の切り欠き。**2 段になる**（open-gaps #28）。
 #
 #   外側 … 利用者のケーブルの**樹脂の胴体**が入るぶん。実測 12x7mm ＋ 逃げ
@@ -252,21 +292,6 @@ from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
                        USB_SHELL_H, USB_SHELL_W)
 from interface import XIAO_OUTLINE_W, XIAO_OVERHANG  # noqa: E402
 
-
-def _usb_receptacle_size():
-    """XIAO の USB-C メスの (幅, 高さ, 子基板の奥端からの張り出し, 板上面からの中心高さ)。
-
-    **KiCad の STEP から数えた実寸**（`pcb_parts.usb_receptacle`）。
-    ここを定数で持つと、XIAO の向きや型番を変えたときに穴だけ取り残される。
-    """
-    import pcb_parts
-
-    x0, y0, z0, x1, y1, z1 = pcb_parts.usb_receptacle()
-    rec = pcb_parts.load()["db"]
-    t = rec["board_step_thickness"]              # STEP の板厚（1.51）
-    return (x1 - x0, z1 - z0, y1 - rec["board_bbox"][4], (z0 + z1) / 2 - t)
-
-
 # 奥の壁の切り欠き。**外から見えるのは「金属が通る穴」だけ。**実機と同じ姿。
 #
 # 一度ここを「樹脂が通る大きさ（12.4x7.4mm）」にしていたが、**誤りだった。**
@@ -280,18 +305,27 @@ def _usb_receptacle_size():
 # メスの頭が穴の上縁に 0.24mm 食い込んでいた（実形状の総当たりで発覚）。
 #
 # だから穴は「プラグとメスの**両方**が通る大きさ」から導く。
-_RECEPT = _usb_receptacle_size()
 USB_W = max(USB_SHELL_W, _RECEPT[0]) + PORT_CLEAR * 2
 USB_H = max(USB_SHELL_H, _RECEPT[1]) + PORT_CLEAR * 2
 # 内側のポケット（XIAO の**基板**の端を受ける）の前に残る壁の厚み。
-# ここを USB_W x USB_H で貫く。**メスはこの 1.0mm を通り抜け、外面から
-# 0.26mm 顔を出す**（3.055 − (WALL + DB_FROM_REAR) = 0.255）。
-# 実機の USB も筐体面とほぼ面一なので、出ること自体は異常ではない。
+# ここを USB_W x USB_H で貫く。**メスはこの中に収まり、外面より
+# USB_RECESS だけ引っ込む**（上の DB_FROM_REAR の注記）。
 USB_PLUG_ENTRY = WALL - (XIAO_OVERHANG - DB_FROM_REAR)
 # **保険の座ぐり。**手持ちのケーブルは金属が 1.0mm 見えていたが、
 # **ケーブルによってはもっと短い。**その場合は樹脂がわずかに壁へ入る必要がある。
 # ここを 0 にすると「このケーブルでしか挿さらないキーボード」になる。
-USB_COUNTERBORE = 0.5    # 樹脂用の浅い座ぐり（外側だけ）
+#
+# **定数で置かず、要求から導く**（2026-08-10）。メスを 0.3mm 引っ込めたら
+# 壁が 0.555mm 厚くなり、**実測したケーブル（金属の露出 1.0mm）が
+# 0.055mm 届かなくなった。**#28 の検査が捕まえた。0.5 と直書きしていた
+# ので、片方を動かしたときに追随しなかった。
+#
+#   金属だけで届かないぶん ＝ USB_PLUG_ENTRY − USB_SHELL_EXPOSED
+#   そこへ印刷の公差（CLEARANCE）を足したぶんを、樹脂に譲る
+#
+# 壁を貫通してはいけない（外に大きな口が開く）。`test_a_real_cable_can_reach
+# _the_socket` の 3 番目がそれを見張っている。
+USB_COUNTERBORE = max(0.5, USB_PLUG_ENTRY - USB_SHELL_EXPOSED + CLEARANCE)
 # 内側のポケット（XIAO の端を受ける）の深さ。
 XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 
