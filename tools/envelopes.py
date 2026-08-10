@@ -183,16 +183,30 @@ def under_pcb_base(h_plate, rim_front, drop):
 
 
 def battery_envelope(center):
-    """単3×2 と電極が占有する空間。
+    """単3×2 と電極。**電池は実形状（円柱）、電極だけ場所取りの箱。**
 
     左右方向に 2 本直列で寝かせる。前後に並べると奥行 30mm を要し、
     傾いた基板の下に入らない。
+
+    以前は全体を 1 つの直方体（109 × 15.5 × 14.5）にしていた。**電池は
+    円柱なので、角の部分は実際には空いている。**箱のままだと、そこに
+    何かを置いたときに嘘の干渉が出る（許容値でごまかす原因になる）。
+
+    電極バネと配線（`AA_TERMINAL` 合計 8mm）は買う品が未定なので、
+    両端に箱のまま残す。**ここは実形状ではない**（[暫定]）。
     """
-    with BuildPart() as env:
-        with Locations(center):
-            Box(AA_L * 2 + AA_TERMINAL, AA_D + 1.0, AA_D,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-    return env.part
+    from build123d import Axis, Compound, Cylinder, Location
+
+    cells = [Location((center[0] + sx * AA_L / 2, center[1], center[2]),
+                      (0, 90, 0)) * Cylinder(AA_D / 2, AA_L)
+             for sx in (-1, 1)]
+    # 端の電極は幅 AA_TERMINAL/2 なので、中心は電池の端から**その半分**外側
+    ends = [Location((center[0] + sx * (AA_L + AA_TERMINAL / 4), center[1],
+                      center[2]))
+            * Box(AA_TERMINAL / 2, AA_D + 1.0, AA_D,
+                  align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            for sx in (-1, 1)]
+    return Compound(children=cells + ends)
 
 
 def pcb_bottom_at(y, h_plate, rim_front):
