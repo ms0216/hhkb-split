@@ -28,6 +28,7 @@ OUT = ROOT / "docs/hardware/img/d1-split-interval.svg"
 # ==========================================================================
 MEASURED = {
     7.5: (0.49, 0.66),
+    10.0: (0.48, 0.55),
     15.0: (0.30, 0.47),
     30.0: (0.29, 0.38),
     60.0: (0.28, 0.33),
@@ -48,6 +49,12 @@ CONTROL_OK = True
 K = 2.850          # 分割リンク: K / 間隔[ms]  [mA]
 B_HIGH = 0.280     # 間隔に依存しない部分（高い側）
 B_LOW = 0.110      # [記録のみ] 同（低い側）。差 0.17mA。図は高い側で描く
+
+# **床 0.28mA の内訳**（2026-08-10・60ms のとき Mac の Bluetooth を切って測った）
+#   ON 0.33mA → OFF 0.22mA。差がホストリンク。
+# 残り 0.17mA には広告が入っているので、**本当の底はもっと低い。**
+HOST_LINK_MA = 0.11
+REST_MA = B_HIGH - HOST_LINK_MA
 
 CAPACITY_MAH = 2000        # アルカリ単3
 HOURS_PER_MONTH = 24 * 30.4
@@ -195,8 +202,12 @@ a(f'<rect x="{BX}" y="{BY}" width="{w_split:.1f}" height="34" fill="{ORA}" '
 a(f'<rect x="{BX+w_split:.1f}" y="{BY}" width="{BW-w_split:.1f}" height="34" '
   'fill="#8fa3bf" stroke="#5f7391"/>')
 txt(BX + w_split / 2, BY + 22, f"分割リンク {split75:.2f}mA", "#ffffff", 12)
-txt(BX + w_split + (BW - w_split) / 2, BY + 22, f"それ以外 {B_HIGH:.2f}mA",
-    "#ffffff", 12)
+_wh = (BW - w_split) * HOST_LINK_MA / B_HIGH
+a(f'<rect x="{BX+w_split:.1f}" y="{BY}" width="{_wh:.1f}" height="34" '
+  'fill="#5f7391" stroke="#41505f"/>')
+txt(BX + w_split + _wh / 2, BY + 22, f"ホスト {HOST_LINK_MA:.2f}", "#ffffff", 11)
+txt(BX + w_split + _wh + (BW - w_split - _wh) / 2, BY + 22,
+    f"その他 {REST_MA:.2f}mA", "#ffffff", 11)
 txt(BX, BY + 52, "← 間隔に反比例して減らせる", ORA, 11, "start")
 txt(BX + BW, BY + 52, "触れない →", "#5f7391", 11, "end")
 

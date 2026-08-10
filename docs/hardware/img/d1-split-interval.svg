@@ -36,6 +36,11 @@
 <text x="150.41666666666666" y="133.66666666666663" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.66</text>
 <circle cx="136.4" cy="214.4" r="6" fill="#2b4a97"/>
 <text x="150.41666666666666" y="230.38888888888889" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.49</text>
+<line x1="154.8" y1="218.7" x2="154.8" y2="188.7" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
+<circle cx="154.8" cy="188.7" r="6" fill="#c0392b"/>
+<text x="168.83333333333331" y="180.7222222222222" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.55</text>
+<circle cx="154.8" cy="218.7" r="6" fill="#2b4a97"/>
+<text x="168.83333333333331" y="234.66666666666669" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.48</text>
 <line x1="191.7" y1="295.7" x2="191.7" y2="222.9" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
 <circle cx="191.7" cy="222.9" r="6" fill="#c0392b"/>
 <text x="205.66666666666666" y="214.94444444444443" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.47</text>
@@ -63,18 +68,20 @@
 <text x="350" y="176" text-anchor="start" font-size="11" font-weight="bold" fill="#111">低い側（待つと出る）</text>
 <text x="640" y="96" text-anchor="start" font-size="14" font-weight="bold" fill="#111">② 何がその電流を作っているか</text>
 <rect x="640" y="116" width="480" height="308" rx="8" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
-<text x="660" y="150" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">測った 4 点は、この式にきれいに乗る</text>
+<text x="660" y="150" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">測った 5 点は、この式にきれいに乗る</text>
 <rect x="660" y="164" width="440" height="46" rx="6" fill="#ffffff" stroke="#d35400" stroke-width="2"/>
 <text x="880" y="194" text-anchor="middle" font-size="15" font-weight="bold" fill="#111">電流 ＝ 0.28mA ＋ 2.85 ÷ 間隔[ms]</text>
 <text x="660" y="240" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">内訳（7.5ms のとき）</text>
 <rect x="660" y="256" width="253.3" height="34" fill="#d35400" stroke="#a04000"/>
 <rect x="913.3" y="256" width="186.7" height="34" fill="#8fa3bf" stroke="#5f7391"/>
 <text x="786.6666666666666" y="278" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">分割リンク 0.38mA</text>
-<text x="1006.6666666666666" y="278" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">それ以外 0.28mA</text>
+<rect x="913.3" y="256" width="73.3" height="34" fill="#5f7391" stroke="#41505f"/>
+<text x="949.9999999999999" y="278" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">ホスト 0.11</text>
+<text x="1043.3333333333333" y="278" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">その他 0.17mA</text>
 <text x="660" y="308" text-anchor="start" font-size="11" font-weight="bold" fill="#d35400">← 間隔に反比例して減らせる</text>
 <text x="1100" y="308" text-anchor="end" font-size="11" font-weight="bold" fill="#5f7391">触れない →</text>
 <text x="660" y="348" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">低い側は、15ms 以降ほぼ床に張りついている</text>
-<text x="660" y="368" text-anchor="start" font-size="11.5" fill="#111">7.5ms 0.49 ／ 15ms 0.30 ／ 30ms 0.29 ／ 60ms 0.28  [mA]</text>
+<text x="660" y="368" text-anchor="start" font-size="11.5" fill="#111">7.5ms 0.49 ／ 10ms 0.48 ／ 15ms 0.30 ／ 30ms 0.29 ／ 60ms 0.28  [mA]</text>
 <text x="660" y="388" text-anchor="start" font-size="11.5" font-weight="bold" fill="#1e8449">60ms の低い側 0.28mA は、当てはめた床とぴったり同じ。</text>
 <text x="660" y="408" text-anchor="start" font-size="11.5" fill="#666">低い側では分割リンクをほとんど消費していない。何が切り替わっているかは未解明。</text>
 <text x="660" y="426" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">⚠️ 低い側は出る条件が分かっていない（待てば出ることも、出ないこともある）。</text>

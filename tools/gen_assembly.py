@@ -326,11 +326,42 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     from build123d import Compound
 
     def _moved(compound, loc):
-        """**立体ごとに動かしてから 1 つにまとめる。**Compound に Location を
-        掛けただけだと、交差の結果が元の（KiCad の生の）座標を持ったまま
-        返り、まったく別の場所で重なったように見える（2026-08-10 に踏んだ）。
+        """立体ごとに動かし、**製品単位にまとめて**から束ねる。
+
+        - Compound に Location を掛けただけだと、交差の結果が元の
+          （KiCad の生の）座標を持ったまま返り、まったく別の場所で
+          重なったように見える（2026-08-10 に踏んだ）。だから立体ごとに動かす。
+        - **重なる立体は 1 つの製品。**XIAO は 84 立体、ソケットは本体＋端子、
+          FFC コネクタは 3 立体で 1 個。まとめないと「自分自身と衝突」と
+          報告される。**重ならないものはまとめない**（まとめた瞬間に
+          製品どうしの重なりが見えなくなる）。
         """
-        return Compound(children=[s_.moved(loc) for s_ in compound.solids()])
+        from build123d import Part
+
+        sols = [s_.moved(loc) for s_ in compound.solids()]
+        boxes = [(s_, s_.bounding_box()) for s_ in sols]
+        groups = []
+        for s_, b in boxes:
+            hit = [g for g in groups
+                   if any(b.min.X < o.max.X and o.min.X < b.max.X
+                          and b.min.Y < o.max.Y and o.min.Y < b.max.Y
+                          and b.min.Z < o.max.Z and o.min.Z < b.max.Z
+                          for _s2, o in g)]
+            if hit:
+                merged = [(s_, b)]
+                for g in hit:
+                    merged += g
+                    groups.remove(g)
+                groups.append(merged)
+            else:
+                groups.append([(s_, b)])
+        out = []
+        for g in groups:
+            fused = g[0][0]
+            for s2, _b in g[1:]:
+                fused = fused + s2
+            out.append(fused)
+        return Compound(children=out)
 
     ox, oy = pcb_parts.ORIGIN
     main = pcb_parts.real_compound(half)
