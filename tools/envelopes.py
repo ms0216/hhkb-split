@@ -193,7 +193,7 @@ def battery_envelope(center):
     何かを置いたときに嘘の干渉が出る（許容値でごまかす原因になる）。
 
     電極バネと配線（`AA_TERMINAL` 合計 8mm）は買う品が未定なので、
-    両端に箱のまま残す。**ここは実形状ではない**（[暫定]）。
+    両端に箱のまま残す。**ここは実形状ではない**（値は AA_TERMINAL の行）。
     """
     from build123d import Axis, Compound, Cylinder, Location
 

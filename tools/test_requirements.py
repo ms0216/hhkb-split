@@ -74,3 +74,31 @@ def test_the_pinned_versions_match_the_environment():
         if got != ver.strip():
             bad.append(f"{name}: 記載 {ver.strip()} / 実際 {got}")
     assert not bad, "requirements と環境がずれている:\n  " + "\n  ".join(bad)
+
+
+def test_ci_installs_the_kicad_that_wrote_the_board_files():
+    """CI が入れる KiCad の版が、基板ファイルを書いた版と一致すること。
+
+    **これが無い間、実形状のジョブは一度も検査に到達していなかった。**
+    CI は `ppa:kicad/kicad-9.0-releases` を入れていて、基板ファイルは
+    KiCad 10 の書式（`(version 20260206)`）。9.0 の kicad-cli は読めずに
+    終了コード 3 で落ち、5 件が真っ赤になる。**赤の中身は実形状の指摘
+    ではなく、環境の不一致だった**（2026-08-10 に判明）。
+
+    KiCad を上げたら基板ファイルの generator_version も上がるので、
+    片方だけ動かすとここで落ちる。
+    """
+    import re
+
+    wf = (ROOT / ".github" / "workflows" / "checks.yml").read_text()
+    m = re.search(r"ppa:kicad/kicad-([\d.]+)-releases", wf)
+    assert m, "checks.yml に KiCad の PPA が見当たらない"
+    ci = m.group(1)                                  # 例 "10.0"
+
+    for pcb in sorted((ROOT / "pcb").glob("*.kicad_pcb")):
+        g = re.search(r'\(generator_version "([\d.]+)"\)', pcb.read_text())
+        assert g, f"{pcb.name}: generator_version が無い"
+        assert g.group(1) == ci, (
+            f"{pcb.name} は KiCad {g.group(1)} が書いたのに、CI は "
+            f"KiCad {ci} を入れている。kicad-cli が基板を読めず、実形状の"
+            "検査は一度も走らない")

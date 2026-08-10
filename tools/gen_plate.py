@@ -91,14 +91,20 @@ def stab_polygon(s, at=(0.0, 0.0)):
     return [(ax + x, ay - y) for x, y in pts]
 
 
-def stab_cutout_face(s, at=(0.0, 0.0), kerf=STAB_KERF):
+def stab_cutout_face(s, at=(0.0, 0.0), kerf=None):
     """スタビ開口の面を、規格の輪郭から `kerf` だけ**外へ広げて**返す。
 
     **点列に ±kerf を足してはいけない。**28 点は凹凸が入り混じっていて
     点ごとに外向きが違うので、符号を手で並べると必ず間違える（#30）。
     多角形のオフセットに任せる。Kind.INTERSECTION は辺を延長して交わらせる
     ので、角が丸まらず規格の形のまま相似に広がる。
+
+    **既定値を引数に書かない**（`kerf=STAB_KERF` は def の時点で束縛され、
+    後から STAB_KERF を差し替えても効かない）。変異検査が値を壊しても
+    素通りしてしまうので、呼ばれるたびに読む。
     """
+    if kerf is None:
+        kerf = STAB_KERF
     with BuildSketch(mode=Mode.PRIVATE) as sk:
         with BuildLine():
             Polyline(*stab_polygon(s, at=at), close=True)

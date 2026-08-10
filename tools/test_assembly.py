@@ -686,3 +686,68 @@ def test_the_real_shape_check_actually_detects_a_collision():
             "ナットの座を 8mm 高くしても何も検出されない。検査が効いていない"
     finally:
         gen_case.NUT_BOSS_H = original
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_stab_openings_clear_the_real_stabilizers_by_the_kerf(half):
+    """**プレートのスタビ開口が、実物のスタビに対して全周 CLEARANCE/2 空いている。**
+
+    重なり 0（上の検査）は「入る」ことを意味しない。プレートは 3D プリントで
+    公差 ±0.2mm 前後なので、隙間 0 は運任せになる（open-gaps #30）。
+
+    **面どうしの最短距離では測れない。**スタビの肩と胴には傾いた面があり、
+    傾いた面への垂線は面内の隙間より短く出る（kerf 0.1 に対して 0.067、
+    板厚の帯で切っても 0.073）。**2 度測って 2 度とも違った。**
+
+    なので距離ではなく**入るかどうかそのもの**を見る。板を平らな座標へ
+    戻し、面内の 8 方向へ CLEARANCE/2 だけずらしても、スタビとまだ
+    重ならないこと。面の傾きに左右されないし、判定は体積なので曖昧さが無い。
+
+    **要求するのは実物に対する隙間で、開口の広げ量（STAB_KERF）ではない。**
+    swillkb の標準パスは実物より片側 0.027mm 狭く、両者は一致しない。
+    ここで STAB_KERF を要求すると、その差を黙って見逃す
+    （実際、逃げ 0.1 で 0.075 しか動かせなかった）。
+
+    実物は KiCad（kiswitch）の STEP。**自分の生成物どうしの一致ではない。**
+    """
+    _github_actions_only("スタビ開口の逃げ")
+    _require_kicad("スタビ開口の逃げ")
+    import math
+
+    from build123d import Location
+    from gen_assembly import plate_placement
+    from gen_plate import plate_positions
+    from interface import CLEARANCE, stab_offset_for
+    from verify import intersection_volume
+
+    keys = HALVES[half]
+    parts, _ = build_assembly(keys, half, real=True)
+    _, (w, h_plate) = plate_positions(keys)
+    flat = plate_placement(w, h_plate).inverse()
+    flat_plate = parts["plate"].moved(flat)
+
+    # **母数を数えてから測る。**選び方が空振りしても緑になる、を防ぐ。
+    want = sum(1 for k in keys if stab_offset_for(k.w_u))
+    stabs = [s.moved(flat) for s in parts["pcb_real"].solids()
+             if s.bounding_box().size.Y > 18 and s.bounding_box().size.Z > 18]
+    assert len(stabs) == want, (
+        f"{half}: 実形状のスタビが {len(stabs)} 個。2u 以上のキーは {want} 個")
+
+    # EPS は check() と同じ意味（ブーリアン演算の分解能）。ちょうど接する
+    # 位置まで寄せるので、退化した接触の欠片が出る。
+    EPS = 1e-6
+    need = CLEARANCE / 2
+    tight = []
+    for s in stabs:
+        c = s.bounding_box().center()
+        for k in range(8):
+            a = math.pi * k / 4
+            moved = flat_plate.moved(
+                Location((need * math.cos(a), need * math.sin(a), 0)))
+            v = intersection_volume(moved, s)
+            if v > EPS:
+                tight.append(f"({c.X:+.1f},{c.Y:+.1f}) {k * 45}度へ "
+                             f"{need}mm ずらすと {v:.4f}mm^3 当たる")
+    assert not tight, (
+        f"{half}: 実物のスタビとの隙間が全周 {need}mm に足りない\n  "
+        + "\n  ".join(tight))

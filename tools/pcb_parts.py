@@ -84,6 +84,29 @@ def _classify(sx, sy, sz):
     return f"unknown_{a}x{b}"
 
 
+def _export_step(name, out):
+    """kicad-cli で STEP を出す。**失敗したら kicad-cli の言い分を見せる。**
+
+    以前は capture_output のまま check=True で投げていたので、CalledProcessError
+    の一行しか残らなかった。CI が KiCad 9 で基板ファイル（KiCad 10 の書式）を
+    読めずに終了コード 3 で落ちていたのに、**赤の理由が読めなかった。**
+
+    --subst-models: .wrl 宣言を同名の .stp に置き換える。kiswitch の
+    ソケット・スタビのモデルはこれが無いと STEP に出ない。
+    """
+    r = subprocess.run([KICAD_CLI, "pcb", "export", "step", "--force",
+                        "--subst-models", "--output", str(out),
+                        str(ROOT / BOARDS[name])], capture_output=True,
+                       text=True)
+    if r.returncode:
+        raise RuntimeError(
+            f"kicad-cli が {name} の STEP 出力に失敗した（終了コード "
+            f"{r.returncode}）。**版が合っているか見ること**（基板ファイルは "
+            f"KiCad 10 の書式）。\n"
+            f"  cli: {KICAD_CLI}\n  stderr: {r.stderr.strip()}\n"
+            f"  stdout: {r.stdout.strip()}")
+
+
 def board_sha256(name):
     """基板ファイルのハッシュ。**KiCad が無くても計算できる。**"""
     import hashlib
@@ -95,14 +118,9 @@ def extract(name):
     """kicad-cli で STEP を出し、板と部品の bbox を返す。"""
     from build123d import import_step
 
-    src = ROOT / BOARDS[name]
     with tempfile.TemporaryDirectory() as td:
         step = Path(td) / f"{name}.step"
-        # --subst-models: .wrl 宣言を同名の .stp に置き換える。kiswitch の
-        # ソケット・スタビのモデルはこれが無いと STEP に出ない
-        subprocess.run([KICAD_CLI, "pcb", "export", "step", "--force",
-                        "--subst-models", "--output", str(step), str(src)],
-                       check=True, capture_output=True)
+        _export_step(name, step)
         solids = import_step(str(step)).solids()
 
     board = max(solids, key=lambda s: s.volume)
@@ -157,12 +175,9 @@ def real_compound(name):
     """
     from build123d import import_step
 
-    src = ROOT / BOARDS[name]
     with tempfile.TemporaryDirectory() as td:
         step = Path(td) / f"{name}.step"
-        subprocess.run([KICAD_CLI, "pcb", "export", "step", "--force",
-                        "--subst-models", "--output", str(step), str(src)],
-                       check=True, capture_output=True)
+        _export_step(name, step)
         return import_step(str(step))
 
 

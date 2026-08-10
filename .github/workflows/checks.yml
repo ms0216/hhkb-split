@@ -46,11 +46,17 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -r requirements-dev.txt
-      - name: KiCad を入れる
+      # **版を手元（KiCad 10）に合わせること。**9.0 を入れていた間、この
+      # ジョブは一度も検査に到達していなかった。基板ファイルは
+      # `(version 20260206)`＝KiCad 10 の書式で、9.0 の kicad-cli は
+      # 読めずに終了コード 3 で落ちる（stderr は capture されて見えない）。
+      # **赤の中身は「実形状の指摘」ではなく、環境の不一致だった。**
+      - name: KiCad を入れる（**手元と同じ 10.0**）
         run: |
-          sudo add-apt-repository --yes ppa:kicad/kicad-9.0-releases
+          sudo add-apt-repository --yes ppa:kicad/kicad-10.0-releases
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends kicad
+          kicad-cli --version
       - name: キースイッチの 3D モデルを入れる
         # 出所と選定理由は docs/hardware/decisions/2026-08-09-third-party-3d-models.md
         run: |
