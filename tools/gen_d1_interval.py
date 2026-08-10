@@ -30,6 +30,7 @@ MEASURED = {
     7.5: (0.49, 0.66),
     15.0: (0.30, 0.47),
     30.0: (0.29, 0.38),
+    60.0: (0.28, 0.33),
 }
 
 # 高い側の 2 点（7.5 と 15）から当てはめた。30ms は当てはめに使っていない
@@ -49,7 +50,7 @@ ORA, GREEN = "#d35400", "#1e8449"
 # 描画域
 X0, X1, Y0, Y1 = 118, 560, 116, 424      # 左の図（電流 vs 間隔）
 IMIN, IMAX = 0.0, 0.72                   # 電流の軸
-LMIN, LMAX = 5.0, 33.0                   # 間隔の軸
+LMIN, LMAX = 5.0, 65.0                   # 間隔の軸
 
 o = []
 a = o.append
@@ -82,9 +83,9 @@ def txt(x, y, s, color="#111", size=11.5, anchor="middle", bold=True):
       f'fill="{color}">{s}</text>')
 
 
-a('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 700" width="1180" '
-  'height="700" font-family="Helvetica, Arial, sans-serif">')
-a('<rect width="1180" height="700" fill="#ffffff"/>')
+a('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" '
+  'height="780" font-family="Helvetica, Arial, sans-serif">')
+a('<rect width="1180" height="780" fill="#ffffff"/>')
 
 txt(24, 34, "D1 — 分割リンクの接続間隔を変えると、左半分の電流はどう変わるか",
     "#111", 18, "start")
@@ -105,7 +106,7 @@ for v in (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7):
     txt(X0 - 10, y + 4, f"{v:.1f}", GREY, 10.5, "end", bold=False)
 txt(X0 - 46, (Y0 + Y1) / 2, "mA", GREY, 11, "middle", bold=False)
 
-for iv in (7.5, 15, 30):
+for iv in (7.5, 15, 30, 60):
     x = px(iv)
     a(f'<line x1="{x:.1f}" y1="{Y0}" x2="{x:.1f}" y2="{Y1}" stroke="#e8ecef" '
       'stroke-width="1"/>')
@@ -113,7 +114,7 @@ for iv in (7.5, 15, 30):
 txt((X0 + X1) / 2, Y1 + 42, "分割リンクの接続間隔", "#666", 11.5, bold=False)
 
 # 当てはめの曲線（2 本）
-for base, color, dash in ((B_HIGH, RED, None), (B_LOW, BLUE, "5 4")):
+for base, color, dash in ((B_HIGH, RED, None),):
     pts = []
     iv = 7.0          # 枠から出ないよう、測った範囲の少し手前から
     while iv <= LMAX:
@@ -133,14 +134,12 @@ for iv, (lo, hi) in MEASURED.items():
     a(f'<circle cx="{x:.1f}" cy="{py(lo):.1f}" r="6" fill="{BLUE}"/>')
     txt(x + 14, py(lo) + 16, f"{lo:.2f}", BLUE, 11.5, "start")
 
-# 30ms の低い側が外れていることを名指しする
-_x, _y = px(30), py(MEASURED[30.0][0])
-_yp = py(model(30, B_LOW))
-a(f'<circle cx="{_x:.1f}" cy="{_yp:.1f}" r="5" fill="none" stroke="{BLUE}" '
-  'stroke-width="2" stroke-dasharray="3 2"/>')
-a(f'<line x1="{_x:.1f}" y1="{_yp:.1f}" x2="{_x-26:.1f}" y2="{_yp+40:.1f}" '
-  f'stroke="{RED}" stroke-width="1.4"/>')
-txt(_x - 30, _yp + 48, "予測 0.21 ⇄ 実測 0.29。ここだけ合わない", RED, 10.5, "end")
+# 床（間隔に依存しない部分）を横線で描く。**低い側がここへ着地している。**
+_fy = py(B_HIGH)
+a(f'<line x1="{X0}" y1="{_fy:.1f}" x2="{X1}" y2="{_fy:.1f}" stroke="{GREEN}" '
+  'stroke-width="2" stroke-dasharray="7 4"/>')
+txt(X0 + 8, _fy - 8, f"床 {B_HIGH:.2f}mA（間隔をいくら伸ばしても残る）",
+    GREEN, 11, "start")
 
 # 凡例
 _LX, _LY = X1 - 242, Y0 + 12
@@ -158,7 +157,7 @@ txt(RX, 96, "② 何がその電流を作っているか", "#111", 14, "start")
 a(f'<rect x="{RX}" y="{Y0}" width="480" height="{Y1-Y0}" rx="8" fill="#fbfcfd" '
   'stroke="#d5dae0" stroke-width="1.5"/>')
 
-txt(RX + 20, Y0 + 34, "測った 3 点は、この式にきれいに乗る", "#111", 12.5, "start")
+txt(RX + 20, Y0 + 34, f"測った {len(MEASURED)} 点は、この式にきれいに乗る", "#111", 12.5, "start")
 a(f'<rect x="{RX+20}" y="{Y0+48}" width="440" height="46" rx="6" fill="#ffffff" '
   f'stroke="{ORA}" stroke-width="2"/>')
 txt(RX + 240, Y0 + 78, f"電流 ＝ {B_HIGH:.2f}mA ＋ {K:.2f} ÷ 間隔[ms]", "#111", 15)
@@ -180,14 +179,19 @@ txt(BX + w_split + (BW - w_split) / 2, BY + 22, f"それ以外 {B_HIGH:.2f}mA",
 txt(BX, BY + 52, "← 間隔に反比例して減らせる", ORA, 11, "start")
 txt(BX + BW, BY + 52, "触れない →", "#5f7391", 11, "end")
 
-_gaps = " ／ ".join(f"{iv:g}ms {hi-lo:.2f}" for iv, (lo, hi) in MEASURED.items())
-txt(RX + 20, BY + 92, f"高い側と低い側の差： {_gaps}  [mA]", "#111", 12, "start")
-txt(RX + 20, BY + 110,
-    "7.5 と 15 は 0.17mA でそろうが、30ms だけ 0.09mA。そろわない。",
-    RED, 11.5, "start")
-txt(RX + 20, BY + 128,
-    "30ms の低い側が出きっていないのか、状態が 2 つではないのか、未解明。",
+txt(RX + 20, BY + 92, "低い側は、15ms 以降ほぼ床に張りついている", "#111", 12.5,
+    "start")
+_lows = " ／ ".join(f"{iv:g}ms {lo:.2f}" for iv, (lo, _h) in MEASURED.items())
+txt(RX + 20, BY + 112, _lows + "  [mA]", "#111", 11.5, "start", bold=False)
+txt(RX + 20, BY + 132,
+    "60ms の低い側 0.28mA は、当てはめた床とぴったり同じ。",
+    GREEN, 11.5, "start")
+txt(RX + 20, BY + 152,
+    "低い側では分割リンクをほとんど消費していない。何が切り替わっているかは未解明。",
     "#666", 11.5, "start", bold=False)
+txt(RX + 20, BY + 170,
+    "⚠️ 低い側は出る条件が分かっていない（待てば出ることも、出ないこともある）。",
+    RED, 11.5, "start")
 
 # ======================= 下: 交換レート =======================
 TY = 512
@@ -201,7 +205,7 @@ a(f'<line x1="50" y1="{TY+14}" x2="1140" y2="{TY+14}" stroke="#d5dae0" '
   'stroke-width="1.5"/>')
 
 rows = []
-for iv in (7.5, 15.0, 30.0):
+for iv in (7.5, 15.0, 30.0, 60.0):
     hi = MEASURED[iv][1]
     rows.append((iv, hi, months(hi), latency(iv)))
 
@@ -227,12 +231,12 @@ for i, (iv, ma, mo, lat) in enumerate(rows):
         txt(960, y, f"1ms あたり {gain:.2f} ヶ月", GREEN if i == 1 else GREY,
             12, "start")
 
-y = TY + 46 + 3 * 42 + 10
+y = TY + 46 + 4 * 42 + 8
 txt(60, y, "⚠️ 打鍵の体感は、この治具では判定できない。"
            "タクトスイッチ 2 個をつつくのと、キーキャップを付けて文章を打つのは別物。",
     RED, 12, "start")
-txt(60, y + 20, "15ms・30ms とも「違和感なし」との報告はあるが、"
-                "完成品で目隠しにして測り直す（D2）。",
+txt(60, y + 20, "15 / 30 / 60ms のいずれも「違和感なし」との報告。60ms は合計遅延 40ms 級。"
+                "それでも完成品で目隠しにして測り直す（D2）。",
     "#666", 11.5, "start", bold=False)
 
 a("</svg>")
@@ -241,11 +245,11 @@ OUT.write_text("\n".join(o), encoding="utf-8")
 # --- 当てはめが実測に合っているかを、書き出すたびに確かめる ------------
 for _iv, (_lo, _hi) in MEASURED.items():
     assert abs(model(_iv, B_HIGH) - _hi) < 0.02, ("高い側が合わない", _iv)
-assert abs(model(7.5, B_LOW) - MEASURED[7.5][0]) < 0.02
-assert abs(model(15.0, B_LOW) - MEASURED[15.0][0]) < 0.02
-# **30ms の低い側は合わない。**合わないことを、ここで固定しておく。
-assert abs(model(30.0, B_LOW) - MEASURED[30.0][0]) > 0.05, \
-    "30ms の低い側がモデルに合うようになった。図の注記を見直すこと"
+# **低い側は床より下へは行けない。**私は一度 0.205mA と予測したが、
+# それは床（0.28mA）を割る値で、最初から成立していなかった（2026-08-10）。
+for _iv, (_lo, _hi) in MEASURED.items():
+    assert _lo >= B_HIGH - 0.01, ("低い側が床を割った", _iv, _lo)
+assert abs(MEASURED[60.0][0] - B_HIGH) < 0.01, "60ms の低い側が床から離れた"
 
 print(f"wrote {OUT.relative_to(ROOT)}")
 for _iv in (7.5, 15.0, 30.0):

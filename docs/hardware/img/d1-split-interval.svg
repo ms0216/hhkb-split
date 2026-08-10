@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 700" width="1180" height="700" font-family="Helvetica, Arial, sans-serif">
-<rect width="1180" height="700" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" height="780" font-family="Helvetica, Arial, sans-serif">
+<rect width="1180" height="780" fill="#ffffff"/>
 <text x="24" y="34" text-anchor="start" font-size="18" font-weight="bold" fill="#111">D1 — 分割リンクの接続間隔を変えると、左半分の電流はどう変わるか</text>
 <text x="24" y="56" text-anchor="start" font-size="12" fill="#666">2026-08-10 実測。左＝セントラル（C4 の治具・電池 ＋ テスター直列）／右＝ペリフェラル。c・d が打てることを確かめてから読んだ。</text>
 <text x="118" y="96" text-anchor="start" font-size="14" font-weight="bold" fill="#111">① 実測と当てはめ</text>
@@ -21,33 +21,38 @@
 <line x1="118" y1="124.6" x2="560" y2="124.6" stroke="#e8ecef" stroke-width="1"/>
 <text x="108" y="128.55555555555554" text-anchor="end" font-size="10.5" fill="#8c959d">0.7</text>
 <text x="72" y="270.0" text-anchor="middle" font-size="11" fill="#8c959d">mA</text>
-<line x1="157.5" y1="116" x2="157.5" y2="424" stroke="#e8ecef" stroke-width="1"/>
-<text x="157.46428571428572" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">7.5ms</text>
-<line x1="275.9" y1="116" x2="275.9" y2="424" stroke="#e8ecef" stroke-width="1"/>
-<text x="275.8571428571429" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">15ms</text>
-<line x1="512.6" y1="116" x2="512.6" y2="424" stroke="#e8ecef" stroke-width="1"/>
-<text x="512.6428571428571" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">30ms</text>
+<line x1="136.4" y1="116" x2="136.4" y2="424" stroke="#e8ecef" stroke-width="1"/>
+<text x="136.41666666666666" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">7.5ms</text>
+<line x1="191.7" y1="116" x2="191.7" y2="424" stroke="#e8ecef" stroke-width="1"/>
+<text x="191.66666666666666" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">15ms</text>
+<line x1="302.2" y1="116" x2="302.2" y2="424" stroke="#e8ecef" stroke-width="1"/>
+<text x="302.1666666666667" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">30ms</text>
+<line x1="523.2" y1="116" x2="523.2" y2="424" stroke="#e8ecef" stroke-width="1"/>
+<text x="523.1666666666666" y="444" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#111">60ms</text>
 <text x="339.0" y="466" text-anchor="middle" font-size="11.5" fill="#666">分割リンクの接続間隔</text>
-<path d="M 149.6 130.1 L 153.5 136.1 L 157.5 141.7 L 161.4 146.9 L 165.4 151.8 L 169.3 156.4 L 173.2 160.8 L 177.2 164.9 L 181.1 168.8 L 185.1 172.4 L 189.0 175.9 L 193.0 179.2 L 196.9 182.3 L 200.9 185.3 L 204.8 188.1 L 208.8 190.8 L 212.7 193.4 L 216.7 195.9 L 220.6 198.2 L 224.6 200.5 L 228.5 202.6 L 232.4 204.7 L 236.4 206.7 L 240.3 208.6 L 244.3 210.4 L 248.2 212.2 L 252.2 213.9 L 256.1 215.6 L 260.1 217.1 L 264.0 218.7 L 268.0 220.1 L 271.9 221.6 L 275.9 222.9 L 279.8 224.3 L 283.8 225.6 L 287.7 226.8 L 291.6 228.0 L 295.6 229.2 L 299.5 230.3 L 303.5 231.4 L 307.4 232.5 L 311.4 233.5 L 315.3 234.6 L 319.3 235.5 L 323.2 236.5 L 327.2 237.4 L 331.1 238.3 L 335.1 239.2 L 339.0 240.1 L 342.9 240.9 L 346.9 241.7 L 350.8 242.5 L 354.8 243.3 L 358.7 244.0 L 362.7 244.8 L 366.6 245.5 L 370.6 246.2 L 374.5 246.8 L 378.5 247.5 L 382.4 248.2 L 386.4 248.8 L 390.3 249.4 L 394.2 250.0 L 398.2 250.6 L 402.1 251.2 L 406.1 251.8 L 410.0 252.3 L 414.0 252.9 L 417.9 253.4 L 421.9 253.9 L 425.8 254.5 L 429.8 255.0 L 433.7 255.5 L 437.7 255.9 L 441.6 256.4 L 445.6 256.9 L 449.5 257.3 L 453.4 257.8 L 457.4 258.2 L 461.3 258.6 L 465.3 259.1 L 469.2 259.5 L 473.2 259.9 L 477.1 260.3 L 481.1 260.7 L 485.0 261.1 L 489.0 261.4 L 492.9 261.8 L 496.9 262.2 L 500.8 262.5 L 504.8 262.9 L 508.7 263.2 L 512.6 263.6 L 516.6 263.9 L 520.5 264.2 L 524.5 264.6 L 528.4 264.9 L 532.4 265.2 L 536.3 265.5 L 540.3 265.8 L 544.2 266.1 L 548.2 266.4 L 552.1 266.7 L 556.1 267.0 L 560.0 267.3" fill="none" stroke="#c0392b" stroke-width="2" opacity="0.55"/>
-<path d="M 149.6 202.8 L 153.5 208.8 L 157.5 214.4 L 161.4 219.6 L 165.4 224.5 L 169.3 229.2 L 173.2 233.5 L 177.2 237.6 L 181.1 241.5 L 185.1 245.1 L 189.0 248.6 L 193.0 251.9 L 196.9 255.0 L 200.9 258.0 L 204.8 260.8 L 208.8 263.5 L 212.7 266.1 L 216.7 268.6 L 220.6 270.9 L 224.6 273.2 L 228.5 275.3 L 232.4 277.4 L 236.4 279.4 L 240.3 281.3 L 244.3 283.2 L 248.2 284.9 L 252.2 286.6 L 256.1 288.3 L 260.1 289.9 L 264.0 291.4 L 268.0 292.9 L 271.9 294.3 L 275.9 295.7 L 279.8 297.0 L 283.8 298.3 L 287.7 299.5 L 291.6 300.7 L 295.6 301.9 L 299.5 303.1 L 303.5 304.2 L 307.4 305.2 L 311.4 306.3 L 315.3 307.3 L 319.3 308.3 L 323.2 309.2 L 327.2 310.1 L 331.1 311.0 L 335.1 311.9 L 339.0 312.8 L 342.9 313.6 L 346.9 314.4 L 350.8 315.2 L 354.8 316.0 L 358.7 316.7 L 362.7 317.5 L 366.6 318.2 L 370.6 318.9 L 374.5 319.6 L 378.5 320.2 L 382.4 320.9 L 386.4 321.5 L 390.3 322.2 L 394.2 322.8 L 398.2 323.4 L 402.1 323.9 L 406.1 324.5 L 410.0 325.1 L 414.0 325.6 L 417.9 326.1 L 421.9 326.7 L 425.8 327.2 L 429.8 327.7 L 433.7 328.2 L 437.7 328.7 L 441.6 329.1 L 445.6 329.6 L 449.5 330.1 L 453.4 330.5 L 457.4 330.9 L 461.3 331.4 L 465.3 331.8 L 469.2 332.2 L 473.2 332.6 L 477.1 333.0 L 481.1 333.4 L 485.0 333.8 L 489.0 334.2 L 492.9 334.5 L 496.9 334.9 L 500.8 335.3 L 504.8 335.6 L 508.7 336.0 L 512.6 336.3 L 516.6 336.6 L 520.5 337.0 L 524.5 337.3 L 528.4 337.6 L 532.4 337.9 L 536.3 338.2 L 540.3 338.5 L 544.2 338.8 L 548.2 339.1 L 552.1 339.4 L 556.1 339.7 L 560.0 340.0" fill="none" stroke="#2b4a97" stroke-width="2" stroke-dasharray="5 4" opacity="0.55"/>
-<line x1="157.5" y1="214.4" x2="157.5" y2="141.7" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
-<circle cx="157.5" cy="141.7" r="6" fill="#c0392b"/>
-<text x="171.46428571428572" y="133.66666666666663" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.66</text>
-<circle cx="157.5" cy="214.4" r="6" fill="#2b4a97"/>
-<text x="171.46428571428572" y="230.38888888888889" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.49</text>
-<line x1="275.9" y1="295.7" x2="275.9" y2="222.9" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
-<circle cx="275.9" cy="222.9" r="6" fill="#c0392b"/>
-<text x="289.8571428571429" y="214.94444444444443" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.47</text>
-<circle cx="275.9" cy="295.7" r="6" fill="#2b4a97"/>
-<text x="289.8571428571429" y="311.66666666666663" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.30</text>
-<line x1="512.6" y1="299.9" x2="512.6" y2="261.4" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
-<circle cx="512.6" cy="261.4" r="6" fill="#c0392b"/>
-<text x="526.6428571428571" y="253.44444444444446" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.38</text>
-<circle cx="512.6" cy="299.9" r="6" fill="#2b4a97"/>
-<text x="526.6428571428571" y="315.94444444444446" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.29</text>
-<circle cx="512.6" cy="336.3" r="5" fill="none" stroke="#2b4a97" stroke-width="2" stroke-dasharray="3 2"/>
-<line x1="512.6" y1="336.3" x2="486.6" y2="376.3" stroke="#c0392b" stroke-width="1.4"/>
-<text x="482.6428571428571" y="384.30555555555554" text-anchor="end" font-size="10.5" font-weight="bold" fill="#c0392b">予測 0.21 ⇄ 実測 0.29。ここだけ合わない</text>
+<path d="M 132.7 130.1 L 134.6 136.1 L 136.4 141.7 L 138.3 146.9 L 140.1 151.8 L 141.9 156.4 L 143.8 160.8 L 145.6 164.9 L 147.5 168.8 L 149.3 172.4 L 151.2 175.9 L 153.0 179.2 L 154.8 182.3 L 156.7 185.3 L 158.5 188.1 L 160.4 190.8 L 162.2 193.4 L 164.0 195.9 L 165.9 198.2 L 167.7 200.5 L 169.6 202.6 L 171.4 204.7 L 173.2 206.7 L 175.1 208.6 L 176.9 210.4 L 178.8 212.2 L 180.6 213.9 L 182.5 215.6 L 184.3 217.1 L 186.1 218.7 L 188.0 220.1 L 189.8 221.6 L 191.7 222.9 L 193.5 224.3 L 195.3 225.6 L 197.2 226.8 L 199.0 228.0 L 200.9 229.2 L 202.7 230.3 L 204.6 231.4 L 206.4 232.5 L 208.2 233.5 L 210.1 234.6 L 211.9 235.5 L 213.8 236.5 L 215.6 237.4 L 217.4 238.3 L 219.3 239.2 L 221.1 240.1 L 223.0 240.9 L 224.8 241.7 L 226.7 242.5 L 228.5 243.3 L 230.3 244.0 L 232.2 244.8 L 234.0 245.5 L 235.9 246.2 L 237.7 246.8 L 239.6 247.5 L 241.4 248.2 L 243.2 248.8 L 245.1 249.4 L 246.9 250.0 L 248.8 250.6 L 250.6 251.2 L 252.4 251.8 L 254.3 252.3 L 256.1 252.9 L 258.0 253.4 L 259.8 253.9 L 261.6 254.5 L 263.5 255.0 L 265.3 255.5 L 267.2 255.9 L 269.0 256.4 L 270.9 256.9 L 272.7 257.3 L 274.5 257.8 L 276.4 258.2 L 278.2 258.6 L 280.1 259.1 L 281.9 259.5 L 283.8 259.9 L 285.6 260.3 L 287.4 260.7 L 289.3 261.1 L 291.1 261.4 L 293.0 261.8 L 294.8 262.2 L 296.6 262.5 L 298.5 262.9 L 300.3 263.2 L 302.2 263.6 L 304.0 263.9 L 305.9 264.2 L 307.7 264.6 L 309.5 264.9 L 311.4 265.2 L 313.2 265.5 L 315.1 265.8 L 316.9 266.1 L 318.7 266.4 L 320.6 266.7 L 322.4 267.0 L 324.3 267.3 L 326.1 267.6 L 327.9 267.8 L 329.8 268.1 L 331.6 268.4 L 333.5 268.6 L 335.3 268.9 L 337.2 269.1 L 339.0 269.4 L 340.8 269.6 L 342.7 269.9 L 344.5 270.1 L 346.4 270.4 L 348.2 270.6 L 350.1 270.8 L 351.9 271.0 L 353.7 271.3 L 355.6 271.5 L 357.4 271.7 L 359.3 271.9 L 361.1 272.1 L 362.9 272.3 L 364.8 272.6 L 366.6 272.8 L 368.5 273.0 L 370.3 273.2 L 372.1 273.4 L 374.0 273.6 L 375.8 273.7 L 377.7 273.9 L 379.5 274.1 L 381.4 274.3 L 383.2 274.5 L 385.0 274.7 L 386.9 274.8 L 388.7 275.0 L 390.6 275.2 L 392.4 275.4 L 394.2 275.5 L 396.1 275.7 L 397.9 275.9 L 399.8 276.0 L 401.6 276.2 L 403.5 276.4 L 405.3 276.5 L 407.1 276.7 L 409.0 276.8 L 410.8 277.0 L 412.7 277.1 L 414.5 277.3 L 416.4 277.4 L 418.2 277.6 L 420.0 277.7 L 421.9 277.9 L 423.7 278.0 L 425.6 278.1 L 427.4 278.3 L 429.2 278.4 L 431.1 278.6 L 432.9 278.7 L 434.8 278.8 L 436.6 279.0 L 438.4 279.1 L 440.3 279.2 L 442.1 279.3 L 444.0 279.5 L 445.8 279.6 L 447.7 279.7 L 449.5 279.8 L 451.3 280.0 L 453.2 280.1 L 455.0 280.2 L 456.9 280.3 L 458.7 280.4 L 460.6 280.5 L 462.4 280.7 L 464.2 280.8 L 466.1 280.9 L 467.9 281.0 L 469.8 281.1 L 471.6 281.2 L 473.4 281.3 L 475.3 281.4 L 477.1 281.5 L 479.0 281.6 L 480.8 281.7 L 482.6 281.9 L 484.5 282.0 L 486.3 282.1 L 488.2 282.2 L 490.0 282.3 L 491.9 282.4 L 493.7 282.5 L 495.5 282.5 L 497.4 282.6 L 499.2 282.7 L 501.1 282.8 L 502.9 282.9 L 504.8 283.0 L 506.6 283.1 L 508.4 283.2 L 510.3 283.3 L 512.1 283.4 L 514.0 283.5 L 515.8 283.6 L 517.6 283.6 L 519.5 283.7 L 521.3 283.8 L 523.2 283.9 L 525.0 284.0 L 526.9 284.1 L 528.7 284.2 L 530.5 284.2 L 532.4 284.3 L 534.2 284.4 L 536.1 284.5 L 537.9 284.6 L 539.7 284.6 L 541.6 284.7 L 543.4 284.8 L 545.3 284.9 L 547.1 284.9 L 549.0 285.0 L 550.8 285.1 L 552.6 285.2 L 554.5 285.2 L 556.3 285.3 L 558.2 285.4 L 560.0 285.5" fill="none" stroke="#c0392b" stroke-width="2" opacity="0.55"/>
+<line x1="136.4" y1="214.4" x2="136.4" y2="141.7" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
+<circle cx="136.4" cy="141.7" r="6" fill="#c0392b"/>
+<text x="150.41666666666666" y="133.66666666666663" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.66</text>
+<circle cx="136.4" cy="214.4" r="6" fill="#2b4a97"/>
+<text x="150.41666666666666" y="230.38888888888889" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.49</text>
+<line x1="191.7" y1="295.7" x2="191.7" y2="222.9" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
+<circle cx="191.7" cy="222.9" r="6" fill="#c0392b"/>
+<text x="205.66666666666666" y="214.94444444444443" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.47</text>
+<circle cx="191.7" cy="295.7" r="6" fill="#2b4a97"/>
+<text x="205.66666666666666" y="311.66666666666663" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.30</text>
+<line x1="302.2" y1="299.9" x2="302.2" y2="261.4" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
+<circle cx="302.2" cy="261.4" r="6" fill="#c0392b"/>
+<text x="316.1666666666667" y="253.44444444444446" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.38</text>
+<circle cx="302.2" cy="299.9" r="6" fill="#2b4a97"/>
+<text x="316.1666666666667" y="315.94444444444446" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.29</text>
+<line x1="523.2" y1="304.2" x2="523.2" y2="282.8" stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>
+<circle cx="523.2" cy="282.8" r="6" fill="#c0392b"/>
+<text x="537.1666666666666" y="274.8333333333333" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">0.33</text>
+<circle cx="523.2" cy="304.2" r="6" fill="#2b4a97"/>
+<text x="537.1666666666666" y="320.2222222222222" text-anchor="start" font-size="11.5" font-weight="bold" fill="#2b4a97">0.28</text>
+<line x1="118" y1="304.2" x2="560" y2="304.2" stroke="#1e8449" stroke-width="2" stroke-dasharray="7 4"/>
+<text x="126" y="296.2222222222222" text-anchor="start" font-size="11" font-weight="bold" fill="#1e8449">床 0.28mA（間隔をいくら伸ばしても残る）</text>
 <rect x="318" y="128" width="230" height="62" rx="5" fill="#ffffff" stroke="#d5dae0"/>
 <circle cx="336" cy="148" r="5" fill="#c0392b"/>
 <text x="350" y="152" text-anchor="start" font-size="11" font-weight="bold" fill="#111">高い側の値</text>
@@ -55,7 +60,7 @@
 <text x="350" y="176" text-anchor="start" font-size="11" font-weight="bold" fill="#111">低い側（待つと出る）</text>
 <text x="640" y="96" text-anchor="start" font-size="14" font-weight="bold" fill="#111">② 何がその電流を作っているか</text>
 <rect x="640" y="116" width="480" height="308" rx="8" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
-<text x="660" y="150" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">測った 3 点は、この式にきれいに乗る</text>
+<text x="660" y="150" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">測った 4 点は、この式にきれいに乗る</text>
 <rect x="660" y="164" width="440" height="46" rx="6" fill="#ffffff" stroke="#d35400" stroke-width="2"/>
 <text x="880" y="194" text-anchor="middle" font-size="15" font-weight="bold" fill="#111">電流 ＝ 0.28mA ＋ 2.85 ÷ 間隔[ms]</text>
 <text x="660" y="240" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">内訳（7.5ms のとき）</text>
@@ -65,9 +70,11 @@
 <text x="1006.6666666666666" y="278" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">それ以外 0.28mA</text>
 <text x="660" y="308" text-anchor="start" font-size="11" font-weight="bold" fill="#d35400">← 間隔に反比例して減らせる</text>
 <text x="1100" y="308" text-anchor="end" font-size="11" font-weight="bold" fill="#5f7391">触れない →</text>
-<text x="660" y="348" text-anchor="start" font-size="12" font-weight="bold" fill="#111">高い側と低い側の差： 7.5ms 0.17 ／ 15ms 0.17 ／ 30ms 0.09  [mA]</text>
-<text x="660" y="366" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">7.5 と 15 は 0.17mA でそろうが、30ms だけ 0.09mA。そろわない。</text>
-<text x="660" y="384" text-anchor="start" font-size="11.5" fill="#666">30ms の低い側が出きっていないのか、状態が 2 つではないのか、未解明。</text>
+<text x="660" y="348" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">低い側は、15ms 以降ほぼ床に張りついている</text>
+<text x="660" y="368" text-anchor="start" font-size="11.5" fill="#111">7.5ms 0.49 ／ 15ms 0.30 ／ 30ms 0.29 ／ 60ms 0.28  [mA]</text>
+<text x="660" y="388" text-anchor="start" font-size="11.5" font-weight="bold" fill="#1e8449">60ms の低い側 0.28mA は、当てはめた床とぴったり同じ。</text>
+<text x="660" y="408" text-anchor="start" font-size="11.5" fill="#666">低い側では分割リンクをほとんど消費していない。何が切り替わっているかは未解明。</text>
+<text x="660" y="426" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">⚠️ 低い側は出る条件が分かっていない（待てば出ることも、出ないこともある）。</text>
 <text x="24" y="496" text-anchor="start" font-size="14" font-weight="bold" fill="#111">③ 交換レート — 何を払って何を得るか</text>
 <text x="60" y="518" text-anchor="start" font-size="11.5" fill="#666">接続間隔</text>
 <text x="200" y="518" text-anchor="start" font-size="11.5" fill="#666">電流（高い側）</text>
@@ -95,6 +102,12 @@
 <text x="560" y="642" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">25.50ms</text>
 <text x="730" y="642" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">＋3.1 ヶ月 ／ 遅延 ＋11.25ms</text>
 <text x="960" y="642" text-anchor="start" font-size="12" font-weight="bold" fill="#8c959d">1ms あたり 0.27 ヶ月</text>
-<text x="60" y="694" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 打鍵の体感は、この治具では判定できない。タクトスイッチ 2 個をつつくのと、キーキャップを付けて文章を打つのは別物。</text>
-<text x="60" y="714" text-anchor="start" font-size="11.5" fill="#666">15ms・30ms とも「違和感なし」との報告はあるが、完成品で目隠しにして測り直す（D2）。</text>
+<text x="60" y="684" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">60ms</text>
+<text x="200" y="684" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.33mA</text>
+<text x="390" y="684" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">8.3 ヶ月</text>
+<text x="560" y="684" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">40.50ms</text>
+<text x="730" y="684" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">＋4.2 ヶ月 ／ 遅延 ＋26.25ms</text>
+<text x="960" y="684" text-anchor="start" font-size="12" font-weight="bold" fill="#8c959d">1ms あたり 0.16 ヶ月</text>
+<text x="60" y="734" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 打鍵の体感は、この治具では判定できない。タクトスイッチ 2 個をつつくのと、キーキャップを付けて文章を打つのは別物。</text>
+<text x="60" y="754" text-anchor="start" font-size="11.5" fill="#666">15 / 30 / 60ms のいずれも「違和感なし」との報告。60ms は合計遅延 40ms 級。それでも完成品で目隠しにして測り直す（D2）。</text>
 </svg>
