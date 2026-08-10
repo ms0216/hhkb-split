@@ -877,29 +877,71 @@ Accessory Design Guidelines §49.6
 
 ###### なぜ今まで拒否されていたか — **こちらの要求が規則違反だった**
 
-```
-Apple Accessory Design Guidelines §49.6
-  ① 間隔は 15ms 以上、15ms の整数倍
-  ② Interval Max × (Slave Latency + 1) × 3 ＜ connSupervisionTimeout
-  ③ connSupervisionTimeout ≦ 6 秒
+**Apple Accessory Design Guidelines（2026-06-08 版）§58.6 の原文。**
+PDF を取得して `pdftotext` で読んだ。**検索結果の要約ではない。**
 
-ZMK の既定   min 7.5ms / max 15ms   ← **① に違反**
-             → macOS は**要求ごと捨てて**、自分の初期値（15ms・latency 0）を使い続ける
 ```
+Connection parameter requests may be rejected if they do not meet these guidelines.
+
+  Peripheral Latency ≤ 30 connection intervals.
+  Supervision Timeout from 6 seconds to 18 seconds.
+  Interval Min ≥ 15 ms.
+  Interval Min ≤ 2 seconds.
+  Interval Min is a multiple of 15 ms.
+  One of the following:
+      Interval Max at least 15 ms greater than Interval Min.
+      Interval Max and Interval Min are both 15 ms.
+  Interval Max * (Peripheral Latency + 1) of 6 seconds or less.
+  Supervision Timeout greater than Interval Max * (Peripheral Latency + 1) * 3.
+```
+
+**ZMK の既定（min 7.5ms）は「Interval Min ≥ 15 ms」と「15ms の倍数」の
+両方に違反する。**→ macOS は**要求ごと捨てて**、自分の初期値
+（15ms・latency 0）を使い続ける。
 
 **「macOS は latency を拒否する」と今日ずっと書いていたが、誤り。**
 **拒否されていたのは要求全体で、原因は latency ではなく間隔の下限だった。**
 
-**②が 45ms の拒否を説明する。**
+###### **macOS が実際に見ているのは 1 行だけらしい**
 
-| 要求 | ② の計算 | 判定 |
+**私たちの 30ms の要求（min=max=30・latency 30・timeout 4 秒）は、
+規則を 2 つ破っているのに通った。**
+
+| 規則 | 30ms の要求 | |
 |---|---|---|
-| 30ms | 30 × 31 × 3 ＝ **2,790ms** ＜ 4,000 | ✅ |
-| 45ms | 45 × 31 × 3 ＝ **4,185ms** ＞ 4,000 | ❌ |
-| 60ms | 60 × 31 × 3 ＝ **5,580ms** ＞ 4,000 | ❌ |
+| latency ≤ 30 | 30 | ✅ |
+| **timeout は 6〜18 秒** | **4 秒** | **❌ 違反。なのに通った** |
+| min ≥ 15ms・15ms の倍数 | 30 | ✅ |
+| **max ≥ min ＋ 15ms（または両方 15ms）** | **30 = 30** | **❌ 違反。なのに通った** |
+| max ×(lat+1) ≤ 6 秒 | 0.93 秒 | ✅ |
+| **timeout ＞ max ×(lat+1)×3** | 4,000 ＞ 2,790 | ✅ |
+
+**45ms が落ちたのは、最後の 1 行だけの違い。**
+
+| 要求 | timeout ＞ max×(lat+1)×3 | 判定 | 実測 |
+|---|---|---|---|
+| 30ms | 4,000 ＞ **2,790** | ✅ | **通った** |
+| 45ms | 4,000 ＜ **4,185** | ❌ | **拒否された** |
+| 60ms | 4,000 ＜ **5,580** | ❌ | （未測定） |
 
 **タイムアウト 4 秒のままで通せる上限は 43ms。**だから **30ms が、15 の倍数で
 通る最大値**だった。**偶然ではない。**
+
+**45・60 を通すにはタイムアウトも伸ばす必要がある**（45ms → 5 秒、60ms → 6 秒）。
+**規則上は 6〜18 秒が正しいが、macOS はそこを見ていないようだ。**
+
+**HID についての注記もある。**
+
+```
+If Bluetooth Low Energy HID is one of the connected services of an accessory,
+a connection interval down to 11.25 ms may be accepted by some devices.
+```
+
+###### ⚠️ これは macOS 1 台での観察
+
+**Apple の規則は Apple 機器の話。**Windows は別の判断をする。
+**「30ms にすれば 34% 減る」は、いまのところ macOS でしか確かめていない。**
+→ **Windows 11 でも同じことを測る**（下記）。
 
 ###### 交換レート — **分割リンクと並べる**
 
@@ -914,6 +956,20 @@ ZMK の既定   min 7.5ms / max 15ms   ← **① に違反**
 > **予測（0.56mA）は外れた。**「latency は 0 のまま」を前提にしていたため。
 > **前提が崩れた形の外れ方**なので、測定前に訂正して記録した（0.38〜0.45mA）。
 > 実測 0.43mA はその範囲。
+
+##### Windows 11 でも同じことを測る（2026-08-10 に決めた）
+
+**やることは macOS と同じ。**`-log` を焼いて `le_param_updated` を読むだけ。
+**ファームも配線もそのまま使える。**
+
+| 見るもの | なぜ |
+|---|---|
+| **既定（min 7.5ms）で何が採られるか** | Windows が通すなら、**Windows のほうが元から省電力**（latency 30 が効く） |
+| **30ms の要求が通るか** | 通れば、**両方で同じ設定が使える** |
+| 別の値を強いてこないか | 設定を決めるとき、**両方を満たす形**を探す必要がある |
+
+**本番の設定は、macOS と Windows の両方で通る形にする必要がある。**
+片方だけを見て決めると、もう片方で要求ごと捨てられる（＝いま起きていたこと）。
 
 ##### 次回の手順（**ファームはビルド済み**）
 
