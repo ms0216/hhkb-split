@@ -12,3 +12,9 @@ matplotlib==3.11.1
 pillow==12.3.0
 PyYAML==6.0.3
 pytest==9.1.1
+
+# **import 名では出てこないが、無いと落ちる。**trimesh の `mesh.contains()`
+# （電源スイッチの受けが中空かを見る検査）は空間索引に rtree を要る。
+# 手元には入っていて CI だけが落ちていた——**matplotlib と同じ轍で 2 度目。**
+# 走査（test_requirements）は直接の import しか見ないので、ここは手で足す。
+rtree==1.4.1
