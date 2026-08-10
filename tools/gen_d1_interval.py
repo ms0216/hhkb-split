@@ -154,9 +154,13 @@ a(f'<line x1="{X0}" y1="{_fy:.1f}" x2="{X1}" y2="{_fy:.1f}" stroke="{GREEN}" '
 txt(X0 + 8, _fy - 8, f"床 {B_HIGH:.2f}mA（間隔をいくら伸ばしても残る）",
     GREEN, 11, "start")
 txt(X1 - 8, _fy + 20, f"{_tv} も、ここに着地（軸の外）", GREEN, 10.5, "end")
-txt(X1 - 8, _fy + 36, "対照実験（60ms のままタイムアウトだけ 32 秒）で 0.33／0.28 が再現。",
-    GREEN, 10, "end", bold=False)
-txt(X1 - 8, _fy + 50, "タイムアウトは電流に効かない。", GREEN, 10, "end", bold=False)
+if CONTROL_OK:
+    txt(X1 - 8, _fy + 36, "対照実験（60ms のままタイムアウトだけ 32 秒）で 0.33／0.28 が再現。",
+        GREEN, 10, "end", bold=False)
+    txt(X1 - 8, _fy + 50, "タイムアウトは電流に効かない。", GREEN, 10, "end", bold=False)
+else:
+    txt(X1 - 8, _fy + 36, "⚠️ 対照実験がまだ。480ms の点は 2 変数のまま。",
+        RED, 10, "end")
 
 # 凡例
 _LX, _LY = X1 - 242, Y0 + 12
