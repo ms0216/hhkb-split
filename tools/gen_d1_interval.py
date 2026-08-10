@@ -28,7 +28,10 @@ OUT = ROOT / "docs/hardware/img/d1-split-interval.svg"
 # ==========================================================================
 MEASURED = {
     7.5: (0.49, 0.66),
+    8.75: (None, 0.55),
     10.0: (0.48, 0.55),
+    11.25: (0.47, 0.52),
+    12.5: (0.44, 0.48),
     15.0: (0.30, 0.47),
     30.0: (0.29, 0.38),
     60.0: (0.28, 0.33),
@@ -46,8 +49,11 @@ CONTROL_OK = True
 
 # 高い側の 2 点（7.5 と 15）から当てはめた。30ms は当てはめに使っていない
 # ので、そこが合うかどうかが検証になる。
-K = 2.850          # 分割リンク: K / 間隔[ms]  [mA]
-B_HIGH = 0.280     # 間隔に依存しない部分（高い側）
+# **8 点すべてで最小二乗**（2026-08-10）。最初は 7.5 と 15 の 2 点だけで
+# K=2.85 / B=0.28 を出し、それが 30・60・480ms を予言した。密なところ
+# （8.75〜12.5）を足して引き直したのがこの値。**床はほとんど動かない。**
+K = 2.591          # 分割リンク: K / 間隔[ms]  [mA]
+B_HIGH = 0.287     # 間隔に依存しない部分（＝床）
 B_LOW = 0.110      # [記録のみ] 同（低い側）。差 0.17mA。図は高い側で描く
 
 # **床 0.28mA の内訳**（2026-08-10・60ms のとき Mac の Bluetooth を切って測った）
@@ -67,7 +73,7 @@ ORA, GREEN = "#d35400", "#1e8449"
 # 描画域
 X0, X1, Y0, Y1 = 118, 560, 116, 424      # 左の図（電流 vs 間隔）
 IMIN, IMAX = 0.0, 0.72                   # 電流の軸
-LMIN, LMAX = 5.0, 65.0                   # 間隔の軸
+LMIN, LMAX = 7.0, 66.0                   # 間隔の軸
 
 o = []
 a = o.append
@@ -87,7 +93,9 @@ def model(interval, base):
 
 
 def px(interval):
-    return X0 + (interval - LMIN) / (LMAX - LMIN) * (X1 - X0)
+    """**対数目盛。**7.5〜15 に 6 点あるので、線形だと重なって読めない。"""
+    from math import log
+    return X0 + (log(interval) - log(LMIN)) / (log(LMAX) - log(LMIN)) * (X1 - X0)
 
 
 def py(ma):
@@ -123,7 +131,7 @@ for v in (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7):
     txt(X0 - 10, y + 4, f"{v:.1f}", GREY, 10.5, "end", bold=False)
 txt(X0 - 46, (Y0 + Y1) / 2, "mA", GREY, 11, "middle", bold=False)
 
-for iv in (7.5, 15, 30, 60):
+for iv in (7.5, 10, 12.5, 15, 30, 60):
     x = px(iv)
     a(f'<line x1="{x:.1f}" y1="{Y0}" x2="{x:.1f}" y2="{Y1}" stroke="#e8ecef" '
       'stroke-width="1"/>')
@@ -144,12 +152,14 @@ for base, color, dash in ((B_HIGH, RED, None),):
 # 実測点
 for iv, (lo, hi) in MEASURED.items():
     x = px(iv)
-    a(f'<line x1="{x:.1f}" y1="{py(lo):.1f}" x2="{x:.1f}" y2="{py(hi):.1f}" '
-      f'stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>')
+    if lo is not None:
+        a(f'<line x1="{x:.1f}" y1="{py(lo):.1f}" x2="{x:.1f}" y2="{py(hi):.1f}" '
+          f'stroke="#9aa1a8" stroke-width="1.4" stroke-dasharray="3 3"/>')
     a(f'<circle cx="{x:.1f}" cy="{py(hi):.1f}" r="6" fill="{RED}"/>')
-    txt(x + 14, py(hi) - 8, f"{hi:.2f}", RED, 11.5, "start")
-    a(f'<circle cx="{x:.1f}" cy="{py(lo):.1f}" r="6" fill="{BLUE}"/>')
-    txt(x + 14, py(lo) + 16, f"{lo:.2f}", BLUE, 11.5, "start")
+    txt(x + 13, py(hi) - 8, f"{hi:.2f}", RED, 11, "start")
+    if lo is not None:
+        a(f'<circle cx="{x:.1f}" cy="{py(lo):.1f}" r="6" fill="{BLUE}"/>')
+        txt(x + 13, py(lo) + 16, f"{lo:.2f}", BLUE, 11, "start")
 
 # 480ms（2 変数）は軸の外なので、床の線の右端に注記として置く
 _tv = "／".join(f"{iv:g}ms {lo:.2f}〜{hi:.2f}mA" for iv, (lo, hi) in TWO_VAR.items())
@@ -185,7 +195,7 @@ txt(RX, 96, "② 何がその電流を作っているか", "#111", 14, "start")
 a(f'<rect x="{RX}" y="{Y0}" width="480" height="{Y1-Y0}" rx="8" fill="#fbfcfd" '
   'stroke="#d5dae0" stroke-width="1.5"/>')
 
-txt(RX + 20, Y0 + 34, f"測った {len(MEASURED)} 点は、この式にきれいに乗る", "#111", 12.5, "start")
+txt(RX + 20, Y0 + 34, f"測った {len(MEASURED)} 点を最小二乗。残差は全部 0.034mA 以内", "#111", 12.5, "start")
 a(f'<rect x="{RX+20}" y="{Y0+48}" width="440" height="46" rx="6" fill="#ffffff" '
   f'stroke="{ORA}" stroke-width="2"/>')
 txt(RX + 240, Y0 + 78, f"電流 ＝ {B_HIGH:.2f}mA ＋ {K:.2f} ÷ 間隔[ms]", "#111", 15)
@@ -213,7 +223,8 @@ txt(BX + BW, BY + 52, "触れない →", "#5f7391", 11, "end")
 
 txt(RX + 20, BY + 92, "低い側は、15ms 以降ほぼ床に張りついている", "#111", 12.5,
     "start")
-_lows = " ／ ".join(f"{iv:g}ms {lo:.2f}" for iv, (lo, _h) in MEASURED.items())
+_lows = " ／ ".join(f"{iv:g}ms {lo:.2f}" for iv, (lo, _h) in MEASURED.items()
+                    if lo is not None)
 txt(RX + 20, BY + 112, _lows + "  [mA]", "#111", 11.5, "start", bold=False)
 txt(RX + 20, BY + 132,
     "60ms の低い側 0.28mA は、当てはめた床とぴったり同じ。",
@@ -275,13 +286,19 @@ a("</svg>")
 OUT.write_text("\n".join(o), encoding="utf-8")
 
 # --- 当てはめが実測に合っているかを、書き出すたびに確かめる ------------
+# **8.75ms だけ当てはめから外れる（予測 0.61 / 実測 0.55）。**
+# 設定した間隔が本当にその値になっているかを、まだログで確かめていない。
+_OUTLIERS = {8.75}
 for _iv, (_lo, _hi) in MEASURED.items():
-    assert abs(model(_iv, B_HIGH) - _hi) < 0.02, ("高い側が合わない", _iv)
+    if _iv in _OUTLIERS:
+        assert abs(model(_iv, B_HIGH) - _hi) > 0.025, ("外れなくなった", _iv)
+        continue
+    assert abs(model(_iv, B_HIGH) - _hi) < 0.03, ("高い側が合わない", _iv)
 # **低い側は床より下へは行けない。**私は一度 0.205mA と予測したが、
 # それは床（0.28mA）を割る値で、最初から成立していなかった（2026-08-10）。
 for _iv, (_lo, _hi) in MEASURED.items():
-    assert _lo >= B_HIGH - 0.01, ("低い側が床を割った", _iv, _lo)
-assert abs(MEASURED[60.0][0] - B_HIGH) < 0.01, "60ms の低い側が床から離れた"
+    assert _lo is None or _lo >= B_HIGH - 0.01, ("低い側が床を割った", _iv, _lo)
+assert abs(MEASURED[60.0][0] - B_HIGH) < 0.015, "60ms の低い側が床から離れた"
 
 print(f"wrote {OUT.relative_to(ROOT)}")
 for _iv in (7.5, 15.0, 30.0):
