@@ -2,7 +2,7 @@
 <rect width="1180" height="860" fill="#ffffff"/>
 <text x="24" y="34" text-anchor="start" font-size="18" font-weight="bold" fill="#111">ホストリンク（左 ↔ Mac）— 遅延を払わずに 32% 減らせた</text>
 <text x="24" y="56" text-anchor="start" font-size="12" fill="#666">2026-08-10 実測。分割リンクは既定の 7.5ms で固定し、ホスト側だけを動かした。</text>
-<text x="118" y="96" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">① latency 0 で間隔を振る（ホストリンクを大きいまま測る）</text>
+<text x="118" y="96" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">① latency 0 で間隔を振る（点が足りない）</text>
 <rect x="118" y="116" width="352" height="284" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
 <line x1="118" y1="400.0" x2="470" y2="400.0" stroke="#e8ecef"/>
 <text x="108" y="404.0" text-anchor="end" font-size="10" fill="#8c959d">0.0</text>
@@ -40,7 +40,9 @@
 <circle cx="149.0" cy="224.5" r="7" fill="#1e8449"/>
 <text x="163.00346526826277" y="229.5285714285714" text-anchor="start" font-size="11" font-weight="bold" fill="#1e8449">候補 A 0.43mA（15ms・latency 30）</text>
 <line x1="149.0" y1="144.4" x2="149.0" y2="224.5" stroke="#1e8449" stroke-width="1.6" stroke-dasharray="4 3"/>
-<text x="128" y="379.7142857142857" text-anchor="start" font-size="11" font-weight="bold" fill="#111">式: 0.447 ＋ 2.725 ÷ 間隔[ms]（残差 0.008 以内）</text>
+<text x="128" y="377.6857142857143" text-anchor="start" font-size="11" font-weight="bold" fill="#111">式: 0.447 ＋ 2.725 ÷ 間隔[ms]</text>
+<text x="128" y="388.64" text-anchor="start" font-size="10.5" font-weight="bold" fill="#c0392b">⚠️ 45 と 60 が同値なので、実質 2 点でしか決まっていない。</text>
+<text x="128" y="397.9714285714286" text-anchor="start" font-size="10.5" font-weight="bold" fill="#c0392b">「1/間隔」の形も、分割リンク（8 点）からの類推で、ここでは未検証。</text>
 <text x="540" y="96" text-anchor="start" font-size="13.5" font-weight="bold" fill="#111">② 0.63mA の内訳（推論を使わずに割れた）</text>
 <rect x="540" y="116" width="600" height="284" rx="8" fill="#fbfcfd" stroke="#d5dae0" stroke-width="1.5"/>
 <text x="560" y="152" text-anchor="start" font-size="12" font-weight="bold" fill="#111">いま（ZMK の既定・latency 0）</text>
@@ -107,6 +109,8 @@
 <text x="700" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">6.3 ヶ月</text>
 <text x="850" y="738" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">3.75ms</text>
 <text x="44" y="790" text-anchor="start" font-size="12.5" font-weight="bold" fill="#1e8449">分割リンクには一切触っていない。遅延も左右差も変わらない。</text>
-<text x="44" y="812" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 未解決: 60ms を要求したとき、電流が 0.50 ⇄ 0.65mA を行き来した。0.65 は macOS の初期値の電流と同じ。</text>
+<text x="44" y="812" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 未解決 ①: 60ms を要求したとき、電流が 0.50 ⇄ 0.65mA を行き来した。0.65 は macOS の初期値の電流と同じ。</text>
 <text x="44" y="832" text-anchor="start" font-size="11.5" fill="#666">→ 接続パラメータが行き来している疑い。ログで確かめる。今日ずっと追ってきた「低い側」の謎と繋がるかもしれない。</text>
+<text x="44" y="856" text-anchor="start" font-size="12" font-weight="bold" fill="#c0392b">⚠️ 未解決 ②: ①の当てはめは 2 点でしか決まっていない。60ms は採られた値をログで確かめておらず、測定中に行き来もしていた。</text>
+<text x="44" y="876" text-anchor="start" font-size="11.5" fill="#666">→ 行き来を先に片づけてから、30 / 90 / 120ms を足して引き直す。</text>
 </svg>
