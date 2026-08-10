@@ -18,13 +18,16 @@ from build123d import (
     Circle,
     BuildPart,
     BuildSketch,
+    Kind,
     Locations,
     Mode,
     Polyline,
     Rectangle,
     RectangleRounded,
+    add,
     extrude,
     make_face,
+    offset,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -37,6 +40,7 @@ from interface import (
     PLATE_MARGIN_Y,
     plate_positions,
     PLATE_T,
+    STAB_KERF,
     SWITCH_CUTOUT,
     boss_positions,
     stab_offset_for,
@@ -87,6 +91,23 @@ def stab_polygon(s, at=(0.0, 0.0)):
     return [(ax + x, ay - y) for x, y in pts]
 
 
+def stab_cutout_face(s, at=(0.0, 0.0), kerf=STAB_KERF):
+    """スタビ開口の面を、規格の輪郭から `kerf` だけ**外へ広げて**返す。
+
+    **点列に ±kerf を足してはいけない。**28 点は凹凸が入り混じっていて
+    点ごとに外向きが違うので、符号を手で並べると必ず間違える（#30）。
+    多角形のオフセットに任せる。Kind.INTERSECTION は辺を延長して交わらせる
+    ので、角が丸まらず規格の形のまま相似に広がる。
+    """
+    with BuildSketch(mode=Mode.PRIVATE) as sk:
+        with BuildLine():
+            Polyline(*stab_polygon(s, at=at), close=True)
+        make_face()
+        if kerf:
+            offset(amount=kerf, kind=Kind.INTERSECTION)
+    return sk.sketch
+
+
 
 
 def build_plate(keys, half):
@@ -109,9 +130,7 @@ def build_plate(keys, half):
             with Locations(*positions):
                 Rectangle(SWITCH_CUTOUT, SWITCH_CUTOUT, mode=Mode.SUBTRACT)
             for pos, s in stabs:
-                with BuildLine():
-                    Polyline(*stab_polygon(s, at=pos), close=True)
-                make_face(mode=Mode.SUBTRACT)
+                add(stab_cutout_face(s, at=pos), mode=Mode.SUBTRACT)
             # 取付ネジの逃げ。**手前の 3 箇所は縁を跨ぐので切り欠きになる。**
             # プレートの縁 y=±52.40 に対して逃げが 50.30〜52.70 なので、
             # 穴ではなく開いた切り欠きとして抜ける（設計どおり）。
