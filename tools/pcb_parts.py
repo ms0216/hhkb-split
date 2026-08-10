@@ -288,6 +288,115 @@ def fuse_touching(boxes):
     return groups
 
 
+GROUPS_DATA = Path(__file__).resolve().parent / "pcb_product_groups.json"
+
+
+def _fingerprints(solids):
+    """立体の並びを照合するための指紋（体積と重心）。
+
+    記録した組分け（index の組）は、**立体の並び順が同じでないと嘘になる。**
+    STEP の書き出しは環境で並びが変わりうるので、盤面のハッシュだけでは
+    足りない。使う直前に指紋を突き合わせ、合わなければ記録を捨てて実測する。
+    """
+    out = []
+    for s in solids:
+        c = s.center()
+        out.append([s.volume, c.X, c.Y, c.Z])
+    return out
+
+
+def _fingerprints_match(a, b, tol=0.05):
+    # 完全一致で引かない。体積・重心は書き出しのたびに最下位桁が揺れる
+    # （_classify の bbox が ±0.1mm 揺れたのと同じ型）。
+    return len(a) == len(b) and all(
+        abs(x - y) <= tol for fa, fb in zip(a, b) for x, y in zip(fa, fb))
+
+
+def compute_product_groups(solids):
+    """**実際に食い込んでいる立体どうしを 1 つの製品にまとめる。**
+
+    - XIAO は 84 立体、ソケットは本体＋端子、FFC コネクタは 3 立体で 1 個。
+      まとめないと「自分自身と衝突」と報告される。
+      **重ならないものは絶対にまとめない**（まとめた瞬間に製品どうしの
+      重なりが見えなくなる）。
+    - **bbox ではなく、実際に交差しているかでまとめる。**bbox は大きい部品で
+      破綻する（板の bbox は全部品を含む）。bbox は絞り込みにだけ使う。
+    - **板そのものは対象から外す。**板は全部品と接するので、入れた瞬間に
+      基板が丸ごと 1 個の塊になる。
+
+    返り値: (板の index, [[index, ...], ...])。座標に依らない
+    （立体を平行移動しても組分けは変わらない）ので、記録して使い回せる。
+    """
+    from verify import intersection_volume
+
+    board_i = max(range(len(solids)), key=lambda i: solids[i].volume)
+    rest = [i for i in range(len(solids)) if i != board_i]
+    bbs = {i: solids[i].bounding_box() for i in rest}
+
+    def _near(i, j):
+        a, b = bbs[i], bbs[j]
+        return (a.min.X < b.max.X and b.min.X < a.max.X
+                and a.min.Y < b.max.Y and b.min.Y < a.max.Y
+                and a.min.Z < b.max.Z and b.min.Z < a.max.Z)
+
+    parent = {i: i for i in rest}
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for a_ in range(len(rest)):
+        for b_ in range(a_ + 1, len(rest)):
+            i, j = rest[a_], rest[b_]
+            if find(i) == find(j) or not _near(i, j):
+                continue
+            if intersection_volume(solids[i], solids[j]) > 1e-6:
+                parent[find(j)] = find(i)          # 実際に食い込む＝1 製品
+
+    groups = {}
+    for i in rest:
+        groups.setdefault(find(i), []).append(i)
+    return board_i, sorted(groups.values())
+
+
+def product_groups(name, solids):
+    """組分けを返す。**記録が現物と合えばそれを、合わなければ実測を。**
+
+    組分けの実測は片側 139 秒かかり、**基板が変わらない限り結果は同じ**
+    （open-gaps #31）。だから --write-groups で記録し、鮮度は
+    盤面のハッシュと立体の指紋で守る。合わないときに黙って記録を使うと
+    嘘の組分けになるので、必ず実測に落ちる（遅いが正しい）。
+    """
+    rec = (json.loads(GROUPS_DATA.read_text()).get(name)
+           if GROUPS_DATA.exists() else None)
+    if (rec and rec["board_sha256"] == board_sha256(name)
+            and _fingerprints_match(rec["fingerprints"], _fingerprints(solids))):
+        return rec["board_index"], rec["groups"]
+    print(f"pcb_parts: {name} の組分けの記録が無いか現物と合わない。実測する"
+          f"（`pcb_parts.py --write-groups` で記録し直せる）", file=sys.stderr)
+    return compute_product_groups(solids)
+
+
+def write_product_groups():
+    data = {}
+    for name in BOARDS:
+        solids = real_compound(name).solids()
+        board_i, groups = compute_product_groups(solids)
+        data[name] = {
+            "board_sha256": board_sha256(name),
+            "board_index": board_i,
+            "fingerprints": [[round(v, 3) for v in f]
+                             for f in _fingerprints(solids)],
+            "groups": groups,
+        }
+        print(f"{name}: 立体 {len(solids)} 個 → 製品 {len(groups)} 個")
+    GROUPS_DATA.write_text(
+        json.dumps(data, ensure_ascii=False) + "\n")
+    print(f"→ {GROUPS_DATA}")
+
+
 def build_envelope(name):
     """部品の占有空間を 1 つの Part にする（本体基板は plate 座標・上面 z=0）。"""
     from build123d import Align, Box, Compound, Location
@@ -309,9 +418,13 @@ def build_envelope(name):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if argv == ["--write-groups"]:
+        write_product_groups()
+        return 0
     if argv != ["--write"]:
         print(__doc__.split("\n")[0])
-        print("使い方: pcb_parts.py --write   （STEP を出し直して JSON を更新）")
+        print("使い方: pcb_parts.py --write          （STEP を出し直して JSON を更新）")
+        print("        pcb_parts.py --write-groups   （実形状の組分けを記録し直す。数分）")
         d = load() if DATA.exists() else {}
         for name, rec in d.items():
             print(f"  {name}: 立体 {rec['solids']} 個 {rec['counts']}")

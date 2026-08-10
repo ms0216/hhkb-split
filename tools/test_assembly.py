@@ -435,6 +435,76 @@ def test_the_recorded_step_data_is_fresh():
         "板の外形が記録と違う。tools/pcb_parts.py --write で更新すること"
 
 
+def test_the_recorded_product_groups_are_fresh():
+    """pcb_product_groups.json が、いまの基板から出た記録であること。
+
+    組分け（どの立体とどの立体が 1 つの製品か）の実測は片側 139 秒かかるので
+    記録して使い回す（#31）。記録が現物と合わないとき product_groups は
+    **黙って実測に落ちる**（正しいが遅い）。落ちたまま誰も気づかないと
+    記録が腐るので、鮮度はここで見張る。kicad は要らない。
+    """
+    import json as _json
+
+    import pcb_parts
+
+    data = _json.loads(pcb_parts.GROUPS_DATA.read_text())
+    for name in pcb_parts.BOARDS:
+        rec = data[name]
+        assert rec["board_sha256"] == pcb_parts.board_sha256(name), (
+            f"{name}: 組分けの記録が古い基板のもの。"
+            "tools/pcb_parts.py --write-groups で記録し直すこと")
+        assert len(rec["fingerprints"]) == pcb_parts.load()[name]["solids"], (
+            f"{name}: 組分けの立体数が pcb_parts.json と合わない")
+        # 板以外の全立体が、どれか 1 つの製品にちょうど 1 回ずつ入っている
+        covered = sorted([i for g in rec["groups"] for i in g]
+                         + [rec["board_index"]])
+        assert covered == list(range(len(rec["fingerprints"]))), (
+            f"{name}: 組分けに漏れか重複がある")
+
+
+def test_the_product_group_record_gatekeeper_actually_works(tmp_path, monkeypatch):
+    """組分けの記録の門番を、**わざと壊して**確かめる。
+
+    - 記録が現物（盤面のハッシュ・立体の指紋）と合えば、記録が使われる
+    - 指紋が 1 つでも合わなければ、記録を捨てて実測に落ちる
+
+    前者が壊れていると記録が永久に使われず 139 秒が戻る。後者が壊れていると
+    **並び順の変わった立体に古い組分けを当てて、嘘の融合を黙って作る**。
+    """
+    import json as _json
+
+    import pcb_parts
+    from build123d import Box, Location
+
+    def _box(size, at):
+        return Box(*size).solids()[0].moved(Location(at))
+
+    solids = [_box((50, 50, 2), (0, 0, 0)),      # 板（いちばん大きい）
+              _box((2, 2, 2), (0, 0, 5)),
+              _box((2, 2, 2), (1, 0, 5)),        # 1 と食い込む＝同じ製品
+              _box((2, 2, 2), (10, 0, 5))]       # 離れている＝別の製品
+    assert pcb_parts.compute_product_groups(solids) == (0, [[1, 2], [3]])
+
+    rec = {"left": {
+        "board_sha256": pcb_parts.board_sha256("left"),
+        "board_index": 0,
+        "fingerprints": [[round(v, 3) for v in f]
+                         for f in pcb_parts._fingerprints(solids)],
+        # 実測とは違う組分けにしておく＝これが返ったら「記録が使われた」証拠
+        "groups": [[1], [2], [3]],
+    }}
+    fake = tmp_path / "groups.json"
+    fake.write_text(_json.dumps(rec))
+    monkeypatch.setattr(pcb_parts, "GROUPS_DATA", fake)
+    assert pcb_parts.product_groups("left", solids)[1] == [[1], [2], [3]], \
+        "記録が現物と合っているのに使われていない（毎回 139 秒の実測に戻る）"
+
+    rec["left"]["fingerprints"][1][0] += 1.0     # 指紋を 1 つ壊す
+    fake.write_text(_json.dumps(rec))
+    assert pcb_parts.product_groups("left", solids)[1] == [[1, 2], [3]], \
+        "指紋が合わないのに記録が使われた（嘘の組分けを黙って作る）"
+
+
 def test_the_socket_box_contains_the_third_party_model():
     """保守的なソケットの箱が、kiswitch のモデルを包含していること。
 

@@ -330,59 +330,24 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
 
     from build123d import Compound
 
-    def _moved(compound, loc):
+    def _moved(compound, loc, name):
         """立体ごとに動かし、**製品単位にまとめて**から束ねる。
 
         - Compound に Location を掛けただけだと、交差の結果が元の
           （KiCad の生の）座標を持ったまま返り、まったく別の場所で
           重なったように見える（2026-08-10 に踏んだ）。だから立体ごとに動かす。
-        - **重なる立体は 1 つの製品。**XIAO は 84 立体、ソケットは本体＋端子、
-          FFC コネクタは 3 立体で 1 個。まとめないと「自分自身と衝突」と
-          報告される。**重ならないものはまとめない**（まとめた瞬間に
-          製品どうしの重なりが見えなくなる）。
+        - 組分けの中身と根拠は pcb_parts.compute_product_groups に。
+          **実測は片側 139 秒かかり、基板が変わらない限り結果は同じ**なので、
+          記録（pcb_product_groups.json）を経由する（#31）。
         """
-        from verify import intersection_volume
-
-        sols = [s_.moved(loc) for s_ in compound.solids()]
-        # **板そのものはまとめる対象から外す。**板は全部品と接するので、
-        # 入れた瞬間に基板が丸ごと 1 個の塊になり、部品どうしの重なりが
-        # また見えなくなる（2026-08-10 に実際にそうなった）。
-        board = max(sols, key=lambda s_: s_.volume)
-        rest = [s_ for s_ in sols if s_ is not board]
-
-        # **bbox ではなく、実際に交差しているかでまとめる。**bbox は
-        # 大きい部品で破綻する（板の bbox は全部品を含む）。
-        bbs = [s_.bounding_box() for s_ in rest]
-
-        def _near(i, j):
-            a, b = bbs[i], bbs[j]
-            return (a.min.X < b.max.X and b.min.X < a.max.X
-                    and a.min.Y < b.max.Y and b.min.Y < a.max.Y
-                    and a.min.Z < b.max.Z and b.min.Z < a.max.Z)
-
-        parent = list(range(len(rest)))
-
-        def find(i):
-            while parent[i] != i:
-                parent[i] = parent[parent[i]]
-                i = parent[i]
-            return i
-
-        for i in range(len(rest)):
-            for j in range(i + 1, len(rest)):
-                if find(i) == find(j) or not _near(i, j):
-                    continue
-                if intersection_volume(rest[i], rest[j]) > 1e-6:
-                    parent[find(j)] = find(i)      # 実際に食い込む＝1 製品
-
-        groups = {}
-        for i in range(len(rest)):
-            groups.setdefault(find(i), []).append(rest[i])
-        out = [board]
-        for g in groups.values():
-            fused = g[0]
-            for s2 in g[1:]:
-                fused = fused + s2
+        raw = compound.solids()
+        board_i, groups = pcb_parts.product_groups(name, raw)
+        sols = [s_.moved(loc) for s_ in raw]
+        out = [sols[board_i]]
+        for g in groups:
+            fused = sols[g[0]]
+            for i in g[1:]:
+                fused = fused + sols[i]
             out.append(fused)
         return Compound(children=out)
 
@@ -395,14 +360,14 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     for name in ("pcb", "sockets", "pcb_parts", "stabs"):
         parts.pop(name, None)
     parts["pcb_real"] = place_pcb(
-        _moved(main, Location((-ox, oy, -board.bounding_box().max.Z))),
+        _moved(main, Location((-ox, oy, -board.bounding_box().max.Z)), half),
         h_plate, rim_front)
 
     dbc = pcb_parts.real_compound("db")
     for name in ("db", "xiao", "db_parts"):
         parts.pop(name, None)
     db_real = _moved(dbc, Location((db_x - ox, db_center_y + oy,
-                                    FLOOR + DB_BOSS_H)))
+                                    FLOOR + DB_BOSS_H)), "db")
 
     # **第三者モデルは USB-C のメスの口を塞いで描いている。**
     # 前面から 0.5mm を切ると 8.94x3.21 の中実の塊で、穴が無い。実物は
