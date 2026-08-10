@@ -55,7 +55,13 @@ jobs:
         run: |
           sudo add-apt-repository --yes ppa:kicad/kicad-10.0-releases
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends kicad
+          # **kicad-packages3d も要る。**`--no-install-recommends` だと
+          # 公式の 3D モデル（${KICAD10_3DMODEL_DIR}）が入らず、ダイオード
+          # 61・74LVC595・コンデンサ・FFC コネクタが STEP に出ない。
+          # kiswitch のソケットとスタビだけが残り、部品の数を数える検査が
+          # 落ちて気づいた（2026-08-10）。**警告は出ない。**
+          sudo apt-get install --yes --no-install-recommends \
+            kicad kicad-packages3d
           kicad-cli --version
       - name: キースイッチの 3D モデルを入れる
         # 出所と選定理由は docs/hardware/decisions/2026-08-09-third-party-3d-models.md
