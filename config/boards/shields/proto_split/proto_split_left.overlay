@@ -12,3 +12,15 @@
 	status = "okay";
 	current-speed = <1000000>;
 };
+
+/* ⚠️ [一時的] ログを UART（D6）へ。 */
+/ {
+	chosen {
+		zephyr,console = &uart0;
+	};
+};
+
+&uart0 {
+	status = "okay";
+	current-speed = <1000000>;
+};
