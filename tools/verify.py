@@ -85,6 +85,73 @@ def intersection_volume(a, b):
         return 0.0
 
 
+def shape_digest(shape):
+    """立体の**形と位置**を丸ごと表すハッシュ（BRep のバイト列の SHA-256）。
+
+    結果の記憶（#31）の鍵。0.001mm 動かしただけで別の値になることを
+    実測で確認済み。弱い指紋（bbox＋体積など）は別の形を同じと誤認して
+    嘘の緑を作るので使わない。
+    """
+    import hashlib
+    import os
+    import tempfile
+
+    from OCP.BinTools import BinTools
+
+    fd, p = tempfile.mkstemp()
+    os.close(fd)
+    try:
+        BinTools.Write_s(shape.wrapped, p)
+        return hashlib.sha256(Path(p).read_bytes()).hexdigest()[:24]
+    finally:
+        os.unlink(p)
+
+
+MEMO_PATH = BUILD / "interference_memo.json"
+
+
+def load_interference_memo():
+    """結果の記憶を読む。**ただのキャッシュ。**消しても遅くなるだけ。
+
+    鍵は 2 立体のハッシュ（形＋位置）の組。「前回から何が変わったか」という
+    基準を持たない内容アドレスなので、基準が古くなる失敗の型（#29 で
+    一日かけて潰したもの）が構造的に入らない。1 bit 違えば必ず測り直す。
+    """
+    import json
+
+    try:
+        return json.loads(MEMO_PATH.read_text())
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def save_interference_memo(memo, touched):
+    import json
+
+    # ponytail: 記憶は増える一方なので、5 万組を超えたら今回触った組だけ残す
+    if len(memo) > 50_000:
+        memo = {k: memo[k] for k in touched if k in memo}
+    BUILD.mkdir(exist_ok=True)
+    MEMO_PATH.write_text(json.dumps(memo))
+
+
+def memoized_intersection_volume(a, b, memo, touched, digests=None):
+    """記憶があればそれを、無ければ実測して覚える。返り値は体積(mm^3)。
+
+    digests に dict を渡すと、立体のハッシュを id() で使い回す
+    （同じ立体を何百組も突き合わせる総当たりで、毎回シリアライズしない）。
+    """
+    if digests is None:
+        digests = {}
+    ka = digests.get(id(a)) or digests.setdefault(id(a), shape_digest(a))
+    kb = digests.get(id(b)) or digests.setdefault(id(b), shape_digest(b))
+    key = "|".join(sorted((ka, kb)))
+    touched.add(key)
+    if key not in memo:
+        memo[key] = intersection_volume(a, b)
+    return memo[key]
+
+
 def assert_no_interference(a, b, label="", tol_mm3=1e-3):
     v = intersection_volume(a, b)
     assert v < tol_mm3, f"{label}干渉している（重なり体積 {v:.3f}mm^3）"
