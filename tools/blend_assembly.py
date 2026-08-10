@@ -35,6 +35,16 @@ from mathutils import Vector
 
 OUT = Path(__file__).resolve().parent.parent / "build" / "assembly"
 
+# **実物の形をしているもの。**残りは場所取りの箱（占有空間）。
+#   - ケース類・ネジ類は、印刷／購入する物の形そのもの
+#   - pcb_real / db_real は KiCad の 3D モデルから起こした基板
+#   - 箱（pcb / sockets / db / xiao / batt / switches / keycaps …）は近似
+# **どちらなのかが名前から分からない**ので、Blender ではここで仕分ける。
+REAL_SHAPE = {
+    "case", "topcase", "plate", "lid", "foot", "screws", "inserts",
+    "nut", "rubber", "pcb_real", "db_real", "pcb_parts", "db_parts",
+}
+
 # 見下ろす向き。export_assembly.py の "iso" と同じ側から見る。
 VIEW_DIR = Vector((1.0, -1.0, 0.8)).normalized()
 
@@ -198,11 +208,19 @@ def build(half, style):
         obj.data.materials.append(materials[kind])
         obj.color = tuple(int(color[i:i + 2], 16) / 255.0 for i in (1, 3, 5)) + (alpha,)
 
-        # 種類ごとのコレクション。**目玉アイコン 1 つで種類ごと消せる**
-        # （ケースを消して中を見る、スイッチを消して基板を見る、のため）。
+        # コレクションは**二段**。上が「実形状 / 箱」、下が種類。
+        #
+        # **名前だけでは、どれが実物の形でどれが場所取りの箱か分からない。**
+        # 混ざった絵は、見ても判断の材料にならない（利用者の指摘・2026-08-10）。
+        # 上の段の目玉アイコン 1 つで、箱を全部消す／実形状を全部消す、が
+        # できるようにする。下の段は従来どおり種類ごと。
+        group = "01_real_実形状" if kind in REAL_SHAPE else "02_box_箱"
+        if group not in collections:
+            collections[group] = bpy.data.collections.new(group)
+            bpy.context.scene.collection.children.link(collections[group])
         if kind not in collections:
             collections[kind] = bpy.data.collections.new(kind)
-            bpy.context.scene.collection.children.link(collections[kind])
+            collections[group].children.link(collections[kind])
         for holder in obj.users_collection:      # STL は scene 直下に入ってくる
             holder.objects.unlink(obj)
         collections[kind].objects.link(obj)
