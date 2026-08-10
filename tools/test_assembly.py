@@ -522,6 +522,28 @@ def test_the_product_group_record_gatekeeper_actually_works(tmp_path, monkeypatc
         "指紋が合わないのに記録が使われた（嘘の組分けを黙って作る）"
 
 
+def test_the_xiao_envelope_rejects_a_wrong_record(monkeypatch):
+    """XIAO の箱の出所を記録に替えた（#31）ので、**記録の取り違えで
+    黙って進まない**ことを故意に壊して確かめる。
+
+    箱の寸法は「xiao_asm のうち xy がいちばん大きい立体＝XIAO の基板」から
+    取る。基板の立体が記録から消えると、2 位（USB シェル 12.6x10.6）を
+    基板と取り違えて小さい箱を作りかねない。そのときは ValueError で止まる。
+    """
+    import copy
+
+    import envelopes
+    import pcb_parts
+
+    d = copy.deepcopy(pcb_parts.load())
+    d["db"]["components"] = [
+        c for c in d["db"]["components"]
+        if not (c["label"] == "xiao_asm" and c["bbox"][3] - c["bbox"][0] > 15)]
+    monkeypatch.setattr(pcb_parts, "load", lambda: d)
+    with pytest.raises(ValueError):
+        envelopes.xiao_overhang_envelope(0, 16, 3)
+
+
 def test_the_interference_memo_gatekeeper_actually_works():
     """結果の記憶（#31）の門番を、**わざと壊して**確かめる。
 

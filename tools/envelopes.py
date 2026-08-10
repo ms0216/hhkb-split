@@ -494,29 +494,50 @@ def xiao_overhang_envelope(x, y_board_rear, z_board_top, usb_x=None, usb_face=No
     ここを別に置かないと検査できない（＝検査対象に入っていない部品は、
     検査していないのと同じ）。
 
-    **2 段ある。**XIAO の基板は板の端から XIAO_OVERHANG（1.8mm）出て、
-    **その先に USB-C のメスがさらに 1.25mm 出ている**（合計 3.055mm。
-    `pcb_parts.usb_receptacle` の実測）。箱を基板の端で止めていたので、
-    箱の側では壁との取り合いが 1.25mm ぶん検査されていなかった。
+    **2 段ある。**XIAO の基板が板の端から出て、**その先に USB-C のメスが
+    さらに出ている**（合計 3.055mm。`pcb_parts.usb_receptacle` の実測）。
+    箱を基板の端で止めていたので、箱の側では壁との取り合いが 1.25mm ぶん
+    検査されていなかった。
+
+    **寸法の出所は記録（実物の 3D モデル）**（#31 の「先にやること 2」・
+    2026-08-11）。手写しの定数（`XIAO_OUTLINE_W` 18.3 / `XIAO_OVERHANG`
+    1.8）で箱を作っていたが、記録を測ると実物は幅 17.78・張り出し 1.528 で
+    **どちらもずれていた**。手写しの定数は基板・ケースの生成側に残る
+    （そちらは設計の入力。ここは実物の代役なので実物のデータから作る）。
     """
     from build123d import Align, Box, BuildPart, Locations
-    from interface import XIAO_OUTLINE_W, XIAO_OVERHANG
 
     import pcb_parts
     rx0, _, rz0, rx1, ry1, rz1 = pcb_parts.usb_receptacle()
     db_rec = pcb_parts.load()["db"]
-    recept_out = ry1 - db_rec["board_bbox"][4]          # 板の端からの張り出し
+    y_edge = db_rec["board_bbox"][4]
+    recept_out = ry1 - y_edge                           # 板の端からの張り出し
     t = db_rec["board_step_thickness"]
 
+    # XIAO の基板そのもの＝xiao_asm のうち xy がいちばん大きい立体。
+    # **取り違えたら黙って進まない**（2 位は USB シェル 12.6x10.6）。
+    xa = [c["bbox"] for c in db_rec["components"] if c["label"] == "xiao_asm"]
+    xb = max(xa, key=lambda b: (b[3] - b[0]) * (b[4] - b[1]))
+    if (xb[3] - xb[0]) < 15 or (xb[4] - xb[1]) < 15:
+        raise ValueError(
+            f"XIAO の基板らしき立体が見つからない（最大 xy "
+            f"{xb[3]-xb[0]:.1f}x{xb[4]-xb[1]:.1f}）。記録が古いか向きが変わった")
+    xiao_w = max(b[3] for b in xa) - min(b[0] for b in xa)
+    overhang = xb[4] - y_edge                           # 実測 1.528mm
+    if not 0 < overhang < recept_out:
+        raise ValueError(
+            f"XIAO の張り出し {overhang:.2f} が 0..{recept_out:.2f} の外。"
+            "配置か記録が変わった（この値は壁のポケットの検査に効く）")
+
     with BuildPart() as env:
-        with Locations((x, y_board_rear + XIAO_OVERHANG / 2, z_board_top)):
-            Box(XIAO_OUTLINE_W, XIAO_OVERHANG, DB_STACK_H,
+        with Locations((x, y_board_rear + overhang / 2, z_board_top)):
+            Box(xiao_w, overhang, DB_STACK_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # メスだけが出ている残り
         with Locations((x + (rx0 + rx1) / 2,
-                        y_board_rear + (XIAO_OVERHANG + recept_out) / 2,
+                        y_board_rear + (overhang + recept_out) / 2,
                         z_board_top + rz0 - t)):
-            Box(rx1 - rx0, recept_out - XIAO_OVERHANG, rz1 - rz0,
+            Box(rx1 - rx0, recept_out - overhang, rz1 - rz0,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     part = env.part
     if usb_x is not None:

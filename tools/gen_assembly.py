@@ -89,14 +89,21 @@ def build_assembly(keys, half, real=False):
     # 子基板。**取付ボスの上に載る位置**に置く。ケース側の造作と同じ
     # 関数から座標を取るので、片方だけ動かしてもずれない。
     from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_BOSS_POS as DB_BOSS_POS_,
-                          DB_D, DB_FROM_REAR, DB_T, DB_W,
+                          DB_FROM_REAR, DB_T,
                           WALL, daughterboard_x_center)
     from gen_case import _RECEPT          # メスの実寸（幅・高さ・張り出し・中心高さ）
+    # 箱の xy は**実物の記録**から（#31 の「先にやること 2」）。設計定数
+    # DB_W/DB_D は基板・ケースの生成側の入力として残る。今日は両者が一致
+    # しているが、ずれた日に検査が見るべきは実物の側。鮮度は
+    # test_the_recorded_step_data_* が見張っている。
+    import pcb_parts
+    _dbb = pcb_parts.load()["db"]["board_bbox"]
+    db_w, db_d = _dbb[3] - _dbb[0], _dbb[4] - _dbb[1]
     db_x = daughterboard_x_center(half, w)
     db_rear = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
     parts["db"] = daughterboard_envelope(
-        (db_x, db_rear - DB_D / 2, FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T,
-        holes=[(db_x + hx, db_rear - DB_D / 2 + hy) for hx, hy in DB_BOSS_POS_],
+        (db_x, db_rear - db_d / 2, FLOOR + DB_BOSS_H), db_w, db_d, DB_T,
+        holes=[(db_x + hx, db_rear - db_d / 2 + hy) for hx, hy in DB_BOSS_POS_],
         usb=(db_x, db_rear + _RECEPT[2]))
     # **子基板の外形からはみ出した XIAO の端**（open-gaps #28）。
     # 壁のポケットが足りているかは、これを置かないと検査できない。
@@ -132,7 +139,7 @@ def build_assembly(keys, half, real=False):
 
     tilt = tan(radians(TILT_DEG))
     pl = plate_placement(w, h_plate)
-    db_center_y = db_rear - DB_D / 2
+    db_center_y = db_rear - db_d / 2
 
     # 本体基板の実装部品（KiCad の STEP から数えて記録した bbox。pcb_parts.py）
     parts["pcb_parts"] = place_pcb(pcb_parts.build_envelope(half),
@@ -375,9 +382,13 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     # このままだと**どんなプラグも必ず食い込む**ので、箱の側に入れたのと
     # 同じ補正を実形状にも入れる。入れないと #28 の再発検査が成立しない。
     from envelopes import _usb_cavity
-    from gen_case import DB_D as _DB_D, _RECEPT
+    from gen_case import _RECEPT
     from gen_case import usb_center_z as _ucz
-    cav = _usb_cavity(db_x, db_center_y + _DB_D / 2 + _RECEPT[2], _ucz())
+    # 板の奥行は**実物の記録**から（箱側と同じ出所。#31）。設計定数と
+    # ずれた日に、口の位置だけ設計側に残ると穴が実物から外れる。
+    _dbb2 = pcb_parts.load()["db"]["board_bbox"]
+    cav = _usb_cavity(db_x, db_center_y + (_dbb2[4] - _dbb2[1]) / 2
+                      + _RECEPT[2], _ucz())
     db_real = Compound(children=[s - cav for s in db_real.solids()])
 
     parts["db_real"] = db_real
