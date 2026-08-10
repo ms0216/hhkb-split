@@ -439,6 +439,16 @@ def check(keys, half, label="", focus=None, real=False):
             label = name if len(sols) == 1 else f"{name}#{k}"
             items.append((label, sol, sol.bounding_box()))
 
+    # **鍵は総当たりを始める前に、全立体ぶん先に計算する。**遅延で
+    # 計算すると鍵が安定しない: 同じ形の立体（キーキャップ等）は 1 つの
+    # TShape を共有しており、ブーリアン演算が入力の許容差を書き換えるので、
+    # 「先にどの組を演算したか」で後からハッシュした立体のバイト列が変わる
+    # （2026-08-11 に実測。キャップ 31 個が毎回 130 組のミスを出していた。
+    # 組んだ直後なら 3 回組んでも 277 個全部が一致することも実測済み）。
+    from verify import shape_digest
+    for _, sol, _ in items:
+        digests.setdefault(id(sol), shape_digest(sol))
+
     def _bb_touch(A, B, margin=0.0):
         return (A.min.X < B.max.X + margin and B.min.X < A.max.X + margin
                 and A.min.Y < B.max.Y + margin and B.min.Y < A.max.Y + margin

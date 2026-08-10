@@ -91,17 +91,25 @@ def shape_digest(shape):
     結果の記憶（#31）の鍵。0.001mm 動かしただけで別の値になることを
     実測で確認済み。弱い指紋（bbox＋体積など）は別の形を同じと誤認して
     嘘の緑を作るので使わない。
+
+    **三角形メッシュは書かない（withTriangles=False）。**既定の書き出しは
+    メッシュ込みで、メッシュは形ではなく「その立体が今までに何に使われたか」
+    の状態（遅延で付き、並列生成で順序も揺れる）。混ぜると同じ形が
+    別の鍵になり、記憶が永遠に当たらない（2026-08-11 に実測。1 つの
+    立体が毎回 118 組のミスを出していた）。
     """
     import hashlib
     import os
     import tempfile
 
     from OCP.BinTools import BinTools
+    from OCP.BinTools import BinTools_FormatVersion
 
     fd, p = tempfile.mkstemp()
     os.close(fd)
     try:
-        BinTools.Write_s(shape.wrapped, p)
+        BinTools.Write_s(shape.wrapped, p, False, False,
+                         BinTools_FormatVersion.BinTools_FormatVersion_CURRENT)
         return hashlib.sha256(Path(p).read_bytes()).hexdigest()[:24]
     finally:
         os.unlink(p)
