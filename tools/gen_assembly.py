@@ -385,7 +385,9 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     main = pcb_parts.real_compound(half)
     board = max(main.solids(), key=lambda s_: s_.volume)
     parts = dict(parts)
-    for name in ("pcb", "sockets", "pcb_parts"):
+    # **スタビの箱も外す。**実物は KiCad の STEP に入っており（pcb_real）、
+    # 箱を残すと同じ物が二重に置かれる（36.5mm^3 の重なりとして出た）。
+    for name in ("pcb", "sockets", "pcb_parts", "stabs"):
         parts.pop(name, None)
     parts["pcb_real"] = place_pcb(
         _moved(main, Location((-ox, oy, -board.bounding_box().max.Z))),
