@@ -132,15 +132,22 @@ def socket_envelope(half):
     """
     import pcb_parts
 
+    from build123d import Compound, Location
+
     boxes = (pcb_parts.keyswitch_boxes(half, "kailh_socket")
              + pcb_parts.keyswitch_boxes(half, "kailh_socket_leg"))
-    with BuildPart() as env:
-        with BuildSketch(Plane.XY.offset(-PCB_T)):
-            for x0, y0, _z0, x1, y1, _z1 in boxes:
-                with Locations(((x0 + x1) / 2, (y0 + y1) / 2)):
-                    Rectangle(x1 - x0, y1 - y0)
-        extrude(amount=-SOCKET_DROP)
-    return env.part
+    # **融合させない**（key_stack_envelopes と同じ理由）。まとめると隣の
+    # ソケットと重なっても消える。
+    out = []
+    for group in pcb_parts.fuse_touching(boxes):   # 本体＋端子で 1 個
+        with BuildPart() as one:
+            for x0, y0, _z0, x1, y1, _z1 in group:
+                with Locations(((x0 + x1) / 2, (y0 + y1) / 2,
+                                -PCB_T - SOCKET_DROP)):
+                    Box(x1 - x0, y1 - y0, SOCKET_DROP,
+                        align=(Align.CENTER, Align.CENTER, Align.MIN))
+        out.append(one.part)
+    return Compound(children=out)
 
 
 def place_pcb(env, h_plate, rim_front):
@@ -332,22 +339,23 @@ def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
     プレートを置くのと同じ基準）。戻りは (switches, keycaps) の 2 部品。
     61 個を 1 部品にまとめる（部品対の数を増やさないため。自己交差は無い）。
     """
-    from build123d import Align, Box, BuildPart, Locations
+    from build123d import Align, Box, Compound, Location
 
-    with BuildPart() as sw:
-        for (kx, ky), _k in zip(positions, keys):
-            with Locations((kx, ky, -PLATE_TO_PCB)):
-                Box(SW_UNDER_W, SW_UNDER_W, PLATE_TO_PCB,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-            with Locations((kx, ky, plate_t)):
-                Box(SW_BODY_W, SW_BODY_W, cap_lift,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-    with BuildPart() as caps:
-        for (kx, ky), k in zip(positions, keys):
-            with Locations((kx, ky, plate_t + cap_lift)):
-                Box(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP, cap_h,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-    return sw.part, caps.part
+    # **融合させない。**1 つの BuildPart に入れると重なりが融合して消え、
+    # 隣り合うキーキャップが当たっても検出できない（2026-08-10 に、
+    # キャップを 1mm 広げても落ちないことで発覚）。立体のまま束ねる。
+    def _box(w, d, h, at):
+        return Location(at) * Box(w, d, h, align=(Align.CENTER, Align.CENTER,
+                                                  Align.MIN))
+
+    sw = [_box(SW_UNDER_W, SW_UNDER_W, PLATE_TO_PCB, (kx, ky, -PLATE_TO_PCB))
+          for kx, ky in positions]
+    sw += [_box(SW_BODY_W, SW_BODY_W, cap_lift, (kx, ky, plate_t))
+           for kx, ky in positions]
+    caps = [_box(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP, cap_h,
+                 (kx, ky, plate_t + cap_lift))
+            for (kx, ky), k in zip(positions, keys)]
+    return Compound(children=sw), Compound(children=caps)
 
 
 def stab_envelope(stabs):

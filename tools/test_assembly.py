@@ -23,6 +23,20 @@ from gen_plate import halves  # noqa: E402
 HALVES = halves()
 
 
+def _github_actions_only(what):
+    """**重い検査は GitHub Actions だけで走らせる。**（利用者の方針・2026-08-10）
+
+    実形状の全組み合わせは片側 5 分以上かかる。手元の `pytest tools` が
+    40 分になると誰も回さなくなり、**回さない検査は無いのと同じ**。
+    バッチはビルドサーバに任せ、手元は速いままにする。
+    REQUIRE_KICAD=1（あのジョブだけが立てる）のときだけ走る。
+    """
+    import os
+
+    if os.environ.get("REQUIRE_KICAD") != "1":
+        pytest.skip(f"{what}: 重いので GitHub Actions で走らせる")
+
+
 def _require_kicad(what):
     """kicad-cli が無ければ飛ばす。**ただし REQUIRE_KICAD=1 なら失敗にする。**
 
@@ -641,26 +655,18 @@ def test_the_screws_engage_enough_of_the_insert(half):
 # 正確に見るときは実物を置く。重い（片側 4〜5 分）ので GitHub Actions の
 # 別ジョブに任せ、手元では走らせない。
 
-def _all_pair_overlaps(parts):
-    from itertools import combinations
-    from verify import intersection_volume
-
-    out = []
-    for a, b in combinations(parts, 2):
-        v = intersection_volume(parts[a], parts[b])
-        if v > 1e-6:
-            out.append((v, a, b))
-    return sorted(out, reverse=True)
+# **判定は check() に任せる。**ここで自前に総当たりを書いたら、
+# Compound どうしを直接交差させて**まったく嘘の数字**（9338mm^3 など）を
+# 出した。check() は立体単位に展開してから測る。同じ判定を 2 つ持たない。
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_real_shapes_do_not_overlap_anywhere(half):
     """**実形状の全部品・全組み合わせで重なり 0。**許容値は無い。"""
+    _github_actions_only("実形状の全組み合わせ")
     _require_kicad("実形状の全組み合わせ")
-    parts, _ = build_assembly(HALVES[half], half, real=True)
-    hits = _all_pair_overlaps(parts)
-    assert not hits, (f"{half}: 実形状で重なっている\n  "
-                      + "\n  ".join(f"{v:.3f}mm^3 {a} x {b}" for v, a, b in hits))
+    problems = check(HALVES[half], half, real=True)[0]
+    assert not problems, f"{half}: 実形状で重なっている\n  " + "\n  ".join(problems)
 
 
 def test_the_real_shape_check_actually_detects_a_collision():
@@ -669,14 +675,14 @@ def test_the_real_shape_check_actually_detects_a_collision():
     検査器が壊れて何も見ていなくても緑になる——それが一番危ない。
     緑の意味を「検査器が生きていて、そのうえで何も無かった」にする。
     """
+    _github_actions_only("実形状の自己確認")
     _require_kicad("実形状の自己確認")
     import gen_case
 
     original = gen_case.NUT_BOSS_H
     try:
         gen_case.NUT_BOSS_H = original + 8.0      # 三脚ナットの座を突き上げる
-        parts, _ = build_assembly(HALVES["left"], "left", real=True)
-        assert _all_pair_overlaps(parts), \
+        assert check(HALVES["left"], "left", real=True)[0], \
             "ナットの座を 8mm 高くしても何も検出されない。検査が効いていない"
     finally:
         gen_case.NUT_BOSS_H = original

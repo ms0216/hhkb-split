@@ -206,16 +206,50 @@ def keyswitch_boxes(name, label):
             if c["label"] == label]
 
 
+def fuse_touching(boxes):
+    """**重なる箱どうしをまとめて 1 つの製品にする。**
+
+    ソケットは「本体＋端子 2 本」、FFC コネクタは 3 立体で 1 個。これらは
+    別々の部品ではないので、重なっているのが当たり前。まとめずに検査へ
+    渡すと、自分自身と衝突していると報告される。
+
+    **逆に、重ならない箱は絶対にまとめない。**まとめた時点で、その中の
+    重なりは融合して見えなくなる（隣り合うキーキャップの隙間が今日まで
+    一度も検査されていなかったのは、これが原因）。
+    """
+    groups = []
+    for b in boxes:
+        hit = [g for g in groups
+               if any(b[0] < o[3] and o[0] < b[3] and b[1] < o[4] and o[1] < b[4]
+                      and b[2] < o[5] and o[2] < b[5] for o in g)]
+        if hit:
+            merged = [b]
+            for g in hit:
+                merged += g
+                groups.remove(g)
+            groups.append(merged)
+        else:
+            groups.append([b])
+    return groups
+
+
 def build_envelope(name):
     """部品の占有空間を 1 つの Part にする（本体基板は plate 座標・上面 z=0）。"""
-    from build123d import Align, Box, BuildPart, Locations
+    from build123d import Align, Box, Compound, Location
 
-    with BuildPart() as env:
-        for x0, y0, z0, x1, y1, z1 in component_boxes(name):
-            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, z0)):
-                Box(x1 - x0, y1 - y0, z1 - z0,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-    return env.part
+    # **融合させない。**まとめると部品どうしの重なりが消える
+    # （envelopes.key_stack_envelopes の注記と同じ理由）。
+    from build123d import BuildPart, Locations
+
+    parts = []
+    for group in fuse_touching(component_boxes(name)):
+        with BuildPart() as one:                 # 1 製品の中だけ融合させる
+            for x0, y0, z0, x1, y1, z1 in group:
+                with Locations(((x0 + x1) / 2, (y0 + y1) / 2, z0)):
+                    Box(x1 - x0, y1 - y0, z1 - z0,
+                        align=(Align.CENTER, Align.CENTER, Align.MIN))
+        parts.append(one.part)
+    return Compound(children=parts)
 
 
 def main(argv=None):

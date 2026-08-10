@@ -350,7 +350,7 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     return parts
 
 
-def check(keys, half, label="", focus=None):
+def check(keys, half, label="", focus=None, real=False):
     """組み立て状態を検査し、問題の一覧を返す。
 
     focus に部品名を渡すと、**その部品が絡む組だけ**を検査する。
@@ -359,7 +359,7 @@ def check(keys, half, label="", focus=None):
     """
     from verify import intersection_volume
 
-    parts, (w, h_case) = build_assembly(keys, half)
+    parts, (w, h_case) = build_assembly(keys, half, real=real)
     problems, notes = [], []
 
     # 1. 干渉。**許容値は無い。0 が合格。**
@@ -382,26 +382,42 @@ def check(keys, half, label="", focus=None):
     # ちょうど接する組は厳密には 0 になるが、円筒と平面が 1 点で触れる
     # ような退化した接触では 1e-8mm^3 級の欠片が出る（一辺 0.004mm）。
     EPS = 1e-6
-    names = list(parts)
-    # bbox が離れている組は体積 0 で確定なので、ブーリアン演算を省く。
-    # 部品が 10 → 22 個になり、総当たり 231 組を全部計算すると遅すぎる。
-    bbs = {n: parts[n].bounding_box() for n in names}
+    # **立体ごとに総当たりする。名前ごとではない。**
+    #
+    # 以前は名前 23 個の 253 通りしか見ていなかった。**名前は 23 でも物は
+    # 175 個**（switches 54・pcb_parts 35・sockets 27・keycaps 27 …）で、
+    # まとめた時点で**同じ名前の中どうしの重なりは融合して消える**。
+    # 隣り合うキーキャップの隙間（設計 0.65mm）を誰も見ていなかった。
+    #
+    # 15,225 通りを全部ブーリアン演算すると終わらないので、**bbox で絞って
+    # から精密に測る**。bbox が離れていれば体積 0 は確定なので省いてよい。
+    items = []                      # (表示名, 立体, bbox)
+    for name in parts:
+        sols = parts[name].solids()
+        for k, sol in enumerate(sols):
+            label = name if len(sols) == 1 else f"{name}#{k}"
+            items.append((label, sol, sol.bounding_box()))
 
-    def _bb_touch(a, b, margin=0.5):
-        A, B = bbs[a], bbs[b]
+    def _bb_touch(A, B, margin=0.0):
         return (A.min.X < B.max.X + margin and B.min.X < A.max.X + margin
                 and A.min.Y < B.max.Y + margin and B.min.Y < A.max.Y + margin
                 and A.min.Z < B.max.Z + margin and B.min.Z < A.max.Z + margin)
 
-    for i, a in enumerate(names):
-        for b in names[i + 1:]:
-            if focus is not None and focus not in (a, b):
+    seen = set()
+    for i, (la, sa, ba) in enumerate(items):
+        for lb, sb, bb_ in items[i + 1:]:
+            if focus is not None and focus not in (la.split("#")[0],
+                                                   lb.split("#")[0]):
                 continue
-            if not _bb_touch(a, b):
+            if not _bb_touch(ba, bb_):
                 continue
-            v = intersection_volume(parts[a], parts[b])
+            v = intersection_volume(sa, sb)
             if v > EPS:
-                problems.append(f"{a} と {b} が {v:.3f}mm^3 食い込んでいる")
+                key = (la.split("#")[0], lb.split("#")[0])
+                if key in seen:          # 同じ組は 1 行にまとめる
+                    continue
+                seen.add(key)
+                problems.append(f"{la} と {lb} が {v:.3f}mm^3 食い込んでいる")
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。
