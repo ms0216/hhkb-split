@@ -252,6 +252,8 @@ USB_PLUG_H = 7.0         # [暫定] 実測（厚さ）
 # **実物を見ずに推測で書いていた。**
 USB_SHELL_W = 8.34       # [確定] USB Type-C プラグの金属シェル（規格値）
 USB_SHELL_H = 2.56       # [確定] 同上
+# プラグの金属シェルの肉厚。**中はメスの舌が入る空洞**（実物の舌は 6.70x0.75）。
+USB_PLUG_SHELL_T = 0.3   # [暫定] シェルの肉厚。実物のプラグをノギスで測る
 # 完全に挿さった状態で、樹脂の面からケース表面までに見えている金属の長さ。
 # **メスをこの長さまで奥へ引っ込めても、樹脂は外に残る。**
 # 利用者が実機に挿して測った値（2026-08-09）。
@@ -316,6 +318,13 @@ SW_UNDER_W = 14.0        # [暫定] プレート下の下部ハウジング（�
 # キーキャップ（DSA・暫定候補 open-gaps #21）。
 # 幅 = キーの u 数 × 19.05 − CAP_GAP。1u で 18.4mm になる（DSA の公称）。
 CAP_GAP = 0.65           # [暫定] 隣のキャップとの隙間（DSA 公称 18.4 から逆算）
+# **キーキャップは中空。**裾の中にスイッチのステムとスタビの挿子が入る。
+# 中身の詰まった箱で描いていたので、実物のスタビ（プレート上面から
+# 10.5mm 立つ）がキャップに 4.3mm 食い込んで見えた（88mm^3。open-gaps #30）。
+# **これはモデルの間違いで、設計の不具合ではない。**MX のキャップは
+# 必ずステムを飲み込む形をしている。
+CAP_WALL = 1.3           # [暫定] 側面の肉厚（射出成形の一般値。買う品で確定）
+CAP_TOP_T = 1.3          # [暫定] 天面の肉厚（同上）
 
 # スタビライザ（2u/3u キーの下、基板に載る）。KiCad に 3D モデルが無く
 # STEP に出てこないので、ここで箱として置く。
@@ -366,7 +375,16 @@ def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
           for kx, ky in positions]
     sw += [_box(SW_BODY_W, SW_BODY_W, cap_lift, (kx, ky, plate_t))
            for kx, ky in positions]
-    caps = [_box(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP, cap_h,
+    # **中空にする。**裾の中はスイッチとスタビの居場所なので、実体で
+    # 埋めると必ず偽の干渉が出る（#30）。外側の形は変わらないので、
+    # キャップどうし・キャップとベゼルの検査はそのまま効く。
+    def _cap(w, d, at):
+        shell = _box(w, d, cap_h, at)
+        cavity = _box(w - CAP_WALL * 2, d - CAP_WALL * 2,
+                      cap_h - CAP_TOP_T, at)
+        return shell - cavity
+
+    caps = [_cap(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP,
                  (kx, ky, plate_t + cap_lift))
             for (kx, ky), k in zip(positions, keys)]
     return Compound(children=sw), Compound(children=caps)
@@ -398,14 +416,29 @@ def usb_plug_envelope(x, y_recept, z_center):
     **メス（y_recept = XIAO の奥端面）から位置を導く。**壁から導くと、
     XIAO が奥まっても「挿さったことにされる」——#28 はまさにそれだった。
     メスが壁から遠のくと、樹脂の胴体が壁に食い込む形で検査に出る。
+
+    **y_recept は「メスの前面」であって、XIAO の基板の端ではない。**
+    XIAO のコネクタは基板の端よりさらに 1.25mm 先まで出ている
+    （`pcb_parts.usb_receptacle`）。基板の端を渡していたので、プラグは
+    そのぶん深く挿さったことになり、メスの端子の上に乗っていた。
+
+    **金属部は中空。**メスの舌（コンタクトの載った板）がこの中へ入る。
+    中身の詰まった箱で描くと、舌を飲み込んで「食い込んでいる」ことに
+    なる（実測 20.3mm^3）。**メスを中空にしたときと同じ間違い**を、
+    今度はオス側でやっていた（2026-08-10 に実形状の総当たりで発覚）。
     """
-    from build123d import Align, Box, BuildPart, Locations
+    from build123d import Align, Box, BuildPart, Locations, Mode
 
     tip = y_recept - USB_MATE_DEPTH
     shell_l = 6.5            # [確定] USB Type-C プラグの金属部の長さ（規格）
     with BuildPart() as env:
         with Locations((x, tip, z_center)):
             Box(USB_SHELL_W, shell_l, USB_SHELL_H,
+                align=(Align.CENTER, Align.MIN, Align.CENTER))
+        # 舌を受ける空洞。**先端は開いている**ので、奥行はシェル全長。
+        with Locations((x, tip, z_center)):
+            Box(USB_SHELL_W - USB_PLUG_SHELL_T * 2, shell_l,
+                USB_SHELL_H - USB_PLUG_SHELL_T * 2, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.MIN, Align.CENTER))
         with Locations((x, tip + shell_l, z_center)):
             Box(USB_PLUG_W, USB_PLUG_BODY_L, USB_PLUG_H,
@@ -460,13 +493,30 @@ def xiao_overhang_envelope(x, y_board_rear, z_board_top, usb_x=None, usb_face=No
     はみ出したぶんは**そこに入っていない**。壁のポケットが足りているかは
     ここを別に置かないと検査できない（＝検査対象に入っていない部品は、
     検査していないのと同じ）。
+
+    **2 段ある。**XIAO の基板は板の端から XIAO_OVERHANG（1.8mm）出て、
+    **その先に USB-C のメスがさらに 1.25mm 出ている**（合計 3.055mm。
+    `pcb_parts.usb_receptacle` の実測）。箱を基板の端で止めていたので、
+    箱の側では壁との取り合いが 1.25mm ぶん検査されていなかった。
     """
     from build123d import Align, Box, BuildPart, Locations
     from interface import XIAO_OUTLINE_W, XIAO_OVERHANG
 
+    import pcb_parts
+    rx0, _, rz0, rx1, ry1, rz1 = pcb_parts.usb_receptacle()
+    db_rec = pcb_parts.load()["db"]
+    recept_out = ry1 - db_rec["board_bbox"][4]          # 板の端からの張り出し
+    t = db_rec["board_step_thickness"]
+
     with BuildPart() as env:
         with Locations((x, y_board_rear + XIAO_OVERHANG / 2, z_board_top)):
             Box(XIAO_OUTLINE_W, XIAO_OVERHANG, DB_STACK_H,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # メスだけが出ている残り
+        with Locations((x + (rx0 + rx1) / 2,
+                        y_board_rear + (XIAO_OVERHANG + recept_out) / 2,
+                        z_board_top + rz0 - t)):
+            Box(rx1 - rx0, recept_out - XIAO_OVERHANG, rz1 - rz0,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     part = env.part
     if usb_x is not None:

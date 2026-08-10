@@ -185,6 +185,46 @@ def load():
     return json.loads(DATA.read_text())
 
 
+def third_party_model(stem):
+    """kiswitch のモデル（.stp）の実在するパスを返す。無ければ None。
+
+    フットプリントは `${KICAD6_3RD_PARTY}` を参照している。CI はその環境変数を
+    立てるが、手元は KiCad が既定の場所（~/Documents/KiCad/<版>/3rdparty）に
+    置くので、**両方を見る**。片方しか見ないと、どちらかで黙って飛ぶ。
+    """
+    rel = ("3dmodels/com_github_perigoso_keyswitch-kicad-library"
+           f"/3d-library.3dshapes/{stem}.stp")
+    roots = [Path(os.environ["KICAD6_3RD_PARTY"])] if os.environ.get(
+        "KICAD6_3RD_PARTY") else []
+    roots += sorted(Path.home().glob("Documents/KiCad/*/3rdparty"))
+    for r in roots:
+        if (r / rel).exists():
+            return r / rel
+    return None
+
+
+def usb_receptacle():
+    """**XIAO の USB-C メスの実寸**（子基板ローカル・z=0 が板の下面）。
+
+    (x0, y0, z0, x1, y1, z1) を返す。板の奥端より外へ出ている唯一の立体で、
+    子基板の奥端（y = +DB_D/2）より **さらに 3.05mm 外**まで出ている。
+
+    **これを使わずに `XIAO_OVERHANG`（1.8mm）でメスの位置を導いていた。**
+    1.8 は XIAO の**基板**の張り出しで、その先にコネクタがもう 1.25mm ある。
+    そのせいで壁の穴（メスより 0.44mm 低い）にコネクタの頭が当たり、
+    プラグは 1.25mm 深く挿さったことにされていた。**#28 と同じ形の間違い**を
+    もう 1 段深いところで繰り返していた（2026-08-10 に実形状の検査で発覚）。
+    """
+    rec = load()["db"]
+    y_edge = rec["board_bbox"][4]
+    out = max(rec["components"], key=lambda c: c["bbox"][4])
+    if out["bbox"][4] <= y_edge:
+        raise ValueError(
+            "子基板の奥端より外へ出ている立体が無い。XIAO の向きか"
+            "配置が変わった可能性がある（この値はケースの穴を決める）")
+    return tuple(out["bbox"])
+
+
 def component_boxes(name):
     """部品の bbox を、**物理的に正しい高さに直して**返す。
 

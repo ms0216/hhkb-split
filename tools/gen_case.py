@@ -252,15 +252,42 @@ from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
                        USB_SHELL_H, USB_SHELL_W)
 from interface import XIAO_OUTLINE_W, XIAO_OVERHANG  # noqa: E402
 
+
+def _usb_receptacle_size():
+    """XIAO の USB-C メスの (幅, 高さ, 子基板の奥端からの張り出し, 板上面からの中心高さ)。
+
+    **KiCad の STEP から数えた実寸**（`pcb_parts.usb_receptacle`）。
+    ここを定数で持つと、XIAO の向きや型番を変えたときに穴だけ取り残される。
+    """
+    import pcb_parts
+
+    x0, y0, z0, x1, y1, z1 = pcb_parts.usb_receptacle()
+    rec = pcb_parts.load()["db"]
+    t = rec["board_step_thickness"]              # STEP の板厚（1.51）
+    return (x1 - x0, z1 - z0, y1 - rec["board_bbox"][4], (z0 + z1) / 2 - t)
+
+
 # 奥の壁の切り欠き。**外から見えるのは「金属が通る穴」だけ。**実機と同じ姿。
 #
 # 一度ここを「樹脂が通る大きさ（12.4x7.4mm）」にしていたが、**誤りだった。**
 # 実機の写真では樹脂は完全に外にあり、金属が 1mm ほど見えたまま挿さっている。
 # 穴を樹脂の大きさにすると、壁に不要な大きな口が開く。
-USB_W = USB_SHELL_W + PORT_CLEAR * 2
-USB_H = USB_SHELL_H + PORT_CLEAR * 2
-# メスが外面からどれだけ奥にいるか。XIAO を外へ出すほど 0 に近づく。
-USB_PLUG_ENTRY = WALL + DB_FROM_REAR - XIAO_OVERHANG
+#
+# ⚠️ **穴を通るのはプラグだけではない。メスも通る。**（2026-08-10 に判明）
+# XIAO の USB-C メスは子基板の奥端より **3.055mm** 出ていて、壁（2.4mm ＋
+# 板の逃げ 0.4mm）を貫いて外へ 0.25mm 顔を出す。メスの断面は 8.94x4.20 で、
+# プラグの金属（8.34x2.56）より**大きい**。プラグ基準で穴を開けていたので、
+# メスの頭が穴の上縁に 0.24mm 食い込んでいた（実形状の総当たりで発覚）。
+#
+# だから穴は「プラグとメスの**両方**が通る大きさ」から導く。
+_RECEPT = _usb_receptacle_size()
+USB_W = max(USB_SHELL_W, _RECEPT[0]) + PORT_CLEAR * 2
+USB_H = max(USB_SHELL_H, _RECEPT[1]) + PORT_CLEAR * 2
+# 内側のポケット（XIAO の**基板**の端を受ける）の前に残る壁の厚み。
+# ここを USB_W x USB_H で貫く。**メスはこの 1.0mm を通り抜け、外面から
+# 0.26mm 顔を出す**（3.055 − (WALL + DB_FROM_REAR) = 0.255）。
+# 実機の USB も筐体面とほぼ面一なので、出ること自体は異常ではない。
+USB_PLUG_ENTRY = WALL - (XIAO_OVERHANG - DB_FROM_REAR)
 # **保険の座ぐり。**手持ちのケーブルは金属が 1.0mm 見えていたが、
 # **ケーブルによってはもっと短い。**その場合は樹脂がわずかに壁へ入る必要がある。
 # ここを 0 にすると「このケーブルでしか挿さらないキーボード」になる。
@@ -704,12 +731,16 @@ def usb_center_z():
     子基板の載る高さから導く。数値を直接書くと、ボスの高さを変えたときに
     穴だけ取り残される。
 
-    **XIAO の積み上げの真ん中に合わせる。**以前は「子基板の上面から 1.6mm」
-    と直書きしていて、切り欠きの上端と XIAO の上面の隙間が 0.10mm しか
-    無かった。実測は「4.5 ぐらい」の概数なので、それでは足りない。
+    **メスの実物の中心に合わせる。**以前は「XIAO の積み上げ（DB_STACK_H）の
+    真ん中」にしていたが、メスは積み上げの真ん中に居ない（板の上面から
+    0.26〜4.46mm で、中心は 2.36。積み上げの半分 2.25 とは 0.11 ずれる）。
+    そのうえ穴がメスより低かったので、メスの頭が上縁に食い込んでいた。
+
+    さらに前は「子基板の上面から 1.6mm」と直書きで、切り欠きの上端と
+    XIAO の上面の隙間が 0.10mm しか無かった。**直書き → 概数 → 実測**と
+    2 度上げてきた値なので、もう推測に戻さないこと。
     """
-    from envelopes import DB_STACK_H
-    return FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2
+    return FLOOR + DB_BOSS_H + DB_T + _RECEPT[3]
 
 
 def _lid_opening(half, w, h_body):

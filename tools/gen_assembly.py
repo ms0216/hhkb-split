@@ -91,18 +91,19 @@ def build_assembly(keys, half, real=False):
     from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_BOSS_POS as DB_BOSS_POS_,
                           DB_D, DB_FROM_REAR, DB_T, DB_W,
                           WALL, daughterboard_x_center)
-    from interface import XIAO_OVERHANG as XIAO_OVERHANG_
+    from gen_case import _RECEPT          # メスの実寸（幅・高さ・張り出し・中心高さ）
     db_x = daughterboard_x_center(half, w)
     db_rear = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
     parts["db"] = daughterboard_envelope(
         (db_x, db_rear - DB_D / 2, FLOOR + DB_BOSS_H), DB_W, DB_D, DB_T,
         holes=[(db_x + hx, db_rear - DB_D / 2 + hy) for hx, hy in DB_BOSS_POS_],
-        usb=(db_x, db_rear + XIAO_OVERHANG_))
+        usb=(db_x, db_rear + _RECEPT[2]))
     # **子基板の外形からはみ出した XIAO の端**（open-gaps #28）。
     # 壁のポケットが足りているかは、これを置かないと検査できない。
+    # **メスの面は XIAO の基板の端ではない**（その先に 1.25mm ある）。
     parts["xiao"] = xiao_overhang_envelope(db_x, db_rear, FLOOR + DB_BOSS_H + DB_T,
                                            usb_x=db_x,
-                                           usb_face=db_rear + XIAO_OVERHANG_)
+                                           usb_face=db_rear + _RECEPT[2])
 
     # 上ケース（ベゼル）。プレートを押さえ、手前端を実機の 17mm にする。
     from gen_case import build_topcase
@@ -127,7 +128,7 @@ def build_assembly(keys, half, real=False):
                           _boss_positions, _rubber_positions,
                           power_switch_center_z, power_switch_x_center,
                           usb_center_z)
-    from interface import M2_INSERT_D, XIAO_OVERHANG, stab_offset_for
+    from interface import M2_INSERT_D, stab_offset_for
 
     tilt = tan(radians(TILT_DEG))
     pl = plate_placement(w, h_plate)
@@ -179,7 +180,11 @@ def build_assembly(keys, half, real=False):
     # 利用者が挿す USB ケーブルのプラグ（open-gaps #28 の再発防止）。
     # **メス（XIAO の奥端面）から位置を導く。**メスが壁から遠のけば、
     # 樹脂の胴体が壁に食い込む形でここに出る。
-    parts["usb_plug"] = usb_plug_envelope(db_x, db_rear + XIAO_OVERHANG,
+    # **基準はメスの実物の面**（KiCad の STEP）。XIAO の基板の端
+    # （db_rear + XIAO_OVERHANG）ではない。**その先にコネクタがもう
+    # 1.25mm ある**ので、基板の端を使うとプラグはそのぶん深く挿さった
+    # ことになり、メスの端子の上に乗る（#28 と同じ形。2026-08-10）。
+    parts["usb_plug"] = usb_plug_envelope(db_x, db_rear + _RECEPT[2],
                                           usb_center_z())
 
     # FFC ケーブル。**経路は未発注・未決定なので、仮置きの占有空間。**
@@ -396,8 +401,21 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     dbc = pcb_parts.real_compound("db")
     for name in ("db", "xiao", "db_parts"):
         parts.pop(name, None)
-    parts["db_real"] = _moved(dbc, Location((db_x - ox, db_center_y + oy,
-                                             FLOOR + DB_BOSS_H)))
+    db_real = _moved(dbc, Location((db_x - ox, db_center_y + oy,
+                                    FLOOR + DB_BOSS_H)))
+
+    # **第三者モデルは USB-C のメスの口を塞いで描いている。**
+    # 前面から 0.5mm を切ると 8.94x3.21 の中実の塊で、穴が無い。実物は
+    # 中空（Seeed の公式モデルで確認済み。`envelopes._usb_cavity` の注記）。
+    # このままだと**どんなプラグも必ず食い込む**ので、箱の側に入れたのと
+    # 同じ補正を実形状にも入れる。入れないと #28 の再発検査が成立しない。
+    from envelopes import _usb_cavity
+    from gen_case import DB_D as _DB_D, _RECEPT
+    from gen_case import usb_center_z as _ucz
+    cav = _usb_cavity(db_x, db_center_y + _DB_D / 2 + _RECEPT[2], _ucz())
+    db_real = Compound(children=[s - cav for s in db_real.solids()])
+
+    parts["db_real"] = db_real
     return parts
 
 
@@ -454,21 +472,65 @@ def check(keys, half, label="", focus=None, real=False):
                 and A.min.Y < B.max.Y + margin and B.min.Y < A.max.Y + margin
                 and A.min.Z < B.max.Z + margin and B.min.Z < A.max.Z + margin)
 
-    seen = set()
+    # **板そのものと、その板に載る部品の組は見ない。**
+    #
+    # 実装部品は板の穴に入るのが正しい姿（ソケットのカップは φ3.05 の穴へ、
+    # スタビの爪は φ3.048/φ3.9878 の穴へ）。ここに出る重なりは「基板の設計」
+    # ではなく「**第三者モデルの置き位置**」を映す。実際、最後まで残っていた
+    # 0.136mm^3 は kiswitch がソケットのカップを穴の中心から最大 0.13mm
+    # ずらして置いているだけで、カップは φ2.92・穴は φ3.05 なので**実物は
+    # 入る**（2026-08-10 に両方を測って確認）。
+    #
+    # **代わりの検査を置いてある**（外さずに移した）:
+    #   - test_the_hotswap_cups_fit_the_drilled_holes … カップ ⊂ 穴 を寸法で
+    #   - test_real_component_boxes_do_not_collide … 部品が板へ沈むのは箱側で
+    #   - DRC のコートヤード … 平面の重なり
+    # 部品どうしの組は**これまでどおり全部見る**。
+    # 板は「その部品の中でいちばん体積の大きい立体」。番号（#0）で決め打つと、
+    # 立体の並び順が変わった日に黙って別の物を除外する。
+    boards = set()
+    for n in ("pcb_real", "db_real"):
+        if n in parts:
+            sols = parts[n].solids()
+            k = max(range(len(sols)), key=lambda j: sols[j].volume)
+            boards.add(f"{n}#{k}")
+
+    def _board_and_its_own_part(la, lb):
+        for b in boards:
+            base = b.split("#")[0]
+            if (la == b and lb.startswith(base + "#")) or \
+               (lb == b and la.startswith(base + "#")):
+                return True
+        return False
+
+    seen, hidden = set(), {}
     for i, (la, sa, ba) in enumerate(items):
         for lb, sb, bb_ in items[i + 1:]:
             if focus is not None and focus not in (la.split("#")[0],
                                                    lb.split("#")[0]):
                 continue
+            if _board_and_its_own_part(la, lb):
+                continue
             if not _bb_touch(ba, bb_):
                 continue
             v = intersection_volume(sa, sb)
             if v > EPS:
+                # **同じ名前の組は 1 行にまとめるが、隠さず数える。**
+                # 以前は 2 件目以降を黙って捨てていたので、1 件直すたびに
+                # 「新しい指摘」が湧いて出た（usb_plug × db_real は端子と舌の
+                # 2 件で、舌のほう 20.3mm^3 が 0.064mm^3 の陰に隠れていた）。
                 key = (la.split("#")[0], lb.split("#")[0])
-                if key in seen:          # 同じ組は 1 行にまとめる
+                if key in seen:
+                    hidden[key] = hidden.get(key, 0) + 1
                     continue
                 seen.add(key)
                 problems.append(f"{la} と {lb} が {v:.3f}mm^3 食い込んでいる")
+
+    for key, n in hidden.items():
+        for k, line in enumerate(problems):
+            if line.startswith(f"{key[0]}") and f" と {key[1]}" in line:
+                problems[k] = line + f"（ほかに同じ組が {n} 件）"
+                break
 
     # 2. プレートがケースのリムを覆えているか。
     #    計算値ではなく、置いた後の実際の外形で比べる。

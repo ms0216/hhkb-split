@@ -32,7 +32,38 @@ jobs:
   # いるので、KiCad の版が違っても、この 2 つを指してやれば同じ結果になる。
   # **これをしないと、KiCad はモデルを警告なしに飛ばして立体数が減る**
   # （数を数える検査が落ちて気づける）。
+  # **1 回 43 分かかる。**文書やファームだけを直した push で回す価値は無い
+  # （2026-08-10。ファームの作業で 1 日に 20 回押した日、実行が詰まった）。
+  # 形に関わるものが変わったときだけ回す。手で回すこともできる。
+  # ⚠️ この一覧が**足りないと、変えたのに検査されない。**足すのを忘れないこと。
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      shape: ${{ steps.f.outputs.shape }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "shape=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          BASE="${{ github.event.before }}"
+          git cat-file -e "$BASE^{commit}" 2>/dev/null || BASE=""
+          if [ -z "$BASE" ]; then
+            echo "shape=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE" HEAD \
+             | grep -qE '^(tools/|pcb/|layout/|\.github/workflows/checks\.yml)'; then
+            echo "shape=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "shape=false" >> "$GITHUB_OUTPUT"
+          fi
+
   real-shape:
+    needs: changed
+    if: needs.changed.outputs.shape == 'true'
     runs-on: ubuntu-latest
     env:
       KICAD10_3DMODEL_DIR: /usr/share/kicad/3dmodels

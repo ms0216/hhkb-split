@@ -17,6 +17,7 @@ import pytest
 CLEARANCE_HALF = 0.1   # gen_case.CLEARANCE / 2（空所は片側 0.1mm 広い）
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+ROOT = Path(__file__).resolve().parent.parent
 from gen_assembly import build_assembly, check  # noqa: E402
 from gen_plate import halves  # noqa: E402
 
@@ -674,18 +675,42 @@ def test_the_real_shape_check_actually_detects_a_collision():
 
     検査器が壊れて何も見ていなくても緑になる——それが一番危ない。
     緑の意味を「検査器が生きていて、そのうえで何も無かった」にする。
+
+    ⚠️ **この検査は、2026-08-10 まで間違った理由で通っていた。**
+    以前は `NUT_BOSS_H` を 8mm 高くして「何か出るか」を見ていたが、
+
+      1. ナットの座は `cutter_under_pcb` で削られる。**高くしても何も
+         当たらない**（`gen_case`: `nut_boss = _n.part - cutter_under_pcb`）
+      2. それでも通っていたのは、**素の状態で指摘が 4 件残っていた**から。
+         変異とは無関係に非空だった
+
+    実形状の指摘を 0 にした瞬間に落ちて発覚した。**掃除しないと、
+    自己確認が嘘をついていることにも気づけない。**
+
+    いまは 2 つ直した:
+      - 動かす対象を、**当たる相手がすぐ隣にあるもの**にした。子基板を
+        奥の壁へ 8mm 押し込む（壁は 2.4mm 先にある）
+      - `focus="db_real"` で**その部品が絡む組だけ**を見る。無関係な指摘が
+        残っていても、それで通ることは無い
+
+    ⚠️ **focus を狭めるときは、当たる相手を取り違えないこと。**
+    最初に選んだ変異（座を 8mm 高くする）は実際には検出できていたが、
+    出ていたのは `screws x pcb_real`（ネジが伸びて本体基板を突いた）で、
+    `focus="db_real"` では見えなかった。**変異が効いていないのか、
+    focus が外しているのかは、必ず focus=None で確かめてから狭める。**
     """
     _github_actions_only("実形状の自己確認")
     _require_kicad("実形状の自己確認")
     import gen_case
 
-    original = gen_case.NUT_BOSS_H
+    original = gen_case.DB_FROM_REAR
     try:
-        gen_case.NUT_BOSS_H = original + 8.0      # 三脚ナットの座を突き上げる
-        assert check(HALVES["left"], "left", real=True)[0], \
-            "ナットの座を 8mm 高くしても何も検出されない。検査が効いていない"
+        gen_case.DB_FROM_REAR = original - 8.0    # 子基板を奥の壁へ押し込む
+        found = check(HALVES["left"], "left", focus="db_real", real=True)[0]
+        assert found, \
+            "子基板を奥の壁へ 8mm 押し込んでも何も検出されない。検査が効いていない"
     finally:
-        gen_case.NUT_BOSS_H = original
+        gen_case.DB_FROM_REAR = original
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -751,3 +776,64 @@ def test_the_stab_openings_clear_the_real_stabilizers_by_the_kerf(half):
     assert not tight, (
         f"{half}: 実物のスタビとの隙間が全周 {need}mm に足りない\n  "
         + "\n  ".join(tight))
+
+
+def test_the_hotswap_cups_fit_the_drilled_holes():
+    """**ソケットのカップが、基板に開けた穴に入ること。**寸法で見る。
+
+    実形状の総当たりでは「板 × その板に載る部品」を見ないことにした
+    （`gen_assembly.check` の注記）。**外した検査をここへ移す。**
+
+    見るのは 2 つ。どちらも外の事実どうしの突き合わせで、
+    自分の生成物どうしの一致ではない:
+      - 穴の径 … KiCad のフットプリント（`np_thru_hole` の drill）
+      - カップの径 … kiswitch の STEP（第三者モデル）
+
+    **モデルの置き位置は最大 0.13mm ずれている**（2026-08-10 実測。これが
+    総当たりに残っていた 0.136mm^3 の正体）。ずれは記録するが、合否は
+    「カップが穴に入るか」で決める。**径が穴を超えたら、実物が入らない。**
+    """
+    import re
+
+    import pcb_parts
+    from build123d import Align, Box, Location, import_step
+
+    model = pcb_parts.third_party_model("SW_Hotswap_Kailh_MX")
+    if model is None:
+        import os
+
+        if os.environ.get("REQUIRE_KICAD") == "1":
+            pytest.fail("kiswitch のモデルが見つからない。このジョブは飛ばせない")
+        pytest.skip("kiswitch のモデルが無い環境")
+
+    fp = (ROOT / "pcb/lib/keyswitch.pretty/SW_Hotswap_Kailh_MX_1.00u.kicad_mod"
+          ).read_text()
+    holes = [(float(x), float(y), float(d)) for x, y, d in re.findall(
+        r'np_thru_hole circle \(at (-?[\d.]+) (-?[\d.]+)\).*?\(drill ([\d.]+)\)',
+        fp)]
+    assert len(holes) >= 2, "フットプリントに非メッキ穴が見当たらない"
+
+    body = max(import_step(str(model)).solids(), key=lambda s: s.volume)
+    bb = body.bounding_box()
+    # 板を貫く部分＝板の下面（z=0 の下）より上。板厚の真ん中で切る。
+    z = (bb.max.Z + max(bb.max.Z - 0.5, bb.min.Z)) / 2
+    slab = Location((0, 0, z)) * Box(60, 60, 0.02,
+                                     align=(Align.CENTER, Align.CENTER,
+                                            Align.CENTER))
+    cups = []
+    for s in body.intersect(slab).solids():
+        c = s.bounding_box()
+        cups.append((c.center().X, c.center().Y, max(c.size.X, c.size.Y)))
+    assert cups, "モデルに板を貫く部分が無い。ソケットの向きが変わった可能性"
+
+    bad, drift = [], []
+    for cx, cy, cd in cups:
+        # モデルは裏面部品なので Y が反転している。近いほうの穴と組む。
+        hx, hy, hd = min(holes, key=lambda h: (h[0] - cx) ** 2 + (-h[1] - cy) ** 2)
+        off = ((hx - cx) ** 2 + (-hy - cy) ** 2) ** 0.5
+        drift.append(f"({cx:+.2f},{cy:+.2f}) カップ φ{cd:.2f} / 穴 φ{hd:.2f} "
+                     f"ずれ {off:.3f}mm")
+        if cd > hd + 1e-6:
+            bad.append(f"({cx:+.2f},{cy:+.2f}) カップ φ{cd:.2f} > 穴 φ{hd:.2f}")
+    assert not bad, ("ソケットのカップが穴に入らない\n  " + "\n  ".join(bad)
+                     + "\n  実測: " + " / ".join(drift))
