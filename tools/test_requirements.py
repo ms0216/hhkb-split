@@ -24,6 +24,12 @@ KICAD_ONLY = {"pcbnew"}
 BLENDER_ONLY = {"bpy", "mathutils"}
 # 任意（入っていなくても検証は通る）
 OPTIONAL = {"pyvista"}
+# **listed している依存が連れてくるもの。**自分で pip に書かない。
+#   OCP … build123d の実体（cadquery-ocp-novtk）。verify.shape_digest が
+#         BinTools でシリアライズするのに直接触る。**別に固定すると、
+#         build123d が決めた版と食い違ったときに壊れる。**
+# ここに足すときは「listed のどれが連れてくるか」を必ず書くこと。
+BUNDLED = {"OCP"}
 
 
 def external_imports():
@@ -38,7 +44,7 @@ def external_imports():
                 mods.add(n.module.split(".")[0])
     return {m for m in mods if m not in std and m not in local
             and m not in KICAD_ONLY and m not in BLENDER_ONLY
-            and m not in OPTIONAL}
+            and m not in OPTIONAL and m not in BUNDLED}
 
 
 def listed():
@@ -53,6 +59,24 @@ def test_every_import_is_listed_in_requirements():
     missing = sorted(m for m in external_imports()
                      if DIST.get(m, m).lower() not in have)
     assert not missing, f"requirements-dev.txt に無い: {missing}"
+
+
+def test_the_bundled_modules_really_come_with_the_listed_ones():
+    """**BUNDLED に逃がしたものが、本当に入っていること。**
+
+    `BUNDLED` は「pip に書かないが使う」という抜け道なので、放っておくと
+    「実は入っていない」を隠す穴になる。上流が同梱をやめたらここで落ちる。
+    """
+    import importlib.metadata as md
+
+    bad = []
+    for m in sorted(BUNDLED):
+        dists = md.packages_distributions().get(m)
+        if not dists:
+            bad.append(f"{m}: import できない（どの配布も提供していない）")
+    # 連れてくる側が requirements にある配布であること……までは辿れない
+    # （pip は逆引きの依存を持たない）ので、**実在すること**を見る。
+    assert not bad, "BUNDLED が実在しない:\n  " + "\n  ".join(bad)
 
 
 def test_the_pinned_versions_match_the_environment():
