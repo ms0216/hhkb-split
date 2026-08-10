@@ -43,6 +43,7 @@
  */
 #include <behaviors.dtsi>
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/bt.h>   /* BT_CLR。無いと devicetree が読めない */
 
 / {
 	keymap {
