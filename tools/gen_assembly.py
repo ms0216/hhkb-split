@@ -330,7 +330,42 @@ def build_assembly(keys, half, real=False):
     if real:
         parts = _swap_in_real_boards(parts, half, h_plate, rim_front,
                                      db_x, db_center_y)
+        # **キースイッチも実物にする。**箱と実物の断面は一致していたが、
+        # ステム・ピン・LED 窓・爪は箱が持っていない。**持っていない形は
+        # 検査していない**（利用者の指摘・2026-08-11）。
+        sw_real = real_switches(positions, pl)
+        if sw_real is not None:
+            parts = dict(parts)
+            parts.pop("switches", None)
+            parts["switches_real"] = sw_real
     return parts, (w, h_case)
+
+
+def real_switches(positions, pl):
+    """**キースイッチ 61 個を実形状で置く**（kiswitch の SW_Cherry_MX_Plate）。
+
+    モデルの原点は**基板の上面**（z=0）。組み立ての平らなプレート座標では
+    基板の上面は z = −PLATE_TO_PCB なので、そこへ落とす。
+
+    **1 個は 7 立体でできているが、1 つの製品にまとめる。**上下ハウジング・
+    ステム・ピン・LED 窓は「別々の部品」ではないので、まとめないと
+    自分自身と衝突していると報告される（基板の実装部品と同じ扱い）。
+    まとめないともう 1 つ悪いことが起きる: 立体数が 61×7 に増え、
+    総当たり（立体数の 2 乗）が実用外になる。
+    """
+    from build123d import Compound, Location, import_step
+    import pcb_parts
+    from envelopes import PLATE_TO_PCB
+
+    model = pcb_parts.third_party_model("SW_Cherry_MX_Plate")
+    if model is None:
+        return None
+    sols = import_step(str(model)).solids()
+    one = sols[0]
+    for t in sols[1:]:
+        one = one + t
+    return Compound(children=[
+        (pl * Location((kx, ky, -PLATE_TO_PCB))) * one for kx, ky in positions])
 
 
 def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
@@ -501,6 +536,20 @@ def check(keys, half, label="", focus=None, real=False, proxy_only=False):
     # 部品どうしの組は**これまでどおり全部見る**。
     # 板は「その部品の中でいちばん体積の大きい立体」。番号（#0）で決め打つと、
     # 立体の並び順が変わった日に黙って別の物を除外する。
+    # **嵌合する組は「重なって当たり前」。**弾性変形するか、穴を通るか。
+    # ここに足すときは、**代わりの検査を必ず置く**（外すのではなく移す）。
+    #
+    #   plate × switches_real … MX の爪のスナップフィット。胴は 14.00 角
+    #     ちょうどで開口 14.0 に入るが、**爪は当たって撓む**（実測：板厚を
+    #     貫く厚さ 0.01〜0.16mm の膜が開口の縁に多数）。**逃げを入れては
+    #     いけない。**入れた瞬間にスイッチが保持されなくなる（スタビとは逆）
+    #   pcb_real × switches_real … ピンが基板の穴を通る（実測 0.06mm）。
+    #     ソケットのカップと同じ
+    #
+    # 代わりの検査は test_the_switch_boxes_match_the_real_switch
+    #（胴 ⊆ 開口 / ピン ⊆ 穴 / ステム ⊆ キャップの空洞）。
+    MATING = {("plate", "switches_real"), ("pcb_real", "switches_real")}
+
     boards = set()
     for n in ("pcb_real", "db_real"):
         if n in parts:
@@ -526,6 +575,9 @@ def check(keys, half, label="", focus=None, real=False, proxy_only=False):
                     and lb.split("#")[0] not in REPLACED_BY_REAL:
                 continue
             if _board_and_its_own_part(la, lb):
+                continue
+            if tuple(sorted((la.split("#")[0], lb.split("#")[0]))) in {
+                    tuple(sorted(m)) for m in MATING}:
                 continue
             if not _bb_touch(ba, bb_):
                 continue

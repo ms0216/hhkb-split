@@ -1035,12 +1035,13 @@ def test_the_switch_boxes_match_the_real_switch():
     天井がステムに当たる）。
     """
     _require_kicad("スイッチの箱と実物の突き合わせ")
+    import re
+
     import pcb_parts
     from build123d import Align, Box, Location, import_step
-    from envelopes import (CAP_TOP_T, CAP_WALL, PLATE_TO_PCB, SW_BODY_W,
-                           SW_UNDER_W)
+    from envelopes import (CAP_TOP_T, PLATE_TO_PCB, SW_BODY_W, SW_UNDER_W)
     from gen_case import CAP_LIFT, OUR_CAPS
-    from interface import PLATE_T
+    from interface import PLATE_T, SWITCH_CUTOUT
 
     model = pcb_parts.third_party_model("SW_Cherry_MX_Plate")
     if model is None:
@@ -1070,6 +1071,38 @@ def test_the_switch_boxes_match_the_real_switch():
     through = widest(PLATE_TO_PCB + PLATE_T / 2)
     assert through == pytest.approx(SW_UNDER_W, abs=0.05), (
         f"プレートを通る部分が {through:.2f}mm。SW_UNDER_W={SW_UNDER_W} と違う")
+    # **胴が開口に入ること。**ここは総当たりから外した組
+    # （`plate × switches_real`）の代わりの検査。
+    # ⚠️ 爪はわざと当たる（スナップフィット）。**逃げを入れてはいけない。**
+    # 入れた瞬間にスイッチが保持されなくなる（スタビ #30 とは逆の判断）。
+    assert through <= SWITCH_CUTOUT + 1e-6, (
+        f"スイッチの胴 {through:.2f}mm がプレート開口 {SWITCH_CUTOUT}mm に入らない")
+
+    # **ピンが基板の穴に入ること。**同じく総当たりから外した組
+    # （`pcb_real × switches_real`）の代わり。板の下（z<0）の断面を、
+    # フットプリントの非メッキ穴と突き合わせる。
+    holes = [(float(hx), float(hy), float(hd)) for hx, hy, hd in re.findall(
+        r'np_thru_hole circle \(at (-?[\d.]+) (-?[\d.]+)\).*?\(drill ([\d.]+)\)',
+        (ROOT / "pcb/lib/keyswitch.pretty/SW_Hotswap_Kailh_MX_1.00u.kicad_mod"
+         ).read_text())]
+    assert holes, "フットプリントに非メッキ穴が見当たらない"
+    slab = Location((0, 0, -0.4)) * Box(60, 60, 0.02,
+                                        align=(Align.CENTER,) * 3)
+    tight = []
+    for so in sw.solids():
+        r = so.intersect(slab)
+        if r is None:
+            continue
+        for t in r.solids():
+            b = t.bounding_box()
+            d = max(b.size.X, b.size.Y)
+            hx, hy, hd = min(holes, key=lambda h: (h[0] - b.center().X) ** 2
+                             + (h[1] - b.center().Y) ** 2)
+            if d > hd + 1e-6:
+                tight.append(f"({b.center().X:+.2f},{b.center().Y:+.2f}) "
+                             f"φ{d:.2f} > 穴 φ{hd:.2f}")
+    assert not tight, ("スイッチのピンが基板の穴に入らない\n  "
+                       + "\n  ".join(tight))
 
     # プレートのすぐ上（つばが載る部分）
     flange = widest(PLATE_TO_PCB + PLATE_T + 0.3)
