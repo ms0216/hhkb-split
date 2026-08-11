@@ -119,6 +119,23 @@ def test_every_part_is_in_the_check(half):
     assert not missing, f"{half}: 検査に入っていない部品 {sorted(missing)}"
 
 
+def test_every_real_part_has_a_colour():
+    """**実形状のときに増える部品にも色があること。**
+
+    箱の組み立てにしか無い名前（`switches_real` など）は、下の
+    `test_every_part_has_a_colour` では見えない。**色が無いと灰色になる
+    だけで落ちない**ので、絵の中で見分けがつかないまま気づけない
+    （2026-08-11 に利用者が 3D で気づいた）。
+    """
+    _github_actions_only("実形状の色")
+    _require_kicad("実形状の色")
+    from export_assembly import style_for
+
+    parts, _ = build_assembly(HALVES["left"], "left", real=True)
+    missing = [n for n in parts if style_for(n) is None]
+    assert not missing, f"実形状で色が無い部品 {sorted(missing)}"
+
+
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_every_part_has_a_colour(half):
     """色の定義から部品が漏れていないこと。

@@ -43,9 +43,9 @@ from interface import PLATE_T  # noqa: E402
 # 組を checks が黙って落とし、実形状ジョブはその箱を持っていない）。
 # 多いぶんには余計に見るだけ。ずれたら
 # test_the_replaced_by_real_list_matches_reality が実形状ジョブで落ちて教える
-# （switches_real が入ったら "switches" をここに足す）。
+# **"switches" は 2026-08-11 に足した**（実形状の switches_real に置き換わる）。
 REPLACED_BY_REAL = {"pcb", "sockets", "stabs", "db", "xiao",
-                    "pcb_parts", "db_parts"}
+                    "pcb_parts", "db_parts", "switches"}
 
 
 def plate_placement(w, h):

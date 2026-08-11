@@ -506,43 +506,51 @@ def test_the_zero_degree_state_is_actually_level():
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
-def test_the_usb_receptacle_does_not_stick_out_of_the_case(name):
-    """**USB-C のメスがケースの外へ出ていないこと。**
+def test_the_usb_receptacle_sticks_out_until_23_is_solved(name):
+    """★未解決★ **USB-C のメスが奥面から 0.26mm はみ出す。**その量を記録する。
 
-    2026-08-10 に実形状の総当たりで、メスが奥面から **0.26mm はみ出す**
-    ことが分かった。**モデルの誤りではなく、完成品がそうなる。**
-    飛び出したコネクタは抜き差しの外力を直に受け、もぎ取れる原因になる。
+    2026-08-10 に実形状の総当たりで発覚。**モデルの誤りではない**——
+    `pcb/lib/hhkb_split.3dshapes/XIAO_nRF52840.step` は Seeed 公式配布で、
+    Seeed 公称 21x17.8mm とも利用者のノギス実測とも一致している。
+    **実物のコネクタが基板の端より 1.5mm 出ている**のが原因。
 
-    はみ出し量は `WALL + DB_FROM_REAR` だけで決まる（コブを深くすると
-    子基板も一緒に奥へ動くので `BUMP_DEPTH` は効かない）。
+    **一度コブを 0.56mm 深くして直したが、撤回した。**CLAUDE.md
+    「寸法は実機に合わせる。交渉可能なのは打鍵感だけ」に反する。奥行は
+    open-gaps #2 で既に実機 +5.1mm あり「現状維持を推奨」と書いてある。
 
-    ⚠️ **直し方に制約がある。子基板を前へ動かしてはいけない。**
-    アンテナは XIAO の反対端にあり、本体基板の後端より 0.11mm 外に
-    出ているだけ（#23）。前へ動かせばアンテナが基板の下へ戻る。
-    だから `DB_FROM_REAR` を増やし、**同じだけコブを深くして**
-    子基板の絶対位置を保っている。片方だけ動かすとどちらかが落ちる
-    （もう片方は `test_the_antenna_is_no_longer_under_the_main_board`）。
+    **はみ出し量は `3.055 − WALL − DB_FROM_REAR` で決まり、コブの深さは
+    効かない**（コブを深くすると子基板も一緒に奥へ動く）。消すには XIAO を
+    前へ動かすしかないが、**アンテナの余裕は 0.362mm しかない**
+    （本物の基板外形 y=48.700 対 アンテナ y=49.062）。面一にするだけで
+    その 70% を使う。→ **#23 の解決と一緒に決める。**
 
-    メスの寸法は KiCad の STEP の記録（`pcb_parts.usb_receptacle`）で、
-    ケースの奥面は**実際に作った立体の bbox**から取る。
+    ここは値を**記録**する（drc.py と同じ型）。#23 が解けて XIAO が動けば
+    この数字が変わり、ここが落ちて「記録を更新しろ」と言ってくる。
+    **黙って直った／黙って悪化した、のどちらも起きない。**
     """
-    from gen_case import DB_FROM_REAR, USB_RECESS, WALL, build_case
+    from gen_case import DB_FROM_REAR, USB_RECESS, WALL
+    from gen_plate import plate_positions
+    from interface import PCB_INSET_Y, antenna_y_span, plan_depth
     import pcb_parts
 
     rec = pcb_parts.load()["db"]
-    out = pcb_parts.usb_receptacle()[4] - rec["board_bbox"][4]   # 板の端からの張り出し
+    out = pcb_parts.usb_receptacle()[4] - rec["board_bbox"][4]
+    stick = out - (WALL + DB_FROM_REAR)
+    assert stick == pytest.approx(0.255, abs=0.001), (
+        f"{name}: メスのはみ出しが {stick:+.3f}mm（記録は +0.255）。"
+        "**変わったのなら open-gaps #23 の節を更新すること。**"
+        "消えたのなら、この検査を "
+        "test_the_usb_receptacle_does_not_stick_out_of_the_case へ戻す")
 
-    # ケースの奥面までの距離（子基板の奥端 → 壁の外面）
-    room = WALL + DB_FROM_REAR
-    assert out <= room - USB_RECESS + 1e-9, (
-        f"{name}: USB-C のメスが奥面から {out - room:+.3f}mm 出る"
-        f"（メスの張り出し {out:.3f} / 壁まで {room:.3f} / "
-        f"引っ込めたい量 {USB_RECESS}）")
-
-    # 作った立体でも確かめる。**定数の計算どうしの一致では検証にならない。**
-    case, (_, h_body), _ = build_case(HALVES[name], name)
+    # **直すのに要る量と、いま持っている余裕を、毎回突き合わせる。**
+    # #23 が進んでアンテナの余裕が増えたら、ここが「もう直せる」と言う。
     from gen_case import BUMP_DEPTH
-    outer = case.bounding_box().max.Y
-    nominal = h_body / 2 + BUMP_DEPTH
-    assert abs(outer - nominal) < 0.01, (
-        f"{name}: ケースの奥面 {outer:.3f} が設計値 {nominal:.3f} と違う")
+    _, (_pw, ph) = plate_positions(HALVES[name])
+    db_rear = plan_depth(ph) / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR
+    margin = antenna_y_span(db_rear)[0] - (ph / 2 - PCB_INSET_Y)
+    need = stick + USB_RECESS
+    assert margin < need, (
+        f"{name}: アンテナの余裕 {margin:.3f}mm が、はみ出しを消して "
+        f"{USB_RECESS}mm 引っ込めるのに要る {need:.3f}mm に**足りている**。"
+        "**もう #23 を待たなくてよい。**子基板を前へ出して、この検査を "
+        "test_the_usb_receptacle_does_not_stick_out_of_the_case へ戻すこと")
