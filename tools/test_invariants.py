@@ -264,11 +264,19 @@ def test_the_antenna_record_cannot_be_silently_deleted():
 
     この検査が守るのは「**測る前に記録だけ消える**」こと。
     消してよいのは Task C3 の §6-6 で実測し、結果を書いたときだけ。
+
+    ⚠️ **2026-08-11: この守りも開きっぱなしだった。**`"アンテナの実測結果" in doc`
+    の部分文字列で見ていたが、open-gaps.md には**この検査を説明する文**が
+    2 か所あり（#23 の表と「この節を消してよいのは」）、そこに同じ文字列が
+    書かれている。**守りを説明する文そのものが、守りを開けていた**——
+    `_gate_antenna()` が同日に踏んだのと同じ型。直し方も同じで、
+    **行頭から始まる見出しであること**を見る。説明文は表のセルや文中に
+    あるので行頭の見出しには来ない。
     """
     doc = (Path(__file__).resolve().parent.parent
            / "docs/hardware/open-gaps.md").read_text()
     open_marker = "## 23. ★未解決★ アンテナが地板に挟まれている" in doc
-    measured = "アンテナの実測結果" in doc
+    measured = bool(re.search(r"^#{1,4} .*アンテナの実測結果", doc, re.M))
     assert open_marker or measured, (
         "アンテナの件（open-gaps #23）の記録が消えている。\n"
         "  実測して結果を書いたなら、見出しに「アンテナの実測結果」を\n"
