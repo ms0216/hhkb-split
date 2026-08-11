@@ -458,7 +458,7 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     # 別の物を黙って持ち上げる（この案件で 3 回起きた型）。
     # **数では突き合わせない**（STEP の取り込みで立体が融合し、記録の
     # 84 個に対し 66 個になる。2026-08-12 に実測）。**占める範囲**で見る。
-    from envelopes import DB_XIAO_LIFT, db_socket_bodies
+    from envelopes import DB_XIAO_LIFT, db_spacer_bodies
     from interface import xiao_y_offset
     _rec = pcb_parts.load()["db"]
     _z_top = FLOOR + DB_BOSS_H + _rec["board_step_thickness"]
@@ -483,9 +483,10 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
             "板の上で拾った立体の範囲が記録の xiao_asm と違う。持ち上げる"
             f"対象を取り違えている:\n  拾った {[round(v, 2) for v in _got]}"
             f"\n  記録   {[round(v, 2) for v in _want]}")
-    # ソケットの実体（買う部品・第三者モデルが無いので寸法から作る）
+    # 板と XIAO の間に実際に入っている物（ヘッダの樹脂＋ソケット）。
+    # **置かないと XIAO が宙に浮いた絵になる**（2026-08-12・利用者の指摘）。
     _db_d = _rec["board_bbox"][4] - _rec["board_bbox"][1]
-    lifted += db_socket_bodies(db_x, db_center_y + xiao_y_offset(_db_d),
+    lifted += db_spacer_bodies(db_x, db_center_y + xiao_y_offset(_db_d),
                                _z_top).solids()
     db_real = Compound(children=lifted)
 

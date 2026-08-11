@@ -591,25 +591,29 @@ def daughterboard_envelope(center, w, d, t, holes=(), usb=None):
     return part
 
 
-def db_socket_bodies(x_center, y_xiao_center, z_board_top):
-    """XIAO を受けるピンソケット 2 本の実体（open-gaps #27・構成 A）。
+def db_spacer_bodies(x_center, y_xiao_center, z_board_top):
+    """子基板と XIAO の間に**実際に入っている物**（open-gaps #27）。
 
-    **買ってくる部品なので第三者モデルが無い。**寸法は規格（1x7・2.54 ピッチ・
-    胴 2.54mm 角）とフットプリントのパッド座標から作る。**これを置かないと、
-    絵の中で XIAO が宙に浮く**（そして「なぜ浮いているのか」を毎回考え直す）。
+    中身は「ヘッダの樹脂（2.0mm・必ずある）」＋「ソケット（採らないので 0）」。
+    高さは `DB_XIAO_LIFT` そのもの。**買ってくる部品なので第三者モデルが
+    無い**ので、規格（1x7・2.54 ピッチ・胴 2.54mm 角）とフットプリントの
+    パッド座標から作る。
 
-    座高は買って測るまで暫定（DB_SOCKET_SEAT）。
-    **直付け（DB_SOCKET_SEAT = 0）なら何も返さない。**
+    **これを置かないと、絵の中で XIAO が 2.0mm 宙に浮く。**
+    2026-08-12、利用者が Blender で「本当に目で確認したのか」と指摘し、
+    実物だけを描いて調べたところ、**板と XIAO の間の z 7.95〜9.90mm に
+    頂点が 1 つも無かった**（＝空気として描かれていた）。
+    **モデルに入っていない物は、検査していないのと同じ。**
     """
     from build123d import Align, Box, BuildPart, Locations, Part
 
-    if DB_SOCKET_SEAT <= 0:
+    if DB_XIAO_LIFT <= 0:
         return Part()
     body_l = DB_SOCKET_PINS * DB_SOCKET_PITCH
     with BuildPart() as env:
         for sx in (-DB_SOCKET_ROW_X, DB_SOCKET_ROW_X):
             with Locations((x_center + sx, y_xiao_center, z_board_top)):
-                Box(DB_SOCKET_PITCH, body_l, DB_SOCKET_SEAT,
+                Box(DB_SOCKET_PITCH, body_l, DB_XIAO_LIFT,
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
     return env.part
 

@@ -255,6 +255,36 @@ def build(half, style):
     return blend, png, len(objects)
 
 
+def _refuse_if_stale(half):
+    """STL が設計より古かったら止める。**古い絵を黙って作らない。**
+
+    2026-08-12 に実際に起きたこと: 利用者が `left.blend` を開いて
+    「本当に目で確認したのか」と指摘した。**その .blend は前日 22:27 の
+    STL から作られていて、その日の変更が 1 つも入っていなかった。**
+    右側に至っては STL 自体が 8 時間前のままで、`.blend` はそれを黙って
+    読み込んでいた。
+
+    **絵は「設計を目で確かめる」ための道具**なので、中身が古いと
+    検証そのものが嘘になる。設定しただけで効いていない類の失敗と同じ。
+    """
+    # 比べる相手は「**STL の形を決めうるファイル**」。検査（test_*.py）と
+    # この描画スクリプト自身は形を作らないので外す。**外しすぎない**——
+    # 迷ったら入れる側（止まりすぎるのは安全側、通しすぎは古い絵になる）。
+    tools = Path(__file__).resolve().parent
+    src = max(p.stat().st_mtime for p in tools.glob("*.py")
+              if not p.name.startswith("test_") and p.name != "blend_assembly.py")
+    stls = sorted(OUT.glob(f"{half}_*.stl"))
+    if not stls:
+        raise SystemExit(f"{half} の STL が無い。先に export_assembly.py を動かすこと")
+    old = [p.name for p in stls if p.stat().st_mtime < src]
+    if old:
+        raise SystemExit(
+            f"{half}: STL が tools/*.py より古い（{len(old)}/{len(stls)} 個）。"
+            f"例: {old[0]}\n"
+            f"  古い絵を作らないために止めた。先に次を動かすこと:\n"
+            f"    .venv/bin/python3 tools/export_assembly.py {half}")
+
+
 def main():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     halves = argv or ["left", "right"]
@@ -262,6 +292,8 @@ def main():
     style_path = OUT / "style.json"
     if not style_path.exists():
         raise SystemExit("style.json が無い。先に export_assembly.py を動かすこと")
+    for half in halves:
+        _refuse_if_stale(half)
     style = {k: tuple(v) for k, v in json.loads(style_path.read_text()).items()}
 
     for half in halves:
