@@ -20,16 +20,21 @@
  * ピンの割り当て（XIAO nRF52840、使えるのは D0..D10 の 11 本）
  *
  *   D0        電池電圧の測定（ADC が使えるのは D0..D5 だけなので D0 を空ける）
- *   D1..D5    行 5 本。MCU に直結した「入力」
+ *   D1..D4    行 0..3。MCU に直結した「入力」
+ *   D5        予備（ROW4 を D9 へ移して空いた）
  *   D6        予備
  *   D7        シフトレジスタの CS（ラッチ）
  *   D8        SPI SCK   ─┐ xiao_spi (= spi2) が使う
- *   D9        SPI MISO  ─┤ 595 は出力専用なので MISO は使わないが、
- *   D10       SPI MOSI  ─┘ ボードの pinctrl が確保するため他用途にできない
+ *   D9        行 4。**元は SPI MISO。**595 は出力専用で MISO を使わないので、
+ *             下の &spi2_default / &spi2_sleep の上書きで pinctrl から外し、
+ *             GPIO 入力として使う（open-gaps #23。アンテナ直下の配線を
+ *             減らすため、子基板で ROW4 の行き先を左列 D5 から右列 D9 へ移した）
+ *   D10       SPI MOSI  ─┘
  *
  * ZMK の公式サンプルは CS に D9（MISO）を充てているが、xiao_ble の pinctrl は
  * P1.14 を MISO として確保している（zephyr の xiao_ble-pinctrl.dtsi）。
- * 競合を避けるため、こちらは D7 を CS にした。予備が D6 の 1 本残る。
+ * 競合を避けるため、こちらは D7 を CS にした。
+ * D9 を行に使う競合は、上のとおり pinctrl の上書きで解いてある。
  *
  * ------------------------------------------------------------------
  * 行と列は物理配列そのまま。5 段 × 左 6 列 / 右 8 列。
@@ -101,8 +106,37 @@
 			, <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			, <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			, <&xiao_d 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
-			, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 9 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			;
+	};
+};
+
+/*
+ * **D9（P1.14）を SPI の MISO から解放する**（open-gaps #23・D9 移設）。
+ *
+ * xiao_ble の board 定義（zephyr の seeed_xiao_ble-pinctrl.dtsi）は
+ * spi2 の pinctrl に SCK(P1.13)・MOSI(P1.15)・MISO(P1.14) の 3 本を
+ * 確保している。この鍵盤の SPI は 595（出力専用）だけで MISO を読まない。
+ * psels を SCK と MOSI の 2 本に上書きして P1.14 を空け、上の row-gpios が
+ * GPIO 入力として使う。nRF の SPIM は MISO 未接続で問題なく動く
+ * （読み値が 0 になるだけ。読んでいない）。
+ *
+ * ⚠️ **ここを消すと P1.14 の取り合いになり、行 4（最下段）が読めなくなる。**
+ */
+#include <dt-bindings/pinctrl/nrf-pinctrl.h>
+
+&spi2_default {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+	};
+};
+
+&spi2_sleep {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+		low-power-enable;
 	};
 };
 

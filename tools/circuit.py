@@ -355,9 +355,13 @@ def netlist(half):
         # その制約の中で SCK(3) の隣を GND(2) にしてある（ループ面積を
         # 小さく）。**両端を GND にはできない。**そうすると交差が戻る。
         # 1 番の CS は 1 スキャンに 1 回しか動かないので端に置く害が最小。
-        "1": "CS", "2": "GND", "3": "SPI_SCK", "4": "SPI_MOSI",
-        "5": "V3V3", "6": "VBATT_SENSE",
-        "7": "ROW0", "8": "ROW1", "9": "ROW2", "10": "ROW3", "11": "ROW4",
+        # **ROW4 は右群にいる**（open-gaps #23・D9 移設）。ROW4 の行き先が
+        # XIAO の右列 D9 になったので、左群のままだと横枝が左群の縦線を
+        # 8 箇所で横切る（DRC で実測）。右群の並び（前→奥＝D7,D8,D9,D10,3V3）
+        # に合わせて 4 番へ挿し、後続を 1 つずつ繰り下げた。
+        "1": "CS", "2": "GND", "3": "SPI_SCK", "4": "ROW4",
+        "5": "SPI_MOSI", "6": "V3V3", "7": "VBATT_SENSE",
+        "8": "ROW0", "9": "ROW1", "10": "ROW2", "11": "ROW3",
         "12": "GND",
     }))
 
@@ -385,9 +389,10 @@ def daughterboard_netlist():
             # その制約の中で SCK(3) の隣を GND(2) にしてある（ループ面積を
             # 小さく）。**両端を GND にはできない。**そうすると交差が戻る。
             # 1 番の CS は 1 スキャンに 1 回しか動かないので端に置く害が最小。
-            "1": "CS", "2": "GND", "3": "SPI_SCK", "4": "SPI_MOSI",
-            "5": "V3V3", "6": "VBATT_SENSE",
-            "7": "ROW0", "8": "ROW1", "9": "ROW2", "10": "ROW3", "11": "ROW4",
+            # **ROW4 は右群にいる**（open-gaps #23・D9 移設。上の J_DB と同じ）。
+            "1": "CS", "2": "GND", "3": "SPI_SCK", "4": "ROW4",
+            "5": "SPI_MOSI", "6": "V3V3", "7": "VBATT_SENSE",
+            "8": "ROW0", "9": "ROW1", "10": "ROW2", "11": "ROW3",
             "12": "GND",
         }),
         # **BAT 端子はどこにも繋がない。**リポ用充電回路に直結しており、
@@ -395,8 +400,15 @@ def daughterboard_netlist():
         ("U_MCU", "xiao_nrf52840", {
             "GND": "GND", "3V3": "V3V3", "5V": "NC", "BAT": "NC",
             "D0": "VBATT_SENSE",
-            "D1": "ROW0", "D2": "ROW1", "D3": "ROW2", "D4": "ROW3", "D5": "ROW4",
-            "D6": "NC", "D7": "CS", "D8": "SPI_SCK", "D9": "NC", "D10": "SPI_MOSI",
+            # **ROW4 は D5 ではなく D9（MISO）にある。**open-gaps #23。
+            # アンテナは XIAO の左列（TX 側）の縁にあり、左列へ行くレーンが
+            # 6 本だとアンテナの真下を 2 本が通る。行を 1 本だけ右列の D9 へ
+            # 移すと左列は 5 本になり、真下は 0 本になる（縁 0.5mm 内に 1 本残る）。
+            # D9 は xiao_spi の MISO だが、595 は出力専用で MISO を使わない。
+            # ファーム側で pinctrl から MISO を外して GPIO として使う
+            # （hhkb_split.dtsi の &spi2_default 上書き）。
+            "D1": "ROW0", "D2": "ROW1", "D3": "ROW2", "D4": "ROW3", "D5": "NC",
+            "D6": "NC", "D7": "CS", "D8": "SPI_SCK", "D9": "ROW4", "D10": "SPI_MOSI",
         }),
         ("C_DB", "cap_100n", {"1": "V3V3", "2": "GND"}),
     ]

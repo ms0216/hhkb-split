@@ -20,7 +20,8 @@ from circuit import daughterboard_netlist  # noqa: E402
 
 # xiao_spi (= SPI2) が固定で使うピン。デバイスツリーには現れないので、
 # ボード定義（seeed_xiao_ble）の事実としてここに書く。
-SPI_PINS = {"D8", "D10"}       # SCK, MOSI。MISO(D9) はキーボードでは使わない
+SPI_PINS = {"D8", "D10"}       # SCK, MOSI。MISO(D9) は pinctrl から外して
+                               # ROW4 の GPIO に転用した（open-gaps #23・D9 移設）
 
 
 def _strip(text):
