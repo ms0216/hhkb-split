@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1180" width="1240" height="1180" font-family="Helvetica, Arial, sans-serif">
+<rect width="1240" height="1180" fill="#ffffff"/>
+<text x="24" y="36" text-anchor="start" font-size="19" font-weight="bold" fill="#111">左（セントラル）の消費電流 — 何が食っていて、どこを変えると効くか</text>
+<text x="24" y="58" text-anchor="start" font-size="12" fill="#666">2026-08-10〜11 の実測。電池 ＋ テスター（mA 直列）。ログ無しのファーム・電池を入れ直した状態で読んだ値。</text>
+<text x="24" y="102" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">① 内訳と、設定を変えたときの姿</text>
+<line x1="300.0" y1="118" x2="300.0" y2="438" stroke="#e8ecef"/>
+<text x="300.0" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.0</text>
+<line x1="385.7" y1="118" x2="385.7" y2="438" stroke="#e8ecef"/>
+<text x="385.7142857142857" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.1</text>
+<line x1="471.4" y1="118" x2="471.4" y2="438" stroke="#e8ecef"/>
+<text x="471.42857142857144" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.2</text>
+<line x1="557.1" y1="118" x2="557.1" y2="438" stroke="#e8ecef"/>
+<text x="557.1428571428571" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.3</text>
+<line x1="642.9" y1="118" x2="642.9" y2="438" stroke="#e8ecef"/>
+<text x="642.8571428571429" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.4</text>
+<line x1="728.6" y1="118" x2="728.6" y2="438" stroke="#e8ecef"/>
+<text x="728.5714285714286" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.5</text>
+<line x1="814.3" y1="118" x2="814.3" y2="438" stroke="#e8ecef"/>
+<text x="814.2857142857143" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.6</text>
+<line x1="900.0" y1="118" x2="900.0" y2="438" stroke="#e8ecef"/>
+<text x="900.0" y="96" text-anchor="middle" font-size="10" fill="#8c959d">0.7</text>
+<text x="934" y="96" text-anchor="start" font-size="10" fill="#8c959d">mA</text>
+<rect x="300.0" y="118" width="25.7" height="46" fill="#9aa1a8" stroke="#ffffff" stroke-width="1"/>
+<rect x="325.7" y="118" width="51.4" height="46" fill="#6c3483" stroke="#ffffff" stroke-width="1"/>
+<text x="351.42857142857144" y="145.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.060</text>
+<rect x="377.1" y="118" width="296.1" height="46" fill="#c0392b" stroke="#ffffff" stroke-width="1"/>
+<text x="525.2" y="145.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.345</text>
+<rect x="673.3" y="118" width="155.7" height="46" fill="#2b4a97" stroke="#ffffff" stroke-width="1"/>
+<text x="751.1142857142859" y="145.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.182</text>
+<text x="24" y="139.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">既定（ZMK のまま）</text>
+<text x="24" y="156.0" text-anchor="start" font-size="10.5" fill="#777">分割 7.5ms ／ ホスト 15ms・latency 0</text>
+<text x="840.9714285714288" y="138.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.617 mA</text>
+<text x="840.9714285714288" y="155.0" text-anchor="start" font-size="12" font-weight="bold" fill="#1e8449">4.4 ヶ月</text>
+<circle cx="840.0" cy="111" r="5" fill="#111"/>
+<text x="830.0" y="115" text-anchor="end" font-size="10.5" font-weight="bold" fill="#111">実測 0.63</text>
+<text x="300" y="179" text-anchor="start" font-size="10" fill="#777">latency 30 を要求していたが Apple の規則違反で捨てられていた</text>
+<rect x="300.0" y="198" width="25.7" height="46" fill="#9aa1a8" stroke="#ffffff" stroke-width="1"/>
+<rect x="325.7" y="198" width="51.4" height="46" fill="#6c3483" stroke="#ffffff" stroke-width="1"/>
+<text x="351.42857142857144" y="225.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.060</text>
+<rect x="377.1" y="198" width="296.1" height="46" fill="#c0392b" stroke="#ffffff" stroke-width="1"/>
+<text x="525.2" y="225.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.345</text>
+<rect x="673.3" y="198" width="5.0" height="46" fill="#2b4a97" stroke="#ffffff" stroke-width="1"/>
+<text x="24" y="219.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">候補 A</text>
+<text x="24" y="236.0" text-anchor="start" font-size="10.5" fill="#777">分割 7.5ms ／ ホスト 15ms・latency 30</text>
+<text x="690.2801843317974" y="218.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.441 mA</text>
+<text x="690.2801843317974" y="235.0" text-anchor="start" font-size="12" font-weight="bold" fill="#1e8449">6.2 ヶ月</text>
+<circle cx="668.6" cy="191" r="5" fill="#111"/>
+<text x="658.5714285714287" y="195" text-anchor="end" font-size="10.5" font-weight="bold" fill="#111">実測 0.43</text>
+<text x="300" y="259" text-anchor="start" font-size="10" fill="#777">遅延も左右差も動かない。Mac・Windows とも同じ値</text>
+<rect x="300.0" y="278" width="25.7" height="46" fill="#9aa1a8" stroke="#ffffff" stroke-width="1"/>
+<rect x="325.7" y="278" width="51.4" height="46" fill="#6c3483" stroke="#ffffff" stroke-width="1"/>
+<text x="351.42857142857144" y="305.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.060</text>
+<rect x="377.1" y="278" width="148.1" height="46" fill="#c0392b" stroke="#ffffff" stroke-width="1"/>
+<text x="451.1714285714286" y="305.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.173</text>
+<rect x="525.2" y="278" width="5.0" height="46" fill="#2b4a97" stroke="#ffffff" stroke-width="1"/>
+<text x="24" y="299.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">候補 A ＋ 分割 15ms</text>
+<text x="24" y="316.0" text-anchor="start" font-size="10.5" fill="#777">分割 15ms ／ ホスト 15ms・latency 30</text>
+<text x="542.2230414746545" y="298.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.269 mA</text>
+<text x="542.2230414746545" y="315.0" text-anchor="start" font-size="12" font-weight="bold" fill="#1e8449">10.2 ヶ月</text>
+<text x="542.2230414746545" y="331.0" text-anchor="start" font-size="9.5" fill="#8c959d">（未実測・式からの予測）</text>
+<text x="300" y="339" text-anchor="start" font-size="10" fill="#777">右手だけ平均 +3.75ms。左右差が増える</text>
+<rect x="300.0" y="358" width="25.7" height="46" fill="#9aa1a8" stroke="#ffffff" stroke-width="1"/>
+<rect x="325.7" y="358" width="51.4" height="46" fill="#6c3483" stroke="#ffffff" stroke-width="1"/>
+<text x="351.42857142857144" y="385.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.060</text>
+<rect x="377.1" y="358" width="74.0" height="46" fill="#c0392b" stroke="#ffffff" stroke-width="1"/>
+<text x="414.1571428571429" y="385.0" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff">0.086</text>
+<rect x="451.2" y="358" width="5.0" height="46" fill="#2b4a97" stroke="#ffffff" stroke-width="1"/>
+<text x="24" y="379.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">候補 A ＋ 分割 30ms</text>
+<text x="24" y="396.0" text-anchor="start" font-size="10.5" fill="#777">分割 30ms ／ ホスト 15ms・latency 30</text>
+<text x="468.19447004608304" y="378.0" text-anchor="start" font-size="12.5" font-weight="bold" fill="#111">0.182 mA</text>
+<text x="468.19447004608304" y="395.0" text-anchor="start" font-size="12" font-weight="bold" fill="#1e8449">15.0 ヶ月</text>
+<text x="468.19447004608304" y="411.0" text-anchor="start" font-size="9.5" fill="#8c959d">（未実測・式からの予測）</text>
+<text x="300" y="419" text-anchor="start" font-size="10" fill="#777">右手だけ平均 +7.5ms。体感に出る恐れ</text>
+<rect x="300" y="456" width="13" height="13" fill="#9aa1a8"/>
+<text x="318" y="467" text-anchor="start" font-size="10" fill="#555">CPU・DC/DC・分圧</text>
+<rect x="450" y="456" width="13" height="13" fill="#6c3483"/>
+<text x="468" y="467" text-anchor="start" font-size="10" fill="#555">BLE スタック</text>
+<rect x="600" y="456" width="13" height="13" fill="#c0392b"/>
+<text x="618" y="467" text-anchor="start" font-size="10" fill="#555">分割リンク（左 ↔ 右）</text>
+<rect x="750" y="456" width="13" height="13" fill="#2b4a97"/>
+<text x="768" y="467" text-anchor="start" font-size="10" fill="#555">ホストリンク（左 ↔ PC）</text>
+<text x="24" y="467" text-anchor="start" font-size="10.5" font-weight="bold" fill="#111">● ＝ 実測値</text>
+<text x="24" y="502" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">② 使っている式と、その根拠</text>
+<rect x="24" y="514" width="1192" height="132" rx="8" fill="#f7f9fb" stroke="#d5dae0"/>
+<text x="44" y="542" text-anchor="start" font-size="14" font-weight="bold" fill="#111">I  =  床 0.090  +  2.591 ÷ 分割間隔[ms]  +  2.725 ÷ ( ホスト間隔[ms] × (latency+1) )</text>
+<text x="44" y="568" text-anchor="start" font-size="11" fill="#555">前提: 無線イベント 1 回あたりの費用は、相手が右手でもホストでも同じ。→ 2 つの係数が近い値（2.591 と 2.725）になったことが傍証。</text>
+<text x="44" y="590" text-anchor="start" font-size="11" fill="#555">latency は「送るものが無いとき、何回まで聞き逃してよいか」。送るものがあれば次の機会に送るので、打鍵の遅延は増えない。</text>
+<text x="44" y="612" text-anchor="start" font-size="11" fill="#1e8449">検算: 既定 0.617（実測 0.63）／ 候補 A 0.441（実測 0.43）。latency 0 の掃引から作った式が、latency 30 の実測を当てている。</text>
+<text x="44" y="632" text-anchor="start" font-size="11" fill="#d35400">⚠️ 本番はこれに 74LVC595 ×2 の静止電流 0.02mA（データシート）が乗る。</text>
+<text x="24" y="678" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">③ どのレバーが、どれだけ効くか</text>
+<text x="24" y="704" text-anchor="start" font-size="11" font-weight="bold" fill="#555">変えるもの</text>
+<text x="400" y="704" text-anchor="start" font-size="11" font-weight="bold" fill="#555">電流の変化</text>
+<text x="520" y="704" text-anchor="start" font-size="11" font-weight="bold" fill="#555">寿命の変化</text>
+<text x="650" y="704" text-anchor="start" font-size="11" font-weight="bold" fill="#555">払う代償</text>
+<text x="890" y="704" text-anchor="start" font-size="11" font-weight="bold" fill="#555">何で確かめたか</text>
+<line x1="24" y1="710" x2="1216" y2="710" stroke="#ccd2d8"/>
+<text x="24" y="732" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">ホストの latency を 0 → 30</text>
+<text x="400" y="732" text-anchor="start" font-size="11.5" font-weight="bold" fill="#1e8449">−0.176mA</text>
+<text x="520" y="732" text-anchor="start" font-size="11.5" font-weight="bold" fill="#1e8449">＋1.8 ヶ月</text>
+<text x="650" y="732" text-anchor="start" font-size="11" fill="#555">なし</text>
+<text x="890" y="732" text-anchor="start" font-size="10.5" fill="#777">実測（Mac・Windows とも 0.43）＋ログで受理を確認</text>
+<text x="24" y="762" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">分割リンクを 7.5 → 15ms</text>
+<text x="400" y="762" text-anchor="start" font-size="11.5" font-weight="bold" fill="#d35400">−0.173mA</text>
+<text x="520" y="762" text-anchor="start" font-size="11.5" font-weight="bold" fill="#d35400">＋4.0 ヶ月</text>
+<text x="650" y="762" text-anchor="start" font-size="11" fill="#555">右手だけ平均 +3.75ms。左右差</text>
+<text x="890" y="762" text-anchor="start" font-size="10.5" fill="#777">8 点の当てはめ（実測）</text>
+<text x="24" y="792" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">分割リンクを 7.5 → 30ms</text>
+<text x="400" y="792" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">−0.259mA</text>
+<text x="520" y="792" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">＋8.8 ヶ月</text>
+<text x="650" y="792" text-anchor="start" font-size="11" fill="#555">右手だけ平均 +7.5ms。左右差</text>
+<text x="890" y="792" text-anchor="start" font-size="10.5" fill="#777">同上</text>
+<text x="24" y="822" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">ホストの間隔を 15 → 60ms（latency 30 のまま）</text>
+<text x="400" y="822" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">−0.004mA</text>
+<text x="520" y="822" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">＋0.1 ヶ月</text>
+<text x="650" y="822" text-anchor="start" font-size="11" fill="#555">両手に +22ms</text>
+<text x="890" y="822" text-anchor="start" font-size="10.5" fill="#777">式。分解能以下なので実測で確かめられない</text>
+<text x="24" y="852" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">マトリクス走査・595 の駆動をやめる</text>
+<text x="400" y="852" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">0.00mA</text>
+<text x="520" y="852" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">±0</text>
+<text x="650" y="852" text-anchor="start" font-size="11" fill="#555">—</text>
+<text x="890" y="852" text-anchor="start" font-size="10.5" fill="#777">実測（direct 0.03 / matrix 0.02 / shift 0.03）</text>
+<text x="24" y="882" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">電池報告の間隔を延ばす</text>
+<text x="400" y="882" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">0.000mA</text>
+<text x="520" y="882" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">±0</text>
+<text x="650" y="882" text-anchor="start" font-size="11" fill="#555">—</text>
+<text x="890" y="882" text-anchor="start" font-size="10.5" fill="#777">計算（60 秒に 1 回の通知）</text>
+<text x="24" y="938" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">④ どこまで確かか</text>
+<rect x="24" y="952" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="964" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="964" text-anchor="start" font-size="11" fill="#444">分割リンクの係数 2.591 — 7.5〜60ms を 8 点。残差 ≤0.034mA</text>
+<rect x="24" y="974" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="986" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="986" text-anchor="start" font-size="11" fill="#444">床が増えないこと — 3 本のファームで実測。差はすべて分解能以下</text>
+<rect x="24" y="996" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="1008" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="1008" text-anchor="start" font-size="11" fill="#444">候補 A の 0.43mA — Mac・Windows・電池入れ直しで一致。macOS はログで受理を確認</text>
+<rect x="24" y="1018" width="52" height="17" rx="3" fill="#c0392b" opacity="0.16"/>
+<text x="50" y="1030" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">弱い</text>
+<text x="88" y="1030" text-anchor="start" font-size="11" fill="#444">ホストリンクの係数 2.725 — 3 点だが 45ms と 60ms が同値。実質 2 点・未知数 2 個で自由度 0</text>
+<rect x="24" y="1040" width="52" height="17" rx="3" fill="#c0392b" opacity="0.16"/>
+<text x="50" y="1052" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">弱い</text>
+<text x="88" y="1052" text-anchor="start" font-size="11" fill="#444">45/60ms の点 — 電流が 2 値を行き来する中から低い側を目で選んだ。ログで裏を取っていない</text>
+<rect x="24" y="1062" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
+<text x="50" y="1074" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
+<text x="88" y="1074" text-anchor="start" font-size="11" fill="#444">Windows の実際の interval / latency — 更新イベントを出さないので読めない。電流が同じことだけが分かっている</text>
+<rect x="24" y="1084" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
+<text x="50" y="1096" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
+<text x="88" y="1096" text-anchor="start" font-size="11" fill="#444">0.87 → 0.96mA の 0.09（ログ入りファーム）。電池電圧は 3.00V で変わらず。説明が無い</text>
+<text x="24" y="1158" text-anchor="start" font-size="10" fill="#aab1b8">生成: tools/gen_power_model.py — SVG を手で編集しない</text>
+</svg>
