@@ -46,9 +46,6 @@ SHIFTER_IQ = 0.020                # 74LVC595 ×2 の静止電流。**データ�
 # 床の実測（BLE 無し・電池を入れ直して測った）
 FLOOR_MEASURED = {"proto_direct": 0.03, "proto_matrix": 0.02, "proto_shift": 0.03}
 
-# 全体の実測（左・ログ無し・電池を入れ直した状態）
-TOTAL_MEASURED = {"既定": 0.63, "候補 A": 0.43}
-
 CAPACITY_MAH, HOURS_PER_MONTH = 2000, 24 * 30.4
 
 # 並べる構成: (名前, 分割間隔[ms], ホスト間隔[ms], latency, 実測 or None, 注)
@@ -198,7 +195,7 @@ txt(44, FY + 110,
     "latency 0 の掃引から作った式が、latency 30 の実測を当てている。",
     GREEN, 11, "start", bold=False)
 txt(44, FY + 130,
-    "⚠️ 本番はこれに 74LVC595 ×2 の静止電流 0.02mA（データシート）が乗る。",
+    f"⚠️ 本番はこれに 74LVC595 の静止電流 {SHIFTER_IQ:.2f}mA（データシート・右は 2 個）が乗る。",
     ORA, 11, "start", bold=False)
 
 # ==========================================================================
