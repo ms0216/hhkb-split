@@ -30,7 +30,7 @@ from gen_case import (  # noqa: E402
 )
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from envelopes import (  # noqa: E402
-    battery_envelope, daughterboard_envelope, pcb_bottom_at, pcb_envelope,
+    battery_envelope, daughterboard_envelope, pcb_envelope,
     place_pcb, xiao_overhang_envelope,
 )
 from interface import PLATE_T  # noqa: E402

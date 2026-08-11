@@ -214,10 +214,18 @@ def battery_envelope(center):
 
 
 def pcb_bottom_at(y, h_plate, rim_front):
-    """奥行位置 y における基板下端の高さ。
+    """奥行位置 y における基板下端の高さ（**保守平面。局所の真実ではない**）。
 
     傾いているので位置によって変わる。電池やボスの高さを決めるときは
     必ずこの関数で確認する（一定と思い込んで衝突させた）。
+
+    ⚠️ この値は SOCKET_DROP 3.2 を**全面について一律に**引いている。
+    「その下に置く物の高さ上限を安全側に決める」用途にだけ使うこと。
+    特定の (x, y) の実際の隙間としてこの値を引用し「入らない」と
+    結論してはならない——実際に open-gaps #27 で、ソケットが 1 個も
+    無い子基板の真上にこの平面を当てて「余裕 0.13mm」という嘘の制約が
+    生まれた（実測は基板まで 3.5〜8mm。2026-08-11 に発覚）。
+    局所の隙間は実形状（gen_assembly real=True）で測る。
     """
     rim = rim_front + (y + h_plate / 2) * tan(radians(TILT_DEG))
     return rim - PLATE_TO_PCB - PCB_T - SOCKET_DROP
