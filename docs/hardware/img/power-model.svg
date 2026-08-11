@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1260" width="1240" height="1260" font-family="Helvetica, Arial, sans-serif">
-<rect width="1240" height="1260" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1320" width="1240" height="1320" font-family="Helvetica, Arial, sans-serif">
+<rect width="1240" height="1320" fill="#ffffff"/>
 <text x="24" y="36" text-anchor="start" font-size="19" font-weight="bold" fill="#111">左（セントラル）の消費電流 — 何が食っていて、どこを変えると効くか</text>
 <text x="24" y="58" text-anchor="start" font-size="12" fill="#666">2026-08-10〜11 の実測。電池 ＋ テスター（mA 直列）。5 つとも実測。UART の宣言を外し、電池を入れ直してから読んだ値。</text>
 <text x="24" y="74" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">① 内訳と、設定を変えたときの姿（5 つとも実測）</text>
@@ -137,40 +137,50 @@
 <text x="520" y="902" text-anchor="start" font-size="11.5" font-weight="bold" fill="#c0392b">−1.1 ヶ月</text>
 <text x="650" y="902" text-anchor="start" font-size="11" fill="#555">電波の余裕を買う（左だけ強くなる）</text>
 <text x="890" y="902" text-anchor="start" font-size="10.5" fill="#777">実測 0.54mA。ZMK の「無視できる」は当てはまらない</text>
-<text x="24" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">ホストの間隔 15 → 60ms（latency 30 のまま）</text>
-<text x="400" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">−0.004mA</text>
-<text x="520" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">＋0.1 ヶ月</text>
-<text x="650" y="932" text-anchor="start" font-size="11" fill="#555">両手に +22ms</text>
-<text x="890" y="932" text-anchor="start" font-size="10.5" fill="#777">式。分解能以下なので実測で確かめられない</text>
-<text x="24" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">マトリクス走査・595 の駆動をやめる</text>
-<text x="400" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">0.00mA</text>
-<text x="520" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">±0</text>
-<text x="650" y="962" text-anchor="start" font-size="11" fill="#555">—</text>
-<text x="890" y="962" text-anchor="start" font-size="10.5" fill="#777">実測（direct 0.03 / matrix 0.02 / shift 0.03）</text>
-<text x="24" y="1018" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">④ どこまで確かか</text>
-<rect x="24" y="1032" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
-<text x="50" y="1044" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
-<text x="88" y="1044" text-anchor="start" font-size="11" fill="#444">分割リンクの係数 2.591 — 8 点の当てはめに加え、15ms と 30ms を予測してから実測して当てた</text>
-<rect x="24" y="1054" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
-<text x="50" y="1066" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
-<text x="88" y="1066" text-anchor="start" font-size="11" fill="#444">床が増えないこと — 3 本のファームで実測。差はすべて分解能以下</text>
-<rect x="24" y="1076" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
-<text x="50" y="1088" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
-<text x="88" y="1088" text-anchor="start" font-size="11" fill="#444">候補 A の 0.43mA — Mac・Windows・電池入れ直しで一致。macOS はログで受理を確認</text>
-<rect x="24" y="1098" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
-<text x="50" y="1110" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
-<text x="88" y="1110" text-anchor="start" font-size="11" fill="#444">TX +8dBm の +0.10mA — データシートから計算した +0.098 を、測って当てた</text>
-<rect x="24" y="1120" width="52" height="17" rx="3" fill="#c0392b" opacity="0.16"/>
-<text x="50" y="1132" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">弱い</text>
-<text x="88" y="1132" text-anchor="start" font-size="11" fill="#444">ホストリンクの係数 2.725 — 3 点だが 45ms と 60ms が同値。実質 2 点・未知数 2 個で自由度 0</text>
-<rect x="24" y="1142" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
-<text x="50" y="1154" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
-<text x="88" y="1154" text-anchor="start" font-size="11" fill="#444">Windows の実際の interval / latency — 更新イベントを出さないので読めない。電流が同じことだけが分かっている</text>
-<rect x="24" y="1164" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
-<text x="50" y="1176" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
-<text x="88" y="1176" text-anchor="start" font-size="11" fill="#444">打鍵感（D2）— 15ms・30ms とも「違和感なし」だが、目隠しでなく右の 1 キーだけ。判断材料にはならない</text>
-<rect x="24" y="1186" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
-<text x="50" y="1198" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
-<text x="88" y="1198" text-anchor="start" font-size="11" fill="#444">本番基板の電波環境（アンテナ #23・左右の距離・人体）。再送が増えれば全部の値が上がる</text>
-<text x="24" y="1238" text-anchor="start" font-size="10" fill="#aab1b8">生成: tools/gen_power_model.py — SVG を手で編集しない</text>
+<text x="24" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">送信電力を 0 → −20dBm</text>
+<text x="400" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">−0.01mA</text>
+<text x="520" y="932" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">＋0.15 ヶ月</text>
+<text x="650" y="932" text-anchor="start" font-size="11" fill="#555">届く距離を捨てる</text>
+<text x="890" y="932" text-anchor="start" font-size="10.5" fill="#777">実測 0.43mA。電力 1/100 でも 1〜1.5m で打鍵できた</text>
+<text x="24" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">2M PHY をやめて 1M にする</text>
+<text x="400" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#d35400">＋0.05mA</text>
+<text x="520" y="962" text-anchor="start" font-size="11.5" font-weight="bold" fill="#d35400">−0.7 ヶ月</text>
+<text x="650" y="962" text-anchor="start" font-size="11" fill="#555">感度が 3dB 良くなる（届きやすくなる）</text>
+<text x="890" y="962" text-anchor="start" font-size="10.5" fill="#777">実測 0.49mA。2M は既定で効いていた</text>
+<text x="24" y="992" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">ホストの間隔 15 → 60ms（latency 30 のまま）</text>
+<text x="400" y="992" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">−0.004mA</text>
+<text x="520" y="992" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">＋0.1 ヶ月</text>
+<text x="650" y="992" text-anchor="start" font-size="11" fill="#555">両手に +22ms</text>
+<text x="890" y="992" text-anchor="start" font-size="10.5" fill="#777">式。分解能以下なので実測で確かめられない</text>
+<text x="24" y="1022" text-anchor="start" font-size="11.5" font-weight="bold" fill="#111">マトリクス走査・595 の駆動をやめる</text>
+<text x="400" y="1022" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">0.00mA</text>
+<text x="520" y="1022" text-anchor="start" font-size="11.5" font-weight="bold" fill="#8c959d">±0</text>
+<text x="650" y="1022" text-anchor="start" font-size="11" fill="#555">—</text>
+<text x="890" y="1022" text-anchor="start" font-size="10.5" fill="#777">実測（direct 0.03 / matrix 0.02 / shift 0.03）</text>
+<text x="24" y="1078" text-anchor="start" font-size="14.5" font-weight="bold" fill="#111">④ どこまで確かか</text>
+<rect x="24" y="1092" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="1104" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="1104" text-anchor="start" font-size="11" fill="#444">分割リンクの係数 2.591 — 8 点の当てはめに加え、15ms と 30ms を予測してから実測して当てた</text>
+<rect x="24" y="1114" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="1126" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="1126" text-anchor="start" font-size="11" fill="#444">床が増えないこと — 3 本のファームで実測。差はすべて分解能以下</text>
+<rect x="24" y="1136" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="1148" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="1148" text-anchor="start" font-size="11" fill="#444">候補 A の 0.43mA — Mac・Windows・電池入れ直しで一致。macOS はログで受理を確認</text>
+<rect x="24" y="1158" width="52" height="17" rx="3" fill="#1e8449" opacity="0.16"/>
+<text x="50" y="1170" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#1e8449">強い</text>
+<text x="88" y="1170" text-anchor="start" font-size="11" fill="#444">送信の費用 — +8dBm/−20dBm/1M の 3 実測が「パケット 40µs ＋ 立ち上がり 40µs」で同時に説明できる</text>
+<rect x="24" y="1180" width="52" height="17" rx="3" fill="#c0392b" opacity="0.16"/>
+<text x="50" y="1192" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#c0392b">弱い</text>
+<text x="88" y="1192" text-anchor="start" font-size="11" fill="#444">ホストリンクの係数 2.725 — 3 点だが 45ms と 60ms が同値。実質 2 点・未知数 2 個で自由度 0</text>
+<rect x="24" y="1202" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
+<text x="50" y="1214" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
+<text x="88" y="1214" text-anchor="start" font-size="11" fill="#444">Windows の実際の interval / latency — 更新イベントを出さないので読めない。電流が同じことだけが分かっている</text>
+<rect x="24" y="1224" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
+<text x="50" y="1236" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
+<text x="88" y="1236" text-anchor="start" font-size="11" fill="#444">打鍵感（D2）— 15ms・30ms とも「違和感なし」だが、目隠しでなく右の 1 キーだけ。判断材料にはならない</text>
+<rect x="24" y="1246" width="52" height="17" rx="3" fill="#8c959d" opacity="0.16"/>
+<text x="50" y="1258" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#8c959d">未確認</text>
+<text x="88" y="1258" text-anchor="start" font-size="11" fill="#444">本番基板の電波環境（アンテナ #23・左右の距離・人体）。治具では −20dBm でも 1.5m 通ったが、基板は別</text>
+<text x="24" y="1298" text-anchor="start" font-size="10" fill="#aab1b8">生成: tools/gen_power_model.py — SVG を手で編集しない</text>
 </svg>
