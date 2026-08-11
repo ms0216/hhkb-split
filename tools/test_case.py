@@ -2,7 +2,7 @@
 import pytest
 from build123d import Align, Box, BuildPart, Location, Locations
 from gen_case import (
-    AA_D, AA_L, BATT_H, BATT_W, FLOOR, PLATE_T, PLATE_TOP_FRONT, TILT_DEG,
+    BATT_H, BATT_W, FLOOR, PLATE_T, PLATE_TOP_FRONT, TILT_DEG,
     build_case, case_heights,
 )
 from gen_plate import halves
@@ -61,17 +61,21 @@ def test_printable(name):
 def test_two_aa_batteries_fit(name):
     """単3×2（左右方向に直列）がケースと干渉せずに収まること。
 
-    電極と配線の余裕を含めた占有空間で判定する。前後に並べる案は
-    傾いた基板と 4,000mm^3 衝突したため、左右方向に改めた。
+    **電池ボックス BH-325-1A150 の外形**で判定する（open-gaps #22）。
+    前後に並べる案は傾いた基板と 4,000mm^3 衝突したため、左右方向に改めた。
+
+    高さの基準は `gen_case.battery_center_z()` **だけ**。以前ここに
+    `FLOOR + AA_D / 2` と直接書いてあり、電池ボックス（高さ 16.8mm）へ
+    変えたとき **4 か所**を別々に直す羽目になった。
     """
     from envelopes import battery_envelope
-    from gen_case import battery_center
+    from gen_case import battery_center, battery_center_z
     part, (_, h_body), _ = build_case(HALVES[name], name)
     from gen_case import battery_x_center
     from gen_plate import plate_positions
     _, (w, _) = plate_positions(HALVES[name])
     batt = battery_envelope((battery_x_center(name, w),
-                             battery_center(h_body), FLOOR + AA_D / 2))
+                             battery_center(h_body), battery_center_z()))
     v = intersection_volume(batt, part)
     assert v < 1e-3, f"{name}: 電池がケースと干渉している ({v:.2f}mm^3)"
 
@@ -182,7 +186,8 @@ def test_bosses_do_not_stand_inside_the_battery_compartment(name):
     """
     from build123d import Align, BuildPart, Cylinder, Locations
     from envelopes import battery_envelope
-    from gen_case import AA_D, FLOOR, M2_BOSS_D, _boss_positions, battery_center
+    from gen_case import (FLOOR, M2_BOSS_D, _boss_positions, battery_center,
+                          battery_center_z)
     from gen_plate import plate_positions
     from interface import plan_depth
     from verify import intersection_volume
@@ -193,7 +198,7 @@ def test_bosses_do_not_stand_inside_the_battery_compartment(name):
     # 寄せたあとも中央にあるものとして検査していた（＝別の場所を見ていた）。
     batt = battery_envelope((battery_x_center(name, w),
                              battery_center(plan_depth(h_plate)),
-                             FLOOR + AA_D / 2))
+                             battery_center_z()))
     for bx, by in _boss_positions(name):
         with BuildPart() as b:
             with Locations((bx, by, FLOOR)):

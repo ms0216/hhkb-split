@@ -22,7 +22,8 @@ from build123d import Align, Box, BuildPart, Location, Locations
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_case import (  # noqa: E402
-    AA_D, AA_L, BATT_MARGIN_REAR, BATT_W, CLEARANCE, FLOOR, FOOT_PEG_H,
+    BATT_MARGIN_REAR, BATT_W, CLEARANCE, FLOOR, FOOT_PEG_H,
+    battery_center_z,
     LID_STOP, LID_T, PLATE_TOP_FRONT, RAIL_H, TILT_DEG, WALL, _foot_positions,
     _lid_opening, battery_center, battery_x_center, build_battery_lid, build_case,
     build_tilt_foot, case_heights,
@@ -105,9 +106,11 @@ def build_assembly(keys, half, real=False):
         foot, fz = build_tilt_foot(3.0, h_case)
         parts[f"foot{i}"] = Location((fx, fy, -fz), (180, 0, 0)) * foot
 
-    # 単3電池 2 本（電極と配線の余裕を含めた占有空間として扱う）
+    # 電池ボックス BH-325-1A150（単3×2・たて一列）。高さの基準は
+    # gen_case.battery_center_z() だけ。ここで足し引きしない。
     parts["batt"] = battery_envelope((battery_x_center(half, w),
-                                      battery_center(h_case), FLOOR + AA_D / 2))
+                                      battery_center(h_case),
+                                      battery_center_z()))
 
     # 子基板。**取付ボスの上に載る位置**に置く。ケース側の造作と同じ
     # 関数から座標を取るので、片方だけ動かしてもずれない。
@@ -155,7 +158,7 @@ def build_assembly(keys, half, real=False):
                            key_stack_envelopes, stab_reservation,
                            usb_plug_envelope)
     import envelopes
-    from gen_case import (BEZEL_TOP_FRONT, CAP_LIFT, DB_BOSS_POS, OUR_CAPS,
+    from gen_case import (BEZEL_TOP_FRONT, CAP_LIFT, DB_BOSS_POS, cap_height,
                           _boss_positions, _rubber_positions,
                           power_switch_center_z, power_switch_x_center,
                           usb_center_z)
@@ -186,8 +189,10 @@ def build_assembly(keys, half, real=False):
 
     # キースイッチ（61）・キーキャップ（61）・スタビライザ
     from interface import PLATE_T as _plate_t
+    # **キャップの高さは段ごとに違う**（上 2 段だけ背が高い。#21）。
+    # 以前ここが OUR_CAPS["home"] 固定で、混ぜても検査に出なかった。
     sw_env, cap_env = key_stack_envelopes(positions, keys, _plate_t,
-                                          CAP_LIFT, OUR_CAPS["home"])
+                                          CAP_LIFT, cap_height)
     parts["switches"] = pl * sw_env
     parts["keycaps"] = pl * cap_env
     parts["stabs"] = pl * stab_reservation(half)

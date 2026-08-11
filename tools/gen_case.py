@@ -44,6 +44,10 @@ from build123d import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# 電池ボックスの外形。**出所は envelopes.py の 1 か所だけ。**
+# （残りの envelopes からの取り込みは下の方にあるが、BATT_* は定数の定義で
+#   使うのでここで先に読む）
+from envelopes import BATT_BOX_H, BATT_BOX_L, BATT_BOX_W  # noqa: E402
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from interface import (  # noqa: E402
     BEZEL_OPENING_GAP,
@@ -105,14 +109,37 @@ CAP_LIFT = 6.2               # [暫定] プレート上面 → キーキャッ�
 #
 # **段ごとに違うキャップを混ぜるなら、ここを段ごとに変える。**
 # そうすれば実機とのズレが検査に出る。
+#
+# **2026-08-11・利用者の決定: 下 3 段は DSA、上 2 段は背の高いものを混ぜる。**
+# ケースの高さを決めるのはホーム段だけなので、**ケースは変わらない**
+# （下の PLATE_TOP_FRONT は home しか読まない）。
+#
+# 上 2 段の 2 つは「実機のキートップ高さに一致する高さ」から逆算した
+# **要求値**で、まだ実在の品番に紐づいていない（open-gaps #21）。
+CAP_H_QWERTY = 9.16    # [暫定] QWERTY 段のキャップ高さ。実機 35.6mm に要る値
+CAP_H_NUMBER = 11.12   # [暫定] 数字段のキャップ高さ。実機 40.0mm に要る値
 OUR_CAPS = {
-    "bottom": 7.6,
-    "ZXCV": 7.6,
-    "home": 7.6,
-    "QWERTY": 7.6,
-    "number": 7.6,
+    "bottom": 7.6,      # DSA
+    "ZXCV": 7.6,        # DSA
+    "home": 7.6,        # DSA
+    "QWERTY": CAP_H_QWERTY,
+    "number": CAP_H_NUMBER,
 }
 CAP_H_HOME = OUR_CAPS["home"]   # [暫定] ケースの高さはホーム段だけで決まる
+
+# layout の y は**下向きが正**（原点は配列の左上）なので、y の小さい順＝奥から。
+_ROWS_FROM_REAR = ["number", "QWERTY", "home", "ZXCV", "bottom"]
+
+
+def cap_height(key):
+    """そのキーに履かせるキャップの高さ。
+
+    **段ごとに違うキャップを混ぜられるようにするための唯一の出所。**
+    以前は組み立て検査が 61 個すべてを `OUR_CAPS["home"]` で建てており、
+    上 2 段を高くしても**検査の中では高くならなかった**
+    （検証の作法 4「検査対象に入っていない部品は、検査していないのと同じ」）。
+    """
+    return OUR_CAPS[_ROWS_FROM_REAR[int(round(key.y_mm / 19.05 - 0.5))]]
 _Y_HOME = 6.375 + 2.5 * 19.05          # ホーム段のキー中心（手前から）
 PLATE_TOP_FRONT = round(
     TARGET_KEYTOP_HOME - CAP_LIFT - CAP_H_HOME - _Y_HOME * tan(radians(TILT_DEG)), 2)
@@ -141,9 +168,11 @@ PORT_CLEAR = 0.6         # 抜き差しする穴の逃げ。嵌合より広く�
 # 傾いた基板の下の「奥側の背の高い領域」に収まることが分かった。
 # コブを足す必要がなく、分割版として小さく収まる。
 AA_D, AA_L = 14.5, 50.5
-BATT_H = AA_D + 1.0              # 占有高さ
-BATT_W = AA_D + 1.0              # 占有奥行（左右に寝かせるので 1 本ぶん）
-BATT_X = AA_L * 2 + 8.0          # 占有幅（2 本直列＋電極）
+# **電池ボックス BH-325-1A150 を使う**（open-gaps #22・2026-08-11 の決定）。
+# 出所は envelopes.py の 1 か所だけ。ここで足し引きしない。
+BATT_H = BATT_BOX_H              # 占有高さ
+BATT_W = BATT_BOX_W              # 占有奥行
+BATT_X = BATT_BOX_L              # 占有幅（長辺。裸の電池 2 本＋電極と同じ 109mm）
 BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
 # **コブは要る。実機と同じ理由で。**
 #
@@ -757,13 +786,23 @@ def power_switch_x_center(half, w):
     return (lo + hi) / 2
 
 
+def battery_center_z():
+    """電池（ボックス）の中心高さ。**底は床に載る。**
+
+    **出所を 1 つにするために関数にした。**以前は `FLOOR + AA_D / 2` が
+    ここと gen_assembly の 2 か所に書かれており、裸の電池から電池ボックス
+    （高さ 16.8mm）へ変えたとき、**箱が床を 1.15mm 突き抜けて蓋に
+    1759mm³ 食い込んだ**（2026-08-11。組み立て検査が捕まえた）。
+    """
+    return FLOOR + BATT_H / 2
+
+
 def power_switch_center_z():
     """電源スイッチの中心高さ。電池の中心に合わせる。
 
     コブの中で電池と同じ高さ帯に置けば、上下に余裕が残る。
     """
-    from envelopes import AA_D
-    return FLOOR + AA_D / 2
+    return battery_center_z()
 
 
 def usb_center_z():
@@ -837,11 +876,14 @@ def build_topcase(keys, half):
 
     断面（前縁）::
 
-        17.50 ┬─────┐                    ベゼル上面
+        17.50 ┬─────┐                    ベゼル上面＝手前端（実機基準）
               │     │
-        11.78 │     └────────┐           プレート上面（内側はここに載る）
-        10.28 └──────────────┘           リム（下ケースの壁の上）
+        10.88 │     └────────┐           プレート上面（内側はここに載る）
+         9.38 └──────────────┘           リム（下ケースの壁の上）
               ├1.6mm┤                    上ケースの壁
+
+    **数字は PLATE_TOP_FRONT から導かれる。**上の図は DSA（7.6mm）を
+    履かせたときの値で、キャップを変えるとプレートごと動く。
     """
     positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)

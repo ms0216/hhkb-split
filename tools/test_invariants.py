@@ -37,27 +37,48 @@ def test_typing_plane_tilt_is_7_3deg():
 
 
 def test_front_edge_height():
-    """手首が当たる手前端の高さ。
+    """手首が当たる手前端の高さを、**組み上げた上ケースの実形状から測る**。
 
-    **このテストは以前 PLATE_TOP_FRONT == 17.5 を固定していた。**
-    実機の手前端 17mm は**ベゼル（リム）の上面**で、プレート面はその 5.2mm 下の
-    14.00mm。二つを混同したまま固定していたため、全段のキートップが 3.5mm
-    高いまま誰も気づかなかった。**要求を守っているように見えて、
-    守っていない値を固定していた。**
+    **このテストは 2 度、間違ったものを測っていた。**
 
-    いまの設計にはベゼルが無く、手前端＝プレート面。実機との差は
-    docs/hardware/open-gaps.md に記録し、忘れられないようにしてある。
+    1 度目は `PLATE_TOP_FRONT == 17.5` を固定していた。実機の手前端は
+    **ベゼル（リム）の上面**で、プレート面はその下にある。二つを混同した
+    まま固定していたため、全段のキートップが 3.5mm 高いまま誰も
+    気づかなかった。
+
+    2 度目（2026-08-11 に発覚）は、その反省で `PLATE_TOP_FRONT` と
+    open-gaps.md の「手前端の高さ」の行を突き合わせるようにしたが、
+    **その間に上ケース（ベゼル）が実装され、手前端はもうプレート面では
+    なくなっていた。**検査は「設計 10.88 < 実機 17.0」を毎回緑で通し、
+    **既に閉じている差を未解決として固定し続けていた。**
+
+    どちらも「定数どうしの突き合わせ」で起きた。だから**実際に組み上げた
+    立体を測る**。手前端は実機の一次資料が 17mm と約 18mm に割れており、
+    設計基準は中間の 17.5mm（docs/hardware/dimensions.md）。
     """
-    from gen_case import PLATE_TOP_FRONT
-    import re
-    doc = (Path(__file__).resolve().parent.parent
-           / "docs/hardware/open-gaps.md").read_text()
-    m = re.search(r"手前端の高さ\s*\|\s*\*{0,2}([\d.]+)mm\*{0,2}\s*\|\s*\*{0,2}([\d.]+)mm", doc)
-    assert m, "open-gaps.md に手前端の行が無い"
-    designed, real = float(m.group(1)), float(m.group(2))
-    assert designed == PLATE_TOP_FRONT, \
-        f"設計値 {PLATE_TOP_FRONT} と文書 {designed} が食い違っている"
-    assert designed < real, "差が無くなったなら、この行を open-gaps.md から消すこと"
+    from build123d import Box, Pos
+
+    from gen_case import build_topcase
+    from gen_plate import halves
+    from interface import BEZEL_TOP_FRONT
+    from reference_hhkb import H_FRONT
+
+    top, _ = build_topcase(halves()["left"], "left")
+    bb = top.bounding_box()
+    # 前縁から 1mm の帯を切り、傾斜ぶんを戻して「前縁ちょうど」の高さにする。
+    slab = top.intersect(Pos(0, bb.min.Y + 0.5, 0) * Box(300, 1.0, 400))
+    from math import radians, tan
+
+    from gen_case import TILT_DEG
+    front = max(s.bounding_box().max.Z for s in slab) - 1.0 * tan(radians(TILT_DEG))
+
+    assert abs(front - BEZEL_TOP_FRONT) < 0.05, (
+        f"組み上げた上ケースの前縁が {front:.2f}mm で、設計基準 "
+        f"{BEZEL_TOP_FRONT}mm と違う")
+    # 一次資料は 17mm（Tom's Hardware 逐語）と約 18mm（blue-de）。
+    # 設計はその間を採っている。外れたら dimensions.md の根拠から見直す。
+    assert H_FRONT <= front <= 18.0, \
+        f"手前端 {front:.2f}mm が実機の実測 2 件（{H_FRONT}〜18.0mm）の外にある"
 
 
 def test_keytop_heights_match_the_real_machine():
@@ -267,10 +288,24 @@ def test_fabrication_output_requires_an_accepted_antenna_risk():
     文書に書くだけでは埋もれる。実際この案件では、電源スイッチが
     「ケースを開けないと操作できない場所」にあるまま、DRC 0 件・
     検査 264 件すべて緑で進んでいた。
+
+    ⚠️ **2026-08-11: この門も開きっぱなしだった**（別セッションが
+    `export_fab.py` 側で見つけ、こちらは私が編集中だったので申し送りに
+    なっていた・コミット c3fac11）。
+
+    `"### 承知して発注する" in doc` と書いてあったが、open-gaps.md には
+    **この門を説明する文**が複数あり、そこに
+    「`### 承知して発注する` が無い限りガーバーを出さない」と書かれている。
+    **門を説明する文そのものが、門を開けていた。**承知の節は一度も
+    作られていないのに、製造ファイルは出せる状態だった。
+
+    直し方は `export_fab._gate_antenna()` と同じ——**行頭から始まる見出しで
+    あること**を見る。本文の引用は鉤括弧の中にあるので行頭には来ない。
+    節の有無も同じ理由で見出しとして見る。
     """
     root = Path(__file__).resolve().parent.parent
     doc = (root / "docs/hardware/open-gaps.md").read_text()
-    if "## 23. ★未解決★ アンテナが地板に挟まれている" not in doc:
+    if not re.search(r"^## 23\. ★未解決★ アンテナが地板に挟まれている", doc, re.M):
         return                      # 解決済み。何も止めない
 
     fab = sorted(
@@ -281,7 +316,7 @@ def test_fabrication_output_requires_an_accepted_antenna_risk():
     if not fab:
         return                      # まだ出していない。何も言うことはない
 
-    assert "### 承知して発注する" in doc, (
+    assert re.search(r"^### 承知して発注する\s*$", doc, re.M), (
         "\n"
         "  ★ アンテナの risk を承知した記録が無いまま製造ファイルが出ている ★\n"
         f"  {fab[:5]}\n"

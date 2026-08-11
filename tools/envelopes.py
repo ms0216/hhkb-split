@@ -39,15 +39,25 @@ PLATE_TO_PCB = 3.5       # [暫定] プレート下面から基板上面まで�
 # 電池
 # --------------------------------------------------------------------------
 AA_D, AA_L = 14.5, 50.5  # [確定] 単3
-# **裸の電池 2 本**の両端に付く電極バネと配線に要る余裕。
+# **電池ボックスを使う。**2026-08-11・利用者の決定（open-gaps #22）。
 #
-# **電池ボックスの寸法ではない。**いまの設計は箱を使わず、ケース自身が
-# 電池室になる（gen_case の「電池は 手前=仕切り壁 / 左右と奥=側壁 /
-# 下=蓋 / 上=基板 で保持される」）。
+# 裸の電池をケース自身で保持する案（電極バネを 3D プリント面に接着して
+# 細線を半田付けする）と比べ、**組み立てと公差がプリント精度に依存しない**
+# のが決め手。代償は箱の肉厚ぶんの断面（下の 3 行）。
 #
-# 文書側が「電池ボックスが届いたら測る」と書いていたため取り違えが起き、
-# 設計に入らない横並び型（58 x 32mm）を買うことになった（open-gaps #22）。
-AA_TERMINAL = 8.0        # [暫定] 電極バネと配線に要る長手方向の余裕（合計）
+# 品番 **BH-325-1A150**（Comfortable Electronic 製・秋月電子 110201・¥60）
+#   「電池ボックス 単3×2本 リード線・**たて一列**」
+#   外形 **長辺 109 × 短辺 16.6 × 高さ 16.8mm**（秋月の商品ページの記載）
+#
+# **長辺が 109mm ちょうど**なのが効いた。裸の電池 2 本＋電極の占有と同じで、
+# 左右方向には 1mm も広がらない。背面の電源スイッチの窓（左 10.56mm）が
+# 無傷で残る（`gen_case.power_switch_x_center` が窓を測って門番をしている）。
+#
+# ⚠️ **まだ暫定。**通販の商品ページの数字であって、ノギスで測っていない。
+# 届いたら測って [確定] にする（provisional-values.md）。
+BATT_BOX_L = 109.0       # [暫定] 電池ボックスの長辺（BH-325-1A150）
+BATT_BOX_W = 16.6        # [暫定] 同・短辺（前後）
+BATT_BOX_H = 16.8        # [暫定] 同・高さ
 
 # --------------------------------------------------------------------------
 # MCU
@@ -183,30 +193,24 @@ def under_pcb_base(h_plate, rim_front, drop):
 
 
 def battery_envelope(center):
-    """単3×2 と電極。**電池は実形状（円柱）、電極だけ場所取りの箱。**
+    """電池ボックス BH-325-1A150（単3×2・たて一列）の外形。
 
     左右方向に 2 本直列で寝かせる。前後に並べると奥行 30mm を要し、
     傾いた基板の下に入らない。
 
-    以前は全体を 1 つの直方体（109 × 15.5 × 14.5）にしていた。**電池は
-    円柱なので、角の部分は実際には空いている。**箱のままだと、そこに
-    何かを置いたときに嘘の干渉が出る（許容値でごまかす原因になる）。
+    **2026-08-11 に「裸の電池＋電極バネ」から「電池ボックス」へ変えた**
+    （open-gaps #22・利用者の決定）。それまではここが円柱 2 本＋電極の箱で、
+    「電池は円柱なので角は空いている」と書いてあった。**箱を買う以上、
+    角は樹脂で埋まっている。**丸のままにすると、実物より小さい占有空間で
+    検査することになる。
 
-    電極バネと配線（`AA_TERMINAL` 合計 8mm）は買う品が未定なので、
-    両端に箱のまま残す。**ここは実形状ではない**（値は AA_TERMINAL の行）。
+    ⚠️ 寸法は商品ページの記載で、**ノギスでは測っていない**（provisional-values.md）。
     """
-    from build123d import Axis, Compound, Cylinder, Location
+    from build123d import Align, Box, Location
 
-    cells = [Location((center[0] + sx * AA_L / 2, center[1], center[2]),
-                      (0, 90, 0)) * Cylinder(AA_D / 2, AA_L)
-             for sx in (-1, 1)]
-    # 端の電極は幅 AA_TERMINAL/2 なので、中心は電池の端から**その半分**外側
-    ends = [Location((center[0] + sx * (AA_L + AA_TERMINAL / 4), center[1],
-                      center[2]))
-            * Box(AA_TERMINAL / 2, AA_D + 1.0, AA_D,
-                  align=(Align.CENTER, Align.CENTER, Align.CENTER))
-            for sx in (-1, 1)]
-    return Compound(children=cells + ends)
+    return (Location(center)
+            * Box(BATT_BOX_L, BATT_BOX_W, BATT_BOX_H,
+                  align=(Align.CENTER, Align.CENTER, Align.CENTER)))
 
 
 def pcb_bottom_at(y, h_plate, rim_front):
@@ -364,6 +368,10 @@ def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
     z=0 がプレートの下面、z=plate_t が上面（gen_assembly.plate_placement が
     プレートを置くのと同じ基準）。戻りは (switches, keycaps) の 2 部品。
     61 個を 1 部品にまとめる（部品対の数を増やさないため。自己交差は無い）。
+
+    `cap_h` は**キーごとの高さを返す呼び出し可能なもの**（`gen_case.cap_height`）
+    か、全段共通の数値。**段ごとに違うキャップを混ぜられるようにするため**で、
+    数値を渡すと上 2 段を高くしても検査の中では高くならない（2026-08-11）。
     """
     from build123d import Align, Box, Compound, Location
 
@@ -381,14 +389,14 @@ def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
     # **中空にする。**裾の中はスイッチとスタビの居場所なので、実体で
     # 埋めると必ず偽の干渉が出る（#30）。外側の形は変わらないので、
     # キャップどうし・キャップとベゼルの検査はそのまま効く。
-    def _cap(w, d, at):
-        shell = _box(w, d, cap_h, at)
-        cavity = _box(w - CAP_WALL * 2, d - CAP_WALL * 2,
-                      cap_h - CAP_TOP_T, at)
+    def _cap(w, d, at, h):
+        shell = _box(w, d, h, at)
+        cavity = _box(w - CAP_WALL * 2, d - CAP_WALL * 2, h - CAP_TOP_T, at)
         return shell - cavity
 
+    height = cap_h if callable(cap_h) else (lambda _k: cap_h)
     caps = [_cap(k.w_u * 19.05 - CAP_GAP, 19.05 - CAP_GAP,
-                 (kx, ky, plate_t + cap_lift))
+                 (kx, ky, plate_t + cap_lift), height(k))
             for (kx, ky), k in zip(positions, keys)]
     return Compound(children=sw), Compound(children=caps)
 
