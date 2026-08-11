@@ -1,14 +1,23 @@
 /* 左（セントラル）。列 0・1 を使うので col-offset は不要。 */
 #include "proto_split.dtsi"
 
-/* ⚠️ [一時的] ログを UART（D6）へ。**電流を測るときは外す（+0.46mA 乗る）。** */
-/ {
-	chosen {
-		zephyr,console = &uart0;
-	};
-};
-
-&uart0 {
-	status = "okay";
-	current-speed = <1000000>;
-};
+/* ⚠️ [一時的] ログを UART（D6）へ。**電流を測るときは必ず外す。**
+ *
+ * この宣言があるだけで **+0.46mA** 乗る（2026-08-11 に実測）。
+ * CONFIG_SERIAL / CONFIG_LOG を切っても、uart0 が初期化されて
+ * 高速クロックが回り続けるため。ファイルの大きさで見分けられる:
+ *   470,528 B ＝ 素 ／ 474,112 B ＝ この宣言あり ／ 571,392 B ＝ ログあり
+ *
+ * ログを読みたいときだけ、下の 2 ブロックを戻す。
+ *
+ * / {
+ * 	chosen {
+ * 		zephyr,console = &uart0;
+ * 	};
+ * };
+ *
+ * &uart0 {
+ * 	status = "okay";
+ * 	current-speed = <1000000>;
+ * };
+ */
