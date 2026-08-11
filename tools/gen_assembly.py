@@ -443,6 +443,52 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     db_real = _moved(dbc, Location((db_x - ox, db_center_y + oy,
                                     FLOOR + DB_BOSS_H)), "db")
 
+    # **ソケットで XIAO が浮く（open-gaps #27・構成 A）。実形状も浮かせる。**
+    #
+    # 記録（KiCad の 3D モデル）の XIAO は**直付けの高さ**で入っている。
+    # ここで持ち上げないと、絵も干渉検査も直付けのままになる。しかも
+    # 下の USB の空洞は usb_center_z()（＝浮いた高さ）で彫るので、
+    # **空洞が実物のメスから外れ**、「どんなプラグも食い込む」状態に戻る。
+    #
+    # 持ち上げる対象は「**板の上面より上にある立体**」。記録では板の上に
+    # 立っているのは XIAO 一式だけで、ほかの部品（ffc_conn・cap_0805）は
+    # 板の裏（z < 0）にある。
+    #
+    # **選んだ結果を記録と突き合わせてから動かす。**接頭辞や番号で拾うと
+    # 別の物を黙って持ち上げる（この案件で 3 回起きた型）。
+    # **数では突き合わせない**（STEP の取り込みで立体が融合し、記録の
+    # 84 個に対し 66 個になる。2026-08-12 に実測）。**占める範囲**で見る。
+    from envelopes import DB_XIAO_LIFT, db_socket_bodies
+    from interface import xiao_y_offset
+    _rec = pcb_parts.load()["db"]
+    _z_top = FLOOR + DB_BOSS_H + _rec["board_step_thickness"]
+    _xa = [c["bbox"] for c in _rec["components"] if c["label"] == "xiao_asm"]
+    _want = (db_x + min(b[0] for b in _xa), db_center_y + min(b[1] for b in _xa),
+             db_x + max(b[3] for b in _xa), db_center_y + max(b[4] for b in _xa),
+             FLOOR + DB_BOSS_H + max(b[5] for b in _xa))
+    lifted, picked = [], []
+    for s_ in db_real.solids():
+        if s_.bounding_box().min.Z >= _z_top - 1e-3:
+            picked.append(s_.bounding_box())
+            lifted.append(s_.moved(Location((0, 0, DB_XIAO_LIFT))))
+        else:
+            lifted.append(s_)
+    if not picked:
+        raise ValueError("板の上に立つ立体が 1 つも無い。記録か配置が変わった")
+    _got = (min(b.min.X for b in picked), min(b.min.Y for b in picked),
+            max(b.max.X for b in picked), max(b.max.Y for b in picked),
+            max(b.max.Z for b in picked))
+    if max(abs(a - b) for a, b in zip(_got, _want)) > 0.05:
+        raise ValueError(
+            "板の上で拾った立体の範囲が記録の xiao_asm と違う。持ち上げる"
+            f"対象を取り違えている:\n  拾った {[round(v, 2) for v in _got]}"
+            f"\n  記録   {[round(v, 2) for v in _want]}")
+    # ソケットの実体（買う部品・第三者モデルが無いので寸法から作る）
+    _db_d = _rec["board_bbox"][4] - _rec["board_bbox"][1]
+    lifted += db_socket_bodies(db_x, db_center_y + xiao_y_offset(_db_d),
+                               _z_top).solids()
+    db_real = Compound(children=lifted)
+
     # **第三者モデルは USB-C のメスの口を塞いで描いている。**
     # 前面から 0.5mm を切ると 8.94x3.21 の中実の塊で、穴が無い。実物は
     # 中空（Seeed の公式モデルで確認済み。`envelopes._usb_cavity` の注記）。

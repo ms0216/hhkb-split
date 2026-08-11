@@ -119,7 +119,12 @@ def export_real(half):
     Blender（blend_assembly.sh）が {half}_*.stl を全部拾うので、
     箱と実形状が同じ .blend に別レイヤーとして入る。
 
-    ⚠️ XIAO は KiCad にモデルが無いので実形状にも出ない（#29 の表）。
+    **配置は build_assembly(real=True) から取る。座標を二重に持たない。**
+    ここには以前、板と子基板を置き直す式が別に書いてあった。**そのせいで
+    2026-08-12、ソケットで XIAO を 10.5mm 浮かせたとき、検査だけが浮いて
+    絵は直付けのままになった**（USB の穴だけが宙に浮いて見えた）。
+    スイッチで同じ理由から real_switches を呼ぶようにしたのと同じ直し方。
+
     kicad-cli が無い環境では出せない。**黙って飛ばさず、その旨を出す。**
     """
     import pcb_parts
@@ -127,54 +132,18 @@ def export_real(half):
     if not Path(pcb_parts.KICAD_CLI).exists():
         print("      kicad-cli が無いので実形状（_pcb_real / _db_real）は出ていない")
         return []
-    from build123d import Location
-    from envelopes import place_pcb
-    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_D, DB_FROM_REAR, FLOOR,
-                          PLATE_TOP_FRONT, WALL, daughterboard_x_center)
-    from interface import PLATE_T, plan_depth
-
-    keys = halves()[half]
-    positions, (w, h_plate) = plate_positions(keys)
-    rim_front = PLATE_TOP_FRONT - PLATE_T
-
-    comp = pcb_parts.real_compound(half)
-    board = max(comp.solids(), key=lambda s: s.volume)
-    top_z = board.bounding_box().max.Z
-    moved = Location((-pcb_parts.ORIGIN[0], pcb_parts.ORIGIN[1], -top_z)) * comp
-    # 粗さは MESH_LIN / MESH_ANG（上の説明を読むこと）。既定（1e-3）だと
-    # ソケットのフィレットが細分化されて **1 ファイル 900MB** になった。
+    parts, _ = build_assembly(halves()[half], half, real=True)
     out = []
-    path = OUT / f"{half}_pcb_real.stl"
-    export_stl(place_pcb(moved, h_plate, rim_front), str(path),
-               tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
-    out.append(path)
-
-    h_case = plan_depth(h_plate)
-    db_x = daughterboard_x_center(half, w)
-    db_center_y = h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
-    dbc = pcb_parts.real_compound("db")
-    moved = Location((db_x - pcb_parts.ORIGIN[0], db_center_y + pcb_parts.ORIGIN[1],
-                      FLOOR + DB_BOSS_H)) * dbc
-    path = OUT / f"{half}_db_real.stl"
-    export_stl(moved, str(path), tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
-    out.append(path)
-
-    # キースイッチの実形状（kiswitch SW_Cherry_MX_Plate）。**gen_assembly の
-    # real_switches をそのまま呼ぶ。**座標の出し方を二重に持たない
-    # （2026-08-11: 箱と実物の断面は一致していたが爪・ステム・ピン・LED窓は
-    # 箱に無く、検査もされていなかった。同じ理由で「見る」側も置き去りに
-    # しない）。third_party_model が無ければ None が返り、黙って飛ばす。
-    from gen_assembly import plate_placement, real_switches
-    pl = plate_placement(w, h_plate)
-    sw = real_switches(positions, pl)
-    if sw is not None:
-        # 粗さは MESH_LIN / MESH_ANG。**角度を 0.3 のままにすると 192MB**
-        # になる（キー 1 個 13 万三角形 × 27）。理由は上の説明。
-        path = OUT / f"{half}_switches_real.stl"
-        export_stl(sw, str(path), tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
+    for name in ("pcb_real", "db_real", "switches_real"):
+        if name not in parts:
+            print(f"      {name} は出ていない（モデルが無い）")
+            continue
+        # 粗さは MESH_LIN / MESH_ANG（上の説明を読むこと）。既定（1e-3）だと
+        # ソケットのフィレットが細分化されて **1 ファイル 900MB** になった。
+        path = OUT / f"{half}_{name}.stl"
+        export_stl(parts[name], str(path),
+                   tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
         out.append(path)
-    else:
-        print("      kiswitch のモデルが無いので switches_real は出ていない")
     return out
 
 

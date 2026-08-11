@@ -153,17 +153,24 @@ def test_the_check_actually_detects_a_collision(half):
     通ったことは、調べた証拠にならない。故意に壊して検出できることを
     毎回確かめる。この案件では、誤った並び順どうしを突き合わせて
     テストが全部通ってしまった前科がある。
+
+    **壊す摘みは `DB_XIAO_LIFT`（ソケットの浮き）**（2026-08-12 に変更）。
+    それまでは `DB_STACK_H` を壊していたが、子基板の予約が
+    **記録（実物の XIAO）＋浮き**から段付きで作られるようになり、
+    **`DB_STACK_H` は導かれる値になった**（＝それだけ動かしても柱は動かない）。
+    **この検査がその変更を捕まえた**——摘みが空回りしていることを、
+    「検査が効いているか」の検査が教えた形。
     """
     import envelopes
 
-    original = envelopes.DB_STACK_H
+    original = envelopes.DB_XIAO_LIFT
     try:
-        envelopes.DB_STACK_H = original + 15.0     # 子基板の部品を背高にする
+        envelopes.DB_XIAO_LIFT = original + 15.0   # ソケットを 15mm 高くする
         problems, _ = check(HALVES[half], half)[:2]
         assert any("db" in p for p in problems), \
-            "子基板を 15mm 背高にしても検出できない。検査が効いていない"
+            "ソケットを 15mm 高くしても検出できない。検査が効いていない"
     finally:
-        envelopes.DB_STACK_H = original
+        envelopes.DB_XIAO_LIFT = original
 
 
 # --------------------------------------------------------------------------
@@ -1209,3 +1216,55 @@ def test_the_switch_boxes_match_the_real_switch():
     assert stem_top < ceiling, (
         f"実物のステムの頭 {stem_top:.2f}mm が、キャップの空洞の天井 "
         f"{ceiling:.2f}mm に当たる（CAP_TOP_T={CAP_TOP_T} が厚すぎる）")
+
+
+# --------------------------------------------------------------------------
+# アンテナと本体基板の地板の距離（open-gaps #23・#27）
+# --------------------------------------------------------------------------
+ANTENNA_MIN_CLEARANCE = 5.0     # チップアンテナの指針「全層で 5〜10mm」の下限
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_antenna_keeps_its_distance_from_the_main_board(half):
+    """XIAO のアンテナが、本体基板（4 層・全面 GND ベタ）から離れていること。
+
+    **この検査が無かったせいで、危うくアンテナを潰すところだった。**
+    2026-08-12、XIAO をピンソケットで 10.5mm 浮かせる設計に作り直し、
+    **干渉検査は左右とも 0 で通った。**ところがアンテナは XIAO と一緒に
+    上がるので、本体基板の後端と同じ高さまで来てしまい、
+    **地板までの距離が 7.22mm → 0.72mm になっていた**（指針は 5〜10mm）。
+    #23 が案 C（XIAO を奥端へ寄せる）で稼いだ距離を、そっくり失う変更を、
+    **形の検査は全部緑で通した。**
+
+    → **電波の条件は、ぶつかるかどうかの検査には映らない。**
+      浮き（DB_XIAO_LIFT）を触るときは必ずここを見る。上限は 2.24mm。
+
+    距離は**箱どうしの最短距離**で測る（アンテナの占有空間 × 基板の外形）。
+    実際に効くのは銅なので、外形で測るのは**保守側**（銅は外形より内側）。
+    """
+    from build123d import Align, Box, Location
+
+    import pcb_parts
+    from gen_case import (BUMP_DEPTH, DB_BOSS_H, DB_FROM_REAR, FLOOR, WALL,
+                          daughterboard_x_center)
+    from envelopes import DB_XIAO_LIFT
+    from interface import antenna_x_band, antenna_y_span
+
+    parts, (w, h_case) = build_assembly(HALVES[half], half)
+    db_x = daughterboard_x_center(half, w)
+    lo, hi = antenna_y_span(h_case / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR)
+    x0, x1 = antenna_x_band()
+    # アンテナが載る面＝XIAO 自身の基板の上面（記録から。手写しの高さを置かない）
+    xa = [c["bbox"] for c in pcb_parts.load()["db"]["components"]
+          if c["label"] == "xiao_asm"]
+    xiao_pcb = max(xa, key=lambda b: (b[3] - b[0]) * (b[4] - b[1]))
+    z = FLOOR + DB_BOSS_H + xiao_pcb[5] + DB_XIAO_LIFT
+    ant = Location((db_x + (x0 + x1) / 2, (lo + hi) / 2, z)) * Box(
+        x1 - x0, hi - lo, 1.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+    d = ant.distance_to(parts["pcb"])
+    assert d >= ANTENNA_MIN_CLEARANCE, (
+        f"アンテナと本体基板が {d:.2f}mm しか離れていない"
+        f"（指針 {ANTENNA_MIN_CLEARANCE}〜10mm）。"
+        f"XIAO の浮き DB_XIAO_LIFT={DB_XIAO_LIFT}mm が大きすぎる。"
+        "ソケットを入れるなら、アンテナの置き方から見直すこと（open-gaps #23）")

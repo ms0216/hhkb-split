@@ -239,11 +239,48 @@ def pcb_bottom_at(y, h_plate, rim_front):
 # test_constants.py が見つけた。
 # 子基板の上面から XIAO の頭まで。**USB コネクタを含む。**
 #
-# XIAO を直付けするなら実測の 4.5mm（XIAO_H_WITH_USB）でよいが、
-# 仕様は「**ピンソケット実装で交換可能にする**」としている。ソケットの
-# 高さぶんこれより高くなる。**ソケットの品種が未定なので暫定のまま。**
-# 4.0 は直付けの実測 4.5mm すら下回っていた（2026-08-08 に 4.5 へ）。
-DB_STACK_H = 4.5         # [暫定] 子基板の上面から XIAO の頭まで（USB 込み・ソケット未定）
+# **XIAO がどれだけ浮くかは、アンテナが決める**（2026-08-12・open-gaps #27）。
+#
+#   子基板の上面
+#     ＋ ソケットの座高            DB_SOCKET_SEAT    （下記）
+#     ＋ ヘッダの樹脂              DB_HEADER_PLASTIC 2.0（実測）
+#     ＝ XIAO の基板下面           DB_XIAO_LIFT
+#     ＋ XIAO 自身（USB 込み）     XIAO_H_WITH_USB   4.5
+#     ＝ XIAO の頭                 DB_STACK_H
+#
+# ⚠️ **ソケットは成立しない。**一度「基板側に制約は無い」として構成 A
+# （座高 8.5・浮き 10.5mm）で作り直したが、**アンテナを見ていなかった。**
+# 浮かせると XIAO が本体基板の後端と同じ高さまで上がり、
+# **アンテナと地板の距離が 7.22mm → 0.72mm になる**（指針は 5〜10mm）。
+# #23 が案 C で稼いだ距離を、そっくり捨てることになる。
+#
+#   浮き 0.0mm → 7.22mm ✓     浮き 3.6mm（低背ソケット）→ 1.67mm ✗
+#   浮き 2.0mm → 5.24mm ✓     浮き 8.5mm（普通のメス）  → 0.14mm ✗
+#   **指針 5mm を保てる上限は 2.24mm**（test_the_antenna_keeps_its_distance）
+#
+# **干渉検査は通る**（ぶつかりはしない）。**電波の条件は形の検査に映らない。**
+# だから専用の検査を置いた。値を変えるならその検査を必ず見ること。
+DB_SOCKET_SEAT = 0.0     # 直付け。**ソケット（8.5 等）にすると上の検査が落ちる**
+# **手持ちの XIAO にはブレッドボード用の角ピンヘッダが実装済み**
+# （樹脂 2.0mm・樹脂から下 5.5mm。利用者のノギス実測・2026-08-12）。
+# 直付けでも、このヘッダのピンを子基板の穴に挿して半田付けするので、
+# **樹脂の 2.0mm ぶんは浮く。**
+# **ここを 0 と置いていたのが、それまでの設計の誤り**——USB の穴の高さも
+# 積み上げも 2.0mm ずれていた。樹脂を割って外せば 0 になり、アンテナの
+# 余裕は 5.24 → 7.22mm に増える（外すかどうかは利用者の判断）。
+DB_HEADER_PLASTIC = 2.0  # [確定] 実測（利用者・2026-08-12）。手持ちヘッダの樹脂厚
+# **測るときは分解して足し算しない。**挿した状態で「子基板の上面から
+# XIAO の基板下面まで」を直接測る（受けの深さが 5.5mm より浅ければ
+# ピンが底突きして、足し算より高くなる）。
+DB_XIAO_LIFT = DB_SOCKET_SEAT + DB_HEADER_PLASTIC
+DB_STACK_H = DB_XIAO_LIFT + XIAO_H_WITH_USB
+
+# ソケットの本体（1x7 を 2 本）が子基板の上に立つ位置。
+# **フットプリントのパッド座標から取る**（pcb/lib/hhkb_split.pretty/
+# XIAO_nRF52840.kicad_mod: x = ±7.62、y = -7.62..+7.62 の 7 点・2.54 ピッチ）。
+DB_SOCKET_ROW_X = 7.62   # [確定] フットプリント。XIAO の中心線からピン列まで
+DB_SOCKET_PINS = 7       # [確定] 片側のピン数
+DB_SOCKET_PITCH = 2.54   # [確定] 規格
 
 # 利用者が挿す USB-C ケーブルの、**オス側プラグの樹脂の胴体**（open-gaps #28）。
 #
@@ -490,18 +527,58 @@ def _usb_cavity(x, y_face, z_center):
 
 
 def daughterboard_envelope(center, w, d, t, holes=(), usb=None):
-    """子基板と、その上に載る XIAO が占める空間。
+    """子基板と、その上に載る XIAO ＋ ソケットが占める空間。
 
     **基板だけでなく XIAO の高さを含める。** 基板の板厚だけで検査すると、
     その上に立つ部品が本体基板とぶつかるのを見逃す。
+
+    **板の上に立つのは XIAO の足あとの中だけ**（2026-08-12・#27）。
+    以前は板の外形いっぱいに `t + DB_STACK_H` の一枚板で予約していたが、
+    ソケットで DB_STACK_H が 4.5 → 15.0mm になったとき、**その一枚板が
+    本体基板を 7mm 突き抜けた。**実物（記録）で板の上に立っているのは
+    XIAO 一式だけ（ほかの部品 ffc_conn / cap_0805 は板の裏）。
+    **予約が実物より太いまま高さだけ増やすと、嘘の干渉が出る**——
+    #27 の 0.13mm と同じ型を、今度は逆向きに踏むところだった。
+    箱が実物を覆っていることは test_the_db_reservation_contains_the_real_parts が見張る。
     """
     from build123d import Box, BuildPart, Locations, Align
 
     from build123d import Cylinder, Mode
 
+    import pcb_parts
+
+    # **柱の高さは、実物の記録から y ごとに作る**（2026-08-12）。
+    # 一律 DB_STACK_H（＝USB コネクタの高さ）の柱にすると、**XIAO が薄い
+    # 手前側でも USB の高さを主張する**。ソケットで 10.5mm 浮かせた状態で
+    # それをやると、傾いて降りてくるプレートの裏に 0.39mm 食い込んだ——
+    # **実物は 2.0mm 空いているのに、箱が「入らない」と言う。**
+    # これは #27 の 0.13mm と同じ型（保守的な近似を局所の真実として読む）。
+    xa = [c["bbox"] for c in pcb_parts.load()["db"]["components"]
+          if c["label"] == "xiao_asm"]
+    if not xa:
+        raise ValueError("記録に xiao_asm が無い。子基板の記録が古い")
+    xw = max(b[3] for b in xa) - min(b[0] for b in xa)
+    xc = center[0] + (max(b[3] for b in xa) + min(b[0] for b in xa)) / 2
+    y0, y1 = min(b[1] for b in xa), max(b[4] for b in xa)
+    y_rear = center[1] + d / 2                      # 板の奥端
+    n_band = 6                                      # 段の数。細かくするほど実物に近い
     with BuildPart() as env:
         with Locations(center):
-            Box(w, d, t + DB_STACK_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            Box(w, d, t, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for i in range(n_band):
+            a = y0 + (y1 - y0) * i / n_band
+            b_ = y0 + (y1 - y0) * (i + 1) / n_band
+            top = max((bb[5] for bb in xa if bb[1] < b_ and a < bb[4]), default=None)
+            if top is None:
+                continue
+            # 板の外へ出る分は xiao_overhang_envelope が持つ（重ねると偽の干渉）
+            ya, yb = center[1] + a, min(center[1] + b_, y_rear)
+            if yb <= ya:
+                continue
+            # 記録の高さ ＋ ソケットの浮き ＋ 0.05mm（箱 ⊇ 実物 を保つ）
+            with Locations((xc, (ya + yb) / 2, center[2] + t)):
+                Box(xw, yb - ya, top - t + DB_XIAO_LIFT + 0.05,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 取付穴。**実物には穴がある。**塞いだ箱にするとネジが必ず食い込む
         for hx, hy in holes:
             with Locations((hx, hy, center[2])):
@@ -512,6 +589,29 @@ def daughterboard_envelope(center, w, d, t, holes=(), usb=None):
         from gen_case import usb_center_z
         part = part - _usb_cavity(usb[0], usb[1], usb_center_z())
     return part
+
+
+def db_socket_bodies(x_center, y_xiao_center, z_board_top):
+    """XIAO を受けるピンソケット 2 本の実体（open-gaps #27・構成 A）。
+
+    **買ってくる部品なので第三者モデルが無い。**寸法は規格（1x7・2.54 ピッチ・
+    胴 2.54mm 角）とフットプリントのパッド座標から作る。**これを置かないと、
+    絵の中で XIAO が宙に浮く**（そして「なぜ浮いているのか」を毎回考え直す）。
+
+    座高は買って測るまで暫定（DB_SOCKET_SEAT）。
+    **直付け（DB_SOCKET_SEAT = 0）なら何も返さない。**
+    """
+    from build123d import Align, Box, BuildPart, Locations, Part
+
+    if DB_SOCKET_SEAT <= 0:
+        return Part()
+    body_l = DB_SOCKET_PINS * DB_SOCKET_PITCH
+    with BuildPart() as env:
+        for sx in (-DB_SOCKET_ROW_X, DB_SOCKET_ROW_X):
+            with Locations((x_center + sx, y_xiao_center, z_board_top)):
+                Box(DB_SOCKET_PITCH, body_l, DB_SOCKET_SEAT,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return env.part
 
 
 def xiao_overhang_envelope(x, y_board_rear, z_board_top, usb_x=None, usb_face=None):
@@ -561,10 +661,13 @@ def xiao_overhang_envelope(x, y_board_rear, z_board_top, usb_x=None, usb_face=No
         with Locations((x, y_board_rear + overhang / 2, z_board_top)):
             Box(xiao_w, overhang, DB_STACK_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # メスだけが出ている残り
+        # メスだけが出ている残り。**ソケットの浮きぶん上げる**（#27・構成 A）。
+        # 上の箱は 0..DB_STACK_H で浮いた XIAO を覆うが、こちらは
+        # メスの高さちょうどの箱なので、**足し忘れると壁の中に取り残される**
+        # （実際に 37.6mm³ の偽の干渉として出た。2026-08-12）。
         with Locations((x + (rx0 + rx1) / 2,
                         y_board_rear + (overhang + recept_out) / 2,
-                        z_board_top + rz0 - t)):
+                        z_board_top + DB_XIAO_LIFT + rz0 - t)):
             Box(rx1 - rx0, recept_out - overhang, rz1 - rz0,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     part = env.part

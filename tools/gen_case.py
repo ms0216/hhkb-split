@@ -327,7 +327,7 @@ SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷でき�
 # test_the_rear_hook_is_actually_captured が検出した。
 
 from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
-                       DB_STACK_H, SCREW_HEAD_D, SCREW_HEAD_H,
+                       DB_STACK_H, DB_XIAO_LIFT, SCREW_HEAD_D, SCREW_HEAD_H,
                        SW_PWR_D, SW_PWR_H, SW_PWR_W,
                        USB_PLUG_H, USB_PLUG_W, USB_SHELL_EXPOSED,
                        USB_SHELL_H, USB_SHELL_W)
@@ -824,8 +824,14 @@ def usb_center_z():
     さらに前は「子基板の上面から 1.6mm」と直書きで、切り欠きの上端と
     XIAO の上面の隙間が 0.10mm しか無かった。**直書き → 概数 → 実測**と
     2 度上げてきた値なので、もう推測に戻さないこと。
+
+    **ソケットの浮き（DB_XIAO_LIFT）を必ず足す**（2026-08-12・#27）。
+    メスは XIAO の上に載っているので、XIAO が浮けば穴も同じだけ上がる。
+    ここを足し忘れると、穴だけ 10.5mm 低い位置に開き、**組み上げてから
+    ケーブルが挿さらない**（#28 の再来）。実形状側（gen_assembly）も
+    同じ関数を使ってメスの空洞を彫るので、片方だけ直すことはできない。
     """
-    return FLOOR + DB_BOSS_H + DB_T + _RECEPT[3]
+    return FLOOR + DB_BOSS_H + DB_T + DB_XIAO_LIFT + _RECEPT[3]
 
 
 def _lid_opening(half, w, h_body):
