@@ -157,6 +157,23 @@ def test_the_mcu_still_runs_down_to_the_declared_cutoff():
         f"（下限 {MCU_V_MIN}V）")
 
 
+def test_the_cutoff_lets_the_device_boot_not_just_survive():
+    """打ち止めまで使っても、電源の入れ直し・スリープ復帰で起動できること。
+
+    起動の限界 2.20V は 10Ω・可変電源での直接実測（open-gaps #34）。
+    維持の限界（1.95V）より高く、装置が実際に止まるのはこちらで決まる。
+
+    **この検査が守るのは式の構造。**打ち止めを `_RAIL_FLOOR + SCHOTTKY_VF`
+    だけに戻して Vf を実測値 0.18V に下げると、打ち止め 2.18V ＜ 起動の
+    限界となり、**自分で再起動できない電圧まで使い切ってから止まる**。
+    """
+    from circuit import BOOT_MARGIN, BOOT_V_MIN
+    assert BATT_V_MIN >= BOOT_V_MIN + BOOT_MARGIN * 0.99, (
+        f"打ち止め {BATT_V_MIN:.2f}V が起動の限界 {BOOT_V_MIN}V＋余裕 "
+        f"{BOOT_MARGIN}V を下回る。電池を使い切る前に、再起動できない"
+        f"電圧に入る")
+
+
 def test_the_rail_never_exceeds_what_the_mcu_can_take():
     """新品の電池でも、マイコンに入る電圧が上限を超えないこと。
 
