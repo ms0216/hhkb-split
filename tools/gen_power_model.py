@@ -39,6 +39,11 @@ CPU = 0.030          # CONFIG_ZMK_BLE=n の直接実測
 STACK = 0.060        # 底 0.090 − CPU。latency 0 の掃引から（推論なし）
 K_SPLIT = 2.591      # 分割リンクを 8 点振った当てはめ I = 0.287 + K/間隔
 K_HOST = 2.725       # ホストリンクを 3 点振った当てはめ。**実質 2 点。弱い**
+# 送信電力を 0dBm → +8dBm にしたときの上乗せ。**1 イベントあたりの追加費用。**
+# Nordic のデータシート（DC/DC 3V）TX 0dBm 4.9mA / +8dBm 14.1mA、
+# 空パケット 80µs（1M PHY）から 9.2mA × 80µs = 0.736 mA·ms。
+# **分割 7.5ms で実測 +0.10mA（0.44 → 0.54）。計算 +0.098 と一致した。**
+K_TX8 = 0.736
 
 FLOOR_JIG = CPU + STACK           # 治具の床（595 は載っていない）
 SHIFTER_IQ = 0.020                # 74LVC595 ×2 の静止電流。**データシート**
@@ -48,12 +53,14 @@ FLOOR_MEASURED = {"proto_direct": 0.03, "proto_matrix": 0.02, "proto_shift": 0.0
 
 CAPACITY_MAH, HOURS_PER_MONTH = 2000, 24 * 30.4
 
-# 並べる構成: (名前, 分割間隔[ms], ホスト間隔[ms], latency, 実測 or None, 注)
+# 並べる構成: (名前, 分割間隔[ms], ホスト間隔[ms], latency, TX+8dBm, 実測 or None, 注)
+# **5 つとも実測済み。**すべて UART の宣言を外したファームで測っている。
 CONFIGS = (
-    ("既定（ZMK のまま）", 7.5, 15.0, 0, 0.63, "latency 30 を要求していたが Apple の規則違反で捨てられていた"),
-    ("候補 A", 7.5, 15.0, 30, 0.43, "遅延も左右差も動かない。Mac・Windows とも同じ値"),
-    ("候補 A ＋ 分割 15ms", 15.0, 15.0, 30, None, "右手だけ平均 +3.75ms。**左右差が増える**"),
-    ("候補 A ＋ 分割 30ms", 30.0, 15.0, 30, None, "右手だけ平均 +7.5ms。**体感に出る恐れ**"),
+    ("既定（ZMK のまま）", 7.5, 15.0, 0, False, 0.63, "latency 30 を要求していたが Apple の規則違反で捨てられていた"),
+    ("候補 A", 7.5, 15.0, 30, False, 0.43, "遅延も左右差も動かない。Mac・Windows とも同じ値"),
+    ("候補 A ＋ 分割 15ms", 15.0, 15.0, 30, False, 0.27, "右手だけ平均 +3.75ms。打鍵の違和感は無かった（目隠しではない）"),
+    ("候補 A ＋ 分割 30ms", 30.0, 15.0, 30, False, 0.18, "右手だけ平均 +7.5ms。実測は 0.14〜0.21 で振れた"),
+    ("候補 A ＋ TX +8dBm", 7.5, 15.0, 30, True, 0.54, "電波の余裕を買う。**寿命を 1.1 ヶ月払う**"),
 )
 
 
@@ -65,8 +72,14 @@ def host_ma(interval, latency):
     return K_HOST / (interval * (latency + 1))
 
 
-def total_ma(split_iv, host_iv, latency):
-    return FLOOR_JIG + split_ma(split_iv) + host_ma(host_iv, latency)
+def tx8_ma(split_iv, host_iv, latency):
+    """送信電力を +8dBm にしたときの上乗せ。**送信 1 回ごとに乗る。**"""
+    return K_TX8 / split_iv + K_TX8 / (host_iv * (latency + 1))
+
+
+def total_ma(split_iv, host_iv, latency, tx8=False):
+    i = FLOOR_JIG + split_ma(split_iv) + host_ma(host_iv, latency)
+    return i + tx8_ma(split_iv, host_iv, latency) if tx8 else i
 
 
 def months(ma):
@@ -74,10 +87,10 @@ def months(ma):
 
 
 # ---- 書き出すたびに、当てはめが実測を当てることを確かめる ----------------
-for _name, _s, _h, _l, _meas, _note in CONFIGS:
+for _name, _s, _h, _l, _tx, _meas, _note in CONFIGS:
     if _meas is None:
         continue
-    assert abs(total_ma(_s, _h, _l) - _meas) < 0.035, ("当てはめが実測から離れた", _name)
+    assert abs(total_ma(_s, _h, _l, _tx) - _meas) < 0.035, ("当てはめが実測から離れた", _name)
 # 分割リンクの当てはめの定数項は「分割リンク以外の全部」なので、
 # 床 ＋ ホストリンク(15ms・latency 0) と一致していなければならない
 assert abs(0.287 - (FLOOR_JIG + host_ma(15.0, 0))) < 0.02, "2 つの当てはめが噛み合わない"
@@ -87,13 +100,16 @@ assert max(FLOOR_MEASURED.values()) - min(FLOOR_MEASURED.values()) <= 0.01
 BLUE, RED, GREY = "#2b4a97", "#c0392b", "#8c959d"
 ORA, GREEN, PUR, BLK = "#d35400", "#1e8449", "#6c3483", "#333333"
 
-W, H = 1240, 1180
+W, H = 1240, 1260
 o = []
 a = o.append
 
 
 def txt(x, y, s, color="#111", size=11.5, anchor="middle", bold=True):
-    s = (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    # **強調** は Markdown の書き方。SVG では意味が無いので落とす
+    # （2026-08-11 に生のまま図に出た）
+    s = str(s).replace("**", "")
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     w = ' font-weight="bold"' if bold else ""
     a(f'<text x="{x}" y="{y}" text-anchor="{anchor}" font-size="{size}"{w} '
       f'fill="{color}">{s}</text>')
@@ -106,7 +122,7 @@ a(f'<rect width="{W}" height="{H}" fill="#ffffff"/>')
 txt(24, 36, "左（セントラル）の消費電流 — 何が食っていて、どこを変えると効くか",
     "#111", 19, "start")
 txt(24, 58, "2026-08-10〜11 の実測。電池 ＋ テスター（mA 直列）。"
-            "ログ無しのファーム・電池を入れ直した状態で読んだ値。",
+            "**5 つとも実測。**UART の宣言を外し、電池を入れ直してから読んだ値。",
     "#666", 12, "start", bold=False)
 
 # ==========================================================================
@@ -117,7 +133,7 @@ BY = 118
 BH, BGAP = 46, 34
 IMAX = 0.70
 
-txt(24, BY - 16, "① 内訳と、設定を変えたときの姿", "#111", 14.5, "start")
+txt(24, BY - 44, "① 内訳と、設定を変えたときの姿（**5 つとも実測**）", "#111", 14.5, "start")
 
 
 def bx(ma):
@@ -132,13 +148,14 @@ for v in (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7):
     txt(x, BY - 22, f"{v:.1f}", GREY, 10, bold=False)
 txt(BX1 + 34, BY - 22, "mA", GREY, 10, "start", bold=False)
 
-for i, (name, s_iv, h_iv, lat, meas, note) in enumerate(CONFIGS):
+for i, (name, s_iv, h_iv, lat, tx8, meas, note) in enumerate(CONFIGS):
     y = BY + i * (BH + BGAP)
     parts = (
         ("CPU・DC/DC", CPU, "#9aa1a8"),
         ("BLE スタック", STACK, PUR),
         ("分割リンク", split_ma(s_iv), RED),
         ("ホストリンク", host_ma(h_iv, lat), BLUE),
+        ("TX +8dBm の上乗せ", tx8_ma(s_iv, h_iv, lat) if tx8 else 0.0, ORA),
     )
     x = BX0
     for _pn, ma, color in parts:
@@ -148,11 +165,11 @@ for i, (name, s_iv, h_iv, lat, meas, note) in enumerate(CONFIGS):
         if w > 42:
             txt(x + w / 2, y + BH / 2 + 4, f"{ma:.3f}", "#ffffff", 11)
         x += w
-    tot = total_ma(s_iv, h_iv, lat)
+    tot = total_ma(s_iv, h_iv, lat, tx8)
     txt(24, y + BH / 2 - 2, name, "#111", 12.5, "start")
     txt(24, y + BH / 2 + 15,
-        f"分割 {s_iv:g}ms ／ ホスト {h_iv:g}ms・latency {lat}", "#777", 10.5, "start",
-        bold=False)
+        f"分割 {s_iv:g}ms ／ ホスト {h_iv:g}ms・latency {lat}"
+        + ("／ TX +8dBm" if tx8 else ""), "#777", 10.5, "start", bold=False)
     txt(x + 12, y + BH / 2 - 3, f"{tot:.3f} mA", "#111", 12.5, "start")
     txt(x + 12, y + BH / 2 + 14, f"{months(tot):.1f} ヶ月", GREEN, 12, "start")
     if meas is not None:
@@ -166,7 +183,8 @@ for i, (name, s_iv, h_iv, lat, meas, note) in enumerate(CONFIGS):
 LY = BY + len(CONFIGS) * (BH + BGAP) + 18
 for j, (pn, color) in enumerate((("CPU・DC/DC・分圧", "#9aa1a8"), ("BLE スタック", PUR),
                                  ("分割リンク（左 ↔ 右）", RED),
-                                 ("ホストリンク（左 ↔ PC）", BLUE))):
+                                 ("ホストリンク（左 ↔ PC）", BLUE),
+                                 ("TX +8dBm の上乗せ", ORA))):
     x = BX0 + j * 150
     a(f'<rect x="{x}" y="{LY}" width="13" height="13" fill="{color}"/>')
     txt(x + 18, LY + 11, pn, "#555", 10, "start", bold=False)
@@ -180,8 +198,9 @@ txt(24, FY, "② 使っている式と、その根拠", "#111", 14.5, "start")
 a(f'<rect x="24" y="{FY+12}" width="{W-48}" height="132" rx="8" fill="#f7f9fb" '
   'stroke="#d5dae0"/>')
 txt(44, FY + 40,
-    "I  =  床 0.090  +  2.591 ÷ 分割間隔[ms]  +  2.725 ÷ ( ホスト間隔[ms] × (latency+1) )",
-    "#111", 14, "start")
+    "I  =  床 0.090  +  2.591 ÷ 分割間隔[ms]  +  2.725 ÷ ( ホスト間隔[ms] × (latency+1) )"
+    "   [ +8dBm なら さらに 0.736 ÷ 同じ 2 つ ]",
+    "#111", 13, "start")
 txt(44, FY + 66,
     "前提: 無線イベント 1 回あたりの費用は、相手が右手でもホストでも同じ。"
     "→ 2 つの係数が近い値（2.591 と 2.725）になったことが傍証。",
@@ -191,8 +210,8 @@ txt(44, FY + 88,
     "送るものがあれば次の機会に送るので、打鍵の遅延は増えない。",
     "#555", 11, "start", bold=False)
 txt(44, FY + 110,
-    "検算: 既定 0.617（実測 0.63）／ 候補 A 0.441（実測 0.43）。"
-    "latency 0 の掃引から作った式が、latency 30 の実測を当てている。",
+    "検算: 0.617/0.63・0.441/0.43・0.269/0.27・0.182/0.18・0.541/0.54。"
+    "**5 点すべてで残差 0.01mA 以内。**予測してから測って当てた点が 3 つある。",
     GREEN, 11, "start", bold=False)
 txt(44, FY + 130,
     f"⚠️ 本番はこれに 74LVC595 の静止電流 {SHIFTER_IQ:.2f}mA（データシート・右は 2 個）が乗る。",
@@ -205,24 +224,24 @@ TY = FY + 176
 txt(24, TY, "③ どのレバーが、どれだけ効くか", "#111", 14.5, "start")
 
 LEVERS = (
-    ("ホストの latency を 0 → 30",
-     f"−{host_ma(15,0)-host_ma(15,30):.3f}mA", f"＋{months(0.441)-months(0.617):.1f} ヶ月",
-     "なし", "実測（Mac・Windows とも 0.43）＋ログで受理を確認", GREEN),
-    ("分割リンクを 7.5 → 15ms",
-     f"−{split_ma(7.5)-split_ma(15):.3f}mA", f"＋{months(0.269)-months(0.441):.1f} ヶ月",
-     "右手だけ平均 +3.75ms。左右差", "8 点の当てはめ（実測）", ORA),
     ("分割リンクを 7.5 → 30ms",
      f"−{split_ma(7.5)-split_ma(30):.3f}mA", f"＋{months(0.182)-months(0.441):.1f} ヶ月",
-     "右手だけ平均 +7.5ms。左右差", "同上", RED),
-    ("ホストの間隔を 15 → 60ms（latency 30 のまま）",
+     "右手だけ平均 +7.5ms。左右差", "**実測 0.18mA**（0.14〜0.21 で振れる）", GREEN),
+    ("分割リンクを 7.5 → 15ms",
+     f"−{split_ma(7.5)-split_ma(15):.3f}mA", f"＋{months(0.269)-months(0.441):.1f} ヶ月",
+     "右手だけ平均 +3.75ms。左右差", "**実測 0.27mA**。打鍵の違和感は無し（目隠しでない）", GREEN),
+    ("ホストの latency を 0 → 30",
+     f"−{host_ma(15,0)-host_ma(15,30):.3f}mA", f"＋{months(0.441)-months(0.617):.1f} ヶ月",
+     "**なし**", "実測（Mac・Windows とも 0.43）＋ログで受理を確認", GREEN),
+    ("送信電力を 0 → +8dBm",
+     f"＋{tx8_ma(7.5,15,30):.3f}mA", f"−{months(0.441)-months(0.541):.1f} ヶ月".replace("−-", "−"),
+     "電波の余裕を買う（左だけ強くなる）", "**実測 0.54mA**。ZMK の「無視できる」は当てはまらない", RED),
+    ("ホストの間隔 15 → 60ms（latency 30 のまま）",
      f"−{host_ma(15,30)-host_ma(60,30):.3f}mA", "＋0.1 ヶ月",
      "両手に +22ms", "式。**分解能以下なので実測で確かめられない**", GREY),
     ("マトリクス走査・595 の駆動をやめる",
      "0.00mA", "±0",
      "—", "実測（direct 0.03 / matrix 0.02 / shift 0.03）", GREY),
-    ("電池報告の間隔を延ばす",
-     "0.000mA", "±0",
-     "—", "計算（60 秒に 1 回の通知）", GREY),
 )
 
 COLS = (24, 400, 520, 650, 890)
@@ -245,19 +264,21 @@ CY = TY + 54 + len(LEVERS) * 30 + 26
 txt(24, CY, "④ どこまで確かか", "#111", 14.5, "start")
 CERT = (
     ("強い", GREEN,
-     "分割リンクの係数 2.591 — 7.5〜60ms を 8 点。残差 ≤0.034mA"),
+     "分割リンクの係数 2.591 — 8 点の当てはめに加え、15ms と 30ms を**予測してから実測して当てた**"),
     ("強い", GREEN,
      "床が増えないこと — 3 本のファームで実測。差はすべて分解能以下"),
     ("強い", GREEN,
      "候補 A の 0.43mA — Mac・Windows・電池入れ直しで一致。macOS はログで受理を確認"),
+    ("強い", GREEN,
+     "TX +8dBm の +0.10mA — データシートから計算した +0.098 を、測って当てた"),
     ("弱い", RED,
-     "ホストリンクの係数 2.725 — 3 点だが 45ms と 60ms が同値。**実質 2 点・未知数 2 個で自由度 0**"),
-    ("弱い", RED,
-     "45/60ms の点 — 電流が 2 値を行き来する中から低い側を目で選んだ。ログで裏を取っていない"),
+     "ホストリンクの係数 2.725 — 3 点だが 45ms と 60ms が同値。実質 2 点・未知数 2 個で自由度 0"),
     ("未確認", GREY,
      "Windows の実際の interval / latency — 更新イベントを出さないので読めない。電流が同じことだけが分かっている"),
     ("未確認", GREY,
-     "0.87 → 0.96mA の 0.09（ログ入りファーム）。電池電圧は 3.00V で変わらず。説明が無い"),
+     "打鍵感（D2）— 15ms・30ms とも「違和感なし」だが、目隠しでなく右の 1 キーだけ。判断材料にはならない"),
+    ("未確認", GREY,
+     "本番基板の電波環境（アンテナ #23・左右の距離・人体）。再送が増えれば全部の値が上がる"),
 )
 for i, (tag, color, s) in enumerate(CERT):
     y = CY + 26 + i * 22
@@ -273,7 +294,7 @@ txt(24, H - 22,
 a("</svg>")
 OUT.write_text("\n".join(o), encoding="utf-8")
 print(f"wrote {OUT.relative_to(ROOT)}")
-for name, s_iv, h_iv, lat, meas, _n in CONFIGS:
-    t = total_ma(s_iv, h_iv, lat)
+for name, s_iv, h_iv, lat, tx8, meas, _n in CONFIGS:
+    t = total_ma(s_iv, h_iv, lat, tx8)
     m = f"  実測 {meas:.2f}" if meas is not None else ""
     print(f"  {name:24s} {t:.3f} mA  {months(t):5.1f} ヶ月{m}")
