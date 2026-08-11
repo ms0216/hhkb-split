@@ -43,6 +43,8 @@ OUT = Path(__file__).resolve().parent.parent / "build" / "assembly"
 REAL_SHAPE = {
     "case", "topcase", "plate", "lid", "foot", "screws", "inserts",
     "nut", "rubber", "pcb_real", "db_real", "pcb_parts", "db_parts",
+    "batt",  # 円柱2本が実形状（電極2箇所だけ箱のまま。dee89db）
+    "switches_real",  # kiswitch SW_Cherry_MX_Plate（爪・ステム・ピン・LED窓）
 }
 
 # 見下ろす向き。export_assembly.py の "iso" と同じ側から見る。

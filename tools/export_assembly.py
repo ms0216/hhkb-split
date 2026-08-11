@@ -31,6 +31,25 @@ from gen_plate import halves, plate_positions         # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "build" / "assembly"
 
+# STEP から起こした形（基板・キースイッチ）を STL にするときの粗さ。
+#
+# **効くのは角度のほうで、線形はほとんど効かない**（2026-08-11 に実測）。
+# kiswitch の MX は全エッジに半径 0.05〜0.1mm のフィレットが入っている
+# （円柱面 246 個のうち 86% が半径 0.5mm 未満・中央値 0.100mm）。**その
+# 半径では線形許容差が先に満たされて制約にならない**ので、角度だけが
+# 分割数を決める。つまり**目に見えない 0.1mm のフィレットが、大きな円柱と
+# 同じ分割数をもらう。**
+#
+#   スイッチ 1 個の三角形数（線形 0.05 固定で角度だけ振った実測）
+#     ang=0.1 → 1,250,764 / 0.3 → 130,131 / 0.5 → 54,174 / 0.8 → 21,938
+#   線形は 0.01→0.3（30 倍）で 100,820 → 53,420 しか動かない
+#
+# 大きな面（最大 2.4mm）は線形許容差のほうが先に効くので、角度を緩めても
+# 粗くならない。**目で並べて差が無いことを確認済み**（/tmp/switch_compare.png）。
+# 締めたくなったら、まず「その面は見えるのか」を測ること。
+MESH_LIN = 0.05
+MESH_ANG = 0.8
+
 # 部品ごとの色と透明度。**中を見せたいものほど薄く。**
 STYLE = {
     "case":    ("#9fb3c8", 0.35),   # 外殻。中が見えないと意味がないので薄く
@@ -115,19 +134,19 @@ def export_real(half):
     from interface import PLATE_T, plan_depth
 
     keys = halves()[half]
-    _, (w, h_plate) = plate_positions(keys)
+    positions, (w, h_plate) = plate_positions(keys)
     rim_front = PLATE_TOP_FRONT - PLATE_T
 
     comp = pcb_parts.real_compound(half)
     board = max(comp.solids(), key=lambda s: s.volume)
     top_z = board.bounding_box().max.Z
     moved = Location((-pcb_parts.ORIGIN[0], pcb_parts.ORIGIN[1], -top_z)) * comp
-    # 許容差は粗く。既定（1e-3）だとソケットのフィレットが細分化されて
-    # **1 ファイル 900MB** になった。0.05mm あれば目視には十分
+    # 粗さは MESH_LIN / MESH_ANG（上の説明を読むこと）。既定（1e-3）だと
+    # ソケットのフィレットが細分化されて **1 ファイル 900MB** になった。
     out = []
     path = OUT / f"{half}_pcb_real.stl"
     export_stl(place_pcb(moved, h_plate, rim_front), str(path),
-               tolerance=0.05, angular_tolerance=0.3)
+               tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
     out.append(path)
 
     h_case = plan_depth(h_plate)
@@ -137,8 +156,25 @@ def export_real(half):
     moved = Location((db_x - pcb_parts.ORIGIN[0], db_center_y + pcb_parts.ORIGIN[1],
                       FLOOR + DB_BOSS_H)) * dbc
     path = OUT / f"{half}_db_real.stl"
-    export_stl(moved, str(path), tolerance=0.05, angular_tolerance=0.3)
+    export_stl(moved, str(path), tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
     out.append(path)
+
+    # キースイッチの実形状（kiswitch SW_Cherry_MX_Plate）。**gen_assembly の
+    # real_switches をそのまま呼ぶ。**座標の出し方を二重に持たない
+    # （2026-08-11: 箱と実物の断面は一致していたが爪・ステム・ピン・LED窓は
+    # 箱に無く、検査もされていなかった。同じ理由で「見る」側も置き去りに
+    # しない）。third_party_model が無ければ None が返り、黙って飛ばす。
+    from gen_assembly import plate_placement, real_switches
+    pl = plate_placement(w, h_plate)
+    sw = real_switches(positions, pl)
+    if sw is not None:
+        # 粗さは MESH_LIN / MESH_ANG。**角度を 0.3 のままにすると 192MB**
+        # になる（キー 1 個 13 万三角形 × 27）。理由は上の説明。
+        path = OUT / f"{half}_switches_real.stl"
+        export_stl(sw, str(path), tolerance=MESH_LIN, angular_tolerance=MESH_ANG)
+        out.append(path)
+    else:
+        print("      kiswitch のモデルが無いので switches_real は出ていない")
     return out
 
 
