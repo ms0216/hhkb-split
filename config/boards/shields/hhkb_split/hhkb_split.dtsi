@@ -150,6 +150,27 @@
 	 *   full  = BATT_V_MAX  … 新品のアルカリの開路電圧（1.65V × 2）
 	 * tools/test_firmware.py が両方を突き合わせ、ずれたら落ちる。
 	 */
+	/*
+	 * ⚠️ **このノードはボード側の vbatt と合体する**（同じパス・同じラベル）。
+	 * xiao_ble//zmk の xiao_ble_zmk.dts が
+	 *
+	 *   vbatt: vbatt {
+	 *       io-channels = <&adc 7>;                 ← XIAO 内蔵の分圧
+	 *       power-gpios = <&gpio0 14 (OPEN_DRAIN | ACTIVE_LOW)>;
+	 *       output-ohms = <510000>; full-ohms = <1510000>;
+	 *   };
+	 *
+	 * を持っており、上書きしない性質は**そのまま残る**。
+	 *
+	 * **2026-08-11 に発覚: power-gpios を受け継いだままだった。**
+	 * P0.14 は **XIAO 内蔵**の分圧（AIN7）を有効にするピンで、こちらは
+	 * D0/AIN0 の**外付け** 1MΩ+1MΩ を常時つないでいるので要らない。
+	 * それなのに ZMK は電池を測るたびに P0.14 を叩き、**10ms 待って**いた
+	 * （driver の「容量が充電されるのを待つ」処理）。60 秒ごとに 10ms、
+	 * 使っていない回路のために起きていたことになる。
+	 * 残量計を差し替えたときに devicetree の検査が
+	 * 「宣言されていない property がある」と言って気づかせてくれた。
+	 */
 	vbatt: vbatt {
 		compatible = "hhkb,battery-alkaline";
 		io-channels = <&adc 0>;
@@ -157,6 +178,7 @@
 		full-ohms = <2000000>;
 		empty-millivolts = <2400>;
 		full-millivolts = <3300>;
+		/delete-property/ power-gpios;
 	};
 
 	chosen {
