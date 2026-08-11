@@ -1222,6 +1222,9 @@ def test_the_switch_boxes_match_the_real_switch():
 # アンテナと本体基板の地板の距離（open-gaps #23・#27）
 # --------------------------------------------------------------------------
 ANTENNA_MIN_CLEARANCE = 5.0     # チップアンテナの指針「全層で 5〜10mm」の下限
+# 指針を割ることを承知したときに、open-gaps.md へ書く見出し。
+# **この文字列があるかどうかで、「黙って割った」と「承知で割った」を区別する。**
+ACCEPTED_HEADING = "### 承知でソケットを挟む（プロトタイプ限定）"
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -1263,8 +1266,38 @@ def test_the_antenna_keeps_its_distance_from_the_main_board(half):
         x1 - x0, hi - lo, 1.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
 
     d = ant.distance_to(parts["pcb"])
-    assert d >= ANTENNA_MIN_CLEARANCE, (
+    if d >= ANTENNA_MIN_CLEARANCE:
+        return
+
+    # **指針を割っているときは、承知の記録が無ければ落とす。**
+    # export_fab.py の `_gate_antenna()`（「### 承知して発注する」が無ければ
+    # ガーバーを出さない）と同じ形。**黙って割るのを許さない**のが目的で、
+    # 利用者が承知して割るのを止めるのが目的ではない。
+    doc = (ROOT / "docs/hardware/open-gaps.md").read_text(encoding="utf-8")
+    assert ACCEPTED_HEADING in doc, (
         f"アンテナと本体基板が {d:.2f}mm しか離れていない"
         f"（指針 {ANTENNA_MIN_CLEARANCE}〜10mm）。"
-        f"XIAO の浮き DB_XIAO_LIFT={DB_XIAO_LIFT}mm が大きすぎる。"
-        "ソケットを入れるなら、アンテナの置き方から見直すこと（open-gaps #23）")
+        f"XIAO の浮き DB_XIAO_LIFT={DB_XIAO_LIFT}mm が大きすぎる。\n"
+        f"  承知で割るなら open-gaps.md に見出し「{ACCEPTED_HEADING}」の節を"
+        "書くこと（誰が・いつ・何を承知したか）。\n"
+        "  直すなら DB_SOCKET_SEAT を 0 に戻すか、アンテナの置き方から"
+        "見直すこと（open-gaps #23）")
+
+
+def test_the_socket_build_is_not_used_to_judge_the_antenna():
+    """ソケットで割っている間は、**#23 の測定に使ってはいけない**と書いてあること。
+
+    **これがこの逸脱の本当の代償。**発注をせき止めている唯一の課題（#23）は
+    「劣化が何 dB か」の実測で、**ソケットを挟んだ機体で測った数字は、
+    出荷構成（直付け）について何も語らない。**悪い結果が出ても、原因が
+    ソケットなのか元の配置なのか切り分けられない。
+    """
+    from envelopes import DB_SOCKET_SEAT
+
+    if DB_SOCKET_SEAT <= 0:
+        return
+    doc = (ROOT / "docs/hardware/open-gaps.md").read_text(encoding="utf-8")
+    assert "この構成で #23 を測ってはいけない" in doc, (
+        "ソケットを挟んでいるのに、「この構成で #23 を測ってはいけない」が"
+        "open-gaps.md に書かれていない。**測ってしまうと、その数字は"
+        "出荷構成について何も語らない**")
