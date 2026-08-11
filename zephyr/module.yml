@@ -1,0 +1,14 @@
+# このリポジトリ自身を Zephyr（ZMK）モジュールとして登録する。
+#
+# **これがあると、ZMK 公式の再利用ワークフローが自動でモジュールとして
+# 読み込む**（build-user-config.yml の "if [ -e zephyr/module.yml ]" →
+# -DZMK_EXTRA_MODULES=<リポジトリ直下>）。別リポジトリを作らなくてよい。
+#
+# 中身は firmware/ にまとめてある。リポジトリ直下に CMakeLists.txt や
+# Kconfig を置くと、CAD 側のツリーと紛らわしいため。
+name: hhkb-split
+build:
+  cmake: firmware
+  kconfig: firmware/Kconfig
+  settings:
+    dts_root: firmware

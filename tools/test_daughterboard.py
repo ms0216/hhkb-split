@@ -155,17 +155,23 @@ def test_the_connector_spec_matches_the_board():
 def test_the_firmware_and_the_circuit_agree_on_the_battery_divider():
     """ファームの分圧宣言が、回路の抵抗値と一致すること。
 
-    ZMK の `zmk,battery-voltage-divider` は `output-ohms` と `full-ohms` から
-    実電圧を復元する。**回路とファームで別々に書かれていて、一致を見る検査が
-    無かった。**片方だけ変えても DRC も検査も通り、**残量表示だけが静かに
-    狂う。**電池が空なのに 60% と出る、あるいはその逆になる。
+    残量計は `output-ohms` と `full-ohms` から実電圧を復元する。
+    **回路とファームで別々に書かれていて、一致を見る検査が無かった。**
+    片方だけ変えても DRC も検査も通り、**残量表示だけが静かに狂う。**
+    電池が空なのに 60% と出る、あるいはその逆になる。
 
     変異検査で `DIVIDER_R_HIGH` を 1MΩ → 1.1MΩ にしても 271 件が全部通った。
+
+    **compatible は見ない。**2026-08-11 に乾電池用へ差し替えた
+    （`zmk,battery-voltage-divider` → `hhkb,battery-alkaline`）とき、
+    ここが品名で引っ掛けていたので落ちた。この検査が守りたいのは
+    **抵抗値の一致**であって、どの driver を使うかではない
+    （それは tools/test_firmware.py が見る）。
     """
     dtsi = _strip((SHIELD / "hhkb_split.dtsi").read_text())
-    m = re.search(r"battery-voltage-divider[\s\S]*?output-ohms\s*=\s*<(\d+)>"
+    m = re.search(r"output-ohms\s*=\s*<(\d+)>"
                   r"[\s\S]*?full-ohms\s*=\s*<(\d+)>", dtsi)
-    assert m, "ファームに battery-voltage-divider の宣言が見つからない"
+    assert m, "ファームに分圧（output-ohms / full-ohms）の宣言が見つからない"
     output_ohms, full_ohms = int(m.group(1)), int(m.group(2))
 
     from circuit import DIVIDER_R_HIGH, DIVIDER_R_LOW

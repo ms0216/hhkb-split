@@ -137,16 +137,26 @@
 	 * ショットキーの手前**に置いてあるので、USB 接続中も電池そのものの
 	 * 電圧が読める。
 	 *
-	 * **注意: ZMK の残量%はリチウムイオンの放電曲線で計算される。**
-	 * 乾電池 2 本（2.2〜3.2V）では正しい%にならない。
-	 * docs/hardware/open-gaps.md #13 参照。電圧は読めるので、
-	 * 曲線を差し替えるまでの土台としては成立する。
+	 * **残量%は乾電池用に差し替えてある**（open-gaps #13）。
+	 * ZMK 標準（zmk,battery-voltage-divider）はリチウムイオンの放電曲線で
+	 * 3.45V 以下を 0% とするので、乾電池 2 本ではほぼ常に 0% になる。
+	 * firmware/drivers/battery_alkaline.c が、下の 2 つの電圧の間での
+	 * 残りを % にする。
+	 *
+	 * **この 2 つの数字の出所は tools/circuit.py だけ。**
+	 *   empty = BATT_V_MIN  … この回路が動かなくなる電圧
+	 *                         （マイコン・595・マトリクス・ソケットの
+	 *                           下限のうち最も厳しいもの ＋ ショットキー Vf）
+	 *   full  = BATT_V_MAX  … 新品のアルカリの開路電圧（1.65V × 2）
+	 * tools/test_firmware.py が両方を突き合わせ、ずれたら落ちる。
 	 */
 	vbatt: vbatt {
-		compatible = "zmk,battery-voltage-divider";
+		compatible = "hhkb,battery-alkaline";
 		io-channels = <&adc 0>;
 		output-ohms = <1000000>;
 		full-ohms = <2000000>;
+		empty-millivolts = <2400>;
+		full-millivolts = <3300>;
 	};
 
 	chosen {

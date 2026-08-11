@@ -1,0 +1,42 @@
+description: |
+  アルカリ乾電池（直列）を分圧で読む残量計。
+
+  ZMK の zmk,battery-voltage-divider と配線は同じで、**% の出し方だけが違う**。
+  標準はリチウムイオンの放電曲線なので、乾電池では常に 0% になる
+  （docs/hardware/open-gaps.md #13）。
+
+compatible: "hhkb,battery-alkaline"
+
+include: base.yaml
+
+properties:
+  io-channels:
+    required: true
+    type: phandle-array
+    description: 分圧の中点を読む ADC チャンネル
+
+  output-ohms:
+    required: true
+    type: int
+    description: 分圧の下側（GND 側）の抵抗値
+
+  full-ohms:
+    required: true
+    type: int
+    description: 分圧の合計抵抗値
+
+  empty-millivolts:
+    required: true
+    type: int
+    description: |
+      **0% とする電池端の電圧（直列の合計）。**
+      「電池が空になる電圧」ではなく「この回路が動かなくなる電圧」を入れる。
+      tools/circuit.py の BATT_V_MIN（マイコン・74LVC595・マトリクス・
+      ソケットの下限のうち最も厳しいもの ＋ ショットキーの Vf）が唯一の出所で、
+      tools/test_firmware.py が突き合わせる。
+
+  full-millivolts:
+    required: true
+    type: int
+    description: |
+      **100% とする電池端の電圧（直列の合計）。**新品のアルカリの開路電圧。

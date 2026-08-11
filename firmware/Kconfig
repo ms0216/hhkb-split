@@ -1,0 +1,40 @@
+# この案件だけのファーム。値そのものは devicetree に置いてあり、
+# ここにあるのは「その機能を積むかどうか」だけ。
+#
+# **同じ数字を 2 か所に書かない。**打ち止め電圧は
+# hhkb_split.dtsi の empty-millivolts が唯一の出所で、
+# tools/test_firmware.py が tools/circuit.py の BATT_V_MIN と突き合わせる。
+
+config HHKB_BATTERY_ALKALINE
+	bool "アルカリ乾電池の残量計"
+	default y
+	depends on DT_HAS_HHKB_BATTERY_ALKALINE_ENABLED
+	select SENSOR
+	select ADC
+	help
+	  ZMK 標準の残量計はリチウムイオンの放電曲線で % を出すため、
+	  乾電池 2 本（2.4〜3.2V）ではほぼ常に 0% になる（open-gaps #13）。
+	  こちらは分圧を読んで、使える電圧の窓の中での残りを % にする。
+
+config HHKB_LOW_BATTERY_SOFT_OFF
+	bool "打ち止め電圧を割ったら自分から止まる"
+	default y
+	depends on HHKB_BATTERY_ALKALINE && ZMK_PM_SOFT_OFF
+	help
+	  電池が尽きるとき、レールが落ちてブラウンアウト → 起動 → 広告 →
+	  また落ちる、を繰り返す。残り少ない電池を早く使い切るうえ、
+	  **低電圧での flash 書き込みでペアリング情報が壊れうる**
+	  （nRF52840 の NVMC は VDD ≧ 1.7V が条件）。open-gaps #25b。
+
+	  打ち止め（devicetree の empty-millivolts）を下回った状態が
+	  HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES 回続いたら soft off に入る。
+
+config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
+	int "何回続けて下回ったら止まるか"
+	default 2
+	depends on HHKB_LOW_BATTERY_SOFT_OFF
+	help
+	  1 回で止めない。BLE 送信中の電圧降下（電池の内部抵抗 × 送信電流）で
+	  一時的に下がることがあり、そこで落ちると誤動作に見える。
+	  ZMK の測定間隔（ZMK_BATTERY_REPORT_INTERVAL・既定 60 秒）× この回数
+	  だけ続いたら本物とみなす。
