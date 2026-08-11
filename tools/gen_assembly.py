@@ -35,17 +35,27 @@ from envelopes import (  # noqa: E402
 from interface import PLATE_T  # noqa: E402
 
 
-# real 層で実形状に置き換わる（＝bbox 層にしか無い）部品。
-# CI の checks ジョブは、**この部品が絡む組だけ**を bbox 層で見る（#31。
-# 両端とも real 層と同一形状の組は、実形状ジョブが同じ形で計算する完全な
-# 重複だった——この集合での実測は右側だけで 456 組）。
-# **一覧が実際より少ないと穴になる**（置き換わる部品の予約の箱 × ケースの
-# 組を checks が黙って落とし、実形状ジョブはその箱を持っていない）。
-# 多いぶんには余計に見るだけ。ずれたら
-# test_the_replaced_by_real_list_matches_reality が実形状ジョブで落ちて教える
-# **"switches" は 2026-08-11 に足した**（実形状の switches_real に置き換わる）。
-REPLACED_BY_REAL = {"pcb", "sockets", "stabs", "db", "xiao",
-                    "pcb_parts", "db_parts", "switches"}
+# **予約の箱 × その箱が予約している実物**の組。包んでいる（または嵌合で
+# 入り込む）のが当たり前なので、干渉としては見ない（#31 案 A・利用者の
+# 決定 2026-08-11）。干渉検査は 1 パスで 2 つの質問に答える:
+#   1. **実物どうしがぶつからないか**（実形状）
+#   2. **予約が守られているか**（条件 1・2 の箱 × ケース等）
+# 箱は実形状の劣化版ではなく、2 の質問に答える道具。
+#
+# **見ない組には、代わりの「箱 ⊇ 実物」の検査を必ず置く**——除外は
+# 「見ない」宣言であり、代わりが効いていなければ穴を開けたのと同じ:
+#   sockets × pcb_real       … test_the_socket_box_contains_the_third_party_model
+#   stabs   × pcb_real       … test_the_stab_box_contains_the_third_party_model
+#   db      × db_real        … test_the_db_reservation_contains_the_real_parts
+#   xiao    × db_real        … 同上（xiao の箱の寸法自体が記録から作られている）
+#   sockets × switches_real  … ピンが予約帯に入る嵌合。
+#                              test_the_switch_boxes_match_the_real_switch
+#                              （ピン ⊆ 基板の穴）が縛る
+# 実測（2026-08-11・右側）: この 5 組以外に、箱と real の重なりは無い
+# （ケース・プレート・上ケースとの想定外の重なり 0）。
+RESERVATION_CONTAINS = {("sockets", "pcb_real"), ("stabs", "pcb_real"),
+                        ("db", "db_real"), ("xiao", "db_real"),
+                        ("sockets", "switches_real")}
 
 
 def plate_placement(w, h):
@@ -142,13 +152,14 @@ def build_assembly(keys, half, real=False):
                            SCREW_HEAD_D, SCREW_HEAD_H, SCREW_SHAFT_D,
                            SCREW_L_DB, SCREW_L_MAIN,
                            SW_PWR_D, SW_PWR_H, SW_PWR_W, M2_INSERT_L,
-                           key_stack_envelopes, stab_envelope, usb_plug_envelope)
+                           key_stack_envelopes, stab_reservation,
+                           usb_plug_envelope)
     import envelopes
     from gen_case import (BEZEL_TOP_FRONT, CAP_LIFT, DB_BOSS_POS, OUR_CAPS,
                           _boss_positions, _rubber_positions,
                           power_switch_center_z, power_switch_x_center,
                           usb_center_z)
-    from interface import M2_INSERT_D, stab_offset_for
+    from interface import M2_INSERT_D
 
     tilt = tan(radians(TILT_DEG))
     pl = plate_placement(w, h_plate)
@@ -179,9 +190,7 @@ def build_assembly(keys, half, real=False):
                                           CAP_LIFT, OUR_CAPS["home"])
     parts["switches"] = pl * sw_env
     parts["keycaps"] = pl * cap_env
-    stabs = [(pos, stab_offset_for(k.w_u))
-             for pos, k in zip(positions, keys) if stab_offset_for(k.w_u)]
-    parts["stabs"] = pl * stab_envelope(stabs)
+    parts["stabs"] = pl * stab_reservation(half)
 
     # 電源スイッチの実物（受け箱の中の本体＋壁を貫く操作部）
     from gen_case import WALL as _wall
@@ -410,17 +419,22 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     main = pcb_parts.real_compound(half)
     board = max(main.solids(), key=lambda s_: s_.volume)
     parts = dict(parts)
-    # **スタビの箱も外す。**実物は KiCad の STEP に入っており（pcb_real）、
-    # 箱を残すと同じ物が二重に置かれる（36.5mm^3 の重なりとして出た）。
-    for name in ("pcb", "sockets", "pcb_parts", "stabs"):
+    # **外すのは「実物の写し」だけ**（板・実装部品の記録 bbox。実物が
+    # pcb_real / db_real として入るので、残すと同じ物が二重になる）。
+    # **予約の箱（sockets / stabs / db / xiao）は外さない**（#31 案 A・
+    # 利用者の決定 2026-08-11）。箱は実形状の劣化版ではなく、
+    # 「**予約が守られているか**」という別の質問に答える道具。
+    # 1 パスで 2 つの質問に答える:
+    #   1. 実物どうしがぶつからないか（実形状）
+    #   2. 予約が守られているか（条件 1・2 の箱 × ケース等）
+    for name in ("pcb", "pcb_parts"):
         parts.pop(name, None)
     parts["pcb_real"] = place_pcb(
         _moved(main, Location((-ox, oy, -board.bounding_box().max.Z)), half),
         h_plate, rim_front)
 
     dbc = pcb_parts.real_compound("db")
-    for name in ("db", "xiao", "db_parts"):
-        parts.pop(name, None)
+    parts.pop("db_parts", None)
     db_real = _moved(dbc, Location((db_x - ox, db_center_y + oy,
                                     FLOOR + DB_BOSS_H)), "db")
 
@@ -443,19 +457,18 @@ def _swap_in_real_boards(parts, half, h_plate, rim_front, db_x, db_center_y):
     return parts
 
 
-def check(keys, half, label="", focus=None, real=False, proxy_only=False):
+def check(keys, half, label="", focus=None, real=False):
     """組み立て状態を検査し、問題の一覧を返す。
 
     focus に部品名を渡すと、**その部品が絡む組だけ**を検査する。
     変異検査（故意に壊して検出できるか）が全組 253 を回すと遅すぎるため。
     通常の検査（focus=None）は必ず全組を見る。
 
-    proxy_only=True は **CI の checks ジョブ専用**（#31「重複なく 1 回」）。
-    REPLACED_BY_REAL が絡む組だけを見る。両端とも real 層と同一形状の組は
-    実形状ジョブが同じ形で計算するので、checks で回すと完全な重複になる
-    （実測・右側 456 組）。**手元では使わない**——kicad-cli の無い
-    環境では bbox 層が唯一の検査で、絞ると case × plate などが
-    誰にも見られなくなる。
+    **本番の干渉検査は real=True**（#31 案 A・利用者の決定 2026-08-11）。
+    実形状＋予約の箱の 1 パスで「実物どうしがぶつからないか」と
+    「予約が守られているか」の両方に答える。real=False の箱だけの組み立ては
+    変異検査（mutate.py・自己確認テスト）と視覚確認が速さのために使う道具で、
+    **検査の本体ではない**。
     """
     from verify import (load_interference_memo, memoized_intersection_volume,
                         save_interference_memo)
@@ -571,13 +584,10 @@ def check(keys, half, label="", focus=None, real=False, proxy_only=False):
             if focus is not None and focus not in (la.split("#")[0],
                                                    lb.split("#")[0]):
                 continue
-            if proxy_only and la.split("#")[0] not in REPLACED_BY_REAL \
-                    and lb.split("#")[0] not in REPLACED_BY_REAL:
-                continue
             if _board_and_its_own_part(la, lb):
                 continue
             if tuple(sorted((la.split("#")[0], lb.split("#")[0]))) in {
-                    tuple(sorted(m)) for m in MATING}:
+                    tuple(sorted(m)) for m in (MATING | RESERVATION_CONTAINS)}:
                 continue
             if not _bb_touch(ba, bb_):
                 continue
@@ -631,33 +641,28 @@ def check(keys, half, label="", focus=None, real=False, proxy_only=False):
     return problems, notes, parts
 
 
-# ローカルの既定で検査する側。**干渉検査は実形状に一本化した**（#31。
-# 占有空間は「品番未定」と「意図的な余裕」の 2 条件だけに使う）。
-# 実形状は片側 2 分半かかるので、手元の既定は**厳しい側だけ**・両側は
-# GitHub Actions の実形状ジョブが毎回見る（利用者の決定・2026-08-11）。
-# 「厳しい」は実測で決めた（2026-08-11・実形状）: right が全指標で上
-#   立体 277 vs 240 / 全組 38,079 vs 28,549 / bbox 近接 <0.1mm 1,011 vs 871
-STRICT_HALF = "right"
-
-
 def main(argv=None):
+    """干渉検査（実形状＋予約の箱・両側）。片側だけなら `left`/`right` を渡す。
+
+    kicad-cli が無ければ**検査せず赤で終わる**（利用者の決定 2026-08-11。
+    「検査が飛んで緑」がこの案件で 4 回起きた。「できなかった」を
+    緑で素通りさせない）。
+    """
     argv = list(sys.argv[1:] if argv is None else argv)
     import pcb_parts
-    real = pcb_parts.kicad_available()
+    if not pcb_parts.kicad_available():
+        print("NG kicad-cli が無いので実形状の干渉検査ができない。"
+              "検査していない状態を緑にしない", file=sys.stderr)
+        return 1
     names = list(halves())
     if argv and argv[0] in names:
         names = [argv[0]]
-    elif real and "--both" not in argv:
-        names = [STRICT_HALF]
-        print(f"実形状で {STRICT_HALF} だけ検査する"
-              f"（両側は CI の実形状ジョブが、形に関わる push のたびに見る。"
-              f"手元で両側: --both）")
     ok = True
     for name in names:
         keys = halves()[name]
-        problems, notes, parts = check(keys, name, name, real=real)
+        problems, notes, parts = check(keys, name, name, real=True)
         print(f"{'OK ' if not problems else 'NG '}{name}  部品 {len(parts)} 個"
-              f"（{'実形状' if real else '記録の bbox（kicad-cli 無し）'}）")
+              f"（実形状＋予約の箱）")
         for n in notes:
             print(f"      {n}")
         for p in problems:

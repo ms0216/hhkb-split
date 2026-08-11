@@ -49,7 +49,7 @@ ORIGIN = (150.0, 100.0)          # gen_pcb.ORIGIN（pcbnew が要るので直接
 
 # kiswitch ライブラリの部品（ソケット・スタビ）。**基板を貫く**ので、
 # 穴の無い板の占有空間と重ねると偽の干渉になる。組み立てでは専用の
-# 保守的な箱（envelopes.socket_envelope / stab_envelope）が受け持ち、
+# 保守的な箱（envelopes.socket_envelope / stab_reservation）が受け持ち、
 # こちらは「数の確認」と「箱が保守側であることの突き合わせ」に使う。
 KEYSWITCH_LABELS = {"kailh_socket", "kailh_socket_leg",
                     "stab_housing", "stab_insert", "stab_wire"}

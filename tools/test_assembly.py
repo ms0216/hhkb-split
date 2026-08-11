@@ -68,42 +68,36 @@ REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db", "topcase",
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_nothing_bites_into_anything_else(half):
-    """干渉 0。**作れる環境ではかならず実形状で見る**（#31 で一本化）。
+    """干渉 0。**実形状＋予約の箱の 1 パス**（#31 案 A・利用者の決定
+    2026-08-11）。1 回の総当たりで 2 つの質問に答える:
 
-    - kicad-cli がある手元: 実形状。ただし重いので**厳しい側だけ**。
-      緩い側は記録の bbox 層に落とす（今日までのローカルの網羅を下げない。
-      緩い側の実形状は **CI の実形状ジョブが、形に関わる push のたびに見る**。
-      文書だけの push では `changed` ゲートで飛ぶが、形の入力（tools/
-      layout/ pcb/）はすべてゲートの中なので、飛ぶ push では形が変わらない。
-      利用者の決定・2026-08-11）
-    - CI の checks ジョブ（kicad-cli 無し）: 記録の bbox＋予約の箱で両側。
-      ただし**置き換え対象（REPLACED_BY_REAL）が絡む組だけ**。両端とも
-      real 層と同一形状の組は実形状ジョブと完全な重複になる（#31
-      「重複なく 1 回」。実測では右側だけで 456 組が二重だった）
-    - CI 以外の kicad-cli 無し環境: bbox 層が唯一の検査なので**全組**見る
+      1. **実物どうしがぶつからないか**（実形状）
+      2. **予約が守られているか**（条件 1・2 の箱 × ケース等）
+
+    - CI の checks ジョブ: **干渉検査を置かない**（skip）。KiCad は 42 秒で
+      入るが、real-shape ジョブと同じ 43 分の検査を二重にやるだけ
+      （「全組み合わせを・重複なく 1 回・正確に」）。両側の実形状は
+      real-shape ジョブが、形に関わる push のたびに見る（gate の filter が
+      形の入力を覆っていることは test_ci_gate.py が見張る）
+    - kicad-cli の無いローカル: **skip ではなく落とす。**「検査が飛んで緑」が
+      この案件で 4 回起きた。「できなかった」を緑で素通りさせない
     """
     import os
 
     import pcb_parts
-    from gen_assembly import STRICT_HALF
 
-    # STRICT_HALF が壊れたとき（綴りの誤りなど）、**静かに bbox 層へ
-    # 落ちるだけ**にならないよう、まず値そのものを検める。
-    assert STRICT_HALF in HALVES, f"STRICT_HALF={STRICT_HALF!r} が半分の名前でない"
-
-    real = pcb_parts.kicad_available()
-    if real and os.environ.get("REQUIRE_KICAD") != "1" and half != STRICT_HALF:
-        real = False                      # 緩い側は bbox 層（実形状は CI で）
-    proxy_only = (os.environ.get("GITHUB_ACTIONS") == "true"
-                  and os.environ.get("REQUIRE_KICAD") != "1")
-    problems, _, parts = check(HALVES[half], half, real=real,
-                               proxy_only=proxy_only)
-    if real:
-        # **実形状に切り替わったことを、緑の条件にする。**差し替えが黙って
-        # 失敗しても bbox 層で緑になれてしまうと、この検査の緑が
-        # 「実物を見た」を意味しなくなる。
-        assert "pcb_real" in parts and "db_real" in parts, \
-            "real=True なのに実形状が組に入っていない"
+    if (os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("REQUIRE_KICAD") != "1"):
+        pytest.skip("checks ジョブには干渉検査を置かない"
+                    "（real-shape ジョブが唯一の干渉検査。利用者の決定）")
+    assert pcb_parts.kicad_available(), (
+        f"kicad-cli が無い（{pcb_parts.KICAD_CLI}）。実形状の干渉検査が"
+        "できない環境を緑にしない（利用者の決定 2026-08-11）")
+    problems, _, parts = check(HALVES[half], half, real=True)
+    # **実形状と予約の箱の両方が組に入っていることを、緑の条件にする。**
+    # どちらかが黙って抜けても総当たりは緑になれてしまう。
+    for need in ("pcb_real", "db_real", "sockets", "stabs", "db", "xiao"):
+        assert need in parts, f"{need} が組に入っていない（1 パスが欠けている）"
     assert not problems, f"{half}:\n  " + "\n  ".join(problems)
 
 
@@ -316,9 +310,8 @@ MUTATIONS = [
     # （「上に浮く」は誤りだった。実測 2026-08-09）。守られているのは
     # 開口の縁との水平の余白（約 1.8mm）なので、幅を広げて壊す
     ("keycaps",  "envelopes", "CAP_GAP", -6.0),
-    # 奥行(+y)はプレートと基板の間の空き地で、+15 でも何にも届かない。
-    # 幅を広げると自分のキーのスイッチ下部に届く（実測 1327mm^3）
-    ("stabs",    "envelopes", "STAB_BODY_XPAD", +25.0),
+    # 余白を広げると隣の実物（スイッチ下部・基板部品）に届く
+    ("stabs",    "envelopes", "STAB_PAD", +12.0),
     ("sw_pwr",   "envelopes", "SW_PWR_W", +15.0),
     ("usb_plug", "envelopes", "USB_MATE_DEPTH", +3.0),
     ("ffc",      "envelopes", "FFC_RIBBON_W", +20.0),
@@ -557,24 +550,107 @@ def test_the_product_group_record_gatekeeper_actually_works(tmp_path, monkeypatc
         "指紋が合わないのに記録が使われた（嘘の組分けを黙って作る）"
 
 
-def test_the_replaced_by_real_list_matches_reality():
-    """`REPLACED_BY_REAL`（checks ジョブが bbox 層で見る組の絞り込み）が、
-    **実際に real 層で置き換わる部品の集合と一致する**こと。
+def test_the_reservation_exclusions_all_have_a_containment_guard():
+    """`RESERVATION_CONTAINS`（見ない宣言）の**すべての組に、代わりの
+    「箱 ⊇ 実物」の検査が実在する**こと。
 
-    一覧が**過大**だと checks が組を黙って落とし、**過小**だと重複が戻る。
-    どちらも静かに起きるので、実形状を組める環境で毎回突き合わせる。
-    スイッチが実形状になった日（2026-08-11）にも、この集合は 1 つ増えた。
+    除外だけ足して代わりを忘れると、穴を開けたのと同じ。組を足すときは
+    ここの対応表にも 1 行足す（検査関数が消えたら落ちて教える）。
     """
-    _github_actions_only("置き換え一覧の突き合わせ")
-    _require_kicad("置き換え一覧の突き合わせ")
-    from gen_assembly import REPLACED_BY_REAL
+    import test_assembly as ta
+    from gen_assembly import RESERVATION_CONTAINS
 
-    pb, _ = build_assembly(HALVES["right"], "right", real=False)
-    pr, _ = build_assembly(HALVES["right"], "right", real=True)
-    actual = set(pb) - set(pr)
-    assert actual == REPLACED_BY_REAL, (
-        f"一覧とのずれ: 一覧に無い {sorted(actual - REPLACED_BY_REAL)} / "
-        f"実際は置き換わらない {sorted(REPLACED_BY_REAL - actual)}")
+    guards = {
+        ("sockets", "pcb_real"): "test_the_socket_box_contains_the_third_party_model",
+        ("stabs", "pcb_real"): "test_the_stab_box_contains_the_third_party_model",
+        ("db", "db_real"): "test_the_db_reservation_contains_the_real_parts",
+        ("xiao", "db_real"): "test_the_db_reservation_contains_the_real_parts",
+        ("sockets", "switches_real"): "test_the_switch_boxes_match_the_real_switch",
+    }
+    assert set(guards) == RESERVATION_CONTAINS, (
+        "除外の組と対応表がずれている。除外を増減したら、代わりの検査と"
+        "この表を揃えること")
+    missing = [name for name in guards.values() if not hasattr(ta, name)]
+    assert not missing, f"代わりの検査が存在しない: {missing}"
+
+
+def test_the_stab_box_contains_the_third_party_model():
+    """スタビの予約の箱が、**実物のハウジング（記録の bbox）を xy で
+    包んでいる**こと。`stabs × pcb_real` を総当たりから外した
+    （RESERVATION_CONTAINS）代わり。
+
+    この検査を最初にブーリアンで書いたら、**予約の方が実物より小さい**
+    ことが出てきた（手決めの前後 7.0 vs 実物 19.2。ハウジング後部が
+    4.7mm はみ出していた）。箱を記録から作るよう直した
+    （envelopes.stab_reservation）。その上でここが守るのは:
+      - 箱が**記録のハウジングを包み続けている**こと（STAB_PAD を負に
+        するなど、箱を実物より小さくする変更で落ちる）
+      - 母数（各側 4 個）が揃っていること
+    ワイヤと、帯の外（開口を貫く上部・板の穴の足）は予約しない。理由は
+    stab_reservation の注記（ワイヤを箱にするとダイオードと偽衝突する。
+    実測 0.2mm）。
+    """
+    from gen_assembly import plate_placement
+    from interface import plate_positions
+
+    import pcb_parts
+
+    for half in ("left", "right"):
+        rec = pcb_parts.keyswitch_boxes(half, "stab_housing")
+        # 母数: スタビは各側 2 本 × ハウジング 2 個 = 4（右は 2u+3u、左も）
+        assert len(rec) == 4, f"{half}: ハウジングが {len(rec)} 個（4 のはず）"
+        parts, _ = build_assembly(HALVES[half], half)
+        _, (w, h_plate) = plate_positions(HALVES[half])
+        inv = plate_placement(w, h_plate).inverse()
+        boxes = [b.moved(inv).bounding_box() for b in parts["stabs"].solids()]
+        missing = []
+        for x0, y0, _z0, x1, y1, _z1 in rec:
+            hit = any(bb.min.X <= x0 + 1e-6 and x1 <= bb.max.X + 1e-6
+                      and bb.min.Y <= y0 + 1e-6 and y1 <= bb.max.Y + 1e-6
+                      for bb in boxes)
+            if not hit:
+                missing.append(f"x[{x0:.1f},{x1:.1f}] y[{y0:.1f},{y1:.1f}]")
+        assert not missing, (
+            f"{half}: 実物のハウジングを包む予約の箱が無い:\n  "
+            + "\n  ".join(missing))
+
+
+def test_the_db_reservation_contains_the_real_parts():
+    """子基板の予約（db の箱＋xiao の箱）が、**記録上の実物を全部
+    包んでいる**こと。
+
+    `db × db_real` / `xiao × db_real` を総当たりから外した代わり。
+    kicad は要らない（記録の算術）。DB_STACK_H を 0.1mm 削るだけで
+    落ちる（実物の頭 5.97 に対して予約の天井 6.01。余裕 0.04mm）。
+    """
+    import pcb_parts
+    from envelopes import DB_STACK_H
+
+    rec = pcb_parts.load()["db"]
+    bx0, by0, _, bx1, by1, _ = rec["board_bbox"]
+    top = rec["board_step_thickness"] + DB_STACK_H
+    rx0, _, _, rx1, ry1, _ = pcb_parts.usb_receptacle()
+    # 張り出し帯の奥端＝XIAO の基板（xiao_asm で xy 最大の立体）の奥端。
+    # envelopes.xiao_overhang_envelope と同じ導き方（出所は同じ記録）。
+    xa = [c2["bbox"] for c2 in rec["components"] if c2["label"] == "xiao_asm"]
+    xb = max(xa, key=lambda b: (b[3] - b[0]) * (b[4] - b[1]))
+    overhang_end = xb[4]                  # 実測 17.53（板の奥端 16.0 + 1.528）
+    over = []
+    for c in rec["components"]:
+        x0, y0, z0, x1, y1, z1 = c["bbox"]
+        if z1 <= 0.05:                    # 裏面の部品は箱の受け持ちの外
+            continue                      # （実物どうしの総当たりが見る）
+        ok = (z1 <= top + 1e-6            # 予約の天井
+              and bx0 - 1e-6 <= x0 and x1 <= bx1 + 1e-6
+              and by0 - 1e-6 <= y0)
+        if y1 > overhang_end + 1e-6:      # 張り出し帯より奥＝メスだけの帯
+            ok = ok and (x0 >= rx0 - 1e-6 and x1 <= rx1 + 1e-6
+                         and y1 <= ry1 + 1e-6)
+        if not ok:
+            over.append(f"{c['label']} {c['bbox']}")
+    assert not over, ("子基板の実物が予約からはみ出している。"
+                      "DB_STACK_H か配置が実物とずれた:\n  "
+                      + "\n  ".join(over))
 
 
 def test_the_xiao_envelope_rejects_a_wrong_record(monkeypatch):

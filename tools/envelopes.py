@@ -328,8 +328,11 @@ CAP_TOP_T = 1.3          # [暫定] 天面の肉厚（同上）
 
 # スタビライザ（2u/3u キーの下、基板に載る）。KiCad に 3D モデルが無く
 # STEP に出てこないので、ここで箱として置く。
-STAB_BODY_D = 7.0        # [暫定] 前後方向の占有
-STAB_BODY_XPAD = 4.0     # [暫定] ワイヤ両端の外側余裕
+# スタビの予約の余白（現物のノギス待ち）。**寸法本体は記録から取る**
+# （stab_reservation。手決めの STAB_BODY_D 7.0 は実物モデルの前後 19.2 より
+# 小さく、予約が実物を覆っていなかった——2026-08-11 の突き合わせで発覚）。
+# 買った現物がモデルより大きかったら、その差をここに入れる。
+STAB_PAD = 0.0           # [暫定] スタビの予約の余白（本体は記録から取る）
 # スタビライザの足は実基板の穴を貫くが、pcb の占有空間には穴が無いので
 # 置かない（スイッチの端子と同じ扱い）。
 
@@ -390,23 +393,32 @@ def key_stack_envelopes(positions, keys, plate_t, cap_lift, cap_h):
     return Compound(children=sw), Compound(children=caps)
 
 
-def stab_envelope(stabs):
-    """スタビライザの占有空間（プレート座標系・z=0 がプレート下面）。
+def stab_reservation(half):
+    """スタビの予約（プレート座標系・z=0 がプレート下面）。
 
-    stabs は [((x, y), s), ...]。s はワイヤ半間隔（interface.stab_offset_for）。
-    **ハウジングはワイヤの両端（キー中心から ±s）に 1 個ずつ。**キー中心には
-    スイッチ本体が居るので、全幅の 1 本棒で置くとスイッチと重なって
-    偽の干渉になる（実際になった）。ワイヤ自体は φ2 程度で基板のすぐ上を
-    通るため、ハウジングの箱に含めて別には置かない。
+    **xy は記録（kiswitch モデルのハウジング bbox）から取る。**手決めの
+    定数（前後 7.0）は実物モデル（前後 19.2）より小さく、**予約が実物を
+    覆っていなかった**（2026-08-11。除外の代わりの検査を書いて発覚）。
+    db / xiao と同じ型: 占有空間は実物の代役なので、実物のデータから作る。
+
+    - z は**プレート下面〜板上面の帯だけ**。上下に貫く部位（開口の中・
+      板の穴）は、開口の検査（kerf）と実形状の総当たりが受け持つ
+    - **ワイヤは予約しない。**実物のワイヤは曲がってダイオードを避けて
+      通っており、bbox の箱にした瞬間にダイオードと偽衝突する（実測
+      0.2mm）。ワイヤは実形状の総当たりだけが見る
+    - `STAB_PAD` は現物のノギス待ちの余白（既定 0）
     """
     from build123d import Align, Box, BuildPart, Locations
 
+    import pcb_parts
+
     with BuildPart() as env:
-        for (kx, ky), s in stabs:
-            for side in (-1, 1):
-                with Locations((kx + side * s, ky, -PLATE_TO_PCB)):
-                    Box(STAB_BODY_XPAD * 2, STAB_BODY_D, PLATE_TO_PCB,
-                        align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for x0, y0, _z0, x1, y1, _z1 in pcb_parts.keyswitch_boxes(
+                half, "stab_housing"):
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, -PLATE_TO_PCB)):
+                Box(x1 - x0 + STAB_PAD * 2, y1 - y0 + STAB_PAD * 2,
+                    PLATE_TO_PCB,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
     return env.part
 
 
