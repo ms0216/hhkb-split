@@ -22,7 +22,7 @@ from circuit import (  # noqa: E402
     BATT_CELLS, BATT_V_MAX, BATT_V_MIN, DIVIDER_R_HIGH, DIVIDER_R_LOW, ICS,
     BATT_ESR_END, BLE_TX_CURRENT,
     COL_DRIVER_DROP, IC_SUPPLY_RANGE, MATRIX_DIODE_IR, MATRIX_DIODE_VF,
-    ROW_PULLDOWN,
+    ROW_PULLDOWN, _RAIL_FLOOR,
     MCU_MARGIN, MCU_V_ABSMAX, MCU_V_MAX, MCU_V_MIN, POWER_NETS, SCHOTTKY_VF,
     daughterboard_netlist,
     netlist,
@@ -479,13 +479,32 @@ def test_the_margin_covers_the_transmit_droop():
     打ち止めの手前でブラウンアウトする。
 
     降下は「電流 × 電池の内部抵抗」で決まり、**バルクコンデンサでは
-    消せない**（コンデンサが効くのは τ=R×C より短い間だけ。送信バーストは
-    数百µs、τ は 40〜150µs なので、容量を倍にしても 3mV しか変わらない）。
+    消せない**（コンデンサが効くのは τ=R×C より短い間だけ）。
     文書には「バルクを入れると使い切れる領域が広がる」と書いてあったが、
     **これは誤り**（2026-08-08 に訂正）。
+
+    ⚠️ **2026-08-11 に、比べる相手を直した。**
+
+    もとは `droop <= MCU_MARGIN`（＝100mV）だった。**これは厳しすぎる。**
+    打ち止めのレールは `_RAIL_FLOOR`＝2.00V で、これを決めているのは
+    **ホットスワップソケット（2V min）**であってマイコンではない。
+    マイコンの下限は 1.70V なので、**打ち止めの時点で 300mV 余っている。**
+
+        比べるべき相手 = _RAIL_FLOOR − MCU_V_MIN
+
+    `MCU_MARGIN` が律速になる構成（ソケットが無い等）でも、この式は
+    自動的に 100mV に戻る。**構成が変わっても正しいままの書き方。**
+
+    ⚠️ **この検査が見ていないもの。**送信中の落ち込みでレールが
+    `_RAIL_FLOOR` を割る間、**ソケットの最低使用電圧を満たさない。**
+    打ち止め寸前の数時間だけの話で、チャタリング除去が 1 回の読み損ないを
+    吸収するため、実害は小さいと考えている（open-gaps #32 の棚）。
+    **ここは「マイコンが落ちないか」だけを見ている。**
     """
     droop = BLE_TX_CURRENT * BATT_ESR_END
-    assert droop <= MCU_MARGIN, (
-        f"送信中に {droop * 1000:.0f}mV 下がるのに、余裕は "
-        f"{MCU_MARGIN * 1000:.0f}mV しかない。**打ち止めの手前で落ちる。**"
-        f"余裕を増やすか、打ち止めを上げること")
+    headroom = _RAIL_FLOOR - MCU_V_MIN
+    assert droop <= headroom, (
+        f"送信中に {droop * 1000:.0f}mV 下がるのに、打ち止めのレール "
+        f"{_RAIL_FLOOR:.2f}V とマイコンの下限 {MCU_V_MIN:.2f}V の差は "
+        f"{headroom * 1000:.0f}mV しかない。**打ち止めの手前で落ちる。**"
+        f"打ち止めを上げるか、送信電流か内部抵抗を下げること")
