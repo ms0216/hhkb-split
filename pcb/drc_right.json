@@ -1,9 +1,10 @@
 {
   "board": "hhkb_split_right.kicad_pcb",
-  "sha256": "538803492159246f89ad9413600b535e04a35a9e640b623d33a1d65cd2358c90",
-  "violations": 1,
+  "sha256": "449a75661cd50f141be2ccc0afe0f1226645076f3f7ad95dad8382d7b0de155c",
+  "violations": 2,
   "unconnected": 3,
   "details": [
-    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1980 mm)"
+    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1869 mm)",
+    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1867 mm)"
   ]
 }

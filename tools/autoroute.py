@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
 UNROUTED = PCB / "unrouted"
 HALVES = ("left", "right")
-PASSES = 300      # 100 では未配線が数本残った（2026-08-12）
+PASSES = 300      # 800 に増やしても未配線は減らなかった（2026-08-13）
 
 JAR = Path(os.environ.get(
     "FREEROUTING_JAR",
@@ -97,6 +97,40 @@ def _check_jar():
 PREWIRED = re.compile(r"GND|SW\d+_D")
 
 
+# Freerouting に上乗せして要求するクリアランス（µm）。
+#
+# **Freerouting は要求ぎりぎりを狙い、丸めで下回ることがある。**
+# 実測（2026-08-13）: 0.200mm を要求したのに **0.198mm** で引き、
+# KiCad の DRC がクリアランス違反にした。差は 2µm。
+#
+# KiCad 側の判定は 0.2mm のまま動かさない（そちらを緩めたら意味が無い）。
+# **自動配線器にだけ多めに言う。**10µm あれば丸めに埋もれない。
+DSN_CLEARANCE_MARGIN_UM = 10
+
+
+def _ask_freerouting_for_a_little_more_clearance(dsn):
+    """DSN のクリアランスだけ少し増やす。KiCad の設計規則は変えない。
+
+    `(clearance N)` の N は µm（DSN の冒頭が `(unit um)`）。
+    **`(type smd_smd)` の行は触らない**——あれは同じ部品の中の
+    パッドどうしの許容で、増やすとファンアウトが通らなくなる。
+    """
+    t = dsn.read_text()
+    n = [0]
+
+    def bump(m):
+        n[0] += 1
+        return f"(clearance {int(m.group(1)) + DSN_CLEARANCE_MARGIN_UM})"
+
+    t = re.sub(r"\(clearance (\d+)\)(?!\s*\(type)", bump, t)
+    if not n[0]:
+        raise SystemExit(
+            "DSN にクリアランスの指定が見つからない。KiCad の書式が"
+            "変わった可能性がある。**黙って進めない**"
+            "（Freerouting が丸めで規則を下回る）")
+    dsn.write_text(t)
+
+
 def _strip_prewired(dsn):
     """自分で引いたネットを DSN から完全に消す。
 
@@ -128,8 +162,8 @@ def _strip_prewired(dsn):
     dsn.write_text(t)
 
 
-def run(half):
-    """未配線の基板を配線し、記録を残して返す。"""
+def _route_once(half, seed):
+    """未配線の基板を 1 回配線して、その結果を返す。"""
     _check_jar()
     src = UNROUTED / f"hhkb_split_{half}.kicad_pcb"
     if not src.exists():
@@ -143,6 +177,7 @@ def run(half):
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
     _strip_prewired(dsn)
+    _ask_freerouting_for_a_little_more_clearance(dsn)
 
     # Freerouting のログは終わりに「N violations」と出すが、これは
     # protect にしたファンアウトどうしの接触を数えているだけ。
@@ -200,16 +235,20 @@ def run(half):
     prewire_switch_diode(board)
     n_fan = gnd_fanout.place(board)
 
-    # **スティッチングビアは配線が終わってから打つ。**
-    # 配線を障害物として避けたいので、配線前に打つと置き場所を
-    # 見誤る（配線が後から来て、ビアを避けて遠回りする）。
-    n_st, n_skip = gnd_fanout.stitch(board)
-    # **長い配線の両脇にもビアを並べる**（指摘 5 の本来の意味）。
-    # 戻り電流がスリットを大回りせず、その場で横断できるようにする。
+    # **順序が効く。狙って打つものを先に、埋め草を後に。**
+    #
+    # 最初は格子（stitch）を先に打っていたが、**配線の脇という一番
+    # 効く場所が格子に先取りされ、フェンスが並ばなかった**
+    # （2026-08-13。利用者が絵を見て「斜め線のところにビアが無い」と
+    # 気づいた）。長い配線の脇は戻り電流の横断口なので、そちらが先。
+    #
+    # どちらも配線が終わってから打つ。配線を障害物として避けたいので、
+    # 配線前に打つと置き場所を見誤る。
     n_fe, n_long = gnd_fanout.fence(board)
+    n_st, n_skip = gnd_fanout.stitch(board)
     print(f"   {half}: GND ビア ファンアウト {n_fan} 個 / "
-          f"スティッチング {n_st} 個（置けなかった格子点 {n_skip}）/ "
-          f"長い配線 {n_long} 本の脇に {n_fe} 個")
+          f"長い経路 {n_long} 本の脇に {n_fe} 個 / "
+          f"格子で埋めた {n_st} 個（置けなかった格子点 {n_skip}）")
 
     # **配線後に 1 本ずつ太らせる後処理は入れていない**（2026-08-12）。
     #
@@ -219,7 +258,7 @@ def run(half):
     # **自前の当たり判定が取りこぼし、DRC のクリアランス違反を
     # 3 回続けて出した。**得られるのは V3V3 が 15mA しか流さない区間で
     # 太くなることだけなので、割に合わないと判断して外した。
-    # 実装は gnd_fanout.widen に残してある（使うなら DRC で要検証）。
+    # 実装も消した（使わないものを残さない）。
 
     # **離島になった GND を、ビアで本土へ繋ぎ戻す**（指摘 4・5）。
     #
@@ -243,16 +282,36 @@ def run(half):
     # バイト列ではなく指紋を使う。KiCad は保存のたびに UUID と
     # フットプリントの並び順を変えるので、バイトのハッシュは
     # 「再生成しただけ」でも変わってしまう（boardhash.py の説明を見る）。
+    board.BuildConnectivity()
+    left_over = board.GetConnectivity().GetUnconnectedCount(False)
     rec = {
         "board": out.name,
         "unrouted": src.name,
         "unrouted_fingerprint": boardhash.fingerprint(src),
         "freerouting": JAR.name,
         "passes": PASSES,
+        "attempt": seed,
+        "unconnected": left_over,
     }
     (PCB / f"route_{half}.json").write_text(
         json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return rec
+
+
+# **引き直しても無駄。Freerouting は決定的。**
+#
+# 「実行のたびに結果が揺れるので、0 が出るまで引き直す」という仕組みを
+# 書きかけたが、**仮定を検証したら間違いだった**（2026-08-13）。
+# 同じ入力で 3 回引いて未配線は 3 回とも同じ本数。揺れて見えていたのは
+# こちらがコードを変えていたからで、Freerouting のせいではない。
+#
+# パス数を増やしても解けない（100 → 300 → 800 で未配線は減らなかった）。
+# **残るのは配置の問題**なので、そちらで解く。
+
+
+def run(half):
+    """未配線の基板を配線し、記録を残して返す。"""
+    return _route_once(half, 1)
 
 
 def main():

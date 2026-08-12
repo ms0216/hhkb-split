@@ -277,6 +277,46 @@ def place(board):
 
 # ---------------------------------------------------------------- スティッチング
 
+def _segment_obstacles(board):
+    """配線を「線分＋半幅」として集める。
+
+    ⚠️ **配線を外接矩形で扱ってはいけない。**斜めの配線の外接矩形は
+    その対角線を含む巨大な長方形になり、**斜め線の周囲一帯が「置けない」**
+    ことになる。実際それで、長い斜めのバス（列のバス）に沿ってビアが
+    1 本も立たなかった（2026-08-13。利用者が絵を見て気づいた）。
+    格子のスティッチングが 8 割方失敗していたのも同じ原因。
+
+    返すのは (x1, y1, x2, y2, 半幅) の並び。単位は mm。
+    """
+    out = []
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            p = t.GetPosition()
+            r = pcbnew.ToMM(t.GetWidth()) / 2
+            x, y = pcbnew.ToMM(p.x), pcbnew.ToMM(p.y)
+            out.append((x, y, x, y, r))
+            continue
+        for ax, ay, bx, by, _L, w in _as_segments(t):
+            out.append((ax, ay, bx, by, w / 2))
+    return out
+
+
+def _near_segment(px, py, segs, need_mm):
+    """点 (px,py) が、どれかの線分に need_mm より近いか。"""
+    for ax, ay, bx, by, half in segs:
+        dx, dy = bx - ax, by - ay
+        L2 = dx * dx + dy * dy
+        if L2 == 0:
+            d2 = (px - ax) ** 2 + (py - ay) ** 2
+        else:
+            u = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / L2))
+            qx, qy = ax + u * dx, ay + u * dy
+            d2 = (px - qx) ** 2 + (py - qy) ** 2
+        if d2 < (need_mm + half) ** 2:
+            return True
+    return False
+
+
 def _obstacles(board):
     """ビアを置いてはいけない場所を、箱の一覧として集める。
 
@@ -298,8 +338,8 @@ def _obstacles(board):
     for fp in board.GetFootprints():
         for pad in fp.Pads():
             boxes.append(pad.GetBoundingBox())
-    for t in board.GetTracks():
-        boxes.append(t.GetBoundingBox())
+    # **配線はここに入れない。**外接矩形だと斜め線が一帯を塞ぐ。
+    # 線分として _segment_obstacles / _near_segment で見る。
     for d in board.GetDrawings():
         boxes.append(d.GetBoundingBox())
     for z in board.Zones():
@@ -331,7 +371,9 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
     margin = VIA_DIAMETER_MM / 2 + 0.5
 
     obstacles = _obstacles(board)
-    r = pcbnew.FromMM(_via_keepout_mm(board))
+    segs = _segment_obstacles(board)
+    need = _via_keepout_mm(board)
+    r = pcbnew.FromMM(need)
 
     placed = skipped = 0
     y = y0 + margin
@@ -339,137 +381,32 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
         x = x0 + margin
         while x <= x1 - margin:
             p = pcbnew.VECTOR2I_MM(x, y)
-            if _blocked(p, obstacles, r):
+            if _blocked(p, obstacles, r) or _near_segment(x, y, segs, need):
                 skipped += 1
             else:
                 # **置いたビアも次からは障害物にする。**そうしないと
                 # 格子が詰まったときにビアどうしが重なる。
                 v = _add_via(board, gnd, x, y)
                 obstacles.append(v.GetBoundingBox())
+                segs.append((x, y, x, y, VIA_DIAMETER_MM / 2))
                 placed += 1
             x += pitch_mm
         y += pitch_mm
     return placed, skipped
 
 
-# ---------------------------------------------------------------- 幅を広げる
+# **配線後に 1 本ずつ太らせる後処理は消した**（2026-08-13）。
+#
+# 指摘 8 は gen_pcb.POWER_CLASSES のクラス分けで達成できている
+# （V3V3 = 0.3mm＝FFC の 0.30mm パッドに載る上限、他 = 0.6mm）。
+# そのうえで「開けたところだけさらに太く」する後処理も書いたが、
+# **自前の当たり判定が取りこぼして DRC 違反を 3 回続けて出した。**
+# さらに実測すると、**Freerouting は狭いところで自分から幅を絞っており**、
+# 後から一律に太らせるのはその正しい判断を壊す行為だった
+# （VBATT 系は 100%、V3V3 は 97% が規定幅で出ている）。
+#
+# **使わないものを残さない**（CLAUDE.md「置き換えたら古い方を消す」）。
 
-# 電源の配線を広げてよい上限（mm）。1A/1mm の目安に対して 1A 相当。
-# **実際に流すのは 15〜30mA なので、これ以上太くしても意味は無い。**
-# 上限を置くのは、際限なく太らせるとベタを削って GND の面を痩せさせるため。
-WIDEN_CAP_MM = 1.0
-
-# 太らせるときに保つクリアランス（mm）。JLCPCB の最小 0.127 に対して余裕。
-WIDEN_CLEARANCE_MM = 0.2   # widen は配線から外してある（下の説明を見る）
-
-# 太らせる前の幅（＝ネットクラスの値のうち一番細いもの）。
-# 「何本太くなったか」を数えるための基準。
-WIDEN_FLOOR_MM = 0.3
-
-
-def widen(board, nets, cap_mm=WIDEN_CAP_MM):
-    """電源の配線を、**1 本ずつ**、隣に当たらない限界まで太らせる。
-
-    なぜ 1 本ずつか
-    ----------------
-    自動配線器（Freerouting）はネットクラスごとに 1 つの幅しか受け取れない。
-    そのため一律の太さで配線するしかなく、**一番細くしなければならない
-    場所に全体が引きずられる。**この設計では FFC コネクタ（J_DB）の
-    パッドが幅 0.30mm しかないので、V3V3 は全長にわたって 0.30mm になる。
-
-    しかし実際には、開けたところは太くできる。**配線が終わったあとなら、
-    1 本ずつ「隣に当たらない限界」まで広げられる。**細ピッチのパッドに
-    刺さる区間だけが細いまま残り、それ以外は太くなる。
-    実務でいうネックダウンと同じ形になる。
-
-    判定は KiCad 自身の形状どうしの当たり判定（SHAPE.Collide）に任せる。
-    自前で距離を計算すると、円弧や端点の丸みで取りこぼす。
-
-    **最後は必ず DRC で確かめること。**ここでの判定は「同じ層の、
-    別ネットの銅」に対してのみ行っており、ベタや製造規則までは見ていない。
-    """
-    clearance = pcbnew.FromMM(WIDEN_CLEARANCE_MM)
-    cap = pcbnew.FromMM(cap_mm)
-
-    targets = [t for t in board.GetTracks()
-               if t.GetClass() == "PCB_TRACK" and t.GetNetname() in nets]
-    if not targets:
-        return 0, 0.0
-
-    # 当たり判定の相手。**同じネットは相手にしない**（繋がってよい）。
-    # ⚠️ `PAD.GetEffectiveShape()` は**層の指定が必須**。配線やビアと違い
-    # 引数なしでは呼べない（実際に TypeError で落ちた）。
-    others = []
-    for t in board.GetTracks():
-        others.append((t.GetNetCode(), t.GetLayerSet(), t, False))
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            others.append((pad.GetNetCode(), pad.GetLayerSet(), pad, True))
-
-    def _shape_of(item, is_pad, layer):
-        return item.GetEffectiveShape(layer) if is_pad \
-            else item.GetEffectiveShape()
-
-    def _collides(track):
-        """その配線が、別ネットの銅に触れているか。"""
-        layer = track.GetLayer()
-        shape = track.GetEffectiveShape()
-        # **外接箱で絞るときは cap のぶん膨らませる。**
-        # SetWidth のあとの GetBoundingBox をそのまま使うと、
-        # 太らせたぶんを取りこぼして「当たっていない」と誤判定する
-        # （2026-08-12。これで DRC のクリアランス違反を 15 件出した）。
-        box = pcbnew.BOX2I(track.GetBoundingBox().GetOrigin(),
-                           track.GetBoundingBox().GetSize())
-        box.Inflate(cap + clearance)
-        for netcode, layers, item, is_pad in others:
-            if netcode == track.GetNetCode():
-                continue
-            if not layers.Contains(layer):
-                continue
-            if not box.Intersects(item.GetBoundingBox()):
-                continue
-            if shape.Collide(_shape_of(item, is_pad, layer), clearance):
-                return True
-        return False
-
-    widened = 0
-    gained = 0.0
-    for t in targets:
-        start_w = t.GetWidth()
-        best = start_w
-        # 太い方から試して、最初に通ったところで止める
-        w = cap
-        while w > start_w:
-            t.SetWidth(w)
-            if not _collides(t):
-                best = w
-                break
-            w -= pcbnew.FromMM(0.05)
-        t.SetWidth(best)
-
-    # **最後にもう一度、全部を確かめる。**
-    #
-    # 1 本ずつ順に太らせるので、**先に太らせた配線は、後から太った隣を
-    # 知らない。**組み合わせで初めて当たることがある。
-    # ここで当たっているものは元の幅に戻す。
-    # （最終的な合否は DRC だが、DRC は「直す」ことができない）
-    reverted = 0
-    for t in targets:
-        if t.GetWidth() > pcbnew.FromMM(0.0) and _collides(t):
-            t.SetWidth(min(t.GetWidth(), pcbnew.FromMM(WIDEN_FLOOR_MM)))
-            while _collides(t) and t.GetWidth() > pcbnew.FromMM(0.15):
-                t.SetWidth(t.GetWidth() - pcbnew.FromMM(0.05))
-            reverted += 1
-
-    for t in targets:
-        w = t.GetWidth()
-        if w > pcbnew.FromMM(WIDEN_FLOOR_MM):
-            widened += 1
-            gained += pcbnew.ToMM(w) - WIDEN_FLOOR_MM
-    return widened, (gained / widened if widened else 0.0)
-
-
-# ---------------------------------------------------------------- 離島を繋ぐ
 
 def _gnd_anchor_points(board):
     """GND に確実に繋がっている点（GND のビアとパッドの中心）。"""
@@ -611,7 +548,11 @@ def stitch_islands(board, rounds=4):
     added = 0
     for _ in range(rounds):
         filler.Fill(board.Zones())
-        obstacles = _obstacles(board)
+        obstacles = _obstacles(board) + [
+            pcbnew.BOX2I(pcbnew.VECTOR2I_MM(min(a, c) - h, min(b, d) - h),
+                         pcbnew.VECTOR2I_MM(abs(c - a) + 2 * h,
+                                            abs(d - b) + 2 * h))
+            for a, b, c, d, h in _segment_obstacles(board)]
         floating = [(lay, poly) for _z, lay, poly, is_float in _islands(board)
                     if is_float]
         if not floating:
@@ -648,7 +589,7 @@ def stitch_islands(board, rounds=4):
 FENCE_MIN_LEN_MM = 10.0
 
 # 長い配線に沿ってビアを置く間隔（mm）。格子のスティッチングと同じ考え方。
-FENCE_STEP_MM = 6.5
+FENCE_STEP_MM = 3.0
 
 # 配線の中心線からビアの中心までの距離は、**その配線の幅から決める**。
 #
@@ -664,65 +605,118 @@ FENCE_STEP_MM = 6.5
 FENCE_MARGIN_MM = 0.05
 
 
+def _as_segments(track):
+    """配線を、直線の並びとして返す。円弧は細かく割る。
+
+    ⚠️ **`GetClass() == "PCB_TRACK"` で絞ってはいけない。**
+    KiCad の配線は直線（PCB_TRACK）だけでなく**円弧（PCB_ARC）**もある。
+    絞ると円弧が丸ごと素通りし、そこにビアが 1 本も立たない。
+    **いまの基板に円弧は 0 本**（Freerouting は直線しか出さない）が、
+    KiCad で手直しすれば生じる。**そのとき黙って無視されるのが困る。**
+
+    返すのは (始点x, 始点y, 終点x, 終点y, 長さ, 線幅) の並び。単位は mm。
+    """
+    import math
+    cls = track.GetClass()
+    if cls == "PCB_VIA":
+        return []
+    w = pcbnew.ToMM(track.GetWidth())
+
+    def seg(ax, ay, bx, by):
+        L = math.dist((ax, ay), (bx, by))
+        return (ax, ay, bx, by, L, w) if L > 0 else None
+
+    if cls == "PCB_ARC":
+        # 円弧は弦の集まりに割る。1 本あたり 0.5mm を目安に。
+        n = max(2, int(pcbnew.ToMM(track.GetLength()) / 0.5))
+        c = track.GetCenter()
+        cx, cy = pcbnew.ToMM(c.x), pcbnew.ToMM(c.y)
+        rad = pcbnew.ToMM(track.GetRadius())
+        a0 = math.radians(track.GetArcAngleStart().AsDegrees())
+        sweep = math.radians(track.GetAngle().AsDegrees())
+        pts = [(cx + rad * math.cos(a0 + sweep * i / n),
+                cy + rad * math.sin(a0 + sweep * i / n)) for i in range(n + 1)]
+        out = [seg(*pts[i], *pts[i + 1]) for i in range(n)]
+        return [s for s in out if s]
+
+    a, b = track.GetStart(), track.GetEnd()
+    s = seg(pcbnew.ToMM(a.x), pcbnew.ToMM(a.y),
+            pcbnew.ToMM(b.x), pcbnew.ToMM(b.y))
+    return [s] if s else []
+
+
 def fence(board, min_len_mm=FENCE_MIN_LEN_MM, step_mm=FENCE_STEP_MM):
-    """**長い配線の両脇に、GND のビアを一定間隔で並べる**（指摘 5）。
+    """**長い配線に沿って、GND のビアを一定間隔で並べる**（指摘 5）。
 
     なぜ要るか（離島の救済とは別の話）
     ------------------------------------
     信号の戻り電流は、その信号配線の**直近**を流れたがる。長い配線が
     ベタを割ると、割られた向こう側へ戻る電流は**スリットの端まで
     大回り**するしかない。往復のループ面積が大きくなり、放射も、
-    隣の配線との結合も増える。
-
-    配線をまたぐ位置にビアがあれば、**反対面のベタを経由してその場で
-    横断できる。**理屈の上では 1 個でも繋がっているが、
+    隣の配線との結合も増える。配線をまたぐ位置にビアがあれば、
+    反対面のベタを経由して**その場で横断できる。**
     「繋がっている」と「最短で行ける」は別。ここが要点。
 
-    離島の救済（stitch_islands）は、これとは別の、より特殊な話。
+    ⚠️ 踏んだ穴を 2 つ残す（どちらも利用者が絵を見て気づいた）
+    -----------------------------------------------------------
+    **(1) 「長い」を線分 1 本の長さで判定しない。**
+    列のバスのような斜めの経路は、キーごとの短い線分の連なりでできて
+    いる。COL0 は合計 152mm あるのに 10mm 以上の線分は 4 本しかなく、
+    **全 406 本のうち 87% が対象外**になっていた。
+    見るのは**そのネットが同じ面に持つ経路の合計長**。
 
-    どこに置くか
-    ------------
-    長い配線に沿って `step_mm` ごとに、中心線の**両側**へ 1 個ずつ。
-    置けない（部品・他の配線・禁止域に当たる）ところは飛ばす。
+    **(2) 配線を外接矩形で避けない。**
+    斜めの配線の外接矩形は対角線を含む巨大な長方形になり、
+    **斜め線の周囲一帯が「置けない」**ことになる。線分として距離で見る
+    （_near_segment）。矩形で見ていたときは、まさに一番ビアが要る
+    斜めのバスの脇に 1 本も立たなかった。
     """
     import math
+    from collections import defaultdict
+
     gnd = board.FindNet("GND")
     if gnd is None:
         return 0, 0
 
-    obstacles = _obstacles(board)
-    r = pcbnew.FromMM(_via_keepout_mm(board))
+    boxes = _obstacles(board)
+    segs = _segment_obstacles(board)
+    need = _via_keepout_mm(board)
+    r = pcbnew.FromMM(need)
 
-    long_tracks = []
+    # ネットと層ごとに経路を集める。**順序は決定的に**（始点で並べ替え）。
+    runs = defaultdict(list)
     for t in board.GetTracks():
-        if t.GetClass() != "PCB_TRACK" or t.GetNetname() == "GND":
+        if t.GetNetname() == "GND":
             continue
-        a, b = t.GetStart(), t.GetEnd()
-        length = math.dist((pcbnew.ToMM(a.x), pcbnew.ToMM(a.y)),
-                           (pcbnew.ToMM(b.x), pcbnew.ToMM(b.y)))
-        if length >= min_len_mm:
-            long_tracks.append((t, a, b, length))
+        for seg in _as_segments(t):
+            runs[(t.GetNetname(), t.GetLayer())].append(seg)
 
     placed = 0
-    for _t, a, b, length in long_tracks:
-        off = (pcbnew.ToMM(_t.GetWidth()) / 2 + _via_keepout_mm(board)
-               + FENCE_MARGIN_MM)
-        ax, ay = pcbnew.ToMM(a.x), pcbnew.ToMM(a.y)
-        bx, by = pcbnew.ToMM(b.x), pcbnew.ToMM(b.y)
-        ux, uy = (bx - ax) / length, (by - ay) / length      # 進む向き
-        nx, ny = -uy, ux                                     # 直交する向き
-        # 端は避け、途中に step ごとに置く
-        d = step_mm / 2
-        while d < length:
-            cx, cy = ax + ux * d, ay + uy * d
-            for sign in (1.0, -1.0):
-                vx = cx + nx * off * sign
-                vy = cy + ny * off * sign
-                p = pcbnew.VECTOR2I_MM(vx, vy)
-                if _blocked(p, obstacles, r):
-                    continue
-                v = _add_via(board, gnd, vx, vy)
-                obstacles.append(v.GetBoundingBox())
-                placed += 1
-            d += step_mm
-    return placed, len(long_tracks)
+    n_long = 0
+    for key in sorted(runs, key=lambda k: (k[0], k[1])):
+        pieces = sorted(runs[key])
+        total = sum(s[4] for s in pieces)
+        if total < min_len_mm:
+            continue                      # この面でのこのネットは短い
+        n_long += 1
+        acc = step_mm / 2                 # 経路をまたいで間隔を保つ
+        for ax, ay, bx, by, length, w in pieces:
+            ux, uy = (bx - ax) / length, (by - ay) / length
+            nx, ny = -uy, ux
+            off = w / 2 + need + FENCE_MARGIN_MM
+            d = (step_mm - acc) if acc < step_mm else 0.0
+            while d < length:
+                cx, cy = ax + ux * d, ay + uy * d
+                for sign in (1.0, -1.0):
+                    vx, vy = cx + nx * off * sign, cy + ny * off * sign
+                    if _blocked(pcbnew.VECTOR2I_MM(vx, vy), boxes, r):
+                        continue
+                    if _near_segment(vx, vy, segs, need):
+                        continue
+                    v = _add_via(board, gnd, vx, vy)
+                    boxes.append(v.GetBoundingBox())
+                    segs.append((vx, vy, vx, vy, VIA_DIAMETER_MM / 2))
+                    placed += 1
+                d += step_mm
+            acc = (acc + length) % step_mm
+    return placed, n_long

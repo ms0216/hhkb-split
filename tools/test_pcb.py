@@ -941,36 +941,36 @@ def test_the_ground_plane_still_covers_the_board(name):
     """GND ベタが基板の大半を覆ったままであること。
 
     **禁止域を開けることの代償はここに出る。**地板は戻り電流の道なので、
-    穴で分断すると、その向こうの部品の戻り電流が遠回りする。
+    大きく削れるとその向こうの部品の戻り電流が遠回りする。
 
-    **数で見てはいけない。**最初「塗られた多角形が 1 個であること」と
-    書いたが、地板を横断する帯を故意に入れても 1 個のままだった。
-    KiCad は切り離された側を**孤島として黙って削除する**ので、
-    多角形は 1 個のまま面積だけが半分になる（頂点 12246 → 6248 で気づいた）。
-    面積で見る。
+    ⚠️ **2026-08-13 に測り方を直した。**以前は正規表現で**最初に見つけた
+    多角形 1 個**の面積を測っていた。4 層のときはベタが 1 枚の連続した
+    面だったので、それで用が足りていた。**2 層ではベタが配線で細かく
+    分かれる**ので、最初の 1 個は全体の 0.24% しかなく、嘘の赤が出た。
 
-    いまの左の禁止域は基板の縁から入る**切り欠き**で、内部に穴を作って
-    いない。切り欠きの向こうには部品もビアも無く、近くを通るのは
-    SW6_D と ROW0 だけ。**どちらも走査の kHz** なので遠回りは効かない。
+    面ごとに**塗られた多角形すべての合計**で測る。
+
+    しきい値について
+    ----------------
+    実測（2026-08-13）は **左 B.Cu 76.4% / F.Cu 82.4%、
+    右 B.Cu 79.8% / F.Cu 84.4%、子基板 B.Cu 62.4%**。
+    一方、**地板を故意に割ったときは 39.5% まで落ちる**（4 層時代の実測）。
+
+    55% はその 2 つを分ける値であって、**現在値に合わせて置いた数字では
+    ない**。「正常なら 60% 以上、割れたら 40% 前後」という 2 つの実測の
+    間を取っている。
     """
-    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
-    blk = re.search(r"\(filled_polygon[\s\S]*?\n\t\t\)", text)
-    assert blk, f"{name}: GND ベタが 1 枚も塗られていない"
-    pts = [(float(a), float(b)) for a, b in
-           re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", blk.group(0))]
-    area = abs(sum(pts[i][0] * pts[(i + 1) % len(pts)][1]
-                   - pts[(i + 1) % len(pts)][0] * pts[i][1]
-                   for i in range(len(pts)))) / 2
-    xs = [(float(a), float(b)) for a, b in
-          re.findall(r"\(gr_line[\s\S]{0,120}?\(start ([-\d.]+) ([-\d.]+)\)", text)]
-    board = ((max(p[0] for p in xs) - min(p[0] for p in xs))
-             * (max(p[1] for p in xs) - min(p[1] for p in xs)))
-    ratio = area / board
-    # いまは左 86.5% / 右 89.3%。地板を割ると 39.5% まで落ちる（実測）。
-    assert ratio >= 0.80, (
-        f"{name}: GND ベタが基板の {ratio * 100:.1f}% しか覆っていない。"
-        "禁止域か配線が地板を割り、切り離された側が孤島として削除された"
-        "可能性がある。戻り電流の道が切れるので、割らない形に直すこと")
+    facts = _board_facts(name) if name in NAMES else None
+    if facts is None:
+        pytest.skip(f"{name} は対象外")
+    per = facts["gnd_coverage"]
+    assert per, f"{name}: GND ベタが 1 枚も塗られていない"
+    thin = {k: v for k, v in per.items() if v < 0.55}
+    assert not thin, (
+        f"{name}: GND ベタの被覆率が低い面がある "
+        + " / ".join(f"{k} {v*100:.1f}%" for k, v in sorted(thin.items()))
+        + "\n  禁止域か配線が地板を大きく削っている可能性がある。"
+        "戻り電流の道が遠回りになるので、削らない形に直すこと")
 
 
 # --------------------------------------------------------------------------
@@ -1077,8 +1077,22 @@ for z in b.Zones():
         zones.append([b.GetLayerName(lay), z.GetNetname(),
                       z.HasFilledPolysForLayer(lay)])
 floating = sum(1 for _z, _l, _p, f in gnd_fanout._islands(b) if f)
+bb = b.GetBoardEdgesBoundingBox()
+board_mm2 = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
+cov = {}
+for z in b.Zones():
+    if z.GetIsRuleArea() or z.GetNetname() != "GND":
+        continue
+    for lay in z.GetLayerSet().CuStack():
+        if not z.HasFilledPolysForLayer(lay):
+            continue
+        ps = z.GetFilledPolysList(lay)
+        a = sum(abs(ps.Outline(i).Area()) for i in range(ps.OutlineCount())) / 1e12
+        nm = b.GetLayerName(lay)
+        cov[nm] = cov.get(nm, 0.0) + a / board_mm2
 print(json.dumps({"tracks": tracks, "vias": vias, "pads": pads,
                   "zones": zones, "floating": floating,
+                  "gnd_coverage": cov,
                   "layers": [b.GetLayerName(l)
                              for l in b.GetEnabledLayers().CuStack()]}))
 """ % (str(ROOT / "tools"), str(PCB / f"hhkb_split_{half}.kicad_pcb"))
@@ -1097,10 +1111,10 @@ print(json.dumps({"tracks": tracks, "vias": vias, "pads": pads,
 # 「6mm なら十分」という主張ではない。
 MAX_DECOUPLE_MM = 6.0
 
-# GND ビアの下限（実測 左 342 / 右 423 の 7 割）。
+# GND ビアの下限（実測 左 732 / 右 913 の 75%）。
 # **「これだけあれば十分」ではなく、静かな後退を見つけるための番人。**
 # DRC は「判定が厳しすぎてビアが減った」を検出しないので、数で見る。
-MIN_GND_VIAS = {"left": 240, "right": 300}
+MIN_GND_VIAS = {"left": 550, "right": 700}
 
 # 浮いた（GND のどこにも触れていない）区画の上限。**0 が必達。**
 #
