@@ -35,17 +35,13 @@ from mathutils import Vector
 
 OUT = Path(__file__).resolve().parent.parent / "build" / "assembly"
 
-# **実物の形をしているもの。**残りは場所取りの箱（占有空間）。
-#   - ケース類・ネジ類は、印刷／購入する物の形そのもの
-#   - pcb_real / db_real は KiCad の 3D モデルから起こした基板
-#   - 箱（pcb / sockets / db / xiao / batt / switches / keycaps …）は近似
-# **どちらなのかが名前から分からない**ので、Blender ではここで仕分ける。
-REAL_SHAPE = {
-    "case", "topcase", "plate", "lid", "rear_lid", "foot", "screws", "inserts",
-    "nut", "rubber", "pcb_real", "db_real", "pcb_parts", "db_parts",
-    "batt",  # 円柱2本が実形状（電極2箇所だけ箱のまま。dee89db）
-    "switches_real",  # kiswitch SW_Cherry_MX_Plate（爪・ステム・ピン・LED窓）
-}
+# **実物の形か、場所取りの箱か。**一覧は gen_assembly.py にある。
+# **ここに手書きで持たない。**部品を足すのは gen_assembly なので、
+# 分類を別ファイルに置くと片方だけ直る（2026-08-12 に 2 回踏んだ）。
+# **gen_assembly からは読めない。**ここは Blender の Python で動くので
+# build123d が無く、import した瞬間に落ちて .blend が作られない。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from part_kinds import REAL_SHAPE  # noqa: E402
 
 # 見下ろす向き。export_assembly.py の "iso" と同じ側から見る。
 VIEW_DIR = Vector((1.0, -1.0, 0.8)).normalized()

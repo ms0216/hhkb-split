@@ -71,6 +71,9 @@ RESERVATION_CONTAINS = {("sockets", "pcb_real"), ("stabs", "pcb_real"),
 # ここに書いていない部品を組み立てに足すと `test_every_part_declares_how_it_is_held`
 # が落ちる。**「留め方が書かれていない部品は、留まっていないのと同じ。」**
 # ⚠️ は「まだ弱い／未解決」。潰したら本文ごと直す。
+# 実形状か箱かの一覧は part_kinds.py にある（Blender 側とも共用）。
+from part_kinds import BOX_SHAPE, REAL_SHAPE  # noqa: F401,E402
+
 HELD_BY = {
     "case":       "外殻そのもの（基準）",
     "topcase":    "手前 M2×3（熱圧入インサート）。⚠️ 奥は未解決（#12）",
@@ -90,7 +93,7 @@ HELD_BY = {
     "batt":       "⚠️ 仕切り壁・側壁・蓋・基板で囲うだけ。#35 と一緒に決める",
     "lid":        "⚠️ レール＋手前ストッパー。**外から開かない**（#35）",
     "ffc":        "コネクタのラッチ＋たるみ 25mm",
-    "sw_pwr":     "⚠️ 壁のポケットへ落とし込むだけ（耳の無い部品）。内側が開いている",
+    "sw_pwr":     "上から落とし込む溝。奥のリブが押し込み側を剛体で止める（#18）",
     "screws":     "ねじ込み",
     "inserts":    "熱圧入",
     "nut":        "ポケットの入口の唇で噛む（2026-08-12 に追加）",
@@ -205,7 +208,9 @@ def build_assembly(keys, half, real=False):
                            PCB_T, PLATE_TO_PCB,
                            SCREW_HEAD_D, SCREW_HEAD_H, SCREW_SHAFT_D,
                            SCREW_L_DB, SCREW_L_MAIN,
-                           SW_PWR_D, SW_PWR_H, SW_PWR_W, M2_INSERT_L,
+                           SW_PWR_BODY_D, SW_PWR_D, SW_PWR_H, SW_PWR_KNOB,
+                           SW_PWR_KNOB_W, SW_PWR_LEAD_D, SW_PWR_PIN_W,
+                           SW_PWR_TRAVEL, SW_PWR_W, M2_INSERT_L,
                            key_stack_envelopes, stab_reservation,
                            usb_plug_envelope)
     import envelopes
@@ -253,13 +258,26 @@ def build_assembly(keys, half, real=False):
     y_rear_outer = h_case / 2 + BUMP_DEPTH
     y_rear_inner = y_rear_outer - _wall
     sw_x, sw_z = power_switch_x_center(half, w), power_switch_center_z()
+    # SS12D01G4-G の実形状（2026-08-12 に品番確定）。
+    # **本体・端子・ツマミを分けて置く。**1 個の箱で置くと、端子ぶんの
+    # 奥行（5.0mm）まで本体の太さがあることになり、**上から落とし込む
+    # 溝の奥のリブと当たる**（そのリブが押し込み側の抜け止めそのもの）。
     with BuildPart() as _sw:
-        with Locations((sw_x, y_rear_inner - SW_PWR_D / 2, sw_z)):
-            Box(SW_PWR_W, SW_PWR_D, SW_PWR_H,
+        # 本体（壁の内面に当たる）
+        with Locations((sw_x, y_rear_inner - SW_PWR_BODY_D / 2, sw_z)):
+            Box(SW_PWR_W, SW_PWR_BODY_D, SW_PWR_H,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # アクチュエータ 4.0mm は壁 2.4mm を貫いて 1.6mm 出る
+        # 端子 3 本（2.5mm ピッチで**上下に並ぶ**。本体を縦向きに付けるため）
+        for _i in (-1, 0, 1):
+            with Locations((sw_x, y_rear_inner - SW_PWR_BODY_D,
+                            sw_z + _i * 2.5)):
+                Box(SW_PWR_PIN_W, SW_PWR_LEAD_D, 0.3,
+                    align=(Align.CENTER, Align.MAX, Align.CENTER))
+        # ツマミ。**ストロークぶん掃いた範囲**を置く（動く先も当たっては困る）
         with Locations((sw_x, y_rear_inner, sw_z)):
-            Box(2.4, _wall + 1.6, 2.5, align=(Align.CENTER, Align.MIN, Align.CENTER))
+            Box(SW_PWR_KNOB_W, _wall + (SW_PWR_KNOB - _wall),
+                SW_PWR_KNOB_W + SW_PWR_TRAVEL,
+                align=(Align.CENTER, Align.MIN, Align.CENTER))
     parts["sw_pwr"] = _sw.part
 
     # 利用者が挿す USB ケーブルのプラグ（open-gaps #28 の再発防止）。

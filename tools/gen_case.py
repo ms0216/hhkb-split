@@ -361,7 +361,8 @@ SW_DISH_H = 8.0          # 同・高さ
 
 from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
                        DB_STACK_H, DB_XIAO_LIFT, SCREW_HEAD_D, SCREW_HEAD_H,
-                       SW_PWR_D, SW_PWR_H, SW_PWR_W,
+                       SW_PWR_BODY_D, SW_PWR_D, SW_PWR_H, SW_PWR_PIN_W,
+                       SW_PWR_W,
                        USB_PLUG_H, USB_PLUG_W, USB_SHELL_EXPOSED,
                        USB_SHELL_H, USB_SHELL_W)
 from interface import XIAO_OUTLINE_W, XIAO_OVERHANG  # noqa: E402
@@ -474,12 +475,33 @@ REAR_LID_REBATE_TOP = 6.0
 REAR_LID_SLIDE = 3.0     # 上へ差し込む距離＝下に残る隙間（指掛かり）
 REAR_LID_LIP_T = 0.8     # 庇の厚み（壁の内側を彫って残す）＝舌の厚み
 REAR_LID_LIP_ENG = 1.5   # 舌が庇の裏へ入る量（掛かり代）
-REAR_LID_DETENT = 0.4    # 抜け止めの**出っ張り量**（座ぐりの底から外へ）
+# 抜け止めの**出っ張り量**（座ぐりの底から外へ）。
+# **わざと大きい側に振ってある**（利用者の判断・2026-08-12）。刷ってから
+# やすりで小さくはできるが、大きくはできない。**割れる側の限界は反り
+# 1.7mm 相当＝この 4 倍以上先**なので、先に効くのは「開けるのに要る力」
+# （計算では反りぶんだけで 14.7N＝1.5kgf）。刷って親指で押し上げられるか
+# 確かめる。根拠の表は open-gaps #35。
+REAR_LID_DETENT = 0.4    # [暫定] 刷って押し上げられるか確かめる
 REAR_LID_DETENT_W = 24.0  # 同・幅
 # 半径は出っ張り量より大きく取り、差ぶん壁へ**沈める**。
 # **接するだけだと境界が縮退して STL が水密にならない**（2026-08-12 に
 # test_printable が両側とも赤になった。同じ理由の注記が蓋の指掛かりにもある）。
 REAR_LID_DETENT_R = 0.6
+# 滑り止めの溝（親指で押し上げるところ）。
+#
+# ⚠️ **上の隙間は指掛かりにならない**（2026-08-12・利用者の指摘）。
+# 蓋を上へずらすには蓋の**下向きの面**を押す必要があるが、隙間は蓋の
+# **上**にあるので、爪を入れても押せるのは下向き＝留まる方向だけ。
+# ビードは抜け止めであって指を掛けるものではない（座ぐりの底にあり
+# 1.6mm 沈んでいるので、そもそも爪が入らない）。
+#
+# → **爪を掛ける方式をやめる。**量産品の電池蓋と同じく、蓋の表面の
+# 溝を**親指で押して滑らせる。**溝は突起にせず彫る（面一を保つ）。
+REAR_LID_GRIP_N = 4      # 溝の本数
+REAR_LID_GRIP_W = 30.0   # 溝の幅（親指の腹）
+REAR_LID_GRIP_H = 1.2    # 同・高さ（滑る向きと直角に並べる）
+REAR_LID_GRIP_D = 0.5    # 同・深さ（板 1.6mm の 1/3 まで）
+REAR_LID_GRIP_P = 2.4    # 同・間隔
 
 # 片持ちばね案の定数はすべて削除した（不成立。経緯は open-gaps #35）。
 # **残しておくと「使われている」と誤読される。**
@@ -788,20 +810,49 @@ def build_case(keys, half):
         # （最初そう書いて、故意に壊す検査が「壊しても落ちない」形で
         # 見つけた）。**受けの箱を足してから、中身を抜く。**
         #
-        # 順序: 箱を足す → スイッチの空所を抜く → 操作部のスロットを貫く。
+        # **上から落とし込む溝にする**（2026-08-12・#18 の抜け止め）。
+        #
+        # 以前は手前（ケースの内側）が開いた箱で、そこから押し込む形
+        # だった。**押し込む向きに留めが無い**（利用者の指摘）。
+        # ところが留めを足せない:
+        #   * 本体は壁に当たるまで **3.5mm** しか入らないのに、入口は
+        #     **11mm 奥**（端子 5.0 とリード線のぶん）。入口に爪を置いても
+        #     本体に届かない
+        #   * 奥（深さ 3.5）に爪を置くと、**入れるときに本体が通れない**
+        #   * 撓む爪にするとひずみが PLA の限界を超える（リブ 1.6mm を
+        #     0.5mm 撓ませると ε=3.3%。上限は 1.0%）
+        #
+        # → **爪をやめる。**上を開けた溝にして、スイッチを**上から
+        # 落とし込む。**奥はリブで塞ぐので、押し込む向きは**剛体で**
+        # 止まる。端子は奥のリブの真ん中に開けた縦スリットを通す。
+        # スリットは上まで抜けているので、落とし込むときに一緒に降りる。
         sw_x = power_switch_x_center(half, w)
         sw_z = power_switch_center_z()
         y_rear_inner = y_rear_outer - WALL
-        holder_d = SW_PWR_D + SW_RIB          # 奥側にも壁を残す
+        holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB   # 本体ぶん＋奥のリブ
+        sw_bot = sw_z - SW_PWR_H / 2 - CLEARANCE / 2    # 溝の底（ここに座る）
         with Locations((sw_x, y_rear_inner - holder_d / 2, sw_z)):
             Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d,
                 SW_PWR_H + CLEARANCE + SW_RIB * 2,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 中身を抜く。**内側（手前）は開けたまま**にして、そこから挿す。
-        with Locations((sw_x, y_rear_inner - SW_PWR_D / 2, sw_z)):
-            Box(SW_PWR_W + CLEARANCE, SW_PWR_D + SW_RIB, SW_PWR_H + CLEARANCE,
-                mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 本体の空所。**上へ突き抜けさせる**（落とし込む口）。
+        with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE) / 2,
+                        sw_bot)):
+            Box(SW_PWR_W + CLEARANCE, SW_PWR_BODY_D + CLEARANCE,
+                (SW_PWR_H + CLEARANCE) * 2, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 端子の縦スリット（奥のリブを貫く）。**ここも上まで抜く。**
+        # 端子は 3 本・2.5 ピッチで**上下に並ぶ**（本体を縦向きに付けるため）
+        # ので、x 方向には 1 本ぶんの幅で足りる。
+        # ⚠️ **奥へ向かってだけ切る。**深さを 2 倍にして中心に置いたら、
+        # 手前側が**奥の壁を突き抜けて外に出た**（2026-08-12・利用者が
+        # Blender で見て発見。外から本体が見えていた）。
+        # 起点を本体の空所の奥の面に固定し、そこから奥へ抜く。
+        with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE),
+                        sw_bot)):
+            Box(SW_PWR_PIN_W + CLEARANCE, holder_d,
+                (SW_PWR_H + CLEARANCE) * 2, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.MAX, Align.MIN))
         # 指の逃げの窪み（外面から SW_DISH_D）。**スロットより先に掘る。**
         with Locations((sw_x, y_rear_outer - SW_DISH_D / 2, sw_z)):
             Box(SW_DISH_W, SW_DISH_D, SW_DISH_H, mode=Mode.SUBTRACT,
@@ -1211,8 +1262,8 @@ def build_rear_battery_lid(half, keys):
 
     **片持ちばねは不成立だった。**理由は定数の注記（腕の逃げ場が無い）。
     """
-    from build123d import (Align, BuildPart, Locations, RectangleRounded,
-                           BuildSketch, Plane, extrude)
+    from build123d import (Align, Box, BuildPart, Locations, Mode,
+                           RectangleRounded, BuildSketch, Plane, extrude)
 
     _positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
@@ -1236,6 +1287,16 @@ def build_rear_battery_lid(half, keys):
             with Locations((cx, (z_bot + z_top) / 2)):
                 RectangleRounded(lw, lh, 1.0)
         extrude(amount=-REAR_LID_T)      # **外へ**（Plane.XZ の法線は −Y）
+        # 滑り止めの溝（下寄り。親指をここに当てて上へ押す）。
+        # **切削用の立体は外面より外へ突き出させる。**面と同一平面に
+        # すると境界が縮退して水密でないメッシュになる（指掛かりの
+        # 窪みで同じことが起きている）。
+        _g0 = z_bot + 3.0                       # いちばん下の溝
+        for _i in range(REAR_LID_GRIP_N):
+            with Locations((cx, y_out, _g0 + _i * REAR_LID_GRIP_P)):
+                Box(REAR_LID_GRIP_W, REAR_LID_GRIP_D * 2, REAR_LID_GRIP_H,
+                    mode=Mode.SUBTRACT,
+                    align=(Align.CENTER, Align.CENTER, Align.CENTER))
         # 舌（板の下端から下へ）。**板より内側へ一段落とす。**
         # 庇の裏の彫り込みは y_wall_in 〜 y_out−LIP_T。座ぐりの底
         # （y_lid_in）と同じ深さで出すと**庇に 0.4mm 食い込む**

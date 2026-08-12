@@ -178,15 +178,27 @@ def test_the_check_actually_detects_a_collision(half):
 # --------------------------------------------------------------------------
 
 def _case_stl(half):
-    """ケースの STL のパス。**無ければその場で作る**（約 10 秒）。
+    """ケースの STL のパス。**無ければ・古ければ、その場で作る**（約 10 秒）。
 
     飛ばすと「通った」が「調べていない」の同義語になる。
+
+    ⚠️ **「無ければ作る」だけでは足りなかった**（2026-08-12）。CAD を
+    変えても STL は残っているので、**古いまま読んで偽の結果を出す。**
+    電源スイッチの受けを作り替えたとき、リブを足したのに検査は
+    「リブが無い」と言った——読んでいたのは前の形の STL だった。
+    `blend_assembly._refuse_if_stale` と同じ型。**こちらは止めずに作り直す**
+    （検査は人の操作を待てない）。
     """
-    stl = Path(__file__).resolve().parent.parent / f"build/case_{half}.stl"
-    if not stl.exists():
+    root = Path(__file__).resolve().parent.parent
+    stl = root / f"build/case_{half}.stl"
+    newest = max((q.stat().st_mtime for q in (root / "tools").glob("*.py")
+                  if not q.name.startswith("test_")), default=0.0)
+    if not stl.exists() or stl.stat().st_mtime < newest:
         import gen_case
         gen_case.main()
     assert stl.exists(), f"{stl} を作れなかった"
+    assert stl.stat().st_mtime >= newest, (
+        f"{stl} が tools/*.py より古いまま。作り直しが効いていない")
     return stl
 
 
@@ -244,23 +256,28 @@ def test_the_power_switch_fits_on_the_rear_panel(half):
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_power_switch_holder_exists_and_is_hollow(half):
-    """スイッチの受けが「足されて」いて、中身が空いていること。
+    """スイッチの受けが「足されて」いて、**入れられて、押し込めない**こと。
 
     **奥の壁の内側は電池室の空洞で、もともと材料が無い。**座ぐりを掘る
     設計にしていたが、それは空気を削るだけでスイッチを受ける面ができない。
     **故意に「彫るのをやめる」実験をしたら検査が落ちなかった**ことで
     見つかった（壊しても落ちない＝検査していない）。
 
-    そこで見るのは 3 つ。
-      1. 空所の**まわりに壁がある**（受けの箱が足されている）
-      2. 空所そのものは**空いている**（スイッチが入る）
+    2026-08-12 に**上から落とし込む溝**へ作り替えた（#18 の抜け止め）。
+    見るのは 5 つ:
+      1. 空所の**まわりに壁がある**（受けが足されている）
+      2. 本体の空所は**空いている**
       3. 操作部のスロットが**壁を貫いている**
+      4. **奥がリブで塞がっている**——押し込む向きの抜け止め。
+         **ここが無いと、指で押し込んだスイッチがケースの中へ落ちる**
+      5. **上が開いている**——入れられる。**#35 と同じ型**（留まることだけ
+         見て、入れられるかを見ない）を繰り返さないために一緒に見る
     """
     import numpy as np
     import trimesh
-    from envelopes import SW_PWR_D, SW_PWR_H, SW_PWR_W
-    from gen_case import (BUMP_DEPTH, SW_RIB, WALL, power_switch_center_z,
-                          power_switch_x_center)
+    from envelopes import SW_PWR_BODY_D, SW_PWR_H, SW_PWR_PIN_W, SW_PWR_W
+    from gen_case import (BUMP_DEPTH, CLEARANCE, SW_RIB, WALL,
+                          power_switch_center_z, power_switch_x_center)
     from interface import plate_positions
     from matrix import keymap_order
 
@@ -273,23 +290,35 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     mesh = trimesh.load(stl)
     x, z = power_switch_x_center(half, w), power_switch_center_z()
     y_out = hb / 2 + BUMP_DEPTH
-    y_mid = y_out - WALL - SW_PWR_D / 2          # 空所の中心 y
+    y_in = y_out - WALL
+    depth = SW_PWR_BODY_D + CLEARANCE          # 本体の空所の奥行
+    y_mid = y_in - depth / 2
 
     def solid(pts):
         return float(np.mean(mesh.contains(np.array(pts))))
 
     cavity = [(x + dx, y_mid + dy, z + dz)
               for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 5)
-              for dy in np.linspace(-SW_PWR_D * 0.3, SW_PWR_D * 0.3, 5)
+              for dy in np.linspace(-depth * 0.3, depth * 0.3, 3)
               for dz in np.linspace(-SW_PWR_H * 0.35, SW_PWR_H * 0.35, 3)]
     # 受けの箱の壁（左右と上下）。**ここに材料が無ければスイッチは宙に浮く。**
     off_w = SW_PWR_W / 2 + CLEARANCE_HALF + SW_RIB / 2
     off_h = SW_PWR_H / 2 + CLEARANCE_HALF + SW_RIB / 2
     walls = ([(x + s_ * off_w, y_mid, z) for s_ in (-1, 1)]
-             + [(x, y_mid, z + s_ * off_h) for s_ in (-1, 1)])
+             + [(x, y_mid, z - off_h)])          # 下は溝の底（座る面）
     slot = [(x + dx, y_out - WALL / 2, z + dz)
             for dx in np.linspace(-0.6, 0.6, 3)
             for dz in np.linspace(-1.0, 1.0, 3)]
+    # 奥のリブ。**端子のスリットを外して**左右の残りを見る。
+    rib_y = y_in - depth - SW_RIB / 2
+    rib = [(x + s_ * (SW_PWR_PIN_W + CLEARANCE + SW_PWR_W) / 4, rib_y, z + dz)
+           for s_ in (-1, 1)
+           for dz in np.linspace(-SW_PWR_H * 0.35, SW_PWR_H * 0.35, 3)]
+    # 端子のスリット（真ん中）。ここは抜けていなければ端子が入らない。
+    slit = [(x, rib_y, z + dz) for dz in np.linspace(-2.5, 2.5, 3)]
+    # 入れ口（溝の上）。
+    mouth = [(x + dx, y_mid, z + SW_PWR_H / 2 + CLEARANCE_HALF + 1.0)
+             for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)]
 
     assert solid(walls) == 1.0, (
         f"{half}: スイッチの受けの壁が無い（材料 {solid(walls):.0%}）。"
@@ -298,6 +327,16 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
         f"{half}: スイッチの空所に材料が残っている"
     assert solid(slot) == 0.0, \
         f"{half}: 操作部のスロットが壁を貫通していない"
+    assert solid(rib) == 1.0, (
+        f"{half}: 奥のリブが無い（材料 {solid(rib):.0%}）。"
+        "**押し込む向きの抜け止めが効かない**——指で押し込むと"
+        "スイッチがケースの中へ落ちる（#18）")
+    assert solid(slit) == 0.0, (
+        f"{half}: 奥のリブに端子のスリットが無い（材料 {solid(slit):.0%}）。"
+        "端子 3 本が通らない＝**スイッチが奥まで入らない**")
+    assert solid(mouth) == 0.0, (
+        f"{half}: 溝の上が塞がっている（材料 {solid(mouth):.0%}）。"
+        "**上から落とし込めない＝スイッチを入れられない**")
 
 
 # --------------------------------------------------------------------------
@@ -1519,7 +1558,174 @@ def test_the_rear_lid_slide_survives_pla():
     assert REAR_LID_SLIDE > REAR_LID_LIP_ENG, (
         f"差し込みしろ {REAR_LID_SLIDE} が掛かり代 {REAR_LID_LIP_ENG} 以下。"
         "**ずらしきっても舌が庇から抜けない＝外せない**")
-    # 指を掛ける隙間。爪が入る幅が要る。
+    # 上に残る隙間は**差し込みしろ**（蓋が上へ逃げる場所）。
+    # **ここは指掛かりではない。**蓋を上へずらすには蓋の下向きの面を
+    # 押す必要があるが、隙間は蓋の上にあるので押せるのは下向きだけ。
+    # （2026-08-12・利用者の指摘。それまで指掛かりだと書いていた）
     _rx0, _rz0, _rx1, rz1 = rear_lid_rebate("left", w)
-    assert rz1 - z_top >= 2.5, (
-        f"上に残る隙間が {rz1 - z_top:.1f}mm。爪が掛からない")
+    assert rz1 - z_top >= REAR_LID_SLIDE, (
+        f"上に残る隙間が {rz1 - z_top:.1f}mm。差し込みしろ "
+        f"{REAR_LID_SLIDE}mm に足りない＝**ずらしきれない**")
+
+    # **手を掛けるところは蓋の表面の溝。**親指で押して滑らせる。
+    from gen_case import (REAR_LID_GRIP_D, REAR_LID_GRIP_N, REAR_LID_GRIP_P,
+                          REAR_LID_GRIP_W, build_rear_battery_lid)
+    from gen_plate import halves as _halves
+
+    assert REAR_LID_GRIP_N >= 3 and REAR_LID_GRIP_W >= 20.0, (
+        f"滑り止めが {REAR_LID_GRIP_N} 本 × {REAR_LID_GRIP_W}mm。"
+        "親指の腹が掛からない")
+    assert 0.3 <= REAR_LID_GRIP_D <= REAR_LID_T / 3, (
+        f"溝の深さ {REAR_LID_GRIP_D}mm。浅いと滑り、深いと板が薄くなる"
+        f"（板 {REAR_LID_T}mm の 1/3 まで）")
+
+    # **溝が本当に彫られていること。**定数だけ足して彫り忘れる型を塞ぐ。
+    # 溝の高さで蓋の外面を薄く切り取り、**溝の無い高さより体積が減る**
+    # ことを見る。深さも一緒に測れる。
+    from build123d import Align, Box, Location
+
+    from gen_case import REAR_LID_GRIP_H, REAR_LID_GRIP_P
+
+    lid_part, _ = build_rear_battery_lid("left", _halves()["left"])
+    _b = lid_part.bounding_box()
+    y_out = _b.max.Y
+    cx = (_b.min.X + _b.max.X) / 2          # **蓋の中心は原点ではない**
+    z_g0 = z_bot + 3.0                      # gen_case と同じ起点
+
+    def skin(zc):
+        # z=zc で、外面から GRIP_D ぶんの薄皮に残っている体積
+        probe = Location((cx, y_out - REAR_LID_GRIP_D / 2, zc)) * Box(
+            REAR_LID_GRIP_W, REAR_LID_GRIP_D, REAR_LID_GRIP_H * 0.6,
+            align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        r = lid_part.intersect(probe)
+        return 0.0 if r is None else sum(x.volume for x in r.solids())
+
+    on = skin(z_g0)                                    # 溝のところ
+    off = skin(z_g0 + REAR_LID_GRIP_P / 2)             # 溝と溝のあいだ
+    assert off > 0, "溝と溝のあいだに板が無い。溝が繋がっている"
+    assert on < off * 0.05, (
+        f"溝の高さで外面が {on:.2f}mm³ 残っている（溝の無いところは "
+        f"{off:.2f}mm³）。**溝が彫られていない**")
+    assert REAR_LID_GRIP_N * REAR_LID_GRIP_P < z_top - z_bot - 4.0, (
+        "溝の並びが蓋の高さに収まらない")
+
+
+# --------------------------------------------------------------------------
+# 奥の壁の穴（2026-08-12。**目で見て気づけなかったものを、数で捕まえる**）
+# --------------------------------------------------------------------------
+def test_every_part_declares_its_shape_kind():
+    """組み立てのすべての部品が、実形状か箱かを申告していること。
+
+    ⚠️ **この分類は blend_assembly.py に手書きで置いてあった。**部品を
+    足すのは gen_assembly なのに、分類は別のファイル——**片方だけ直る。**
+    2026-08-12 に `rear_lid` と `sw_pwr` で 2 回続けて踏んだ。実形状なのに
+    「箱」のコレクションへ入り、**利用者が開いた実形状側に現れなかった。**
+    """
+    from gen_assembly import BOX_SHAPE, REAL_SHAPE
+
+    both = REAL_SHAPE & BOX_SHAPE
+    assert not both, f"実形状と箱の両方に入っている: {sorted(both)}"
+    for half in ("left", "right"):
+        parts, _ = build_assembly(HALVES[half], half)
+        missing = sorted(k for k in parts if k not in REAL_SHAPE | BOX_SHAPE)
+        assert not missing, (
+            f"{half}: 形の種類を申告していない部品: {missing}\n"
+            "  gen_assembly.REAL_SHAPE か BOX_SHAPE に足すこと。"
+            "**書かないと Blender で間違ったコレクションに入る**")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_rear_wall_has_no_undeclared_holes(half):
+    """コブの奥の壁に、**申告していない貫通穴が無い**こと。
+
+    ⚠️ **これは「目で見る」で 3 回落とした種類の欠陥。**2026-08-12 に、
+    電源スイッチの端子スリットを切る箱を「奥へ 2 倍」にしたら、手前側が
+    **奥の壁を突き抜けて外に出た**（外から本体が見えていた）。利用者が
+    Blender で見つけた。**数で判定できるものを、目に頼っていた。**
+
+    やり方: 奥の外面を格子で走査し、壁厚のどこにも材料が無い点を「穴」と
+    する。穴はすべて**申告した窓の中**に無ければならない。
+    """
+    import numpy as np
+    import trimesh
+    from gen_case import (BUMP_DEPTH, SW_SLOT_LEN, SW_SLOT_W, USB_H, USB_W,
+                          WALL,
+                          daughterboard_x_center,
+                          power_switch_center_z, power_switch_x_center,
+                          rear_lid_opening, usb_center_z)
+    from interface import plate_positions
+    from matrix import keymap_order
+
+    mesh = trimesh.load(_case_stl(half))
+    _, (w, hb) = plate_positions(keymap_order(halves()[half]))
+    y_out = hb / 2 + BUMP_DEPTH
+
+    # 申告した窓（x0, z0, x1, z1）。**余白 0.6mm を足して縁の量子化を吸収。**
+    m = 0.6
+    ox0, oz0, ox1, oz1 = rear_lid_opening(half, w)
+    sx, sz = power_switch_x_center(half, w), power_switch_center_z()
+    db_x = daughterboard_x_center(half, w)
+    windows = [
+        ("電池蓋の口", ox0 - m, oz0 - m, ox1 + m, oz1 + m),
+        ("電源スイッチのスロット", sx - SW_SLOT_W / 2 - m,
+         sz - SW_SLOT_LEN / 2 - m, sx + SW_SLOT_W / 2 + m,
+         sz + SW_SLOT_LEN / 2 + m),
+        ("USB-C の口", db_x - USB_W / 2 - m, usb_center_z() - USB_H / 2 - m,
+         db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
+    ]
+
+    xs = np.arange(-w / 2 + 1.0, w / 2 - 1.0, 1.0)
+    zs = np.arange(0.5, 30.0, 0.5)
+    depths = y_out - np.linspace(0.15, WALL - 0.15, 6)
+    gx, gz = np.meshgrid(xs, zs, indexing="ij")
+    gx, gz = gx.ravel(), gz.ravel()
+    solid = np.zeros(gx.shape, dtype=bool)
+    for d in depths:
+        pts = np.column_stack([gx, np.full_like(gx, d), gz])
+        solid |= mesh.contains(pts)
+
+    holes = [(x, z) for x, z, ok in zip(gx, gz, solid) if not ok]
+    stray = [(x, z) for x, z in holes
+             if not any(x0 <= x <= x1 and z0 <= z <= z1
+                        for _n, x0, z0, x1, z1 in windows)]
+    # 壁そのものが無い高さ（コブの外・角の丸み）は除く。**壁の帯だけ見る。**
+    stray = [(x, z) for x, z in stray if 1.0 <= z <= 26.0]
+    assert not stray, (
+        f"{half}: 奥の壁に申告していない穴が {len(stray)} 点ある。"
+        f"最初の 5 点 {[(round(x, 1), round(z, 1)) for x, z in stray[:5]]}\n"
+        "  **外から中が見える。**切削の箱が壁を突き抜けていないか見ること")
+
+
+def test_the_blender_script_only_imports_what_blender_has():
+    """`blend_assembly.py` が、**Blender の Python に有る物しか import しない**こと。
+
+    ⚠️ 2026-08-12。実形状／箱の分類を `gen_assembly.py` へ移したら、
+    `blend_assembly.py` はそれを import するので **`build123d` を要求**し、
+    Blender の Python には無いので `ModuleNotFoundError` で落ちた。
+    **.blend が 1 つも作られなくなった。**しかも Blender は -P の
+    スクリプトが落ちても 0 を返すので、シェルも通り、**古い .blend を
+    「出し直した」と報告した。**
+
+    分類は依存を持たない `part_kinds.py` に置く。ここはそれを見張る。
+    """
+    import ast
+
+    root = Path(__file__).resolve().parent
+    tree = ast.parse((root / "blend_assembly.py").read_text())
+    imported = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            imported |= {a.name.split(".")[0] for a in n.names}
+        elif isinstance(n, ast.ImportFrom) and n.level == 0 and n.module:
+            imported.add(n.module.split(".")[0])
+    allowed = {
+        "json", "math", "sys", "pathlib", "os", "re", "collections",
+        "bpy", "mathutils",          # Blender が持っているもの
+        "part_kinds",                # 依存を持たない自前の一覧
+    }
+    extra = sorted(imported - allowed)
+    assert not extra, (
+        f"blend_assembly.py が {extra} を import している。\n"
+        "  **Blender の Python には build123d も numpy も無い。**\n"
+        "  ここが落ちると .blend が 1 つも作られず、しかも Blender は\n"
+        "  0 を返すので気づけない。データは part_kinds.py へ置くこと")
