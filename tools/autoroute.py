@@ -185,7 +185,7 @@ def _route_once(half, seed):
     # 良否を決めないこと。
     subprocess.run(
         [_java(), "-jar", str(JAR), "-de", str(dsn), "-do", str(ses),
-         "-mp", str(PASSES)],
+         "-mp", str(PASSES), "--gui.enabled=false"],
         check=True)
     if not ses.exists():
         raise SystemExit(f"{half}: Freerouting が SES を出さなかった")
