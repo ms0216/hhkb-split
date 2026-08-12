@@ -1915,3 +1915,36 @@ def test_the_switch_reservation_covers_the_real_part_and_its_wires():
         f"リード線の余裕が {SW_PWR_WIRE}mm。AWG26 の曲げ半径 1.5mm に足りない"
         "（端子の先で内壁へ押し付けられる）")
 
+
+
+def test_the_constants_that_slipped_through_mutation_are_guarded():
+    """**壊しても誰も気づかなかった定数**に、関係式で歯止めを置く。
+
+    2026-08-13。検査が名前で見ていない 11 個を 1 つずつ壊して測ったら、
+    **5 個が素通りした**（うち 1 個は無害）。幾何の検査は「組んだ形」しか
+    見ないので、**使い勝手と印刷の都合は素通りする。**
+    """
+    from gen_case import (CLEARANCE, REAR_LID_CLR, REAR_LID_DETENT,
+                          REAR_LID_DETENT_R, REAR_LID_DETENT_W, SW_DISH_H,
+                          SW_SLOT_LEN)
+
+    # ① 窪みは、スロットの上下に指が回る高さが要る（4.0mm では入らない）
+    assert SW_DISH_H >= SW_SLOT_LEN + 2.0, (
+        f"窪みの高さ {SW_DISH_H} が、スロット {SW_SLOT_LEN} ＋ 指の余地 2.0 "
+        "に足りない。**ツマミの上下に指が回らない**")
+
+    # ② ビードが細いと、蓋を点で押さえることになる（4mm では効かない）
+    assert REAR_LID_DETENT_W >= 15.0, (
+        f"抜け止めのビードが {REAR_LID_DETENT_W}mm。細いと蓋を点で押さえ、"
+        "板がその場だけ反って乗り越える（保持にならない）")
+
+    # ③ 口の逃げは、印刷の公差より大きいこと
+    assert REAR_LID_CLR >= CLEARANCE, (
+        f"口の逃げが片側 {REAR_LID_CLR}mm。印刷の公差 {CLEARANCE}mm 以下では、"
+        "**電池ボックスが口を通らない**（通販ページ値 109mm に対し余裕が無い）")
+
+    # ④ ビードは壁へ沈めること。半径＝出っ張り量だと**接するだけ**になり、
+    #    境界が縮退して STL が水密でなくなる（2026-08-12 に実際に起きた）
+    assert REAR_LID_DETENT_R > REAR_LID_DETENT, (
+        f"ビードの半径 {REAR_LID_DETENT_R} が出っ張り量 {REAR_LID_DETENT} 以下。"
+        "**壁に接するだけになり、境界が縮退する**（沈めること）")
