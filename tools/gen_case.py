@@ -1399,22 +1399,35 @@ def _boss_positions(half):
 
 
 def main():
+    import json
+
     from verify import BUILD, assert_watertight, render_outline_2d, to_mesh
 
     BUILD.mkdir(exist_ok=True)
+    # **前に出したが、今は出さない物を消す。**
+    #
+    # ⚠️ 2026-08-12。底面の電池蓋を廃止したのに `build/battery_lid_*.stl`
+    # が残り、**slice_check.py は build/*.stl を全部拾う**ので「刷れます」と
+    # 報告し続けた。**存在しない部品を刷らせるところだった。**
+    # export_assembly.py で同じ穴を塞いだのに、**こちらに入れていなかった。**
+    manifest = BUILD / "gen_case_manifest.json"
+    written = []
     for name, keys in halves().items():
         part, (w, h), (z_front, z_rear) = build_case(keys, name)
         mesh, stl = to_mesh(part, f"case_{name}")
+        written.append(stl.name)
         assert_watertight(mesh, stl.name)
 
         for deg in TILT_STEPS:
             foot, fz = build_tilt_foot(deg, h)
             fmesh, fstl = to_mesh(foot, f"tilt_foot_{int(deg)}deg_{name}")
+            written.append(fstl.name)
             assert_watertight(fmesh, fstl.name)
             print(f"      チルト脚 +{deg:.0f}° 高さ {fz:.2f}mm -> {fstl.name}")
         # 上ケース（ベゼル）
         topc, (tw, th) = build_topcase(keys, name)
         tmesh, tstl = to_mesh(topc, f"topcase_{name}")
+        written.append(tstl.name)
         assert_watertight(tmesh, tstl.name)
         print(f"      上ケース {tw:.2f} x {th:.2f} x "
               f"{topc.bounding_box().size.Z:.2f}mm -> {tstl.name}")
@@ -1431,6 +1444,15 @@ def main():
         # 最も高いのはコブの後端（ベゼル上面）
         z_top = BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
         assert abs(bb.size.Z - z_top) < 0.05, f"高さが設計値と違う（{bb.size.Z:.2f} vs {z_top:.2f}）"
+
+    # 前回の控えとの差を消す（消えた部品の STL と、その絵）。
+    old = set(json.loads(manifest.read_text())) if manifest.exists() else set()
+    for gone in sorted(old - set(written)):
+        for q in (BUILD / gone, BUILD / f"view_{Path(gone).stem}.png"):
+            if q.exists():
+                q.unlink()
+                print(f"      もう作らない物を消した: {q.name}")
+    manifest.write_text(json.dumps(sorted(written), indent=2))
     return 0
 
 

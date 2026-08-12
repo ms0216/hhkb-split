@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+TOOLS = Path(__file__).resolve().parent
 BUILD = ROOT / "build"
 OUT = BUILD / "slice"
 
@@ -124,6 +125,21 @@ def main(names=None):
 
     stls = sorted(p for p in BUILD.glob("*.stl")
                   if not p.stem.startswith(("smoke", "dbg", "mut", "_")))
+
+    # **古い STL を黙って「刷れます」と言わない。**
+    #
+    # ⚠️ 2026-08-12。底面の電池蓋を廃止したのに build/battery_lid_*.stl が
+    # 残り、ここが拾って合格を出していた。**存在しない部品を刷らせる。**
+    # 調査中に出した残骸（lid.stl / c.stl）も同じように拾っていた。
+    # 生成器側でも片付けるようにしたが、ここでも**目に見える形で**出す。
+    newest = max((q.stat().st_mtime for q in TOOLS.glob("*.py")
+                  if not q.name.startswith("test_")), default=0.0)
+    stale = [p for p in stls if p.stat().st_mtime < newest]
+    if stale:
+        print("⚠️ tools/*.py より古い STL がある（作り直すか、消すこと）:")
+        for q in stale:
+            print(f"     {q.name}")
+        print()
     if names:
         stls = [p for p in stls if p.stem in names]
 
