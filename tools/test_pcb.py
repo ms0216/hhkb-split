@@ -113,18 +113,26 @@ def test_stabilizers_are_on_the_wide_keys(name):
 @pytest.mark.parametrize("name", NAMES)
 
 def test_mounting_holes_match_the_case_bosses(name):
-    """**基板に取付穴が無いこと**と、ボスが基板に当たらないこと。
+    """**上ケースのボスが基板に当たらない**ことと、取付穴が正しい数あること。
 
-    上ケース方式では、基板はプレートとスイッチで一体になり、上下ケースに
-    挟まれて保持される。ネジは上ケースから基板の外側のボスへ入る。
-    穴が要らないぶん配線の自由度も上がる。
+    上ケースのネジは基板の外側（y=±51.5、基板の縁 48.7 より外）のボスへ
+    入るので、**ボスは基板に触れてはいけない。**
 
-    以前は「穴がボスと同じ位置にあること」を見ていた。構造が変わったので、
-    **穴が無いこと**と**当たらないこと**の two 方向で見る。
+    ⚠️ **「基板に取付穴が無いこと」を見ていたが、2026-08-12 に逆転した**
+    （open-gaps #36）。基板はプレートとスイッチで保持される——という理屈
+    だったが、測ったら**固定具が 1 つも無く**、スイッチを抜くとソケットの
+    はんだに剥離力がかかる状態だった。**プレート裏の柱へ下から締める**
+    ようにしたので、基板には穴が要る。**数が合っているか**を見る。
     """
-    from interface import M2_BOSS_D, boss_positions
+    import re
+
+    from interface import M2_BOSS_D, boss_positions, pcb_mount_positions
     txt = (ROOT / f"pcb/hhkb_split_{name}.kicad_pcb").read_text()
-    assert "MountingHole" not in txt, f"{name}: 基板に取付穴が残っている"
+    n_hole = len(re.findall(r'footprint "MountingHole', txt))
+    want = len(pcb_mount_positions(name))
+    assert n_hole == want, (
+        f"{name}: 基板の取付穴が {n_hole} 個。設計は {want} 個"
+        "（interface.PCB_MOUNT_POSITIONS）")
     x0, y0, x1, y1 = outline_extent(name)
     half_h = (y1 - y0) / 2
     for bx, by in boss_positions(name):

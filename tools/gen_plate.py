@@ -14,7 +14,9 @@ import sys
 from pathlib import Path
 
 from build123d import (
+    Align,
     BuildLine,
+    Cylinder,
     Circle,
     BuildPart,
     BuildSketch,
@@ -143,6 +145,23 @@ def build_plate(keys, half):
             with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)
+        # 本体基板を締める柱（open-gaps #36・2026-08-12）。
+        #
+        # **プレートの裏（−z 側）へ PLATE_TO_PCB だけ伸ばす。**基板は下から
+        # ネジで締めるので、**ネジの頭が打鍵面に出ない。**位置は
+        # interface.pcb_mount_positions が正本（基板・組み立てと共有）。
+        from envelopes import PLATE_TO_PCB
+        from interface import PCB_POST_D, PCB_POST_PILOT_D, pcb_mount_positions
+        for px, py in pcb_mount_positions(half):
+            with Locations((px, py, 0)):
+                Cylinder(PCB_POST_D / 2, PLATE_TO_PCB,
+                         align=(Align.CENTER, Align.CENTER, Align.MAX))
+        # 下穴。**柱を立ててから抜く**（先に抜くと柱が埋め戻す）。
+        for px, py in pcb_mount_positions(half):
+            with Locations((px, py, 0)):
+                Cylinder(PCB_POST_PILOT_D / 2, PLATE_TO_PCB + PLATE_T,
+                         mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MAX))
     return plate.part, (w, h), positions
 
 

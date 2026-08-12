@@ -41,7 +41,7 @@ OUT = Path(__file__).resolve().parent.parent / "build" / "assembly"
 #   - 箱（pcb / sockets / db / xiao / batt / switches / keycaps …）は近似
 # **どちらなのかが名前から分からない**ので、Blender ではここで仕分ける。
 REAL_SHAPE = {
-    "case", "topcase", "plate", "lid", "foot", "screws", "inserts",
+    "case", "topcase", "plate", "lid", "rear_lid", "foot", "screws", "inserts",
     "nut", "rubber", "pcb_real", "db_real", "pcb_parts", "db_parts",
     "batt",  # 円柱2本が実形状（電極2箇所だけ箱のまま。dee89db）
     "switches_real",  # kiswitch SW_Cherry_MX_Plate（爪・ステム・ピン・LED窓）

@@ -313,6 +313,28 @@ SW_SLOT_W = 2.6          # 操作部が通るスロットの幅（アクチュ�
 # **本体の高さではない。**本体ぶん開けると穴が無駄に大きくなる。
 SW_SLOT_LEN = 5.0
 SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷できる最小側）
+
+# 電源スイッチの**指の逃げ**（窪み・open-gaps #18・2026-08-12）。
+#
+# **壁 2.4mm を貫いて外へ 1mm 出すには、アクチュエータが 3.4mm 以上
+# 突き出ている部品しか使えない。**市場の超小型スライドの実勢は
+# **1.4〜3.0mm**（8 品番を当たった調査）で、本命 C&K OS102011MA1QN1 の
+# 3.90mm でも余裕は 0.5mm しかない（2.8 説と 4.0 説が割れてもいる）。
+#
+# → **スロットの周りを窪ませ、操作面をツライチにする。**必要な突出量は
+# 「窪みの底までの壁厚」= 2.4 − SW_DISH_D になり、**1.4mm あれば足りる。**
+#
+# **つまみを被せる案も同じ効果**があり、操作感はそちらが上（指の腹で
+# 動かせる）。**それでも窪みを採る**——ケースは刷り直せるが、部品の購入は
+# 戻しにくい。**戻せない側（部品選択）を最大限ゆるくしておき、操作感が
+# 足りなければ後からつまみを刷る**（利用者の判断・2026-08-12）。
+#
+# 壁は薄くなるが、**スライドの力を受けるのは受け箱のリブ**（壁の内面に
+# 付いている周囲の帯）で、窪みはその内側。内面は削らないのでスイッチの
+# 座りも変わらない。
+SW_DISH_D = 1.0          # 窪みの深さ（壁 2.4 → 底で 1.4mm）
+SW_DISH_W = 10.0         # 窪みの幅（指先が入る）
+SW_DISH_H = 8.0          # 同・高さ
 # RESET のボタンは**載せられない。**
 # XIAO nRF52840 の裏面に出ているパッドは VUSB/GND/3V3/10/9/8/7・0〜6（側面ピンの
 # 複製）と BAT +/−、NFC だけで、**RST は出ていない**（実機の写真で確認）。
@@ -325,6 +347,17 @@ SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷でき�
 # コブの上に材料が無い。**溝を空中に切っていた。
 # 「当たらない」ことしか見ない干渉検査では気づけず、噛み合いを直接見る
 # test_the_rear_hook_is_actually_captured が検出した。
+#
+# **2026-08-12 に「庇」を試して、また外した。**コブの天井は上ケースの
+# 後端の真後ろ（z 28.82..31.25）まで来ているので、そこを手前へ 3mm
+# 伸ばして庇にし、上ケースの天面を欠き取って潜らせた。**噛みはした**
+# （0.3mm 持ち上げると当たる）。**が、組み立てられなかった**——
+# 上へ・奥へ・傾けて、**どの向きにも動かせない**（上ケースは外形が
+# ケースと同一の「落とし込み蓋」で、平面方向の逃げが 0）。
+#
+# → **水平方向に噛む機構は原理的に入らない。**入るのは
+#   **垂直に押し込んで噛むもの**（ナットやチルト脚と同じ返し／溝）だけ。
+#   次はその形で設計する。**「噛むか」と「組めるか」は別の検査**。
 
 from envelopes import (PCB_T, PLATE_TO_PCB, SOCKET_DROP,  # noqa: E402
                        DB_STACK_H, DB_XIAO_LIFT, SCREW_HEAD_D, SCREW_HEAD_H,
@@ -384,6 +417,73 @@ RAIL_H = LID_T           # 段の深さ＝蓋の厚み。こうすると蓋が�
                          # （組み立て検査で 233mm^3 の食い込みとして検出された）。
 LID_STOP = 2.0           # 手前側のストッパー
 
+# --------------------------------------------------------------------------
+# 電池蓋（**コブの奥面**）— open-gaps #35・2026-08-12
+#
+# **実機は奥面に蓋がある**（利用者。「わざわざ裏返す必要がないため」。
+# 裏面には制振シートを貼る可能性もある）。底面の蓋（上の LID_*）は
+# **外から開けない**ことが分かった（座ぐりが床の内側にあり、蓋は貫通穴より
+# 3.8mm 大きい）ので、こちらへ移す。
+#
+# 口は電池ボックスの断面（109 x 16.8）＋逃げ。x では USB（53〜65）とも
+# 電源スイッチ（43.7）とも重ならない（電池は −70.6〜38.4）。
+#
+# ⚠️ **電池ボックスのどの面が開くかはモデルに入っていない。**奥面の蓋で
+# 電池を出し入れするには、**箱の開く面が奥を向いている**必要がある。
+# 箱（BH-325-1A150）が届いたら真っ先に確認する（shopping-list に記載）。
+REAR_LID_CLR = 0.5       # 口を電池の断面からどれだけ広げるか（片側）
+# 蓋の厚み。**1.2mm では 111mm の長手で中央が浮く**（0.4mm ノズルで壁 3 本＝
+# 中身が無い）。量産品の指針は 1.6〜2.0mm（2026-08-12 の調査）。
+REAR_LID_T = 1.6
+REAR_LID_REBATE = 2.0    # 座ぐりを口からどれだけ広げるか（片側）＝蓋の掛かり代
+# **上だけ広く取る。**上には「差し込みしろ（指掛かりの隙間）」と「抜け止めの
+# ビードが載る縁」の 2 つを並べる必要がある。REBATE のままだと**ビードが口の
+# 中に浮いて、ケースが 2 個の立体になった**（2026-08-12・断面図で発見）。
+REAR_LID_REBATE_TOP = 6.0
+
+# --------------------------------------------------------------------------
+# 抜け止め: **上へスライドして庇の裏へ差し込む**（2026-08-12・3 度目の設計）
+#
+# ⚠️ **片持ちばね案は原理的に成り立たなかった。**利用者の指摘
+# 「上の爪が非常に長いので、多少撓んだところで外れるようには思えない」が
+# 当たっていた。断面を描いて分かったこと:
+#
+#   * 蓋を外す＝上端が **+y へ出る**。腕は口の上（z>19.7）で壁の裏に
+#     立っているので、**壁が全高で塞いでいる**。腕が −y に撓んでも
+#     壁の裏にいることは変わらず、**どう撓ませても抜けない**
+#   * 抜けるようにするには腕が **z 方向へ逃げる**必要がある＝腕は
+#     **内側へ寝かせて z に撓む**形でなければならない
+#   * ところが内側は**電池が埋めている**（電池箱の上面 z=19.2、口の上端
+#     19.7。空きは 0.5mm）。**寝かせる場所がどこにも無い**
+#
+# → ばねを使わない。**面内のスライド**で留める（実機の電池蓋と同じ）。
+#
+#   下 … 蓋の下端を **1.2mm の舌**にし、壁の内側を彫って作った**庇**の
+#        裏へ、下へ 3mm スライドさせて差し込む。+y へは庇が塞ぐ
+#   上 … 座ぐりの底の**半丸ビード**。勝手に上がるのを止める
+#   外し方 … 上端に残る **3mm の隙間**に爪を掛け、上へずらしてから
+#        手前へ起こす。**指を掛ける所が外にある**（利用者の要求）
+#
+# **下向きに差し込む。**上向きにすると重力が「外れる向き」に効き、
+# 抜け止めをビード 1 つに頼ることになる。さらに**ビードを置く座ぐりの底が
+# 口の下には 2.0mm しか無く、上向きだと宙に浮いた**（2026-08-12・断面図で
+# 発見）。下向きなら重力が留める側に効き、ビードは念のための 2 段目。
+#
+# 撓むのは蓋の板（幅 111mm・厚 1.6mm）が 0.4mm 反るだけ。**PLA でも
+# ひずみが桁で小さい**（片持ち爪は ε=1% の綱渡りだった）。
+REAR_LID_SLIDE = 3.0     # 上へ差し込む距離＝下に残る隙間（指掛かり）
+REAR_LID_LIP_T = 0.8     # 庇の厚み（壁の内側を彫って残す）＝舌の厚み
+REAR_LID_LIP_ENG = 1.5   # 舌が庇の裏へ入る量（掛かり代）
+REAR_LID_DETENT = 0.4    # 抜け止めの**出っ張り量**（座ぐりの底から外へ）
+REAR_LID_DETENT_W = 24.0  # 同・幅
+# 半径は出っ張り量より大きく取り、差ぶん壁へ**沈める**。
+# **接するだけだと境界が縮退して STL が水密にならない**（2026-08-12 に
+# test_printable が両側とも赤になった。同じ理由の注記が蓋の指掛かりにもある）。
+REAR_LID_DETENT_R = 0.6
+
+# 片持ちばね案の定数はすべて削除した（不成立。経緯は open-gaps #35）。
+# **残しておくと「使われている」と誤読される。**
+
 # ゴム足（市販品）
 RUBBER_D = 10.0
 RUBBER_T = 2.0           # [暫定] 厚み。**傾斜角に直接効く。**買う製品で確定させる
@@ -412,6 +512,18 @@ FOOT_PEG_D = 4.0         # 差し込みピンの径
 # （provisional-values.md に登録済み）。
 FOOT_PEG_H = 2.4         # [暫定] 保持力は印刷して確かめる（上の注記）
 FOOT_BOSS_CAP = 1.2      # 盲穴ボスのキャップ厚。1.6 だとボス頂がコネクタに近づく
+# **抜け止めの返し**（2026-08-12・利用者の「固定が弱いところ」から）。
+#
+# ピンを伸ばして掛かりを稼ぐ道は塞がっている（上の注記。真上に J_MAIN が
+# 4.31mm まで下がる）。**摩擦だけでは、裏返すたびに脚が抜ける。**
+# → **ピンの先に返しを付け、穴の奥に溝を掘って噛ませる。**
+# 押し込むとき返し（φ4.4）が穴（φ4.2）を 0.1mm/片側 押し広げて通り、
+# 溝（φ4.7）で開いて戻らなくなる。**定位置では重なりが無い**ので、
+# 干渉検査から除外する必要が無い（ナットで学んだ形）。
+# 噛みは test_the_tilt_foot_is_captured が寸法で見る。
+FOOT_BARB_D = 4.4        # 返しの外径（ピン φ4.0 ＋ 0.4）
+FOOT_BARB_H = 0.6        # 返しの高さ（層 0.2mm × 3）
+FOOT_GROOVE_D = 4.7      # 穴の奥の溝の径（返し ＋ 0.3 の逃げ）
 # 脚は**後ろの隅**に差し、そこが設置点になる。実機の折りたたみ脚と同じ役割。
 # 0° 用の短い脚も作るので、脚は常に 2 個使う（外すのではなく差し替える）。
 # 当初は脚を内側に置き、電池室と蓋の中にボスが立っていた。
@@ -430,10 +542,15 @@ FOOT_BASE_H = RUBBER_T - RUBBER_RECESS
 # 1/4-20 の六角ナットを埋め込む。二面幅 11.1mm / 厚み 5.5mm
 # --------------------------------------------------------------------------
 NUT_AF = 11.1 + 0.3      # 二面幅＋逃げ
-NUT_T = 5.5 + 0.2
+NUT_T = 5.5 + 0.2 + 0.6   # 厚み＋逃げ＋唇の高さ（ナットは唇の上に座る）
 NUT_BOSS_D = 18.0
 NUT_BOSS_H = 9.0
 NUT_THRU_D = 7.0
+# **抜け止め。**入口（底面側）の帯だけ二面幅を狭め、押し込んだナットが
+# 自重で落ちないようにする。**PLA が 0.2mm 変形すれば入る**程度に留める
+# （大きくすると入らないか、押し込みで割れる）。
+NUT_LIP_H = 0.6          # 狭める帯の高さ（層 0.2mm × 3）
+NUT_LIP_UNDER = 0.4      # 二面幅をどれだけ狭めるか（片側 0.2mm の食い込み）
 
 
 
@@ -614,6 +731,50 @@ def build_case(keys, half):
                 DB_STACK_H + CLEARANCE * 2, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
+        # 6-0a. 電池蓋の口（**コブの奥面**。open-gaps #35・2026-08-12）
+        #
+        # **範囲を明示して切る。**電池ボックスの左端は内壁から 0.2mm しか
+        # なく、「電池の断面 ＋ 逃げ」を中心振り分けで切ると**左の壁を
+        # 0.3mm 突き破る**（2026-08-12 に実測）。左は内壁で止める。
+        bx0, bz0, bx1, bz1 = rear_lid_opening(half, w)
+        with Locations(((bx0 + bx1) / 2, y_rear_outer - WALL / 2,
+                        (bz0 + bz1) / 2)):
+            Box(bx1 - bx0, WALL * 3, bz1 - bz0, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 外面の座ぐり（蓋が面一に沈む）。**ケースの外形の内側に収める。**
+        # **下端は口の下端まで。**その下（rz0 〜 bz0）は壁を全厚のまま残し、
+        # そこが**庇**になる（蓋の舌がこの裏へ入る）。座ぐりを rz0 まで
+        # 掘ると庇が消え、蓋を留めるものが何も無くなる。
+        rx0, rz0, rx1, rz1 = rear_lid_rebate(half, w)
+        with Locations(((rx0 + rx1) / 2, y_rear_outer - REAR_LID_T / 2,
+                        (bz0 + rz1) / 2)):
+            Box(rx1 - rx0, REAR_LID_T, rz1 - bz0, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 庇の裏を彫る（**内側から**）。舌が入る隙間を作りつつ、外側に
+        # REAR_LID_LIP_T だけ残す。**内側へ張り出さない**ので電池箱に
+        # 当たらない（口の内側は電池が埋めていて 0.5mm しか空きが無い）。
+        # **壁の内面より 0.2mm 深く彫る。**ちょうど同一平面にすると、
+        # 口の下端（z=bz0）と壁の内面と彫り込みの面が 1 点で交わり、
+        # **STL に開いた辺が 1 本残って水密でなくなる**（2026-08-12 に
+        # test_printable が両側とも赤。開いた辺はまさにその 1 点だった）。
+        _pocket_d = WALL - REAR_LID_LIP_T + 0.2
+        with Locations(((rx0 + rx1) / 2,
+                        y_rear_outer - WALL - 0.2 + _pocket_d / 2,
+                        (rz0 + bz0) / 2)):
+            Box(rx1 - rx0, _pocket_d, bz0 - rz0, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 抜け止めの半丸ビード（座ぐりの底・蓋の上端のすぐ上）。
+        # **円柱にする。**上下対称なので嵌めるときも外すときも同じ力で
+        # 乗り越える。斜面の立体を別に作らずに済む（入れ子の罠を避ける）。
+        _, _lz1 = rear_lid_plate_z(half, w)
+        _sink = REAR_LID_DETENT_R - REAR_LID_DETENT      # 壁へ沈める量
+        # 中心は**蓋の上端から半径ぶん**上。出っ張り量ぶんにすると
+        # ビードの下側が蓋へ 0.2mm 食い込む（2026-08-12 に 0.58mm³ 検出）。
+        with Locations(((rx0 + rx1) / 2, y_rear_outer - REAR_LID_T - _sink,
+                        _lz1 + REAR_LID_DETENT_R + CLEARANCE / 4)):
+            Cylinder(REAR_LID_DETENT_R, REAR_LID_DETENT_W, rotation=(0, 90, 0),
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
+
         # 6-0b. 電源スイッチのポケットとスロット（奥の壁）
         #
         # スイッチは基板に載らない。右アングルなので、壁の内側に掘った
@@ -640,6 +801,10 @@ def build_case(keys, half):
         with Locations((sw_x, y_rear_inner - SW_PWR_D / 2, sw_z)):
             Box(SW_PWR_W + CLEARANCE, SW_PWR_D + SW_RIB, SW_PWR_H + CLEARANCE,
                 mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 指の逃げの窪み（外面から SW_DISH_D）。**スロットより先に掘る。**
+        with Locations((sw_x, y_rear_outer - SW_DISH_D / 2, sw_z)):
+            Box(SW_DISH_W, SW_DISH_D, SW_DISH_H, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
         with Locations((sw_x, y_rear_outer, sw_z)):
             Box(SW_SLOT_W, WALL * 4, SW_SLOT_LEN,
@@ -672,9 +837,23 @@ def build_case(keys, half):
         with Locations((0, 0, 0)):
             Cylinder(NUT_THRU_D / 2, NUT_BOSS_H + FLOOR * 2, mode=Mode.SUBTRACT,
                      align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # **ポケットは底面に開いている（下から入れる）。**逃げ 0.30mm では
+        # **持ち上げるとナットが落ちる**（2026-08-12 に発見。利用者の
+        # 「固定が弱いところは無いか」から）。締めれば天井に当たるので
+        # 機能はするが、使わないときに落ちるのは製品として成立しない。
+        #
+        # → **入口だけ狭めて、押し込んだら戻らないようにする。**
+        # 深さ NUT_LIP_H の帯だけ二面幅を NUT_LIP_UNDER 狭くする。
+        # **公差に依存しない**（#11 のクーポン待ちの CLEARANCE を使わない）。
+        # 噛んでいることは test_the_tenting_nut_is_captured が形で確かめる。
+        _hex_r = NUT_AF / 2 / __import__("math").cos(radians(30))
+        with BuildSketch(Plane.XY.offset(NUT_LIP_H)):
+            RegularPolygon(_hex_r, 6)
+        extrude(amount=NUT_T - NUT_LIP_H, mode=Mode.SUBTRACT)
         with BuildSketch(Plane.XY):
-            RegularPolygon(NUT_AF / 2 / __import__("math").cos(radians(30)), 6)
-        extrude(amount=NUT_T, mode=Mode.SUBTRACT)
+            RegularPolygon(
+                (NUT_AF - NUT_LIP_UNDER) / 2 / __import__("math").cos(radians(30)), 6)
+        extrude(amount=NUT_LIP_H, mode=Mode.SUBTRACT)
 
         # 8. ゴム足の座ぐりと、チルト脚の差し込み穴（いずれも底面）
         for fx, fy in _rubber_positions(w, h_body):
@@ -688,6 +867,12 @@ def build_case(keys, half):
         for fx, fy in _foot_positions(w, h_body):
             with Locations((fx, fy, 0)):
                 Cylinder(FOOT_PEG_D / 2 + 2.0, FOOT_PEG_H + FOOT_BOSS_CAP,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 穴の奥の溝（返しが開いて噛む場所）。**穴より先に掘らない**
+        # ——順序を変えると、細い穴が太い溝を削り取る。
+        for fx, fy in _foot_positions(w, h_body):
+            with Locations((fx, fy, FOOT_PEG_H - FOOT_BARB_H)):
+                Cylinder(FOOT_GROOVE_D / 2, FOOT_BARB_H, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         for fx, fy in _foot_positions(w, h_body):
             with Locations((fx, fy, 0)):
@@ -917,6 +1102,7 @@ def build_topcase(keys, half):
     # 押し付ける設計にすると個体差でプレートが反る。薄いガスケットで詰める。
     rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
 
+
     with BuildPart() as top:
         with BuildSketch():
             RectangleRounded(w, h_body, CORNER_R)
@@ -972,6 +1158,117 @@ def build_battery_lid(half, keys):
     return lid.part, (lw, lh)
 
 
+def rear_lid_opening(half, w):
+    """奥面の電池蓋の**口**の範囲 (x0, z0, x1, z1)。
+
+    **ケース・蓋・検査がこの 1 つから取る。**別々に計算するとずれる
+    （この案件で何度も踏んだ型）。
+    """
+    bx = battery_x_center(half, w)
+    x0 = max(bx - BATT_BOX_L / 2 - REAR_LID_CLR, -(w / 2 - WALL))
+    x1 = bx + BATT_BOX_L / 2 + REAR_LID_CLR
+    bz = battery_center_z()
+    z0 = max(bz - BATT_BOX_H / 2 - REAR_LID_CLR, FLOOR)
+    z1 = bz + BATT_BOX_H / 2 + REAR_LID_CLR
+    return x0, z0, x1, z1
+
+
+def rear_lid_rebate(half, w):
+    """蓋が沈む**座ぐり**の範囲 (x0, z0, x1, z1)。ケースの外形の内側に収める。"""
+    x0, z0, x1, z1 = rear_lid_opening(half, w)
+    lim = w / 2 - CORNER_R          # 角の丸みに掛からないところまで
+    return (max(x0 - REAR_LID_REBATE, -lim), max(z0 - REAR_LID_REBATE, 0.0),
+            min(x1 + REAR_LID_REBATE, lim), z1 + REAR_LID_REBATE_TOP)
+
+
+def rear_lid_plate_z(half, w):
+    """蓋の板の z 範囲 (下端, 上端)。**留まった位置**（上へ差し込んだ後）。
+
+    **ケース（抜け止めビード）・蓋・検査がこの 1 つから取る。**
+    """
+    _ox0, oz0, _ox1, _oz1 = rear_lid_opening(half, w)
+    _rx0, _rz0, _rx1, rz1 = rear_lid_rebate(half, w)
+    z_bot = oz0 + CLEARANCE / 2                 # 庇の上端のすぐ上
+    z_top = rz1 - REAR_LID_SLIDE - CLEARANCE / 2
+    return z_bot, z_top
+
+
+def build_rear_battery_lid(half, keys):
+    """コブの奥面の電池蓋（open-gaps #35・2026-08-12）。
+
+    **ケース座標のまま作る。**以前は XY 平面で作って −90° 回して立てていたが、
+    **局所の上下・前後がケースと一致せず、同じ取り違えを 5 回繰り返した**
+    （返しを消す側／爪を立てる側／足の位置／返しの浮き／爪が口の中）。
+    **回さなければ、この種の間違いは原理的に起きない。**
+    返り値はケース座標に置いたままの立体で、組み立て側は動かさない。
+
+    方式は**上へスライドして庇の裏へ差し込む**（実機の電池蓋と同じ）:
+      下  … 板の下端を舌にし、庇（壁の内側を彫って残した外皮）の裏へ
+             **下へ 3mm** 差し込む。+y へは庇が塞ぐ。**重力が留める側**
+      上  … 座ぐりの底の**半丸ビード**を乗り越えて留まる（板が 0.4mm 反る）
+      外し方 … 上端に残る **3mm の隙間**へ爪を掛け、上へずらしてから
+             手前へ起こす。舌が庇から抜けたら外れる
+
+    **片持ちばねは不成立だった。**理由は定数の注記（腕の逃げ場が無い）。
+    """
+    from build123d import (Align, BuildPart, Locations, RectangleRounded,
+                           BuildSketch, Plane, extrude)
+
+    _positions, (w, h_plate) = plate_positions(keys)
+    h_body = plan_depth(h_plate)
+    y_out = h_body / 2 + BUMP_DEPTH          # 奥面（外）
+    y_lid_in = y_out - REAR_LID_T            # 蓋の内面（座ぐりの底）
+    y_wall_in = y_out - WALL                 # 壁の内面＝庇の裏の彫り込みの底
+    _ox0, oz0, _ox1, _oz1 = rear_lid_opening(half, w)
+    rx0, rz0, rx1, rz1 = rear_lid_rebate(half, w)
+    cx = (rx0 + rx1) / 2
+    z_bot, z_top = rear_lid_plate_z(half, w)
+    lw, lh = (rx1 - rx0) - CLEARANCE, z_top - z_bot
+    tw = lw - 4.0                            # 舌の幅（角の丸みを避ける）
+    th = REAR_LID_LIP_ENG                    # 舌が庇の裏へ入る量
+    #   留まった位置で舌の先は z_bot − 1.5。上へ 3mm ずらすと口の下端より
+    #   上になり、庇から完全に抜ける＝**外せる**。
+    #   **SLIDE > LIP_ENG でなければ外れない。**自己検査がここを見ている。
+
+    with BuildPart() as lid:
+        # 板（座ぐりに沈む）
+        with BuildSketch(Plane.XZ.offset(-y_lid_in)):
+            with Locations((cx, (z_bot + z_top) / 2)):
+                RectangleRounded(lw, lh, 1.0)
+        extrude(amount=-REAR_LID_T)      # **外へ**（Plane.XZ の法線は −Y）
+        # 舌（板の下端から下へ）。**板より内側へ一段落とす。**
+        # 庇の裏の彫り込みは y_wall_in 〜 y_out−LIP_T。座ぐりの底
+        # （y_lid_in）と同じ深さで出すと**庇に 0.4mm 食い込む**
+        # （REAR_LID_T + LIP_T が WALL と同じなので厚みが残らない）。
+        with BuildSketch(Plane.XZ.offset(-(y_wall_in + CLEARANCE / 2))):
+            with Locations((cx, z_bot - th / 2 + 0.01)):
+                RectangleRounded(tw, th + 0.02, 0.5)
+        extrude(amount=-(WALL - REAR_LID_LIP_T - CLEARANCE))
+
+    # **自己検査。**この関数は向きを何度も取り違えた（2026-08-12 に 5 回）。
+    # 「置いた結果」を関数の中で確かめる。**黙って通らせない。**
+    b = lid.part.bounding_box()
+    if b.min.Y < y_wall_in - 1e-6:
+        raise ValueError(
+            f"舌が壁の内面 {y_wall_in:.2f} より内側（{b.min.Y:.2f}）へ出ている。"
+            "**電池箱に当たる**")
+    if abs(b.max.Y - y_out) > 1e-6:
+        raise ValueError(
+            f"蓋の外面が y={b.max.Y:.2f}。奥面 {y_out:.2f} と一致しない"
+            "（押し出しの向きが逆）")
+    if abs(b.min.Z - (z_bot - th)) > 1e-6:
+        raise ValueError(
+            f"舌の先が z={b.min.Z:.2f}。庇の裏（{z_bot - th:.2f}）に届かない")
+    if b.min.Z + REAR_LID_SLIDE <= oz0:
+        raise ValueError(
+            f"上へ {REAR_LID_SLIDE}mm ずらしても舌の先が z={b.min.Z + REAR_LID_SLIDE:.2f} "
+            f"で口の下端 {oz0:.2f} より下のまま＝**外せない**")
+    if len(lid.part.solids()) != 1:
+        raise ValueError(
+            f"蓋が {len(lid.part.solids())} 個に分かれている")
+    return lid.part, (lw, lh)
+
+
 def build_tilt_foot(add_deg, h):
     """差し込み式のチルト脚。add_deg だけ後縁を持ち上げる。"""
     z = foot_height(h, add_deg)
@@ -981,6 +1278,10 @@ def build_tilt_foot(add_deg, h):
         extrude(amount=z)
         with Locations((0, 0, z)):
             Cylinder(FOOT_PEG_D / 2, FOOT_PEG_H,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 先端の返し。押し込むと穴を押し広げて通り、奥の溝で開いて戻らない。
+        with Locations((0, 0, z + FOOT_PEG_H - FOOT_BARB_H)):
+            Cylinder(FOOT_BARB_D / 2, FOOT_BARB_H,
                      align=(Align.CENTER, Align.CENTER, Align.MIN))
     return foot.part, z
 

@@ -55,6 +55,7 @@ STAB_FP = {11.938: "Stabilizer_Cherry_MX_2.00u", 19.05: "Stabilizer_Cherry_MX_3.
 # 取付穴は feec08b（上ケース方式）で廃止した。基板はプレートとスイッチで
 # 一体になり、上下ケースに挟まれる。ボスは基板の外にある。
 # 定数だけが使われないまま残っていたので消した。
+MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")  # M2 のバカ穴（#36）
 DIODE_FP = ("Diode_SMD", "D_SOD-123")     # BAT46W（ショットキー）が入る
 
 # ダイオードの置き場所（KiCad 座標・キー中心から mm）と向き。
@@ -516,12 +517,23 @@ def build(half, keys):
     _place_electronics(board, half, net)
     gnd_fanout.place(board)
 
-    # 取付穴は**もう開けない。**
+    # 取付穴（open-gaps #36・2026-08-12）。
     #
-    # 上ケース方式では、基板はプレートとスイッチで機械的に一体になり、
-    # 上下のケースに挟まれて保持される。ネジは上ケースから、基板の外側
-    # （y=±51.5、基板の縁 49.0 より外）にあるボスへ入る。
-    # 基板に穴が要らないぶん、配線の自由度も上がる。
+    # **一度は「もう開けない」としていた。**上ケース方式では基板はプレートと
+    # スイッチで一体になり、上下のケースに挟まれて保持される——という理屈
+    # だったが、**測ったら挟まれていなかった。**ネジ 3 本は y=±51.5 で
+    # 基板の縁（±48.7）より外にあり、**基板に触れてもいない。**下の支えも
+    # 無く（床まで 3.0〜14.5mm）、保持はスイッチ 54 本のピンの摩擦だけ。
+    # **スイッチを抜くとソケットのはんだに剥離力**がかかる。
+    #
+    # → **プレートの裏の柱へ、下からネジで締める。**穴の位置は
+    # interface.pcb_mount_positions が正本（プレート・組み立てと共有）。
+    from interface import pcb_mount_positions
+    for i, (mx, my) in enumerate(pcb_mount_positions(half)):
+        h = _load(KICAD_FP / f"{MOUNT_FP[0]}.pretty", MOUNT_FP[1])
+        h.SetPosition(to_kicad(mx, my))
+        h.SetReference(f"H{i}")
+        board.Add(h)
 
     # シルクの線幅を製造能力まで太らせる。
     #
@@ -565,7 +577,7 @@ def build(half, keys):
     board.Save(str(path))
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
-            (n_sw, n_stab, 0, rows, cols, len(nets)))
+            (n_sw, n_stab, len(pcb_mount_positions(half)), rows, cols, len(nets)))
 
 
 def main():
@@ -573,7 +585,7 @@ def main():
     for half, keys in (("left", keys_l), ("right", keys_r)):
         path, (w, h), (n_sw, n_stab, n_hole, rows, cols, n_net) = build(half, keys)
         print(f"{half:5s} 基板 {w:7.2f} x {h:6.2f}mm  "
-              f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}（不要）")
+              f"スイッチ {n_sw} / ダイオード {n_sw} / スタビ {n_stab} / 取付穴 {n_hole}")
         print(f"      行列 {rows} 行 × {cols} 列 / ネット {n_net} 本")
         print(f"      {path}")
     return 0

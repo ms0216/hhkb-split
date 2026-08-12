@@ -172,6 +172,23 @@ def run(half):
     if not pcbnew.ImportSpecctraSES(board, str(ses)):
         raise SystemExit(f"{half}: SES の取り込みに失敗した")
 
+    # **トラック幅を揃える。**
+    #
+    # Freerouting は同じ入力でも**たまに 0.12mm / 0.15mm の線を引く**
+    # （2026-08-12 に左で 4 本出た。前回の配線では 1 本も無かった）。
+    # 0.12mm は JLCPCB の最小 0.127mm を割るので DRC が赤になる。
+    # **配線し直すたびに当たるかどうかが変わる**ので、ここで潰す。
+    # 太くする向きなので、クリアランスは DRC で確認する。
+    from gen_pcb import TRACK_W
+    _w = pcbnew.FromMM(TRACK_W)
+    _fixed = 0
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK" and t.GetWidth() < _w:
+            t.SetWidth(_w)
+            _fixed += 1
+    if _fixed:
+        print(f"   {half}: 細いトラック {_fixed} 本を {TRACK_W}mm へ揃えた")
+
     # **自分で引いた配線を立て直す。**
     #
     # ImportSpecctraSES は既存の配線を全部作り直すので、配置段階で

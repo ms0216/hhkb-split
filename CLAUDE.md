@@ -91,8 +91,9 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 .venv/bin/pytest tools -q                      # 全検査（378 件・約 13 分）
 .venv/bin/python3 tools/gen_case.py            # ケース・上ケース・蓋・脚
 .venv/bin/python3 tools/gen_assembly.py        # 組み立て干渉（0 でなければならない）
-.venv/bin/python3 tools/export_assembly.py     # **組み立てを目で見る。**STL を部品ごとに build/assembly/ へ出し、絵も出す
-tools/blend_assembly.sh                        # 続けて叩くと、色とカメラ付きの build/assembly/{half}.blend が出る。**ダブルクリックで開くだけ**（Blender の操作は要らない）
+tools/refresh_view.sh                          # ★**CAD を変えたら必ずこれ。**STL を出し直して .blend まで作る（片側だけなら `left`）
+.venv/bin/python3 tools/export_assembly.py     # 上の前半だけ。STL を部品ごとに build/assembly/ へ出し、絵も出す
+tools/blend_assembly.sh                        # 上の後半だけ。色とカメラ付きの build/assembly/{half}.blend。**ダブルクリックで開くだけ**
 .venv/bin/python3 tools/slice_check.py         # K1 Max でスライスできるか
 .venv/bin/python3 tools/drc.py                 # 基板の DRC（記録も更新）
 .venv/bin/python3 tools/mutate.py              # 定数を壊して検査が気づくか測る（遅い）
@@ -108,6 +109,32 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 "$KPY" tools/gen_daughterboard.py
 "$KPY" tools/export_fab.py       # ガーバー・BOM・CPL（2 つの門を通る）
 ```
+
+## 検査を回す順番（**時間を無駄にしないため**）
+
+**同じ検査を二重に回さない。**`gen_assembly.py`（実形状の干渉・約 20 分）は
+`pytest tools`（約 13 分）の `test_nothing_bites_into_anything_else` と
+**同じことをしている。**両方叩くと 30 分以上を捨てる（2026-08-12 に実際にやった）。
+
+| 段 | やること | 時間 | 目的 |
+|---|---|---|---|
+| 1 | **箱モードで当たりを見る**（`build_assembly(..., real=False)` を直接叩く） | 数十秒 | 大きな取り違えをその場で潰す |
+| 2 | **`tools/refresh_view.sh`** で STL と .blend | 約 6 分 | **利用者が見られるようにする**／自分も目で見る |
+| 3 | 変更をひととおり終える | — | **1 つ直すたびに 3 を回さない。まとめる** |
+| 4 | **`pytest tools` を 1 回**（実形状の干渉を含む） | 約 13 分 | 本番の検査 |
+| 5 | コミット | — | |
+
+**基板を触ったときだけ** `gen_pcb → autoroute → drc`（約 5 分）を 4 の前に足す。
+
+⚠️ **検査の実行中にファイルを編集しない。**編集途中の状態を読んで
+偽の赤／偽の緑が出る（2026-08-12 に 2 回起きた）。
+
+**CAD（`gen_case.py` / `gen_plate.py` / `envelopes.py` / `gen_assembly.py`）を
+変えたら、`tools/refresh_view.sh` を叩くこと。**利用者は `.blend` を開いて
+設計を見る。**古い絵は嘘の検証になる。**2026-08-12 に実際に起きた: 利用者が
+開いた `left.blend` は前日 22:27 のもので、その日の変更が 1 つも入っておらず、
+右側は STL 自体が 8 時間前だった。**`blend_assembly.py` は STL が
+`tools/*.py` より古ければ止まる**が、出し直しは人が起こす。
 
 **部品を推測で書かないこと。**ブラウザが要ると思い込んで見積もりを 3 回外し、
 在庫 0 の部品を指定しかけた。`jlcpcb_lookup.py` で必ず実データを見る。

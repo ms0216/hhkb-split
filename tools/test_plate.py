@@ -36,8 +36,27 @@ def cutouts(part):
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_thickness(name):
-    part, _, _ = build_plate(HALVES[name], name)
-    assert_bbox(part, expect_z=PLATE_T, label=f"{name}: ")
+    """板そのものの厚み。**柱は含めない。**
+
+    2026-08-12 に本体基板を締める柱（プレート裏へ PLATE_TO_PCB）が生えた
+    ので、bbox の Z は 1.5 → 5.0mm になる。**見たいのは板の厚み**なので、
+    柱の生えていない高さで切って測る。
+    """
+    from build123d import Align, Box, Location
+
+    from envelopes import PLATE_TO_PCB
+
+    part, (w, h), _ = build_plate(HALVES[name], name)
+    cutter = Location((0, 0, 0)) * Box(w * 2, h * 2, PLATE_T * 4,
+                                       align=(Align.CENTER, Align.CENTER,
+                                              Align.MIN))
+    slab = part & cutter
+    assert_bbox(slab, expect_z=PLATE_T, label=f"{name}: 板の厚み ")
+    # 柱がちゃんと裏へ出ていること（この検査で一緒に見る）
+    b = part.bounding_box()
+    assert abs(b.min.Z + PLATE_TO_PCB) < 1e-6, (
+        f"{name}: 柱が裏へ {-b.min.Z:.2f}mm しか出ていない"
+        f"（PLATE_TO_PCB={PLATE_TO_PCB} のはず）")
 
 
 @pytest.mark.parametrize("name", ["left", "right"])

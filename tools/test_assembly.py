@@ -1301,3 +1301,225 @@ def test_the_socket_build_is_not_used_to_judge_the_antenna():
         "ソケットを挟んでいるのに、「この構成で #23 を測ってはいけない」が"
         "open-gaps.md に書かれていない。**測ってしまうと、その数字は"
         "出荷構成について何も語らない**")
+
+
+# --------------------------------------------------------------------------
+# テンティング用ナットの抜け止め（2026-08-12・利用者の「固定が弱いところ」から）
+# --------------------------------------------------------------------------
+def test_the_tenting_nut_is_captured():
+    """1/4-20 ナットが、押し込んだあと自重で落ちないこと。
+
+    **ポケットは底面に開いている。**逃げ 0.30mm では、キーボードを
+    持ち上げるとナットが落ちる（2026-08-12 に発見）。締めれば天井に
+    当たるので機能はするが、使わないときに落ちるのは製品にならない。
+
+    → 入口の帯だけ二面幅を狭めて噛ませた。**噛んでいることを寸法で見る**
+    （#12 の「舌と溝を試したが噛まなかった」を、当たらないことしか見ない
+    干渉検査が見逃した反省。**噛み合いは直接見る**）。
+    """
+    from gen_case import NUT_AF, NUT_LIP_H, NUT_LIP_UNDER, NUT_T
+    from envelopes import NUT_QUARTER_AF, NUT_QUARTER_T
+
+    lip = NUT_AF - NUT_LIP_UNDER
+    assert lip < NUT_QUARTER_AF, (
+        f"入口の二面幅 {lip:.2f} がナットの {NUT_QUARTER_AF} 以上。**噛まない**"
+        "（このままでは持ち上げると落ちる）")
+    bite = (NUT_QUARTER_AF - lip) / 2
+    assert bite <= 0.25, (
+        f"片側の食い込みが {bite:.2f}mm。**PLA が割れるか入らない。**"
+        "0.25mm 以下に抑えること")
+    assert NUT_AF > NUT_QUARTER_AF, (
+        f"ポケットの二面幅 {NUT_AF} がナット {NUT_QUARTER_AF} 以下。入らない")
+    # **唇を越えた先に、ナットが丸ごと収まる深さがあること。**
+    # ここが足りないと、ナットが唇に跨がったまま止まる＝押し込めない。
+    assert NUT_T >= NUT_LIP_H + NUT_QUARTER_T, (
+        f"ポケットの深さ {NUT_T} が、唇 {NUT_LIP_H} ＋ ナット厚 "
+        f"{NUT_QUARTER_T} = {NUT_LIP_H + NUT_QUARTER_T} に足りない")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_every_part_declares_how_it_is_held(half):
+    """組み立てに入っている部品が、**何で留まっているか**を宣言していること。
+
+    **干渉検査は「ぶつからないこと」しか見ない。**組んだ瞬間に成立して
+    いても、**持ち上げた・裏返した・打鍵した**ときに落ちる／浮くものは
+    別の話で、それを見る仕組みが無かった。2026-08-12 に利用者の
+    「固定が弱いところは無いか」で 2 つ出た——**電池蓋が外から開かない**
+    （#35）／**テンティング用ナットが落ちる**。
+
+    **留め方が書かれていない部品は、留まっていないのと同じ。**
+    部品を足したら `gen_assembly.HELD_BY` にも書く。
+    """
+    from gen_assembly import HELD_BY
+
+    parts, _ = build_assembly(HALVES[half], half)
+    missing = sorted(n for n in parts
+                     if n not in HELD_BY
+                     and n.rstrip("0123456789").rstrip("_") not in HELD_BY)
+    assert not missing, (
+        f"留め方が宣言されていない部品: {missing}\n"
+        "  gen_assembly.HELD_BY に「何で留まっているか」を書くこと"
+        "（弱いなら ⚠️ を付けて、open-gaps に項目を立てる）")
+
+
+def test_the_tilt_foot_is_captured():
+    """チルト脚が、差したあと自重や持ち上げで抜けないこと。
+
+    **ピンを伸ばす道は塞がっている**（真上に J_MAIN コネクタが 4.31mm まで
+    下がるため、#29 で 4.0 → 2.4mm に短縮した）。摩擦だけでは裏返すたびに
+    抜けるので、**先端の返しと穴の奥の溝**で噛ませた（2026-08-12）。
+
+    **噛み合いは直接見る。**#12 の「舌と溝を試したが噛まなかった」は、
+    当たらないことしか見ない干渉検査では見つからなかった。
+    """
+    from gen_case import (CLEARANCE, FOOT_BARB_D, FOOT_BARB_H, FOOT_GROOVE_D,
+                          FOOT_PEG_D, FOOT_PEG_H)
+
+    hole = FOOT_PEG_D + CLEARANCE
+    assert FOOT_BARB_D > hole, (
+        f"返し φ{FOOT_BARB_D} が穴 φ{hole:.2f} 以下。**噛まない**（抜ける）")
+    bite = (FOOT_BARB_D - hole) / 2
+    assert bite <= 0.25, (
+        f"片側の食い込みが {bite:.2f}mm。**押し込めないか、返しが折れる**")
+    assert FOOT_GROOVE_D > FOOT_BARB_D, (
+        f"溝 φ{FOOT_GROOVE_D} が返し φ{FOOT_BARB_D} 以下。返しが開けない")
+    assert FOOT_BARB_H < FOOT_PEG_H, (
+        f"返しの高さ {FOOT_BARB_H} がピン全長 {FOOT_PEG_H} 以上")
+    # 返しを飲み込んでも、案内として効く胴の長さが残っていること
+    assert FOOT_PEG_H - FOOT_BARB_H >= 1.5, (
+        f"返しを除いた胴が {FOOT_PEG_H - FOOT_BARB_H:.1f}mm しかない。"
+        "差すときに傾いて入る")
+
+
+# --------------------------------------------------------------------------
+# 本体基板をプレートへ締める柱（open-gaps #36・2026-08-12）
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_pcb_is_actually_fastened_to_the_plate(half):
+    """本体基板が、プレートの柱で締められていること。
+
+    **それまで本体基板には固定具が 1 つも無かった。**上ケースのネジ 3 本は
+    y=−51.5 で基板の縁（−48.7）より外にあり、**基板に触れてもいない。**
+    保持はスイッチ 54 本のピンの摩擦だけで、**スイッチを抜くとソケットの
+    はんだに剥離力**がかかる（ホットスワップ基板でいちばん多い壊れ方）。
+
+    ここが見ているのは 3 つ:
+      1. 柱が**基板の内側**にあること（縁から出ていたら締まらない）
+      2. 柱が**キーやスタビと当たらない**こと
+      3. 柱が**実装部品と当たらない**こと（記録から）
+    """
+    import math
+
+    import pcb_parts
+    from find_mounts import keepout_boxes, _clear_of
+    from interface import PCB_POST_D, pcb_mount_positions, plate_positions
+
+    pts = pcb_mount_positions(half)
+    assert pts, f"{half} の柱が 0 本。基板が固定されない"
+
+    rec = pcb_parts.load()[half]
+    bb = rec["board_bbox"]
+    r = PCB_POST_D / 2
+    for px, py in pts:
+        assert abs(px) + r <= bb[3] - 1.0 and abs(py) + r <= bb[4] - 1.0, (
+            f"柱 ({px}, {py}) が基板の縁からはみ出す"
+            f"（基板 ±{bb[3]:.1f} × ±{bb[4]:.1f}）")
+
+    boxes = list(keepout_boxes(HALVES[half]))          # スイッチ＋スタビ
+    for c in rec["components"]:
+        x0, y0, _z0, x1, y1, _z1 = c["bbox"]
+        boxes.append((x0, y0, x1, y1))
+    # **1 本目で止めない。**assert をループの中に置くと最初の 1 本しか
+    # 出ず、直すたびに次が出てくる（2026-08-12 に 3 往復した）。
+    biting = [p for p in pts if not _clear_of(p[0], p[1], boxes, r)]
+    assert not biting, (
+        f"キーか実装部品に当たる柱が {len(biting)}/{len(pts)} 本: {biting}")
+
+    # **どのキーからも遠すぎないこと。**遠いほど、そのキーを抜くときに
+    # 基板が撓んでソケットに力がかかる。
+    kpos, _ = plate_positions(HALVES[half])
+    worst = max(min(math.dist(k, q) for q in pts) for k in kpos)
+    assert worst <= 40.0, (
+        f"最寄りの柱まで {worst:.1f}mm のキーがある。40mm 以下に収めること")
+
+
+# --------------------------------------------------------------------------
+# 電池蓋（コブの奥面）の着脱（open-gaps #35・2026-08-12）
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_rear_battery_lid_can_be_taken_off(half):
+    """奥面の電池蓋が、**外から着脱でき、かつ勝手に外れない**こと。
+
+    **底面の蓋は外から開かなかった**（座ぐりが床の内側にあり、蓋は貫通穴より
+    3.8mm 大きい。#35）。**同じ失敗を繰り返さないために、最初から入れる。**
+
+    方式は**下へスライドして庇の裏へ差し込む**。動作を 4 つとも見る:
+
+      1. 据わった位置で**干渉が無い**（嵌まる）
+      2. そのまま手前へ引くと**引っ掛かる**（勝手に外れない）
+      3. **上へ SLIDE ずらすと**、引っ掛かりが消える（外せる）
+      4. 上へずらす途中で**ビードに当たる**（勝手に上がらない）
+
+    ⚠️ **片持ちばね案は 2 と 3 を同時に満たせず不成立だった。**腕が壁の裏に
+    立っていて、どう撓ませても抜けない。**「留まる」だけを見る検査では
+    通ってしまった**ので、3 を必ず一緒に見る。
+    """
+    from build123d import Location
+    from gen_case import REAR_LID_SLIDE
+
+    parts, _ = build_assembly(HALVES[half], half)
+    lid, case = parts["rear_lid"], parts["case"]
+
+    def hit(dy, dz):
+        v = 0.0
+        for a in (Location((0, dy, dz)) * lid).solids():
+            for b in case.solids():
+                s = a & b
+                if s is not None and s.volume > 1e-6:
+                    v += s.volume
+        return v
+
+    assert hit(0.0, 0.0) < 1e-6, f"据わった位置で {hit(0.0, 0.0):.2f}mm³ 当たる"
+    assert hit(2.0, 0.0) > 1.0, (
+        "手前へ 2mm 引いても何も引っ掛からない。**抜け止めが効いていない**"
+        "（蓋が自重で落ちる）")
+    assert hit(2.0, REAR_LID_SLIDE) < 1e-6, (
+        f"上へ {REAR_LID_SLIDE}mm ずらしてから手前へ引くと "
+        f"{hit(2.0, REAR_LID_SLIDE):.2f}mm³ 当たる。**外せない蓋**")
+    assert hit(0.0, REAR_LID_SLIDE) > 1.0, (
+        "上へずらす途中で何にも当たらない。**抜け止めのビードが効いていない**"
+        "（振動で勝手に上がって外れる）")
+
+
+def test_the_rear_lid_slide_survives_pla():
+    """電池蓋を外すときの**板の反り**が、PLA で割れない量であること。
+
+    片持ち爪をやめたので撓むのは**板そのもの**。上端をビード（0.4mm）へ
+    乗り上げさせるとき、板は下端を支点に反る。
+
+        ε = 1.5 · t · y / L²        …… PLA は繰り返し使用なら ε ≤ 1.0%
+
+    **爪案は ε = 0.94% で綱渡りだった**（L=9・t=1.0・y=0.6）。板で受けると
+    L が桁で大きくなるので、同じ掛かり量でもひずみが桁で小さい。
+    """
+    from gen_case import (REAR_LID_DETENT, REAR_LID_LIP_ENG, REAR_LID_SLIDE,
+                          REAR_LID_T, rear_lid_plate_z, rear_lid_rebate)
+    from gen_plate import halves, plate_positions
+
+    _pos, (w, _h) = plate_positions(halves()["left"])
+    z_bot, z_top = rear_lid_plate_z("left", w)
+    L = z_top - z_bot                            # 反る長さ＝板の高さ
+    eps = 1.5 * REAR_LID_T * (REAR_LID_DETENT + 0.1) / L ** 2
+    assert eps <= 0.010, (
+        f"板の反りのひずみが {eps*100:.2f}%。**PLA は 1.0% まで。**"
+        f"L={L:.1f} t={REAR_LID_T} 反り={REAR_LID_DETENT + 0.1:.1f}mm。"
+        "ビードを浅くするか、板を薄くすること")
+
+    # 差し込みしろは掛かり代より大きくなければ、ずらしても抜けない。
+    assert REAR_LID_SLIDE > REAR_LID_LIP_ENG, (
+        f"差し込みしろ {REAR_LID_SLIDE} が掛かり代 {REAR_LID_LIP_ENG} 以下。"
+        "**ずらしきっても舌が庇から抜けない＝外せない**")
+    # 指を掛ける隙間。爪が入る幅が要る。
+    _rx0, _rz0, _rx1, rz1 = rear_lid_rebate("left", w)
+    assert rz1 - z_top >= 2.5, (
+        f"上に残る隙間が {rz1 - z_top:.1f}mm。爪が掛からない")

@@ -281,7 +281,7 @@ def board_refs(ref, kind, pins):
 
 
 def mechanical_refs(half):
-    """基板に載るが**回路には入らない**部品の参照名。いまはスタビライザだけ。
+    """基板に載るが**回路には入らない**部品の参照名。スタビと取付穴。
 
     以前は検査側が `startswith(("H", "ST"))` で除外していた。CLAUDE.md が
     禁じている接頭辞での走査で、**`HACK_ROGUE` のような名前が素通りした**
@@ -301,8 +301,15 @@ def mechanical_refs(half):
     path = Path(__file__).resolve().parent.parent / "layout/hhkb_split.json"
     left, right = split_halves(load_layout(str(path)))
     keys = keymap_order(left if half == "left" else right)
-    return {f"ST{i}" for i, k in enumerate(keys, start=1)
-            if stab_offset_for(k.w_u) is not None}
+    # 取付穴（H0..）。**2026-08-12 に足した**（open-gaps #36。基板を
+    # プレート裏の柱へ下から締める）。宣言しないと
+    # test_nothing_on_the_board_is_undeclared が落ちる——**それでいい。**
+    # 基板に物を足したら、ここにも書く。
+    from interface import pcb_mount_positions
+
+    return ({f"ST{i}" for i, k in enumerate(keys, start=1)
+             if stab_offset_for(k.w_u) is not None}
+            | {f"H{i}" for i in range(len(pcb_mount_positions(half)))})
 
 
 def netlist(half):

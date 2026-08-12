@@ -59,6 +59,48 @@ RESERVATION_CONTAINS = {("sockets", "pcb_real"), ("stabs", "pcb_real"),
                         ("sockets", "switches_real")}
 
 
+# **部品ごとに「何で留まっているか」**（2026-08-12・利用者の
+# 「固定が弱いところは無いか」から）。
+#
+# **干渉検査は「ぶつからないこと」しか見ない。**組み上げた瞬間に成立して
+# いても、**持ち上げた・裏返した・打鍵した**ときに落ちる／浮くものは
+# 別の話で、そこを見る仕組みが無かった。実際に 2 つ見つかった:
+#   - 電池蓋が外から開かない（#35）
+#   - テンティング用ナットが落ちる（逃げ 0.30mm・ポケットは底面に開放）
+#
+# ここに書いていない部品を組み立てに足すと `test_every_part_declares_how_it_is_held`
+# が落ちる。**「留め方が書かれていない部品は、留まっていないのと同じ。」**
+# ⚠️ は「まだ弱い／未解決」。潰したら本文ごと直す。
+HELD_BY = {
+    "case":       "外殻そのもの（基準）",
+    "topcase":    "手前 M2×3（熱圧入インサート）。⚠️ 奥は未解決（#12）",
+    "plate":      "上ケースとリムで挟む＋手前 M2×3。⚠️ 奥は未解決（#12）",
+    "pcb":        "⚠️ 固定具なし。スイッチのピン 54 本の摩擦のみ（#36 で対応中）",
+    "pcb_real":   "同上",
+    "pcb_parts":  "基板に半田付け",
+    "sockets":    "基板に半田付け",
+    "stabs":      "プレートとスタビの爪",
+    "switches":   "プレートの爪（スナップフィット）",
+    "switches_real": "プレートの爪（スナップフィット）",
+    "keycaps":    "スイッチのステムへの圧入",
+    "db":         "M2×2（手前）＋奥の壁のポケットが上・後・左右を押さえる",
+    "db_real":    "同上",
+    "db_parts":   "子基板に半田付け",
+    "xiao":       "ソケットへの挿入＋壁のポケット（プロトタイプ期。#27）",
+    "batt":       "⚠️ 仕切り壁・側壁・蓋・基板で囲うだけ。#35 と一緒に決める",
+    "lid":        "⚠️ レール＋手前ストッパー。**外から開かない**（#35）",
+    "ffc":        "コネクタのラッチ＋たるみ 25mm",
+    "sw_pwr":     "⚠️ 壁のポケットへ落とし込むだけ（耳の無い部品）。内側が開いている",
+    "screws":     "ねじ込み",
+    "inserts":    "熱圧入",
+    "nut":        "ポケットの入口の唇で噛む（2026-08-12 に追加）",
+    "rubber":     "座ぐり＋粘着",
+    "foot":       "φ4×2.4mm のピン圧入 ＋ 先端の返しφ4.4／穴の奥の溝φ4.7（2026-08-12）",
+    "usb_plug":   "利用者が挿すケーブル（留めるものではない）",
+    "rear_lid":   "座ぐりに沈み、下は床の溝・上は壁の内面に爪が掛かる（#35・2026-08-12）",
+}
+
+
 def plate_placement(w, h):
     """プレートをリム面に載せる位置。
 
@@ -100,6 +142,15 @@ def build_assembly(keys, half, real=False):
     # 蓋の手前端はストッパーの奥に来る
     y_lid = oy - oh / 2 + LID_STOP + CLEARANCE + lh / 2
     parts["lid"] = Location((ox, y_lid, FLOOR - RAIL_H)) * lid
+
+    # コブの奥面の電池蓋（open-gaps #35）。**座ぐりに沈めて面一に置く。**
+    # 蓋は XY 平面で作ってあるので、奥面（XZ 平面）へ立てる。
+    from gen_case import (BUMP_DEPTH as _BD, REAR_LID_T, battery_center_z,
+                          build_rear_battery_lid)
+    from gen_case import rear_lid_rebate
+    # **ケース座標で作ってあるので動かさない**（回すと上下が入れ替わり、
+    # 同じ取り違えを 5 回繰り返した。2026-08-12）。
+    parts["rear_lid"] = build_rear_battery_lid(half, keys)[0]
 
     # チルト脚は底面のピン穴に差す（ピンが上、脚が下）。
     for i, (fx, fy) in enumerate(_foot_positions(w, h_case)):
@@ -318,11 +369,41 @@ def build_assembly(keys, half, real=False):
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
                 Cylinder(SCREW_SHAFT_D / 2, SCREW_L_DB,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
+        # 本体基板をプレートの柱へ締める M2（open-gaps #36・2026-08-12）。
+        # **下から入れる。**頭は基板の裏、軸は板を貫いて柱へ入る。
+        # **穴と柱だけ作ってネジを置かないと、検査対象に入らない**
+        # （#29 の原則。利用者の指摘で気づいた）。
+        from envelopes import SCREW_L_PCB
+        from interface import pcb_mount_positions
+        # **プレートと同じ姿勢**（傾いた板に垂直）で置く。pl は上で作った
+        # プレートの置き方そのもの。座標を別に計算しない。
+        # **柱の中の軸は下穴の径で描く。**タッピングねじは、ねじ山の谷に
+        # 樹脂が入り込んで噛む。φ2.0 の丸棒として描くと下穴 φ1.6 と必ず
+        # 重なり、**干渉検査から除外する羽目になる**（除外した瞬間、ネジは
+        # 検査されない部品に戻る。ナットで学んだ）。**噛み方を描く。**
+        from interface import PCB_POST_PILOT_D
+        for mx, my in pcb_mount_positions(half):
+            with Locations(pl * Location((mx, my, -PLATE_TO_PCB - PCB_T))):
+                Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H,
+                         align=(Align.CENTER, Align.CENTER, Align.MAX))
+                Cylinder(SCREW_SHAFT_D / 2, PCB_T,      # 基板のバカ穴の中
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations(pl * Location((mx, my, -PLATE_TO_PCB))):
+                Cylinder(PCB_POST_PILOT_D / 2, SCREW_L_PCB - PCB_T,  # 柱の中
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
     parts["screws"] = _scr.part
 
-    # テンティング用 1/4-20 六角ナット（底面のポケットに埋め込む）
+    # テンティング用 1/4-20 六角ナット（底面のポケットに埋め込む）。
+    #
+    # **唇の上に座る**（2026-08-12）。入口の帯 NUT_LIP_H だけ二面幅を
+    # 狭めてあり、**押し込んだナットはそこを越えて上に収まる。**
+    # だから最終位置は z = NUT_LIP_H から。**押し込む途中の食い込みを
+    # 定位置として描かない**——描くと干渉検査から外す羽目になり、
+    # 外した瞬間にナットは「検査されていない部品」に戻る
+    # （実際に test_each_added_part_is_actually_checked[nut] が落ちて分かった）。
+    from gen_case import NUT_LIP_H
     with BuildPart() as _nut:
-        with BuildSketch(Plane.XY):
+        with BuildSketch(Plane.XY.offset(NUT_LIP_H)):
             RegularPolygon(NUT_QUARTER_AF / 2 / cos(radians(30)), 6)
         extrude(amount=NUT_QUARTER_T)
     parts["nut"] = _nut.part
@@ -613,6 +694,7 @@ def check(keys, half, label="", focus=None, real=False):
     #
     # 代わりの検査は test_the_switch_boxes_match_the_real_switch
     #（胴 ⊆ 開口 / ピン ⊆ 穴 / ステム ⊆ キャップの空洞）。
+    #
     MATING = {("plate", "switches_real"), ("pcb_real", "switches_real")}
 
     boards = set()
