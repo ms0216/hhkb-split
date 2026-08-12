@@ -478,24 +478,35 @@ def test_the_board_says_which_half_it_is(half):
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_main_board_is_four_layers_with_a_ground_plane(half):
-    """本体基板が 4 層で、内層 1 に GND のベタがあること。
+def test_the_main_board_is_two_layers_with_ground_poured_on_both(half):
+    """本体基板が 2 層で、**両面とも** GND のベタが塗られていること。
 
-    2 層では行の引き回しが通らない（通路が 1.65mm しかない）。
-    連続した GND 面は、分割の左右で 2.4GHz を至近距離で動かすこの設計では
-    配線の都合以上に効く。
+    2026-08-12 に 4 層から 2 層へ落とした（指摘 2）。4 層にした当時の
+    根拠「行の引き回しが 2 層では通らない」は、その後 Freerouting に
+    切り替えて配線をやり直したときに崩れていた——**信号は実際には
+    In2.Cu と B.Cu の 2 層に収まり、F.Cu は配線 0 本で空いていた**（実測）。
 
-    **「層を 4 に設定した」だけでは足りない。**ベタが実際に塗られている
-    （filled_polygon がある）ことまで見る。
+    2 層になると GND 専用層が無くなるので、**両面に敷く**（指摘 3）。
+
+    **「層を 2 に設定した」「ゾーンを足した」だけでは足りない。**
+    それぞれの面でベタが実際に塗られている（filled_polygon を持つ）
+    ことまで見る。この案件では「足した」と「塗られた」を 2 回取り違えている。
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
     m = re.search(r"\(layers\s*\n(.*?)\n\t\)", txt, re.S)
     assert m, f"{half}: 層の定義が読めない"
     cu = re.findall(r'"(\w+\.Cu)"', m.group(1))
-    assert cu == ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"], f"{half}: 層構成が {cu}"
-    zone = re.search(r"\(zone\b[\s\S]{0,400}?\(layer \"In1\.Cu\"", txt)
-    assert zone, f"{half}: 内層 1 に GND のベタが無い"
-    assert "filled_polygon" in txt, f"{half}: ベタが塗られていない"
+    assert cu == ["F.Cu", "B.Cu"], f"{half}: 層構成が {cu}（2 層のはず）"
+
+    poured = set()
+    for blk in _zone_blocks(txt):
+        lay = re.search(r'\(layers? "([^"]+)"', blk)
+        net = re.search(r'\(net_name "([^"]*)"', blk)
+        if lay and net and net.group(1) == "GND" and "filled_polygon" in blk:
+            poured.add(lay.group(1))
+    assert poured == {"F.Cu", "B.Cu"}, (
+        f"{half}: GND ベタが塗られている面が {sorted(poured)}。"
+        "両面（F.Cu と B.Cu）に要る")
 
 
 # --------------------------------------------------------------------------
@@ -505,6 +516,31 @@ def test_the_main_board_is_four_layers_with_a_ground_plane(half):
 # SOIC-16 はコートヤード 10.49mm で、帯 9.25mm にそもそも入らない。
 # 位置を微調整しても 0 にはならない。算数で入らないものを、機械が言う。
 # --------------------------------------------------------------------------
+
+def _sexpr_blocks(txt, head):
+    """トップレベルの `(head ...)` を括弧の対応で切り出して順に返す。
+
+    **正規表現で切らない。**非貪欲でも次の塊まで食ってしまい、
+    誤検出したことがある（GND 基準面の検査で実際に起きた）。
+    """
+    for m in re.finditer(r"\n\t\(" + head + r"\b", txt):
+        i = m.start() + 1
+        depth, j = 0, i
+        while True:
+            if txt[j] == "(":
+                depth += 1
+            elif txt[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        yield txt[i:j + 1]
+
+
+def _zone_blocks(txt):
+    """ゾーン（ベタ・禁止域）の S 式を順に返す。"""
+    return _sexpr_blocks(txt, "zone")
+
 
 def _footprint_blocks(txt):
     """(参照名, フットプリントの S 式) を順に返す。括弧の対応で切り出す。"""
@@ -608,27 +644,40 @@ def test_the_electronics_fit_inside_their_band(half):
 
 
 @pytest.mark.parametrize("half", NAMES)
-def test_the_ground_plane_is_not_cut_by_routing(half):
-    """In1.Cu に配線が 1 本も無いこと。
+def test_the_ground_stays_one_island_after_routing(half):
+    """**配線したあとも、GND が 1 つの島に繋がっていること。**
 
-    **In1.Cu は GND のベタ専用。**ここに信号を通すと基準面が切れる。
-    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
-    連続していることの価値が大きい（4 層にしたのはそのため）。
+    4 層のときは GND 専用層（In1.Cu）を自動配線器から全面予約でき、
+    「その層に配線が 0 本か」を数えれば面の連続を保証できた。
+    **2 層ではそれができない**——信号層と GND 層が同じ 2 枚を兼ねるので、
+    両方を予約したら配線する場所が無くなる。
 
-    KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
-    そのまま渡すと自動配線器がここを使う。autoroute.py の
-    _protect_the_ground_plane が (type power) に直している。
-    **その細工が効いているかを、ここで確かめる。**DRC は面が切れていても
-    何も言わない。
+    だから 2 層では、面が切れないようにするのではなく、
+    **切れた面をビアで縫い直したかを見る**（指摘 4・5）。
+    表と裏のベタは、スティッチングビアを通れば行き来できる。
+
+    KiCad はゾーンを塗るとき、繋がっていない切れ端を「島」として
+    数える。**島が複数あるということは、そこの GND が電気的に
+    浮いているということ。**DRC はこれを何も言わない。
     """
+    from collections import defaultdict
     txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
-    # **セグメントの塊ごとに見る。**非貪欲でも `(segment ...` から
-    # 次のゾーンの `(layer "In1.Cu")` まで食ってしまい、誤検出した。
-    on_in1 = [b for b in re.findall(r"\(segment\n(?:\t\t\([^\n]*\)\n)+\t\)", txt)
-              if '(layer "In1.Cu")' in b]
-    assert not on_in1, (
-        f"{half}: GND 基準面（In1.Cu）に配線が {len(on_in1)} 本ある。"
-        "autoroute.py の _protect_the_ground_plane を確かめること")
+
+    islands = defaultdict(int)
+    for blk in _zone_blocks(txt):
+        net = re.search(r'\(net_name "([^"]*)"', blk)
+        lay = re.search(r'\(layers? "([^"]+)"', blk)
+        if not net or net.group(1) != "GND" or not lay:
+            continue
+        islands[lay.group(1)] += len(re.findall(r"\(filled_polygon", blk))
+
+    assert islands, f"{half}: GND のベタが 1 つも塗られていない"
+    # **表と裏はビアで繋がるので、面ごとに 1 つずつあれば足りる。**
+    # ここで数えているのは「その面の中で切れ端になっていないか」。
+    bad = {k: v for k, v in islands.items() if v != 1}
+    assert not bad, (
+        f"{half}: GND ベタが分断されている（面: 島の数）= {dict(islands)}。"
+        "gnd_fanout.stitch のスティッチングビアが足りていない")
 
 
 @pytest.mark.parametrize("half", NAMES)
@@ -1011,3 +1060,241 @@ def test_the_hotswap_footprint_matches_the_kailh_datasheet():
     for w, h in solder:
         assert {round(w, 2), round(h, 2)} == {2.55, 2.5}, (
             f"パッド {w}x{h}mm。データシートは 2.5 x 2.55mm")
+
+
+# ======================================================================
+# 2026-08-12 の回路レビュー（熟練エンジニアの指摘 4・6・7・8）
+#
+# **どれも「配置」ではなく「出来上がった銅」を測る。**
+# 設定しただけ・置いただけでは効いていない、というのがこの案件で
+# 何度も踏んだ型なので、判定は配線後の実物に対して行う。
+# ======================================================================
+
+def _tracks(txt):
+    """(層, ネット, 幅, x1, y1, x2, y2) の一覧。単位は mm。"""
+    out = []
+    for blk in _sexpr_blocks(txt, "segment"):
+        s = re.search(r"\(start ([-\d.]+) ([-\d.]+)\)", blk)
+        e = re.search(r"\(end ([-\d.]+) ([-\d.]+)\)", blk)
+        w = re.search(r"\(width ([-\d.]+)\)", blk)
+        lay = re.search(r'\(layer "([^"]+)"', blk)
+        net = re.search(r'\(net (\d+)\)', blk)
+        if s and e and w and lay and net:
+            out.append((lay.group(1), int(net.group(1)), float(w.group(1)),
+                        float(s.group(1)), float(s.group(2)),
+                        float(e.group(1)), float(e.group(2))))
+    return out
+
+
+def _net_names(txt):
+    """ネット番号 → 名前。"""
+    return {int(n): name
+            for n, name in re.findall(r'\n\t\(net (\d+) "([^"]*)"\)', txt)}
+
+
+def _vias(txt):
+    """(x, y, ネット番号) の一覧。"""
+    out = []
+    for blk in _sexpr_blocks(txt, "via"):
+        a = re.search(r"\(at ([-\d.]+) ([-\d.]+)\)", blk)
+        n = re.search(r"\(net (\d+)\)", blk)
+        if a and n:
+            out.append((float(a.group(1)), float(a.group(2)), int(n.group(1))))
+    return out
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_power_nets_are_routed_with_the_wider_track(half):
+    """**電源のネットが、実際に太い線で引かれていること**（指摘 8）。
+
+    経験則で 1A あたり 1mm。この設計が流すのは数十 mA なので 0.2mm でも
+    桁で足りるが、**基板を評価していて挙動がおかしいときに「電源が細い
+    せいでは」という初歩的な疑いに時間を使いたくない**ので太くする。
+
+    **ネットクラスを定義しただけでは効かない。**割り当てて、
+    RecomputeEffectiveNetclasses まで呼んで、はじめて自動配線器に届く。
+    だから設定ではなく**引かれた線の幅**を見る。
+    """
+    from gen_pcb import POWER_NETS, POWER_TRACK_W, TRACK_W
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    names = _net_names(txt)
+
+    thin = []
+    for lay, net, w, *_ in _tracks(txt):
+        name = names.get(net, "")
+        if name in POWER_NETS and w < POWER_TRACK_W - 1e-6:
+            thin.append(f"{name} {w}mm ({lay})")
+    assert not thin, (
+        f"{half}: 電源のネットに {POWER_TRACK_W}mm 未満の線が "
+        f"{len(thin)} 本ある（信号は {TRACK_W}mm でよい）\n  "
+        + "\n  ".join(sorted(set(thin))[:20]))
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_there_are_enough_ground_vias_to_tie_the_two_planes(half):
+    """**GND のビアが十分な数あること**（指摘 4）。
+
+    理屈の上ではビアが 1 個でも表と裏の GND は繋がる。しかし電流が流れると
+    その 1 個に全部が集中し、ビアの抵抗とインダクタンスが電位差として現れる。
+    **多いほど電位が揃う。**
+
+    数え方: 基板の面積を、狙った格子間隔（STITCH_PITCH_MM）の升目で割った
+    数に対して、**実際に打てた割合**を見る。部品と配線で埋まっている升目
+    には打てないので 100% にはならない。**半分は打てていること**を求める。
+
+    この下限は「これだけあれば良い」という物理的な根拠ではなく、
+    **スティッチングが動かなくなったこと（0 個や数個になったこと）を
+    検出するための番人**。故意に stitch を呼ばないようにして落ちることを
+    確かめてある。
+    """
+    from gnd_fanout import STITCH_PITCH_MM
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    names = _net_names(txt)
+    gnd_vias = [v for v in _vias(txt) if names.get(v[2]) == "GND"]
+
+    xs = [x for x, _y, _n in gnd_vias] or [0]
+    ys = [y for _x, y, _n in gnd_vias] or [0]
+    area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+    cells = max(1, int(area / (STITCH_PITCH_MM ** 2)))
+    ratio = len(gnd_vias) / cells
+
+    assert ratio >= 0.5, (
+        f"{half}: GND のビアが {len(gnd_vias)} 個しかない"
+        f"（{STITCH_PITCH_MM}mm 格子で {cells} 升に対して {ratio:.0%}）。"
+        "gnd_fanout.stitch が効いていない可能性がある")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_decoupling_caps_are_close_to_their_ic_in_copper(half):
+    """**パスコンと IC が、銅の上で近いこと**（指摘 6）。
+
+    利用者の指摘のとおり、効くのは配置上の直線距離ではなく
+    **IC の電源ピン → パスコン → GND → 地板 → IC の GND ピン**と一周する
+    経路の配線長（ループのインダクタンス）。だから配置座標ではなく
+    **実際に引かれた銅の経路長**を測る。
+
+    ここで測るのは V3V3 側の往路（IC の VCC パッド → パスコンの V3V3 パッド）。
+    GND 側の復路は両面のベタが受け持ち、各 GND パッドの脇には
+    gnd_fanout がビアを立てている（別の検査が見ている）。
+
+    2026-08-12 の実測では **C_U1 の V3V3 パッドが U1 の VCC ピンから
+    17.0mm** あった。パスコンとして働かない距離で、しかも
+    C_RAIL のほうが U1 に近いという逆転した並びだった。
+    """
+    import math
+    from collections import defaultdict
+    from gen_pcb import DECOUPLE_BESIDE
+
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    names = _net_names(txt)
+
+    # V3V3 のネット上にある配線とビアで、点どうしを繋ぐグラフを作る
+    v3 = [n for n, name in names.items() if name == "V3V3"]
+    if not v3:
+        pytest.skip(f"{half}: V3V3 のネットが無い")
+    v3 = set(v3)
+
+    g = defaultdict(list)
+
+    def node(x, y):
+        return (round(x, 3), round(y, 3))
+
+    for lay, net, _w, x1, y1, x2, y2 in _tracks(txt):
+        if net not in v3:
+            continue
+        a, b = node(x1, y1), node(x2, y2)
+        d = math.dist(a, b)
+        g[a].append((b, d))
+        g[b].append((a, d))
+    # ビアは表裏を 0 の長さで繋ぐ（同じ座標なので、そのまま同一点になる）
+
+    def shortest(src, dst):
+        """src から dst までの銅の経路長。届かなければ None。"""
+        import heapq
+        if src not in g or dst not in g:
+            return None
+        seen, q = {}, [(0.0, src)]
+        while q:
+            d, u = heapq.heappop(q)
+            if u in seen:
+                continue
+            seen[u] = d
+            if u == dst:
+                return d
+            for v, w in g[u]:
+                if v not in seen:
+                    heapq.heappush(q, (d + w, v))
+        return None
+
+    pads = {}
+    for ref, blk in _footprint_blocks(txt):
+        fx, fy, ang = _fp_at(blk)
+        for pad in re.finditer(
+                r'\(pad "([^"]+)"[^\n]*\n\s*\(at ([-\d.]+) ([-\d.]+)', blk):
+            px, py = float(pad.group(2)), float(pad.group(3))
+            c, s = math.cos(math.radians(-ang)), math.sin(math.radians(-ang))
+            pads[(ref, pad.group(1))] = (fx + px * c - py * s,
+                                         fy + px * s + py * c)
+
+    import pinmap
+    far = []
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        ic_pad = pads.get((ic_ref, pinmap.resolve("74LVC595", "VCC")))
+        cap_pad = pads.get((cap_ref, pinmap.resolve("cap_100n", "1")))
+        if ic_pad is None or cap_pad is None:
+            continue
+        direct = math.dist(ic_pad, cap_pad)
+        cu = shortest(node(*ic_pad), node(*cap_pad))
+        length = cu if cu is not None else direct
+        if length > MAX_DECOUPLE_MM:
+            far.append(f"{cap_ref}→{ic_ref}: 銅の経路 {length:.2f}mm "
+                       f"（直線 {direct:.2f}mm）")
+    assert not far, (
+        f"{half}: パスコンが IC から遠い（上限 {MAX_DECOUPLE_MM}mm）\n  "
+        + "\n  ".join(far))
+
+
+# パスコンと IC の間に許す銅の経路長（mm）。
+#
+# **物理から一意に決まる値ではない。**0805 のパッドと TSSOP-16 の
+# ピッチから、隣に置いたときに構造的に決まるのが 2.64mm なので、
+# 配線の遠回りぶんを見て 6mm を上限に置く。
+# **17mm だった状態を二度と作らないための番人**であって、
+# 「6mm なら十分」という主張ではない。
+MAX_DECOUPLE_MM = 6.0
+
+
+def _fp_at(blk):
+    """フットプリントの (x, y, 角度)。"""
+    m = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+    if not m:
+        return 0.0, 0.0, 0.0
+    return (float(m.group(1)), float(m.group(2)),
+            float(m.group(3) or 0.0))
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_there_is_exactly_one_bulk_capacitor_shared_by_the_board(half):
+    """**バルクコンデンサは 1 個で、その基板の IC 全部で共用していること**
+    （指摘 7）。
+
+    指摘は「可能な範囲で数を減らし、複数の IC で共用できるように」。
+    調べた結果、**すでに 1 枚あたり 1 個で、これ以上減らせない**。
+    レール（V3V3）に付いているので、その基板の IC は全部これを共用している。
+
+    バルクは「電池の内部抵抗が上がったときに BLE 送信のパルスを支える」
+    ためのもの。パスコン（0.1µF）とは役割が違うので**統合できない**——
+    パスコンは IC ごとに直近へ置くことに意味がある。
+
+    **この検査は「減らせ」ではなく「増えたら気づく」ために置く。**
+    後から不用意にバルクが増えたら落ちる。
+    """
+    from circuit import netlist
+    parts = netlist(half)
+    bulk = [p for p in parts if p[1] == "cap_100u"]
+    assert len(bulk) == 1, (
+        f"{half}: バルクコンデンサが {len(bulk)} 個ある: "
+        f"{[p[0] for p in bulk]}。1 個で足りるはず"
+        "（レールに付いていて全 IC が共用する）")
+    assert set(bulk[0][2].values()) == {"V3V3", "GND"}, (
+        f"{half}: バルクがレール（V3V3-GND）に付いていない: {bulk[0][2]}")

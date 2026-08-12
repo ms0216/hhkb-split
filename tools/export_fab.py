@@ -40,8 +40,10 @@ BOARDS = {
 }
 
 LAYERS = [
-    (pcbnew.F_Cu, "F_Cu"), (pcbnew.In1_Cu, "In1_Cu"),
-    (pcbnew.In2_Cu, "In2_Cu"), (pcbnew.B_Cu, "B_Cu"),
+    # **銅は 2 層**（2026-08-12・指摘 2）。内層は無い。
+    # ここに In1/In2 を残すと、中身の無いガーバーを 2 枚 JLCPCB へ送ることに
+    # なり、4 層として作られて費用が上がる。
+    (pcbnew.F_Cu, "F_Cu"), (pcbnew.B_Cu, "B_Cu"),
     (pcbnew.F_Paste, "F_Paste"), (pcbnew.B_Paste, "B_Paste"),
     (pcbnew.F_SilkS, "F_Silkscreen"), (pcbnew.B_SilkS, "B_Silkscreen"),
     (pcbnew.F_Mask, "F_Mask"), (pcbnew.B_Mask, "B_Mask"),

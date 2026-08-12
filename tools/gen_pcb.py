@@ -36,6 +36,28 @@ from circuit import WIRE_PAD_KINDS                                 # noqa: E402
 import gnd_fanout                                                   # noqa: E402
 import pinmap                                                       # noqa: E402
 
+# **銅の層。ここが唯一の出どころ。**層数を変えるときはここだけ直す。
+# 2026-08-12 に 4 層（F/In1/In2/B）から 2 層に落とした（指摘 2）。
+COPPER_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
+
+# **GND ベタを敷く層。2 層なので両面とも。**
+#
+# 4 層のときは In1.Cu の 1 層を GND 専用にして、自動配線器に対して
+# 「ここに信号を通すな」と全面予約できた（autoroute._protect_the_ground_plane）。
+# 2 層では信号層と GND 層が同じ 2 枚を兼ねるので**予約はできない。**
+# したがってベタは最初から配線を避けた歯抜けになる。
+# その分断を繋ぎ直すのが gnd_fanout のスティッチングビア。
+GND_POUR_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
+
+# ベタの小片を捨てる面積のしきい値（mm²）。
+#
+# **ここで捨てるのは「ビアが物理的に入らない小片」だけ。**
+# ビアの外径 0.6mm にクリアランス 0.2mm を足すと直径 1.0mm、
+# 面積にして約 0.8mm²。それを下回る区画にはどうやってもビアを立てられない
+# ので、繋ぎようがない。**それより大きい離島は、消さずにビアで繋ぐ**
+# （gnd_fanout.stitch_islands）。
+MIN_ISLAND_MM2 = 1.0
+
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
 OUT = ROOT / "pcb"
@@ -144,6 +166,59 @@ def _rounded_rect_outline(board, w, h, r):
 # --------------------------------------------------------------------------
 TRACK_W = 0.2           # JLCPCB の最小 0.127mm に対して余裕を見た値
 VIA_D, VIA_DRILL = 0.6, 0.3
+
+# **電源のネットは太くする**（2026-08-12・指摘 8）。
+#
+# 経験則で 1A あたり 1mm。この設計が流す電流はまるで足りていない——
+# BLE の送信で 15mA、レール全体でも数十 mA なので、0.2mm でも桁で足りる。
+#
+# **それでも太くするのは、切り分けのため。**基板を評価していて挙動が
+# おかしいとき、「電源ラインが細いせいでは」という初歩的な疑いに時間を
+# 使いたくない。
+#
+# **なぜ 0.5mm ではなく 0.3mm か（実測で決めた上限）**
+#
+# 最初 0.5mm にしたら、**両基板とも V3V3 が J_DB に届かず未配線になった。**
+# 原因を測ったら物理的に不可能だった:
+#
+#   J_DB（Hirose FH12-12S-0.5SH・0.5mm ピッチ）のパッドは
+#   **幅 0.30mm、隣との隙間 0.20mm。**
+#   0.5mm の線は 0.30mm のパッドに載らない。
+#
+# V3V3 はこのコネクタを通って子基板へ行くので、**0.30mm がこの設計の
+# 上限**。利用者も「基板面積の制約があるので絶対に全部太くしろとは
+# 言わない」と条件を付けている。ここはその条件に当たる。
+#
+# 0.3mm でも 1A/1mm の目安に対して 0.3A 相当。実際に流す 15〜30mA の
+# 10〜20 倍あり、「電源が細いせいでは」という疑いを消す目的は達している。
+#
+# **ネットごとに幅を変えられる**（2026-08-12 に確認）。
+#
+# 当初「Freerouting はネットクラスごとに 1 つの幅しか受け取れない」と
+# 書いたが、**確認せずに断定した誤りだった。**実際に KiCad が出す DSN を
+# 読むと、クラスが 2 つ並んで書かれている:
+#
+#     (class kicad_default COL0 COL1 ... (rule (width 200) ...))
+#     (class Power GND V3V3 VBATT_RAW VBATT_SW (rule (width 300) ...))
+#
+# **できないのは「1 本のネットの中で場所により幅を変える」ほう**
+# （開けた所は太く、細ピッチのパッド際だけ絞る＝ネックダウン）。
+# そこだけは配線後の後処理で太らせる（gnd_fanout.widen）。
+#
+# そこで電源を 2 つのクラスに割る。**FFC に届く必要があるのは V3V3 だけ**
+# なので、他のネットを 0.30mm に引きずられる理由が無い。
+POWER_TRACK_W = 0.3
+# クラス名 → (線幅 mm, そのクラスに入れるネット)
+#
+#   PowerFFC   V3V3 だけ。**FFC（0.30mm パッド）に届く必要がある**ので
+#              これ以上太くできない。開けたところは配線後に太らせる
+#   PowerWide  それ以外の電源。繋ぐ先は 2mm のランド・SOD-123・0805 で、
+#              細ピッチのパッドが無い。最初から太く引ける
+POWER_CLASSES = {
+    "PowerFFC":  (POWER_TRACK_W, ("V3V3",)),
+    "PowerWide": (0.6, ("GND", "VBATT_RAW", "VBATT_SW")),
+}
+POWER_NETS = tuple(n for _w, nets in POWER_CLASSES.values() for n in nets)
 # --------------------------------------------------------------------------
 # JLCPCB の製造能力を、基板の設計規則として書き込む。
 #
@@ -229,7 +304,44 @@ def _apply_jlcpcb_rules(board):
     nc.SetClearance(mm(TRACK_W))       # 0.2mm。線幅と同じ
     nc.SetViaDiameter(mm(VIA_D))
     nc.SetViaDrill(mm(VIA_DRILL))
+
+    # **電源用のネットクラスを足す**（指摘 8）。
+    #
+    # 自動配線器はネットクラスしか見ない。ここに登録しないと、
+    # POWER_TRACK_W をいくら定義しても**1 本も太くならない**
+    # （「設定しただけでは効いていない」——CLAUDE.md）。
+    # 効いたかどうかは配線後に実測する
+    # （test_pcb.test_power_nets_are_routed_with_the_wider_track）。
+    _add_power_netclasses(d, mm)
     return board
+
+
+def _add_power_netclasses(d, mm):
+    """電源のネットクラスを作り、ネットを割り当てる。
+
+    API は pcbnew を実際に叩いて確かめたもの（推測で書かない）。
+
+        SetNetclass(name, netclass)
+        SetNetclassPatternAssignment(pattern, netclass_name)
+        RecomputeEffectiveNetclasses()
+
+    **最後の Recompute を忘れると割り当てが効かない。**「設定しただけで
+    効いていない」の典型で、太くしたつもりで細いまま出る。
+
+    **クラスは複数作れる。**KiCad はそれを DSN にそのまま書き出し、
+    Freerouting も受け取る（生の DSN を読んで確認済み）。
+    """
+    ns = d.m_NetSettings
+    for name, (width, nets) in POWER_CLASSES.items():
+        cls = pcbnew.NETCLASS(name)
+        cls.SetTrackWidth(mm(width))
+        cls.SetClearance(mm(TRACK_W))
+        cls.SetViaDiameter(mm(VIA_D))
+        cls.SetViaDrill(mm(VIA_DRILL))
+        ns.SetNetclass(name, cls)
+        for net in nets:
+            ns.SetNetclassPatternAssignment(net, name)
+    ns.RecomputeEffectiveNetclasses()
 
 
 # 電子部品は**段と段の間**に置く。
@@ -504,7 +616,7 @@ def _antenna_keepout(board, half):
     zone.SetDoNotAllowVias(True)
     zone.SetDoNotAllowPads(True)
     layers = pcbnew.LSET()
-    for lay in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
+    for lay in COPPER_LAYERS:
         layers.addLayer(lay)
     zone.SetLayerSet(layers)
     pts = pcbnew.VECTOR_VECTOR2I()
@@ -514,19 +626,48 @@ def _antenna_keepout(board, half):
     board.Add(zone)
 
 
-def _pour(board, netitem, layer, w, h):
-    """その層いっぱいにベタを敷く。"""
-    zone = pcbnew.ZONE(board)
-    zone.SetNet(netitem)
-    zone.SetLayer(layer)
-    zone.SetLocalClearance(pcbnew.FromMM(0.25))
-    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
-    pts = pcbnew.VECTOR_VECTOR2I()
-    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-        pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,
-                                      ORIGIN[1] + dy * h / 2))
-    zone.AddPolygon(pts)
-    board.Add(zone)
+def _pour(board, netitem, layers, w, h):
+    """指定した層いっぱいに GND のベタを敷く。
+
+    **2 層なので両面に敷く**（指摘 3）。配線やビアが載っているところは
+    KiCad が自動でよけるので、「配線を避けた歯抜けのベタ」になる。
+    その歯抜けで分断された島を繋ぎ直すのが gnd_fanout のスティッチングビア。
+
+    `layers` は単層でも並びでも受ける。
+    """
+    if isinstance(layers, int):
+        layers = (layers,)
+    for layer in layers:
+        zone = pcbnew.ZONE(board)
+        zone.SetNet(netitem)
+        zone.SetLayer(layer)
+        zone.SetLocalClearance(pcbnew.FromMM(0.25))
+        # **サーマルリリーフを使わずベタ付けにする。**リフロー実装なので
+        # 手はんだの熱の逃げを気にする必要が無く、GND のインピーダンスは
+        # 低いほどよい。
+        zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        # **浮いた小片だけを消す。繋げられるものは繋ぐ。**
+        #
+        # 2 層では配線がベタを割るので、GND のどこにも触れない区画が
+        # できる。そういう銅は**電位が決まっておらず、GND ではない**——
+        # 遮蔽の役に立たず、囲んでいる配線どうしを容量結合させ、
+        # 2.4GHz では寸法次第でアンテナになる。
+        #
+        # **だが第一の手は「消す」ではなく「繋ぐ」。**
+        # gnd_fanout.stitch_islands が、浮いている区画にビアを打って
+        # 反対面のベタへ落とす。ここで消すのは、ビアが物理的に入らない
+        # 小片だけ（面積のしきい値で切る）。
+        #
+        # **ALWAYS にしてはいけない。**一度やって、J_DB の GND パッド
+        # どうしを繋いでいた銅まで消えた（2026-08-12）。
+        zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_AREA)
+        zone.SetMinIslandArea(pcbnew.FromMM(MIN_ISLAND_MM2) * pcbnew.FromMM(1))
+        pts = pcbnew.VECTOR_VECTOR2I()
+        for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,
+                                          ORIGIN[1] + dy * h / 2))
+        zone.AddPolygon(pts)
+        board.Add(zone)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 
@@ -543,13 +684,22 @@ def build(half, keys):
 
     board = pcbnew.CreateEmptyBoard()
     _apply_jlcpcb_rules(board)
-    # **4 層。**行の引き回しが 2 層では通らない（通路が 1.65mm しかない）。
-    # 経緯は docs/hardware/decisions/2026-08-07-four-layer.md。
-    #   F.Cu   列のバス・信号
-    #   In1.Cu GND ベタ（全面）
-    #   In2.Cu 行の引き回し・電源
-    #   B.Cu   ソケット・ダイオード・行のバス・部品
-    board.SetCopperLayerCount(4)
+    # **2 層。**（2026-08-12。指摘 2。経緯は decisions/2026-08-07-four-layer.md
+    # の冒頭の追記）
+    #
+    #   F.Cu   信号（旧 In2.Cu ぶん）＋ GND ベタ
+    #   B.Cu   ソケット・ダイオード・部品・信号 ＋ GND ベタ
+    #
+    # 4 層にしたときの根拠は「行の引き回しが 2 層では通らない」だったが、
+    # その後 Freerouting に切り替えて配線をやり直したときに、
+    # **信号は実際には 2 層（In2.Cu と B.Cu）に収まっていた。**F.Cu は
+    # ビアのランドだけで配線 0 本、まるごと空いていた（実測）。
+    # 決定記録がその事実に追いついていなかった。
+    #
+    # **部品は全部 B.Cu 側のまま。**JLCPCB は片面実装と両面実装で
+    # 段取り費が倍（$25 → $50）違い、しかも安い枠（Economic PCBA）は
+    # 片面限定なので、実装面は動かさない。動かすのは銅箔だけ。
+    board.SetCopperLayerCount(2)
     _rounded_rect_outline(board, pcb_w, pcb_h, CORNER_R)
 
     # スイッチ
@@ -691,7 +841,7 @@ def build(half, keys):
     # 基準電位が連続していることの価値が大きい。**
     # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
     _antenna_keepout(board, half)
-    _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
+    _pour(board, net("GND"), GND_POUR_LAYERS, pcb_w, pcb_h)
 
     # **未配線のまま pcb/unrouted/ に出す。**
     # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。
