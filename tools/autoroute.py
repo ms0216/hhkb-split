@@ -105,7 +105,7 @@ PREWIRED = re.compile(r"GND|SW\d+_D")
 #
 # KiCad 側の判定は 0.2mm のまま動かさない（そちらを緩めたら意味が無い）。
 # **自動配線器にだけ多めに言う。**10µm あれば丸めに埋もれない。
-DSN_CLEARANCE_MARGIN_UM = 10
+DSN_CLEARANCE_MARGIN_UM = 25
 
 
 def _ask_freerouting_for_a_little_more_clearance(dsn):
