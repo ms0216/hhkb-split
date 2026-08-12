@@ -58,7 +58,7 @@ tools/drc.py         ハッシュつきで記録
 - `SOIC-16` はコートヤード 10.49mm で、帯 9.25mm に**そもそも入らなかった**。
   位置の微調整（`-1.8`）は、どちら側にはみ出すかを選んでいただけ
 
-設計: [2026-08-08-pcb-autoroute-design.md](../../superpowers/specs/2026-08-08-pcb-autoroute-design.md)
+設計: [2026-08-08-pcb-autoroute-design.md](../superpowers/specs/2026-08-08-pcb-autoroute-design.md)
 
 ---
 

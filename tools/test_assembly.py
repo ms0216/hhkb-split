@@ -277,7 +277,8 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     import trimesh
     from envelopes import SW_PWR_BODY_D, SW_PWR_H, SW_PWR_PIN_W, SW_PWR_W
     from gen_case import (BUMP_DEPTH, CLEARANCE, SW_HOLD_H, SW_RIB, WALL,
-                          power_switch_center_z, power_switch_x_center)
+                          plan_depth, power_switch_center_z,
+                          power_switch_x_center)
     from interface import plate_positions
     from matrix import keymap_order
 
@@ -286,10 +287,12 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     # `build/` は .gitignore なので **CI では毎回黙って飛んでいた**
     # （2026-08-10 に発覚）。10 秒で作れるものを、無いからと飛ばしていた。
     stl = _case_stl(half)
-    _, (w, hb) = plate_positions(keymap_order(halves()[half]))
+    _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
     mesh = trimesh.load(stl)
     x, z = power_switch_x_center(half, w), power_switch_center_z()
-    y_out = hb / 2 + BUMP_DEPTH
+    # **plan_depth を通す。**plate_positions が返すのはプレートの奥行で、
+    # ケースは傾けたぶん縮んだ値を使う（0.44mm ずれる）。
+    y_out = plan_depth(h_plate) / 2 + BUMP_DEPTH
     y_in = y_out - WALL
     depth = SW_PWR_BODY_D + CLEARANCE          # 本体の空所の奥行
     y_mid = y_in - depth / 2
@@ -1652,7 +1655,7 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
     import numpy as np
     import trimesh
     from gen_case import (BUMP_DEPTH, SW_SLOT_W, USB_H, USB_W,
-                          WALL, power_switch_slot_z,
+                          WALL, plan_depth, power_switch_slot_z,
                           daughterboard_x_center,
                           power_switch_center_z, power_switch_x_center,
                           rear_lid_opening, usb_center_z)
@@ -1660,8 +1663,8 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
     from matrix import keymap_order
 
     mesh = trimesh.load(_case_stl(half))
-    _, (w, hb) = plate_positions(keymap_order(halves()[half]))
-    y_out = hb / 2 + BUMP_DEPTH
+    _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
+    y_out = plan_depth(h_plate) / 2 + BUMP_DEPTH   # **plan_depth を通す**
 
     # 申告した窓（x0, z0, x1, z1）。**余白 0.6mm を足して縁の量子化を吸収。**
     m = 0.6
@@ -1817,4 +1820,98 @@ def test_every_part_can_be_put_in_from_outside(half):
         assert outside, (
             f"{half}: {name} は当たらないが、まだケースの中に居る"
             f"（最後の手 {path[-1]}）。**外まで出す経路を書くこと**")
+
+
+# --------------------------------------------------------------------------
+# 誰も見張っていなかった定数（2026-08-13）
+#
+# 今日足した定数 35 個のうち **17 個は検査が名前で見ていなかった。**
+# 多くは形に効くので干渉検査が間接的に捕まえるが、**素通りしたときに
+# 金が飛ぶもの**（ネジを買い直す・ケースを刷り直す）だけは関係式で見る。
+# `mutate.py` を数時間回すより安くて確実。
+# --------------------------------------------------------------------------
+def test_the_pcb_screw_reaches_the_post_without_punching_through():
+    """本体基板を締める M2 の長さが、**噛み代を満たし、突き抜けない**こと。
+
+    短いと柱に噛まず、長いと柱を貫いて**プレートの表面（キーの座面）へ
+    出る**。どちらも**ネジを買い直す**しかない（open-gaps #36）。
+    """
+    from envelopes import PCB_T, PLATE_TO_PCB, SCREW_L_PCB
+    from interface import PLATE_T
+
+    bite = SCREW_L_PCB - PCB_T                    # 柱へ入る長さ
+    assert bite >= 2.0, (
+        f"ネジ {SCREW_L_PCB}mm − 板 {PCB_T}mm = 噛み代 {bite:.1f}mm。"
+        "**M2（ピッチ 0.4）で 5 山に満たない。**2.0mm 以上にすること")
+    room = PLATE_TO_PCB + PLATE_T - 0.5           # 柱＋プレート厚（表面手前まで）
+    assert bite <= room, (
+        f"噛み代 {bite:.1f}mm が柱＋プレート {room:.1f}mm を超える。"
+        "**プレートの表面へ突き抜ける**（キーの座面に頭が出る）")
+
+
+def test_the_post_pilot_hole_taps_without_splitting():
+    """柱の下穴が、**M2 がタップでき、かつ柱が割れない**径であること。
+
+    太いとねじが効かず、細いと PLA の柱が割れる。**基板と一緒に組んでから
+    でないと分からない**ので、寸法の関係で見る。
+    """
+    from interface import PCB_POST_D, PCB_POST_PILOT_D
+
+    # PLA へのセルフタッピングは呼び径の 0.75〜0.85 が定石（M2 → 1.5〜1.7）
+    assert 1.5 <= PCB_POST_PILOT_D <= 1.7, (
+        f"下穴 φ{PCB_POST_PILOT_D}。M2 のセルフタッピングは φ1.5〜1.7"
+        "（太いと効かず、細いと割れる）")
+    wall = (PCB_POST_D - PCB_POST_PILOT_D) / 2
+    assert wall >= 1.0, (
+        f"柱の肉が片側 {wall:.2f}mm。1.0mm 未満は**タップで割れる**"
+        f"（柱 φ{PCB_POST_D} / 下穴 φ{PCB_POST_PILOT_D}）")
+
+
+def test_the_finger_dish_leaves_wall_and_still_exposes_the_knob():
+    """指の窪みが、**壁を残しつつツマミを出す**深さであること。
+
+    深いと壁が薄くなって割れ、浅いとツマミに指が届かない。**ケースを
+    刷り直す**ことになる（open-gaps #18）。
+    """
+    from envelopes import SW_PWR_KNOB
+    from gen_case import SW_DISH_D, WALL
+
+    left = WALL - SW_DISH_D
+    assert left >= 1.2, (
+        f"窪みの底の壁が {left:.1f}mm。0.4mm ノズルで 3 本ぶん（1.2mm）は残す")
+    out = SW_PWR_KNOB - left
+    assert out >= 1.0, (
+        f"ツマミが窪みの底から {out:.1f}mm しか出ない。**指が掛からない**"
+        f"（ツマミ {SW_PWR_KNOB} − 貫く壁 {left:.1f}）")
+
+
+def test_the_switch_reservation_covers_the_real_part_and_its_wires():
+    """電源スイッチの**予約の奥行が、実物とリード線の曲げに足りる**こと。
+
+    足りないとリード線がコブの内壁に押される。**組んでからでないと
+    分からない**ので、内訳の関係で見る。
+    """
+    from envelopes import SW_PWR_D, SW_PWR_WIRE
+    from gen_case import BUMP_DEPTH, WALL, plan_depth
+    from interface import plate_positions
+    from matrix import keymap_order
+
+    # ⚠️ **`SW_PWR_D == 本体＋端子＋線` は書いてはいけない。**
+    # SW_PWR_D はその合計として導出しているので**常に真**——中身が無い
+    # （2026-08-13 に実際に書いて、故意に壊しても素通りした）。
+    # **組み立てに置いた実物を測って**、予約に収まるかを見る。
+    parts, _ = build_assembly(HALVES["left"], "left")
+    # **plan_depth を通す。**plate_positions が返すのはプレートの奥行で、
+    # ケースは傾けたぶん縮んだ値を使う（0.44mm ずれる）。
+    _, (w, h_plate) = plate_positions(keymap_order(halves()["left"]))
+    y_in = plan_depth(h_plate) / 2 + BUMP_DEPTH - WALL
+    used = y_in - parts["sw_pwr"].bounding_box().min.Y     # 壁の内面から奥へ
+    assert used <= SW_PWR_D - SW_PWR_WIRE + 1e-6, (
+        f"実物が壁の内面から {used:.2f}mm 使っている。予約 {SW_PWR_D} から"
+        f"リード線ぶん {SW_PWR_WIRE} を引いた {SW_PWR_D - SW_PWR_WIRE:.2f}mm "
+        "に収まらない。**リード線を回す余地が無い**")
+    # AWG26 のリード線の曲げ半径は約 1.5mm。端子の先で 1 回曲げる。
+    assert SW_PWR_WIRE >= 1.5, (
+        f"リード線の余裕が {SW_PWR_WIRE}mm。AWG26 の曲げ半径 1.5mm に足りない"
+        "（端子の先で内壁へ押し付けられる）")
 

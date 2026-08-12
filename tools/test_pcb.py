@@ -704,7 +704,7 @@ def ffc_span(half):
     """
     from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
                           daughterboard_x_center)
-    from interface import plate_positions
+    from interface import plan_depth, plate_positions
     _, (w, h) = plate_positions(HALVES[half])
     # **footprints() を使わない。**あの正規表現は `.*?` で最初に見つかった
     # (at ...) を拾うため、部品によって別の座標を返す（J_DB では左が
@@ -717,7 +717,8 @@ def ffc_span(half):
     # （pcb/hhkb_split_daughterboard.kicad_pcb で実測。外形中心 y=100、
     #   J_MAIN は y=111 で KiCad は Y 下向きなので手前側）。
     dbx = daughterboard_x_center(half, w)
-    dby = h / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+    # **plan_depth を通す**（plate_positions はプレートの奥行。0.44mm ずれる）
+    dby = plan_depth(h) / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
     return math.hypot(dbx - jx, (dby - 11.0) - jy)
 
 

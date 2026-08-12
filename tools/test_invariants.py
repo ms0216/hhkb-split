@@ -468,3 +468,53 @@ def test_fabrication_output_requires_the_placement_preview_check():
         "\n"
         "  見たら docs/hardware/fab-checklist.md の第 1 節に\n"
         "  「### 配置プレビューを確認した」の見出しを作り、日付と結果を書く。\n")
+
+
+def test_the_case_depth_is_never_taken_straight_from_the_plate():
+    """`BUMP_DEPTH` と足す奥行は、**必ず `plan_depth()` を通している**こと。
+
+    ⚠️ **同じ取り違えが 4 か所で見つかった**（2026-08-13）。
+    `plate_positions` が返すのは**プレートの奥行**で、ケースは傾けたぶん
+    縮んだ値（`plan_depth`）を使う。そのまま足すと **0.44mm ずれる**——
+    奥面の座標が 0.22mm 動くので、走査する検査は壁の外を測り、位置を
+    照合する検査は期待値がずれる。**どれも「ほぼ合っている」ので落ちない。**
+
+    `gen_case.py` の `_lid_opening` にも「プレートの平らな奥行を渡すと
+    0.42mm ずれる」と書いてあった。**書いてあっても踏む。**書けなくする。
+
+    見るのは `X / 2 + BUMP_DEPTH` の形。X が **`plan_depth(...)` か
+    `h_body`（＝既に通した値）以外**なら落とす。`h_plate` / `hb` / `h` の
+    ような「プレートの奥行」をそのまま足しているのが、まさに踏んだ形。
+    """
+    import ast
+    import re
+
+    # **既に plan_depth を通した値**の名前。増やすときは、本当に
+    # ケースの奥行かを確かめてから足すこと。
+    ALLOWED = {"h_body", "hbody", "h_case"}
+    # `plan_depth(...)` そのものか、許した名前だけを通す。
+    PAT = re.compile(
+        r"(plan_depth\([^()]*\)|[A-Za-z_][\w.]*)\s*/\s*2\s*\+\s*BUMP_DEPTH")
+    root = Path(__file__).resolve().parent
+    bad = []
+    for path in sorted(root.glob("*.py")):
+        src = path.read_text()
+        # **文字列と注釈は見ない。**説明文の中の式を拾ってしまう
+        # （この検査自身の docstring で実際に起きた）。
+        class _Blank(ast.NodeTransformer):
+            def visit_Constant(self, node):
+                if isinstance(node.value, str):
+                    return ast.Constant(value="")
+                return node
+
+        code = ast.unparse(_Blank().visit(ast.parse(src)))
+        for line in code.splitlines():
+            for m in PAT.finditer(line):
+                term = m.group(1)
+                if term.startswith("plan_depth") or term in ALLOWED:
+                    continue
+                bad.append(f"{path.name}  {line.strip()[:90]}")
+    assert not bad, (
+        "ケースの奥行を、プレートの奥行から直に取っている:\n  "
+        + "\n  ".join(bad)
+        + "\n  **plan_depth() を通すこと**（傾けたぶん 0.44mm 縮む）")

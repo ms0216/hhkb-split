@@ -461,7 +461,7 @@ GND のパッドが「ベタの上にあるだけ」で未接続だったのを�
 配線は手書きのコードをやめ、Freerouting に委ねた（`tools/autoroute.py`）。
 手書きルータは衝突判定を持たず、任意のネット対を短絡させていて、
 経路の調整では 0 にならなかった。経緯は
-[配線を自動配線器に委ねる設計](../../superpowers/specs/2026-08-08-pcb-autoroute-design.md)。
+[配線を自動配線器に委ねる設計](../superpowers/specs/2026-08-08-pcb-autoroute-design.md)。
 
 以下は経緯として残す。
 
