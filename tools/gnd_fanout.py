@@ -37,11 +37,43 @@ import pcbnew
 
 from circuit import ELEC_REF as ELEC
 
-# ビア半径 0.3mm + クリアランス 0.2mm + 余裕 0.05mm
-CLEARANCE_MM = 0.55
 STUB_WIDTH_MM = 0.2
 VIA_DIAMETER_MM = 0.6
 VIA_DRILL_MM = 0.3
+
+# 銅どうしのすき間に、規則の上乗せとして足す余裕（mm）。
+#
+# **これだけが判断で置いた数字。**残りは基板の設計規則から導く。
+# 0.05mm は KiCad の丸め（内部単位は nm だが座標は 0.001mm 刻みで
+# 書き出される）と、こちらの当たり判定が矩形近似であることに対する
+# 保険。**規則ちょうどに置くと、丸め 1 つで DRC が赤になる。**
+SAFETY_MM = 0.05
+
+
+def _clearance_mm(board):
+    """**この基板の設計規則が要求するクリアランス（mm）。**
+
+    ⚠️ **数値を書かない。**以前は 0.2 を 4 か所に直書きしていて、
+    設計規則を変えてもここが追随しなかった。規則より緩ければ DRC が
+    捕まえるが、**厳しすぎても DRC は緑のまま**なので誰も気づけない。
+    """
+    d = board.GetDesignSettings()
+    return max(pcbnew.ToMM(d.m_MinClearance),
+               pcbnew.ToMM(d.m_NetSettings.GetDefaultNetclass().GetClearance()))
+
+
+def _via_keepout_mm(board):
+    """ビアの**中心**から、相手の銅の縁までに要る距離（mm）。
+
+    ビアの半径 + クリアランス + 余裕。**半径を二重に数えない**
+    （以前やって 0.3mm 過剰に厳しくなり、格子点の 8 割を捨てていた）。
+    """
+    return VIA_DIAMETER_MM / 2 + _clearance_mm(board) + SAFETY_MM
+
+
+def _pad_escape_mm(board):
+    """パッドの縁から、逃がすビアの中心までの距離（mm）。"""
+    return _via_keepout_mm(board)
 
 # スティッチングビアの格子間隔（mm）。
 #
@@ -56,17 +88,10 @@ VIA_DRILL_MM = 0.3
 # 「打った結果ベタが 1 つの島になったか」（test_pcb が見る）。
 STITCH_PITCH_MM = 6.5
 
-# ビアの**縁**から相手の銅までに要る距離（mm）。クリアランス 0.2 + 余裕 0.05。
-#
-# ⚠️ **ビアの半径をここに入れない。**使う側が
-# `VIA_DIAMETER_MM / 2 + STITCH_KEEPOUT_MM` として半径を足すので、
-# ここにも入れると二重に数えることになる。実際 0.55（半径込み）を
-# 入れていて 0.3mm ぶん過剰に厳しく、**10.8mm² の離島でも格子点 48 個が
-# 全部「置けない」と判定されていた**（2026-08-12）。
-STITCH_KEEPOUT_MM = 0.25
 
 
-def _candidates(fp, pad):
+
+def _candidates(board, fp, pad):
     """そのパッドからビアを逃がす候補を、良い順に返す。
 
     第 1 候補は**パッドの長軸**。最初は縦横どちらか広い方に単純に逃がそうと
@@ -80,8 +105,9 @@ def _candidates(fp, pad):
     """
     c, q, s = fp.GetPosition(), pad.GetPosition(), pad.GetSize()
     x, y = pcbnew.ToMM(q.x), pcbnew.ToMM(q.y)
-    hx = pcbnew.ToMM(s.x) / 2 + CLEARANCE_MM
-    hy = pcbnew.ToMM(s.y) / 2 + CLEARANCE_MM
+    esc = _pad_escape_mm(board)
+    hx = pcbnew.ToMM(s.x) / 2 + esc
+    hy = pcbnew.ToMM(s.y) / 2 + esc
     long_y = s.y >= s.x
     sign_y = 1.0 if (q.y - c.y) >= 0 else -1.0
     sign_x = 1.0 if (q.x - c.x) >= 0 else -1.0
@@ -127,14 +153,14 @@ def _blocked(p, boxes, r):
     return False
 
 
-def _path_blocked(a, b, boxes, step_mm=0.05):
+def _path_blocked(a, b, boxes, clearance_mm, step_mm=0.05):
     """a から b への直線（スタブ配線）が、どれかの箱に触れるか。
 
     線と矩形の厳密な判定はせず、線上を細かく標本化して点で見る。
     刻みが線幅の半分より細かければ取りこぼさない。
     """
     import math
-    half = pcbnew.FromMM(STUB_WIDTH_MM / 2 + 0.2)   # 線の半幅 + クリアランス
+    half = pcbnew.FromMM(STUB_WIDTH_MM / 2 + clearance_mm)  # 線の半幅+規則
     ax, ay = pcbnew.ToMM(a.x), pcbnew.ToMM(a.y)
     bx, by = pcbnew.ToMM(b.x), pcbnew.ToMM(b.y)
     n = max(2, int(math.dist((ax, ay), (bx, by)) / step_mm))
@@ -183,7 +209,7 @@ def spots(board):
     避けた場所と違うところにビアが立ち、その上を配線が通る。**
     だからパッドだけを見る（パッドは配線で動かない）。
     """
-    r = pcbnew.FromMM(VIA_DIAMETER_MM / 2 + STITCH_KEEPOUT_MM)
+    r = pcbnew.FromMM(_via_keepout_mm(board))
     out = []
     taken = []
     # ⚠️ **参照名で並べ替えてから回す。**
@@ -203,7 +229,7 @@ def spots(board):
             blockers = _pad_boxes(
                 board, skip=(fp.GetReference(), pad.GetNumber())) + taken
             q = pad.GetPosition()
-            for vx, vy in _candidates(fp, pad):
+            for vx, vy in _candidates(board, fp, pad):
                 p = pcbnew.VECTOR2I_MM(vx, vy)
                 if _blocked(p, blockers, r):
                     continue
@@ -212,7 +238,7 @@ def spots(board):
                 # パッドを横切ることがある。0.5mm ピッチの FFC で実際に
                 # 起きた（J_DB のパッド 2 のスタブが、隣の CS を横切って
                 # 短絡した。2026-08-12）。
-                if _path_blocked(q, p, blockers):
+                if _path_blocked(q, p, blockers, _clearance_mm(board)):
                     continue
                 out.append((pad, (vx, vy)))
                 taken.append(pcbnew.BOX2I(
@@ -305,7 +331,7 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
     margin = VIA_DIAMETER_MM / 2 + 0.5
 
     obstacles = _obstacles(board)
-    r = pcbnew.FromMM(VIA_DIAMETER_MM / 2 + STITCH_KEEPOUT_MM)
+    r = pcbnew.FromMM(_via_keepout_mm(board))
 
     placed = skipped = 0
     y = y0 + margin
@@ -334,7 +360,7 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
 WIDEN_CAP_MM = 1.0
 
 # 太らせるときに保つクリアランス（mm）。JLCPCB の最小 0.127 に対して余裕。
-WIDEN_CLEARANCE_MM = 0.2
+WIDEN_CLEARANCE_MM = 0.2   # widen は配線から外してある（下の説明を見る）
 
 # 太らせる前の幅（＝ネットクラスの値のうち一番細いもの）。
 # 「何本太くなったか」を数えるための基準。
@@ -506,7 +532,7 @@ def stitch_islands(board, rounds=4):
         return 0, 0
 
     filler = pcbnew.ZONE_FILLER(board)
-    r = pcbnew.FromMM(VIA_DIAMETER_MM / 2 + STITCH_KEEPOUT_MM)
+    r = pcbnew.FromMM(_via_keepout_mm(board))
     added = 0
     for _ in range(rounds):
         filler.Fill(board.Zones())
@@ -564,7 +590,12 @@ FENCE_STEP_MM = 6.5
 # 当たり判定は「相手の外接箱をビア半径＋クリアランスぶん膨らませて、
 # ビアの中心が入るか」で見るので、**配線自身の箱に食い込んでしまう。**
 # 必要な距離は 配線の半幅 + ビア半径 + クリアランス + 余裕。
-FENCE_MARGIN_MM = 0.1
+# 配線の脇へ置くときの上乗せ（mm）。
+#
+# 当たり判定は矩形近似なので、**境界ちょうどに置くと判定が揺れる。**
+# 0 にしたらフェンスが 121 個 → 20 個に減った（自分の配線の箱に
+# 食い込んで弾かれた）。半歩ぶん外へ出す。
+FENCE_MARGIN_MM = 0.05
 
 
 def fence(board, min_len_mm=FENCE_MIN_LEN_MM, step_mm=FENCE_STEP_MM):
@@ -594,7 +625,7 @@ def fence(board, min_len_mm=FENCE_MIN_LEN_MM, step_mm=FENCE_STEP_MM):
         return 0, 0
 
     obstacles = _obstacles(board)
-    r = pcbnew.FromMM(VIA_DIAMETER_MM / 2 + STITCH_KEEPOUT_MM)
+    r = pcbnew.FromMM(_via_keepout_mm(board))
 
     long_tracks = []
     for t in board.GetTracks():
@@ -608,8 +639,8 @@ def fence(board, min_len_mm=FENCE_MIN_LEN_MM, step_mm=FENCE_STEP_MM):
 
     placed = 0
     for _t, a, b, length in long_tracks:
-        off = (pcbnew.ToMM(_t.GetWidth()) / 2 + VIA_DIAMETER_MM / 2
-               + STITCH_KEEPOUT_MM + FENCE_MARGIN_MM)
+        off = (pcbnew.ToMM(_t.GetWidth()) / 2 + _via_keepout_mm(board)
+               + FENCE_MARGIN_MM)
         ax, ay = pcbnew.ToMM(a.x), pcbnew.ToMM(a.y)
         bx, by = pcbnew.ToMM(b.x), pcbnew.ToMM(b.y)
         ux, uy = (bx - ax) / length, (by - ay) / length      # 進む向き
