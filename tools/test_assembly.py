@@ -1536,7 +1536,8 @@ def test_the_rear_battery_lid_can_be_taken_off(half):
         "（振動で勝手に上がって外れる）")
 
 
-def test_the_rear_lid_slide_survives_pla():
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_rear_lid_slide_survives_pla(half):
     """電池蓋を外すときの**板の反り**が、PLA で割れない量であること。
 
     片持ち爪をやめたので撓むのは**板そのもの**。上端をビード（0.4mm）へ
@@ -1551,8 +1552,8 @@ def test_the_rear_lid_slide_survives_pla():
                           REAR_LID_T, rear_lid_plate_z, rear_lid_rebate)
     from gen_plate import halves, plate_positions
 
-    _pos, (w, _h) = plate_positions(halves()["left"])
-    z_bot, z_top = rear_lid_plate_z("left", w)
+    _pos, (w, _h) = plate_positions(halves()[half])
+    z_bot, z_top = rear_lid_plate_z(half, w)
     L = z_top - z_bot                            # 反る長さ＝板の高さ
     eps = 1.5 * REAR_LID_T * (REAR_LID_DETENT + 0.1) / L ** 2
     assert eps <= 0.010, (
@@ -1568,7 +1569,7 @@ def test_the_rear_lid_slide_survives_pla():
     # **ここは指掛かりではない。**蓋を上へずらすには蓋の下向きの面を
     # 押す必要があるが、隙間は蓋の上にあるので押せるのは下向きだけ。
     # （2026-08-12・利用者の指摘。それまで指掛かりだと書いていた）
-    _rx0, _rz0, _rx1, rz1 = rear_lid_rebate("left", w)
+    _rx0, _rz0, _rx1, rz1 = rear_lid_rebate(half, w)
     assert rz1 - z_top >= REAR_LID_SLIDE, (
         f"上に残る隙間が {rz1 - z_top:.1f}mm。差し込みしろ "
         f"{REAR_LID_SLIDE}mm に足りない＝**ずらしきれない**")
@@ -1592,7 +1593,7 @@ def test_the_rear_lid_slide_survives_pla():
 
     from gen_case import REAR_LID_GRIP_H, REAR_LID_GRIP_P
 
-    lid_part, _ = build_rear_battery_lid("left", _halves()["left"])
+    lid_part, _ = build_rear_battery_lid(half, _halves()[half])
     _b = lid_part.bounding_box()
     y_out = _b.max.Y
     cx = (_b.min.X + _b.max.X) / 2          # **蓋の中心は原点ではない**
@@ -1885,7 +1886,8 @@ def test_the_finger_dish_leaves_wall_and_still_exposes_the_knob():
         f"（ツマミ {SW_PWR_KNOB} − 貫く壁 {left:.1f}）")
 
 
-def test_the_switch_reservation_covers_the_real_part_and_its_wires():
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_switch_reservation_covers_the_real_part_and_its_wires(half):
     """電源スイッチの**予約の奥行が、実物とリード線の曲げに足りる**こと。
 
     足りないとリード線がコブの内壁に押される。**組んでからでないと
