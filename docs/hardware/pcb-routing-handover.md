@@ -16,7 +16,7 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 "$KPY" tools/gen_pcb.py          # 未配線の基板を pcb/unrouted/ に出す
 "$KPY" tools/autoroute.py        # Freerouting で配線（数分）
 .venv/bin/python3 tools/drc.py   # 確かめる
-.venv/bin/pytest tools -q        # 258 件
+.venv/bin/pytest tools -q        # 402 件（約 14 分）
 ```
 
 Java（`brew install openjdk`）と Freerouting v2.3.0 の jar
@@ -95,6 +95,32 @@ plane 宣言を**まとめて**消すこと（`_strip_prewired`）。
 
 ファンアウトの配線材は `(type protect)` に変えて、ネットを持たない
 固定障害物として渡す。**消すと避けてくれない。**
+
+---
+
+## 取付穴（2026-08-12 に足した。**配線の制約が 1 つ増えた**）
+
+**本体基板に取付穴がある**（左 6・右 8・φ2.2 / M2）。open-gaps #36。
+それまで本体基板には**固定具が 1 つも無く**、保持はスイッチ 54 本のピンの
+摩擦だけだった（スイッチを抜くとソケットのはんだに剥離力がかかる）。
+プレートの裏から柱が降りてきて、基板を下から M2 で締める。
+
+位置は `tools/interface.py` の `PCB_MOUNT_POSITIONS`。**手で決めない。**
+次の 4 つを**同時に**満たす場所しか使えない:
+
+| 条件 | 何で見ているか |
+|---|---|
+| 基板の縁から 1.0mm 内側 | `test_the_pcb_is_actually_fastened_to_the_plate` |
+| **キーとプレート開口**に当たらない | 同上（`find_mounts.keepout_boxes`） |
+| **実装部品**に当たらない | 同上（`pcb_parts.json` の bbox） |
+| **コートヤード**に当たらない | DRC（`Courtyards overlap`） |
+
+⚠️ **この 4 つを別々に確かめて 3 往復した**（2026-08-12）。コートヤードだけ
+見て置いたらキーに当たり、キーを避けたらコートヤードに当たった。
+**穴を動かしたら `gen_pcb → autoroute → drc` をやり直すこと。**
+
+⚠️ **配線が通らないからといって穴を減らさないこと**（利用者の指示）。
+位置を工夫する。現に左 6・右 8 のまま DRC 0 で通っている。
 
 ---
 
