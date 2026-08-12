@@ -532,22 +532,29 @@ def _pour(board, netitem, layers, w, h):
         # 手はんだの熱の逃げを気にする必要が無く、GND のインピーダンスは
         # 低いほどよい。
         zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
-        # **浮いた小片だけを消す。繋げられるものは繋ぐ。**
+        # **浮いた銅は 1 つも残さない。**
         #
         # 2 層では配線がベタを割るので、GND のどこにも触れない区画が
         # できる。そういう銅は**電位が決まっておらず、GND ではない**——
         # 遮蔽の役に立たず、囲んでいる配線どうしを容量結合させ、
-        # 2.4GHz では寸法次第でアンテナになる。
+        # 2.4GHz では寸法次第で再放射する。
         #
-        # **だが第一の手は「消す」ではなく「繋ぐ」。**
-        # gnd_fanout.stitch_islands が、浮いている区画にビアを打って
-        # 反対面のベタへ落とす。ここで消すのは、ビアが物理的に入らない
-        # 小片だけ（面積のしきい値で切る）。
+        # **取り得る手は常に 2 つあり、どちらかは必ず選べる。**
         #
-        # **ALWAYS にしてはいけない。**一度やって、J_DB の GND パッド
-        # どうしを繋いでいた銅まで消えた（2026-08-12）。
-        zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_AREA)
-        zone.SetMinIslandArea(pcbnew.FromMM(MIN_ISLAND_MM2) * pcbnew.FromMM(1))
+        #   1. 繋ぐ  ビアが入るなら（gnd_fanout.stitch_islands）
+        #   2. 消す  ビアが入らないなら、その銅を残す理由が無い ← ここ
+        #
+        # **残さなければならない場面は無いので、0 を必達にする。**
+        # 一時「面積のしきい値より小さいものだけ消す」にしていたが、
+        # それは**問題を解かずに一部だけ隠す**やり方だった。
+        #
+        # ⚠️ 以前 ALWAYS にしたとき J_DB の GND パッドが切れた
+        # （2026-08-12）。原因は**当時そのパッドにファンアウトビアが
+        # 立てられていなかった**こと。パッドを含む区画は「繋がっている」
+        # と判定されるので消えない。全 GND パッドにビアが立つように
+        # なった今は前提が変わっている。**それでも DRC の未配線が
+        # 増えていないかを毎回確かめること。**
+        zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
         pts = pcbnew.VECTOR_VECTOR2I()
         for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
             pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,

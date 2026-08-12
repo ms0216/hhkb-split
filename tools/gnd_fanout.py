@@ -513,6 +513,59 @@ def _islands(board):
     return out
 
 
+def _room_for_a_via(poly, obstacles, r):
+    """その区画にビアを置けるか。置けるなら座標を、置けなければ None。
+
+    **標本化しない。**格子で点を試す方法は刻みに依存し、粗いと
+    置ける場所を見落とす。実際 0.5mm 刻みのとき、**ビアを置ける点が
+    512 個あった 23.80mm² の区画を「置けない」と判定して捨てていた**
+    （2026-08-13）。刻みという調整値そのものを無くす。
+
+    やることは幾何の引き算だけ。
+
+        区画 − （障害物を r だけ膨らませたもの）
+
+    残りが空でなければ、そこがビアの中心を置ける領域。空なら
+    どうやっても置けない。**「細かく調べれば見つかるかも」が無くなる。**
+    """
+    room = pcbnew.SHAPE_POLY_SET()
+    room.AddOutline(poly.Outline(0))
+
+    box = poly.BBox()
+    box.Inflate(r)
+    blockers = pcbnew.SHAPE_POLY_SET()
+    n = 0
+    for b in obstacles:
+        if not box.Intersects(b):
+            continue
+        big = pcbnew.BOX2I(b.GetOrigin(), b.GetSize())
+        big.Inflate(r)
+        blockers.NewOutline()
+        for x, y in ((big.GetLeft(), big.GetTop()), (big.GetRight(), big.GetTop()),
+                     (big.GetRight(), big.GetBottom()), (big.GetLeft(), big.GetBottom())):
+            blockers.Append(int(x), int(y))
+        n += 1
+    if n:
+        blockers.Simplify()
+        room.BooleanSubtract(blockers)
+    # ⚠️ **ここで区画の縁から Deflate してはいけない。**
+    #
+    # 一度やって、標本化なら 24 点置ける区画を「置けない」と誤判定した
+    # （2026-08-13）。**ビアは区画の内側に丸ごと収まる必要が無い。**
+    # 区画は GND で、ビアも GND だから、はみ出しても同じネットどうし。
+    # 守るべきは**他のネットとの距離**だけで、それは上の引き算で
+    # すでに課してある。両方やるとクリアランスを二重に課すことになる。
+    room.Simplify()
+    if room.IsEmpty() or room.OutlineCount() == 0:
+        return None
+    # 残った領域の代表点。**重心ではなく頂点**（凹んだ形だと重心は外に出る）
+    out = room.Outline(0)
+    if out.PointCount() == 0:
+        return None
+    c = out.CPoint(0)
+    return pcbnew.VECTOR2I(c.x, c.y)
+
+
 def stitch_islands(board, rounds=4):
     """**離島になった GND に、ビアを打って本土へ繋ぎ戻す。**
 
@@ -536,6 +589,23 @@ def stitch_islands(board, rounds=4):
     if gnd is None:
         return 0, 0
 
+    # ⚠️ **島の削除を一時的に止めてから探す。**
+    #
+    # ゾーンは `ISLAND_REMOVAL_MODE_ALWAYS` にしてある（浮いた銅を
+    # 残さないため）。**そのまま塗ると、浮いた区画は塗った瞬間に消える。**
+    # 消えたあとに探しても見つからないので、**繋げられるものまで
+    # 問答無用で捨てていた**（2026-08-13 発見。23.80mm² の区画に
+    # ビアを置ける点が 512 個あったのに、1 個も打たれていなかった）。
+    #
+    # 正しい順序:
+    #   1. 削除を止めて塗る  → 浮いた区画が見える
+    #   2. 置けるものにビアを打つ → 本土に繋がる
+    #   3. 削除を戻して塗る  → **本当に置けなかったものだけが消える**
+    zones = [z for z in board.Zones() if not z.GetIsRuleArea()]
+    saved = [(z, z.GetIslandRemovalMode()) for z in zones]
+    for z in zones:
+        z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_NEVER)
+
     filler = pcbnew.ZONE_FILLER(board)
     r = pcbnew.FromMM(_via_keepout_mm(board))
     added = 0
@@ -548,31 +618,22 @@ def stitch_islands(board, rounds=4):
             break
         placed_this_round = 0
         for _lay, poly in floating:
-            box = poly.BBox()
-            # 区画の中で、ビアを置ける点を探す。**重心とは限らない**
-            # （凹んだ形だと重心が外に出る）ので、外接箱を格子で走査して
-            # 「区画の中」かつ「周りが空いている」点を取る。
-            step = pcbnew.FromMM(0.5)
-            found = False
-            y = box.GetTop()
-            while y <= box.GetBottom() and not found:
-                x = box.GetLeft()
-                while x <= box.GetRight():
-                    p = pcbnew.VECTOR2I(int(x), int(y))
-                    if poly.Contains(p) and not _blocked(p, obstacles, r):
-                        v = _add_via(board, gnd,
-                                     pcbnew.ToMM(p.x), pcbnew.ToMM(p.y))
-                        obstacles.append(v.GetBoundingBox())
-                        added += 1
-                        placed_this_round += 1
-                        found = True
-                        break
-                    x += step
-                y += step
+            spot = _room_for_a_via(poly, obstacles, r)
+            if spot is None:
+                continue           # この区画にはどうやってもビアが入らない
+            v = _add_via(board, gnd, pcbnew.ToMM(spot.x), pcbnew.ToMM(spot.y))
+            obstacles.append(v.GetBoundingBox())
+            added += 1
+            placed_this_round += 1
         if not placed_this_round:
             break                      # これ以上は繋げない
+
+    # 繋げなかったものを数えてから、削除を元に戻す
     filler.Fill(board.Zones())
     left = sum(1 for _z, _l, _p, f in _islands(board) if f)
+    for z, mode in saved:
+        z.SetIslandRemovalMode(mode)
+    filler.Fill(board.Zones())
     return added, left
 
 

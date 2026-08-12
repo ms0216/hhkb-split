@@ -1102,8 +1102,19 @@ MAX_DECOUPLE_MM = 6.0
 # DRC は「判定が厳しすぎてビアが減った」を検出しないので、数で見る。
 MIN_GND_VIAS = {"left": 240, "right": 300}
 
-# 浮いた（GND のどこにも触れていない）区画の上限。実測は左 4 / 右 5。
-MAX_FLOATING_ISLANDS = 8
+# 浮いた（GND のどこにも触れていない）区画の上限。**0 が必達。**
+#
+# 一時は「現実に 0 にできないので増加を検出する」としていたが、**誤り**
+# だった（2026-08-13・利用者の指摘）。取り得る手は常に 2 つあり、
+# どちらかは必ず選べる。
+#
+#   1. 繋ぐ  ビアが入るなら（gnd_fanout.stitch_islands）
+#   2. 消す  ビアが入らないなら、その銅を残す理由が無い
+#
+# 浮いた銅は**電位が定義されておらず GND ではない**。遮蔽の役に立たず、
+# 囲んでいる配線どうしを容量結合させ、2.4GHz では再放射する。
+# 残す利益がゼロなので、**番人ではなく必達条件**として 0 を要求する。
+MAX_FLOATING_ISLANDS = 0
 
 
 @pytest.fixture(scope="module")
@@ -1112,65 +1123,58 @@ def facts():
 
 
 @pytest.mark.parametrize("half", NAMES)
-def test_power_nets_are_routed_with_the_wider_track(facts, half):
-    """**電源のネットが、実際に太い線で引かれていること**（指摘 8）。
+def test_power_nets_can_carry_the_current_they_actually_see(facts, half):
+    """**電源の配線が、実際に流れる電流を流せる幅であること**（指摘 8）。
 
-    ネットクラスは 2 つに分かれている。
+    ⚠️ **「規定幅の何割か」で見るのをやめた**（2026-08-13）。
+    それは代理指標で、しかも**実測値を見てから閾値を置いていた**
+    （96.5% を見てから 90% と書いた）。データに閾値を合わせる行為で、
+    現状が悪くてもその悪さを固定してしまう。
 
-        PowerFFC   V3V3      0.30mm  ← FFC のパッドが 0.30mm 幅で、これが上限
-        PowerWide  GND ほか  0.60mm  ← 細ピッチのパッドに繋がらないので太い
+    本当に問うべきは「**その幅で、実際に流れる電流を流せるか**」で、
+    これは計算できる。閾値を置く必要がない。
 
-    **「全部が規定幅」を求めてはいけない。**Freerouting は狭いところで
-    自分から幅を絞る。実測（2026-08-12）:
+      必要な幅 = 実際に流れる電流 ÷ 経験則（1A あたり 1mm）
 
-        VBATT_RAW / VBATT_SW   100% が 0.60mm
-        V3V3                   97%（254/261）が 0.30mm、狭い 7 区間だけ 0.225mm
+    電流の出どころは `circuit.BLE_TX_CURRENT`（送信中の消費電流。
+    この系で最大の電流）。**この検査は数字を持たない**——回路の宣言と
+    経験則から毎回導く。電流の見積もりを直せば、ここも自動で追随する。
 
-    これは利用者が求めた「**太くできるところは太く、できないところは
-    しない**」そのもの。一度これを一律に太らせたら DRC のクリアランス
-    違反が増えた（左 0→1・右 1→2）。**自動配線器の正しい判断を
-    壊す行為だった。**
-
-    だから見るのは 2 つ。
-
-      1. **配線長の 9 割以上が規定幅であること** — クラスが効いている証拠
-      2. **1 本も製造の最小線幅を割っていないこと** — 絞りすぎの検出
-
-    **本数ではなく長さで見る。**抵抗は「長さ ÷ 幅」で効くので、
-    長さで重み付けする方が物理に沿う。本数で見ると母数が小さく
-    （左は 8 本）、1 本絞られただけで 12% 動いて脆い。
-    実測: **左 96.5% / 右 100%**（本数だと左 88%）。
-
-    パッドからビアへ逃がすスタブ（2mm 未満）は対象外。太さはクラスでは
-    なく**パッドの幅**に縛られる（FFC のパッドは 0.30mm しかない）。
+    利用者の指摘は「1A あたり 1mm 程度」「今回は 1A も流さないので現在の
+    幅でも十分な可能性は高いが、**電源ラインから疑うという初歩的な疑いを
+    無くしたい**」。だから求めるのは「足りていること」であって、
+    「太いこと」ではない。余裕がどれだけあるかも表示する。
     """
     import math
+    from circuit import BLE_TX_CURRENT
     from pcb_rules import JLC, POWER_CLASSES
-    want = {net: w for w, nets in POWER_CLASSES.values() for net in nets}
 
-    at_class, total, too_thin = 0.0, 0.0, []
+    # 経験則: 1A あたり 1mm（利用者の指摘。外皮温度上昇を抑える目安）
+    MM_PER_AMP = 1.0
+    need_mm = BLE_TX_CURRENT * MM_PER_AMP
+
+    power_nets = {n for _w, nets in POWER_CLASSES.values() for n in nets}
+    worst = None
+    bad = []
     for layer, net, w, x1, y1, x2, y2 in facts[half]["tracks"]:
-        need = want.get(net)
-        if need is None:
+        if net not in power_nets:
             continue
-        length = math.dist((x1, y1), (x2, y2))
-        if length < 2.0:
-            continue
-        total += length
-        if w >= need - 1e-6:
-            at_class += length
         if w < JLC["track_min"] - 1e-6:
-            too_thin.append(f"{net} {w}mm ({layer})")
+            bad.append(f"{net} {w}mm ({layer}) — 製造の最小 {JLC['track_min']}mm 未満")
+        elif w < need_mm - 1e-9:
+            bad.append(f"{net} {w}mm ({layer}) — {BLE_TX_CURRENT*1000:.0f}mA には "
+                       f"{need_mm:.3f}mm 要る")
+        if worst is None or w < worst[0]:
+            worst = (w, net, layer)
 
-    assert not too_thin, (
-        f"{half}: 製造の最小線幅 {JLC['track_min']}mm を割っている線がある\n  "
-        + "\n  ".join(sorted(set(too_thin))))
-    assert total, f"{half}: 電源の配線が 1 本も無い"
-    ratio = at_class / total
-    assert ratio >= 0.9, (
-        f"{half}: 電源の配線長のうち規定幅は "
-        f"{at_class:.1f}/{total:.1f}mm（{ratio:.1%}）。9 割を下回った。"
-        "ネットクラスが効いていない可能性がある")
+    assert worst is not None, f"{half}: 電源の配線が 1 本も無い"
+    assert not bad, (
+        f"{half}: 電流を流せない幅の配線がある\n  " + "\n  ".join(sorted(set(bad))))
+
+    # 余裕を記録に残す（落とすためではなく、後から読む人のため）
+    print(f"\n  {half}: 最も細い電源配線 {worst[0]}mm（{worst[1]} / {worst[2]}）"
+          f" — {BLE_TX_CURRENT*1000:.0f}mA に必要な {need_mm:.3f}mm の "
+          f"{worst[0]/need_mm:.0f} 倍")
 
 
 @pytest.mark.parametrize("half", NAMES)
@@ -1228,8 +1232,9 @@ def test_few_pieces_of_ground_copper_are_left_floating(facts, half):
     """
     n = facts[half]["floating"]
     assert n <= MAX_FLOATING_ISLANDS, (
-        f"{half}: 浮いた GND の区画が {n} 箇所ある"
-        f"（上限 {MAX_FLOATING_ISLANDS}）")
+        f"{half}: 浮いた GND の区画が {n} 箇所ある（**0 でなければならない**）。\n"
+        "  繋ぐ（gnd_fanout.stitch_islands）か、消す（ゾーンの島削除）かの\n"
+        "  どちらかが効かなくなっている。**浮いた銅を残す理由は無い。**")
 
 
 @pytest.mark.parametrize("half", NAMES)
