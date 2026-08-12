@@ -45,7 +45,7 @@
 | ファイル | 時間 | 何を見るか |
 |---|---|---|
 | `case_left.stl` | 1h39m | 全体の姿・傾斜・手前端の高さ |
-| `battery_lid_left.stl` | 6 分 | 蓋がレールに収まるか |
+| `rear_lid_left.stl` | 8 分 | **コブの奥面の蓋**（2026-08-12 に底面から移した）。下へ 3mm 差し込んで留まるか／親指の溝で押し上げられるか |
 | `tilt_foot_0deg_left.stl` | 4 分 | 脚が穴に入るか |
 | `tilt_foot_3deg_left.stl` | 6 分 | 3° の傾きが出るか |
 | `tilt_foot_6deg_left.stl` | 8 分 | 6° の傾きが出るか |

@@ -1012,3 +1012,28 @@ def test_the_hotswap_footprint_matches_the_kailh_datasheet():
     for w, h in solder:
         assert {round(w, 2), round(h, 2)} == {2.55, 2.5}, (
             f"パッド {w}x{h}mm。データシートは 2.5 x 2.55mm")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_mounting_holes_are_isolated_from_ground(half):
+    """取付穴が **GND につながっていない**こと（electrical-design 3-3）。
+
+    ケースが樹脂なので落とす意味が無く、**ネジ頭が他所に触れたときの
+    経路になる。**規則は 2026-08-09 から書いてあったが、**穴そのものが
+    無かったので誰も見張っていなかった。**2026-08-12 に穴を足したので、
+    ここで初めて意味を持つ。
+
+    非メッキ穴（`MountingHole_2.2mm_M2`）ならネットは付かない。
+    `MountingHole_Pad` 系に差し替えるとパッドが出て GND に落ちうる。
+    """
+    import re
+
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    blocks = re.findall(r'\(footprint "MountingHole[^"]*"(.*?)\n\t\)\n', txt, re.S)
+    assert blocks, f"{half}: 取付穴が 1 つも無い"
+    nets = set()
+    for b in blocks:
+        nets |= {m.group(1) for m in re.finditer(r'\(net \d+ "([^"]*)"', b)}
+    assert not nets, (
+        f"{half}: 取付穴にネットが付いている: {sorted(nets)}。"
+        "**絶縁のままにすること**（electrical-design 3-3）")
