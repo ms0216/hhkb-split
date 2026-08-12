@@ -503,7 +503,12 @@ def _islands(board):
             for i in range(polys.OutlineCount()):
                 one = pcbnew.SHAPE_POLY_SET()
                 one.AddOutline(polys.Outline(i))
-                floating = not any(one.Contains(p) for p in anchors)
+                # **外接箱で先に振るう。**多角形の内外判定は重く、
+                # 区画 × アンカー（GND のビアとパッド、400 点超）を
+                # 総当たりすると分単位でかかる。箱の外なら中にも無い。
+                box = one.BBox()
+                near = [q for q in anchors if box.Contains(q)]
+                floating = not any(one.Contains(q) for q in near)
                 out.append((z, layer, one, floating))
     return out
 

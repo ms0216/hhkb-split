@@ -1120,29 +1120,57 @@ def test_power_nets_are_routed_with_the_wider_track(facts, half):
         PowerFFC   V3V3      0.30mm  ← FFC のパッドが 0.30mm 幅で、これが上限
         PowerWide  GND ほか  0.60mm  ← 細ピッチのパッドに繋がらないので太い
 
-    **クラスを定義しただけでは効かない。**割り当てて Recompute まで
-    呼んで、はじめて自動配線器に届く。だから設定ではなく**引かれた線の幅**
-    を見る。
+    **「全部が規定幅」を求めてはいけない。**Freerouting は狭いところで
+    自分から幅を絞る。実測（2026-08-12）:
+
+        VBATT_RAW / VBATT_SW   100% が 0.60mm
+        V3V3                   97%（254/261）が 0.30mm、狭い 7 区間だけ 0.225mm
+
+    これは利用者が求めた「**太くできるところは太く、できないところは
+    しない**」そのもの。一度これを一律に太らせたら DRC のクリアランス
+    違反が増えた（左 0→1・右 1→2）。**自動配線器の正しい判断を
+    壊す行為だった。**
+
+    だから見るのは 2 つ。
+
+      1. **配線長の 9 割以上が規定幅であること** — クラスが効いている証拠
+      2. **1 本も製造の最小線幅を割っていないこと** — 絞りすぎの検出
+
+    **本数ではなく長さで見る。**抵抗は「長さ ÷ 幅」で効くので、
+    長さで重み付けする方が物理に沿う。本数で見ると母数が小さく
+    （左は 8 本）、1 本絞られただけで 12% 動いて脆い。
+    実測: **左 96.5% / 右 100%**（本数だと左 88%）。
+
+    パッドからビアへ逃がすスタブ（2mm 未満）は対象外。太さはクラスでは
+    なく**パッドの幅**に縛られる（FFC のパッドは 0.30mm しかない）。
     """
-    from pcb_rules import POWER_CLASSES
-    want = {net: w for w, nets in POWER_CLASSES.values() for net in nets}
     import math
-    thin = []
+    from pcb_rules import JLC, POWER_CLASSES
+    want = {net: w for w, nets in POWER_CLASSES.values() for net in nets}
+
+    at_class, total, too_thin = 0.0, 0.0, []
     for layer, net, w, x1, y1, x2, y2 in facts[half]["tracks"]:
         need = want.get(net)
         if need is None:
             continue
-        # **パッドからビアへ逃がすスタブは対象外。**
-        # 長さ 2mm 未満の短い線がそれで、太さはクラスではなく
-        # **パッドの幅**に縛られる（FFC のパッドは 0.30mm しかない）。
-        # ここを一緒に見ると、物理的に不可能な要求になる。
-        if math.dist((x1, y1), (x2, y2)) < 2.0:
+        length = math.dist((x1, y1), (x2, y2))
+        if length < 2.0:
             continue
-        if w < need - 1e-6:
-            thin.append(f"{net} {w}mm ({layer}) — {need}mm のはず")
-    assert not thin, (
-        f"{half}: 電源のネットに細い線が {len(thin)} 本ある\n  "
-        + "\n  ".join(sorted(set(thin))[:20]))
+        total += length
+        if w >= need - 1e-6:
+            at_class += length
+        if w < JLC["track_min"] - 1e-6:
+            too_thin.append(f"{net} {w}mm ({layer})")
+
+    assert not too_thin, (
+        f"{half}: 製造の最小線幅 {JLC['track_min']}mm を割っている線がある\n  "
+        + "\n  ".join(sorted(set(too_thin))))
+    assert total, f"{half}: 電源の配線が 1 本も無い"
+    ratio = at_class / total
+    assert ratio >= 0.9, (
+        f"{half}: 電源の配線長のうち規定幅は "
+        f"{at_class:.1f}/{total:.1f}mm（{ratio:.1%}）。9 割を下回った。"
+        "ネットクラスが効いていない可能性がある")
 
 
 @pytest.mark.parametrize("half", NAMES)
