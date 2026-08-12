@@ -57,7 +57,6 @@ STYLE = {
     "plate":   ("#d7dee6", 0.45),
     "pcb":     ("#7fae6b", 0.55),   # 本体基板（板＋キー下のソケット）
     "batt":    ("#c8a24a", 0.80),
-    "lid":     ("#a8b6c4", 0.60),
     "db":      ("#3f7fd0", 0.95),   # 子基板
     "xiao":    ("#e0752c", 1.00),   # 板からはみ出した XIAO の端
     "foot":    ("#8d8d8d", 0.90),   # foot0 / foot1
@@ -109,6 +108,18 @@ def export(half="left"):
         export_stl(part, str(path))
         written.append(path)
     written += export_real(half)
+
+    # **消えた部品の STL を片付ける。**
+    #
+    # ⚠️ 2026-08-12。底面の電池蓋を廃止したのに `left_lid.stl` が残り、
+    # **Blender は {half}_*.stl を全部拾うので .blend に出続けた**
+    # （利用者が「まだ居る」と気づいた）。**書き出しは足すだけで、
+    # 引くことをしていなかった。**
+    keep = {q.name for q in written}
+    for q in sorted(OUT.glob(f"{half}_*.stl")):
+        if q.name not in keep:
+            q.unlink()
+            print(f"      古い STL を消した: {q.name}")
     return parts, written
 
 

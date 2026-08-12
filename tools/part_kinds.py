@@ -21,7 +21,7 @@ Blender 側の種類名（STL の名前から数字を落とした `foot`）。
 """
 
 REAL_SHAPE = {
-    "case", "topcase", "plate", "lid", "rear_lid",
+    "case", "topcase", "plate", "rear_lid",
     "foot", "foot0", "foot1",          # Blender 側は数字を落とした名前で来る
     "screws", "inserts", "nut", "rubber", "sw_pwr",
     "pcb_real", "db_real", "pcb_parts", "db_parts",

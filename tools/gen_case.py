@@ -313,6 +313,16 @@ SW_SLOT_W = 2.6          # 操作部が通るスロットの幅（アクチュ�
 # **本体の高さではない。**本体ぶん開けると穴が無駄に大きくなる。
 SW_SLOT_LEN = 5.0
 SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷できる最小側）
+# 受け（レールと奥のリブ）の高さ。**本体より低くする。**
+#
+# ⚠️ **本体と同じ高さにすると、スイッチを入れられない**（2026-08-12 に
+# 実形状で発見）。入れ方は「上から落とし込む」だが、**ツマミは壁を貫いて
+# 外に出ている**ので、降ろすあいだツマミはスロットの中を滑る必要がある。
+# 受けが本体と同じ高さだと、ツマミがスロットに入る高さまで持ち上げた
+# ときに**スロットの上端に当たる**（実測 12.6mm³）。
+# 受けを低くすると、ツマミをスロットへ入れる高さが下がり、
+# **スロットを短くできる。**受けは本体の下半分を掴む。
+SW_HOLD_H = 5.6          # 受けの高さ（本体 8.8 の下側 5.6mm を掴む）
 
 # 電源スイッチの**指の逃げ**（窪み・open-gaps #18・2026-08-12）。
 #
@@ -333,7 +343,9 @@ SW_RIB = 1.6             # スイッチを受ける箱の壁厚（印刷でき�
 # 付いている周囲の帯）で、窪みはその内側。内面は削らないのでスイッチの
 # 座りも変わらない。
 SW_DISH_D = 1.0          # 窪みの深さ（壁 2.4 → 底で 1.4mm）
-SW_DISH_W = 10.0         # 窪みの幅（指先が入る）
+SW_DISH_W = 10.0         # 窪みの幅の**上限**（実際は空きから決まる。
+                         # power_switch_dish_w を見ること）
+SW_DISH_EDGE = 0.5       # 窪みの縁と、隣の造作とのあいだに残す壁
 SW_DISH_H = 8.0          # 同・高さ
 # RESET のボタンは**載せられない。**
 # XIAO nRF52840 の裏面に出ているパッドは VUSB/GND/3V3/10/9/8/7・0〜6（側面ピンの
@@ -411,12 +423,8 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # 実機と同じく底面から電池を出し入れする。蓋は奥へスライドして抜ける。
 # レールは 1.2mm の段。K1 Max ならサポート無しでブリッジできる。
 # --------------------------------------------------------------------------
-LID_T = 1.6              # 蓋の厚み（0.4mm の 4 倍）
-RAIL_W = 2.0             # レールの掛かり幅
-RAIL_H = LID_T           # 段の深さ＝蓋の厚み。こうすると蓋が床の内面と面一になる。
                          # 段を蓋より浅くすると蓋が内側へ出っ張り、電池と干渉する
                          # （組み立て検査で 233mm^3 の食い込みとして検出された）。
-LID_STOP = 2.0           # 手前側のストッパー
 
 # --------------------------------------------------------------------------
 # 電池蓋（**コブの奥面**）— open-gaps #35・2026-08-12
@@ -573,7 +581,6 @@ NUT_THRU_D = 7.0
 # （大きくすると入らないか、押し込みで割れる）。
 NUT_LIP_H = 0.6          # 狭める帯の高さ（層 0.2mm × 3）
 NUT_LIP_UNDER = 0.4      # 二面幅をどれだけ狭めるか（片側 0.2mm の食い込み）
-
 
 
 def case_heights(depth):
@@ -831,15 +838,16 @@ def build_case(keys, half):
         y_rear_inner = y_rear_outer - WALL
         holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB   # 本体ぶん＋奥のリブ
         sw_bot = sw_z - SW_PWR_H / 2 - CLEARANCE / 2    # 溝の底（ここに座る）
-        with Locations((sw_x, y_rear_inner - holder_d / 2, sw_z)):
+        with Locations((sw_x, y_rear_inner - holder_d / 2,
+                        sw_bot - SW_RIB)):
             Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d,
-                SW_PWR_H + CLEARANCE + SW_RIB * 2,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+                SW_HOLD_H + SW_RIB,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 本体の空所。**上へ突き抜けさせる**（落とし込む口）。
         with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE) / 2,
                         sw_bot)):
             Box(SW_PWR_W + CLEARANCE, SW_PWR_BODY_D + CLEARANCE,
-                (SW_PWR_H + CLEARANCE) * 2, mode=Mode.SUBTRACT,
+                SW_PWR_H * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 端子の縦スリット（奥のリブを貫く）。**ここも上まで抜く。**
         # 端子は 3 本・2.5 ピッチで**上下に並ぶ**（本体を縦向きに付けるため）
@@ -851,31 +859,29 @@ def build_case(keys, half):
         with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE),
                         sw_bot)):
             Box(SW_PWR_PIN_W + CLEARANCE, holder_d,
-                (SW_PWR_H + CLEARANCE) * 2, mode=Mode.SUBTRACT,
+                SW_PWR_H * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.MAX, Align.MIN))
         # 指の逃げの窪み（外面から SW_DISH_D）。**スロットより先に掘る。**
         with Locations((sw_x, y_rear_outer - SW_DISH_D / 2, sw_z)):
-            Box(SW_DISH_W, SW_DISH_D, SW_DISH_H, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        with Locations((sw_x, y_rear_outer, sw_z)):
-            Box(SW_SLOT_W, WALL * 4, SW_SLOT_LEN,
+            Box(power_switch_dish_w(half, w), SW_DISH_D, SW_DISH_H,
                 mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-
-
-
-        ox, oy, ow, oh = _lid_opening(half, w, h_body)
-        # 6-1. 貫通させるのは狭い方（両側に RAIL_W の段を残す）
-        with Locations((ox, oy, 0)):
-            Box(ow - RAIL_W * 2, oh, FLOOR * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 6-2. 蓋が落ち込む座ぐりは広い方。床の上側 RAIL_H だけ削る
-        with Locations((ox, oy, FLOOR - RAIL_H)):
-            Box(ow, oh, RAIL_H, mode=Mode.SUBTRACT,
+        _sl0, _sl1 = power_switch_slot_z(half, w)
+        with Locations((sw_x, y_rear_outer, _sl0)):
+            Box(SW_SLOT_W, WALL * 4, _sl1 - _sl0,
+                mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 6-3. 手前側のストッパー（蓋は奥へ抜ける）
-        with Locations((ox, oy - oh / 2 + LID_STOP / 2, FLOOR - RAIL_H)):
-            Box(ow, LID_STOP, RAIL_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+
+
+
+        # 6-1〜3. **底面の電池蓋は廃止した**（2026-08-12・利用者の決定）。
+        #
+        # 電池の出し入れはコブの奥面の蓋（#35）に移した。底に 109 × 16.6mm の
+        # 貫通穴とレールと蓋が残っていたが、**用途はもう無い。**しかも
+        # それは #35 で「外から開かない」と判定した蓋そのもので、
+        # **裏面に振動吸収シートを貼れなくなる**（利用者が奥面を選んだ
+        # 理由の 1 つ）。**置き換えたのに古い方を消していなかった。**
+        # 床は塞がったままになる（剛性も上がる）。
 
         # 7. 三脚ネジ穴（1/4-20 の六角ナットを底面から埋め込む）
         #
@@ -1024,7 +1030,58 @@ def power_switch_x_center(half, w):
             f"{half}: 電源スイッチの場所が {hi - lo:.1f}mm しかない "
             f"（{SW_PWR_W + CLEARANCE * 2:.1f}mm 必要）")
     del s_
-    return (lo + hi) / 2
+    # **蓋の座ぐりと子基板ポケットに挟まれた空きの中央。**外面の造作
+    # （窪み・スロット）はここを基準に置く。隙間の中央ではない。
+    a, b = power_switch_free_span(half, w)
+    return (a + b) / 2
+
+
+def power_switch_slot_z(half, w):
+    """操作部のスロットの z 範囲 (下端, 上端)。**ケースと検査がここから取る。**
+
+    ⚠️ **上端は「溝の口」まで伸ばす**（2026-08-12）。スイッチは上から
+    落とし込むが、**ツマミは壁を貫いて外へ出ている。**スロットが操作部の
+    ストロークぶんしか無いと、降ろす途中でツマミが壁に当たって
+    **入らない**（実形状で 12.6mm³ 検出）。ツマミがスロットの中を
+    滑り降りられるように、上を溝の口まで開ける。
+    """
+    del w
+    from envelopes import SW_PWR_H, SW_PWR_KNOB_W, SW_PWR_TRAVEL
+    sz = power_switch_center_z()
+    bot = sz - SW_PWR_H / 2 - CLEARANCE / 2       # 座った位置での本体の下端
+    # 受けの上まで持ち上げた状態でツマミが要る高さ（そこでスロットへ入れる）
+    top = (bot + SW_HOLD_H) + SW_PWR_H / 2 + (SW_PWR_KNOB_W + SW_PWR_TRAVEL) / 2
+    return sz - SW_SLOT_LEN / 2, top + 0.3
+
+
+def power_switch_free_span(half, w):
+    """電源スイッチの**外面の造作（指の窪み）が使える x の範囲**。
+
+    ⚠️ **窪みは 2 つの造作に挟まれている**（2026-08-12 に順番に踏んだ）:
+
+      1. 左は**電池蓋の座ぐり。**蓋をコブの奥面へ移して座ぐりを広げたら、
+         窪み（幅 10mm）が 2.22mm 食い込んだ。どちらも外面の造作なので、
+         重なった分は**蓋に覆われて指が入らない**
+      2. 右は**子基板のポケット。**1 を避けて右へ寄せたら、今度は
+         ポケットと重なって**壁が消えた**（外から中が見えた）
+
+    **空きは 8.06mm しかなく、幅 10mm の窪みはどこにも置けない。**
+    だから窪みの幅は定数ではなく、**ここで決まる。**
+    """
+    bx, dx = battery_x_center(half, w), daughterboard_x_center(half, w)
+    _rx0, _rz0, rx1, _rz1 = rear_lid_rebate(half, w)
+    lo = max(bx + BATT_X / 2, rx1)          # 電池と蓋の座ぐりの右端
+    hi = dx - DB_W / 2                      # 子基板のポケットの左端
+    if half == "right":                     # 左右で並びが反転する
+        _rx0b = rear_lid_rebate(half, w)[0]
+        lo, hi = dx + DB_W / 2, min(bx - BATT_X / 2, _rx0b)
+    return (lo, hi) if lo < hi else (hi, lo)
+
+
+def power_switch_dish_w(half, w):
+    """指の窪みの幅。**空きから決める**（power_switch_free_span を見ること）。"""
+    lo, hi = power_switch_free_span(half, w)
+    return min(SW_DISH_W, (hi - lo) - SW_DISH_EDGE * 2)
 
 
 def battery_center_z():
@@ -1068,15 +1125,6 @@ def usb_center_z():
     同じ関数を使ってメスの空洞を彫るので、片方だけ直すことはできない。
     """
     return FLOOR + DB_BOSS_H + DB_T + DB_XIAO_LIFT + _RECEPT[3]
-
-
-def _lid_opening(half, w, h_body):
-    """電池蓋の開口（中心 x, y と 大きさ）。電池室の真下に開ける。
-
-    y は**本体部分の中心を原点**とした座標。
-    x は電池を外側へ寄せたぶんだけずれる。
-    """
-    return (battery_x_center(half, w), battery_center(h_body), BATT_X, BATT_W)
 
 
 def _rubber_positions(w, h_body):
@@ -1153,7 +1201,6 @@ def build_topcase(keys, half):
     # 押し付ける設計にすると個体差でプレートが反る。薄いガスケットで詰める。
     rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
 
-
     with BuildPart() as top:
         with BuildSketch():
             RectangleRounded(w, h_body, CORNER_R)
@@ -1185,28 +1232,6 @@ def build_topcase(keys, half):
                 Cylinder(SCREW_HEAD_D / 2 + 0.3, z_max, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
     return top.part, (w, h_body)
-
-
-def build_battery_lid(half, keys):
-    """電池蓋。ケースのレールに差し込んで奥へスライドさせる。
-
-    開口の位置と大きさはケース側の造作なので、平面図の奥行で計算する。
-    プレートの平らな奥行を渡すと 0.42mm ずれる。
-    """
-    _, (w, h_plate) = plate_positions(keys)
-    _, _, ow, oh = _lid_opening(half, w, plan_depth(h_plate))
-    lw = ow - CLEARANCE                      # 開口より少し小さく
-    lh = oh - LID_STOP - CLEARANCE
-    with BuildPart() as lid:
-        with BuildSketch():
-            RectangleRounded(lw, lh, 1.5)
-        extrude(amount=LID_T)
-        # 指掛かりの窪み。切削用の立体は上面より外へ突き出させる。
-        # 上面とちょうど同一平面にすると境界が縮退し、水密でないメッシュになる。
-        with Locations((0, -lh / 2 + 6.5, LID_T + 1.0)):
-            Cylinder(4.0, 1.8, mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.MAX))
-    return lid.part, (lw, lh)
 
 
 def rear_lid_opening(half, w):
@@ -1381,11 +1406,6 @@ def main():
         part, (w, h), (z_front, z_rear) = build_case(keys, name)
         mesh, stl = to_mesh(part, f"case_{name}")
         assert_watertight(mesh, stl.name)
-
-        lid, (lw, lh) = build_battery_lid(name, keys)
-        lmesh, lstl = to_mesh(lid, f"battery_lid_{name}")
-        assert_watertight(lmesh, lstl.name)
-        print(f"      電池蓋 {lw:.1f} x {lh:.1f} x {LID_T}mm -> {lstl.name}")
 
         for deg in TILT_STEPS:
             foot, fz = build_tilt_foot(deg, h)

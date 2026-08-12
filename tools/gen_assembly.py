@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen_case import (  # noqa: E402
     BATT_MARGIN_REAR, BATT_W, CLEARANCE, FLOOR, FOOT_PEG_H,
     battery_center_z,
-    LID_STOP, LID_T, PLATE_TOP_FRONT, RAIL_H, TILT_DEG, WALL, _foot_positions,
-    _lid_opening, battery_center, battery_x_center, build_battery_lid, build_case,
+    PLATE_TOP_FRONT, TILT_DEG, WALL, _foot_positions,
+    battery_center, battery_x_center, build_case,
     build_tilt_foot, case_heights,
 )
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
@@ -74,6 +74,32 @@ RESERVATION_CONTAINS = {("sockets", "pcb_real"), ("stabs", "pcb_real"),
 # 実形状か箱かの一覧は part_kinds.py にある（Blender 側とも共用）。
 from part_kinds import BOX_SHAPE, REAL_SHAPE  # noqa: F401,E402
 
+# **どうやって入れるか。**据わった位置からの逃がし方を、外に出るまで
+# 順に書く（(dx, dy, dz) の並び。最後は必ずケースの外）。
+#
+# ⚠️ **「留まるか」だけ見ていて「入れられるか」を見ていなかった。**
+# 2026-08-12 に電源スイッチで踏んだ——奥のリブで押し込みを止めたのは
+# よかったが、**そのリブのせいで手前からは入らず、上からは
+# ツマミがスロットの上端に当たって入らなかった**（実形状で 12.6mm³）。
+# #35 の電池蓋（外から開かない）と同じ型で、**3 度目**だった。
+#
+# 書いていない部品は「ケースに入らない物」か「はんだ・ねじ込み」。
+INSERT_PATH = {
+    # 電池ボックスはコブの奥面の口から差し込む（上はコブの天井で塞がっている）
+    "batt":     [(0, 8, 0), (0, 20, 0), (0, 40, 0)],
+    # 子基板と XIAO は手前（ケースの内側）へ抜いてから上へ
+    "db":       [(0, -8, 0), (0, -8, 40)],
+    "xiao":     [(0, -8, 0), (0, -8, 40)],
+    # 電源スイッチ: 受けの上まで上げてから手前へ（ツマミがスロットを滑る）
+    "sw_pwr":   [(0, 0, 5.6), (0, -8, 5.6), (0, -8, 40)],
+    # 奥面の電池蓋: 抜け止めビードを乗り越えるぶん外へ反らせながら上へ、
+    # そのあと手前へ。**0.5mm の反りは設計どおり**（板が 0.4mm 撓む）。
+    "rear_lid": [(0, 0.5, 3.0), (0, 8, 3.0)],
+    # 本体基板とソケットは真上（プレートを外した状態）
+    "pcb":      [(0, 0, 40)],
+    "sockets":  [(0, 0, 40)],
+}
+
 HELD_BY = {
     "case":       "外殻そのもの（基準）",
     "topcase":    "手前 M2×3（熱圧入インサート）。⚠️ 奥は未解決（#12）",
@@ -91,7 +117,6 @@ HELD_BY = {
     "db_parts":   "子基板に半田付け",
     "xiao":       "ソケットへの挿入＋壁のポケット（プロトタイプ期。#27）",
     "batt":       "⚠️ 仕切り壁・側壁・蓋・基板で囲うだけ。#35 と一緒に決める",
-    "lid":        "⚠️ レール＋手前ストッパー。**外から開かない**（#35）",
     "ffc":        "コネクタのラッチ＋たるみ 25mm",
     "sw_pwr":     "上から落とし込む溝。奥のリブが押し込み側を剛体で止める（#18）",
     "screws":     "ねじ込み",
@@ -127,7 +152,11 @@ def build_assembly(keys, half, real=False):
     positions, (w, h_plate) = plate_positions(keys)
     case, (_, h_case), _ = build_case(keys, half)
     plate, _, _ = build_plate(keys, half)
-    lid, (lw, lh) = build_battery_lid(half, keys)
+    # **底面の電池蓋は廃止した**（2026-08-12・利用者の決定）。
+    # 電池の出し入れはコブの奥面の蓋（#35）に移した。底の 109 × 16.6mm の
+    # 貫通穴・レール・蓋は用途が無く、**裏面に振動吸収シートを貼れなく
+    # なる**（奥面を選んだ理由の 1 つ）。**置き換えたのに古い方を消して
+    # いなかった。**
 
     parts = {"case": case, "plate": plate_placement(w, h_plate) * plate}
 
@@ -139,12 +168,6 @@ def build_assembly(keys, half, real=False):
     # 実物なので、保守的な箱として別部品で置く（open-gaps #29）
     from envelopes import socket_envelope
     parts["sockets"] = place_pcb(socket_envelope(half), h_plate, rim_front)
-
-    # 電池蓋はレールの段に載る。開口の中心へ、レールの高さに置く。
-    ox, oy, _, oh = _lid_opening(half, w, h_case)
-    # 蓋の手前端はストッパーの奥に来る
-    y_lid = oy - oh / 2 + LID_STOP + CLEARANCE + lh / 2
-    parts["lid"] = Location((ox, y_lid, FLOOR - RAIL_H)) * lid
 
     # コブの奥面の電池蓋（open-gaps #35）。**座ぐりに沈めて面一に置く。**
     # 蓋は XY 平面で作ってあるので、奥面（XZ 平面）へ立てる。
@@ -785,10 +808,6 @@ def check(keys, half, label="", focus=None, real=False):
         if gap < -0.3:
             problems.append(f"プレートが {axis} 方向に {-gap:.2f}mm はみ出す")
 
-    # 3. 蓋がレールに載っているか
-    ox, oy, ow, oh = _lid_opening(half, w, h_case)
-    _, (lw, lh) = build_battery_lid(half, keys)
-    notes.append(f"電池蓋 {lw:.1f}x{lh:.1f} / 開口 {ow:.1f}x{oh:.1f}mm")
 
     return problems, notes, parts
 

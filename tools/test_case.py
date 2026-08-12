@@ -96,20 +96,6 @@ def _dist(a, b):
     return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5
 
 
-@pytest.mark.parametrize("name", ["left", "right"])
-def test_battery_lid_is_printable_and_fits_the_opening(name):
-    from gen_case import CLEARANCE, LID_STOP, _lid_opening, build_battery_lid
-    from gen_plate import plate_positions
-    lid, (lw, lh) = build_battery_lid(name, HALVES[name])
-    mesh, _ = to_mesh(lid, f"battery_lid_{name}")
-    assert_watertight(mesh, f"battery_lid_{name}")
-    _, (w, h) = plate_positions(HALVES[name])
-    _, _, ow, oh = _lid_opening(name, w, h)
-    assert lw < ow, "蓋が開口より大きい"
-    assert lh < oh - LID_STOP, "蓋がストッパーに当たって入らない"
-    assert ow - lw == pytest.approx(CLEARANCE), "嵌合の逃げが設計値と違う"
-
-
 @pytest.mark.parametrize("deg", [3.0, 6.0])
 def test_tilt_foot_height_gives_the_intended_angle(deg):
     """脚の高さが、後縁を deg だけ持ち上げる値になっていること。"""
@@ -248,12 +234,11 @@ def test_every_part_fits_the_printer(name):
     **造形できない部品を設計しても意味がない。**寸法を大きくしたときに
     黙って超えることを防ぐ。
     """
-    from gen_case import build_case, build_topcase, build_battery_lid
+    from gen_case import build_case, build_topcase
     from gen_plate import build_plate
     parts = {
         "case": build_case(HALVES[name], name)[0],
         "topcase": build_topcase(HALVES[name], name)[0],
-        "lid": build_battery_lid(name, HALVES[name])[0],
         "plate": build_plate(HALVES[name], name)[0],
     }
     for label, part in parts.items():
@@ -271,9 +256,10 @@ def test_wall_thicknesses_are_multiples_of_the_nozzle():
     半端な厚みにすると、スライサが埋めきれず隙間が残る。
     **上ケースの壁 1.6mm はノズル 4 本ぶん**で、これは意図した値。
     """
-    from gen_case import FLOOR, LID_T, WALL
+    from gen_case import FLOOR, REAR_LID_T, WALL
     from interface import BEZEL_WALL
-    for label, t in (("側壁", WALL), ("床", FLOOR), ("蓋", LID_T),
+    # 底面の蓋は廃止した（2026-08-12）。見るのは奥面の蓋の厚み。
+    for label, t in (("側壁", WALL), ("床", FLOOR), ("奥面の蓋", REAR_LID_T),
                      ("上ケースの壁", BEZEL_WALL)):
         n = t / NOZZLE
         assert abs(n - round(n)) < 1e-6, \

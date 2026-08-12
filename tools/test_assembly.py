@@ -58,7 +58,7 @@ def _require_kicad(what):
 
 # 組み立てに含まれていなければならない部品。
 # 名前を書いておくことで、あとから足した部品が検査から漏れるのを防ぐ。
-REQUIRED = {"case", "plate", "pcb", "lid", "batt", "db", "topcase",
+REQUIRED = {"case", "plate", "pcb", "rear_lid", "batt", "db", "topcase",
             "foot0", "foot1", "xiao",
             # open-gaps #29: 製品として存在する実物
             "sockets", "pcb_parts", "db_parts", "switches", "keycaps",
@@ -276,7 +276,7 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     import numpy as np
     import trimesh
     from envelopes import SW_PWR_BODY_D, SW_PWR_H, SW_PWR_PIN_W, SW_PWR_W
-    from gen_case import (BUMP_DEPTH, CLEARANCE, SW_RIB, WALL,
+    from gen_case import (BUMP_DEPTH, CLEARANCE, SW_HOLD_H, SW_RIB, WALL,
                           power_switch_center_z, power_switch_x_center)
     from interface import plate_positions
     from matrix import keymap_order
@@ -311,11 +311,14 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
             for dz in np.linspace(-1.0, 1.0, 3)]
     # 奥のリブ。**端子のスリットを外して**左右の残りを見る。
     rib_y = y_in - depth - SW_RIB / 2
-    rib = [(x + s_ * (SW_PWR_PIN_W + CLEARANCE + SW_PWR_W) / 4, rib_y, z + dz)
-           for s_ in (-1, 1)
-           for dz in np.linspace(-SW_PWR_H * 0.35, SW_PWR_H * 0.35, 3)]
+    # **リブの高さの中だけを見る。**受けは本体より低い（SW_HOLD_H。
+    # 高くすると入れられなくなる。test_every_part_can_be_put_in_from_outside）。
+    z_bot = z - SW_PWR_H / 2 - CLEARANCE / 2
+    zs_rib = np.linspace(z_bot + 0.6, z_bot + SW_HOLD_H - 0.6, 3)
+    rib = [(x + s_ * (SW_PWR_PIN_W + CLEARANCE + SW_PWR_W) / 4, rib_y, zz)
+           for s_ in (-1, 1) for zz in zs_rib]
     # 端子のスリット（真ん中）。ここは抜けていなければ端子が入らない。
-    slit = [(x, rib_y, z + dz) for dz in np.linspace(-2.5, 2.5, 3)]
+    slit = [(x, rib_y, zz) for zz in zs_rib]
     # 入れ口（溝の上）。
     mouth = [(x + dx, y_mid, z + SW_PWR_H / 2 + CLEARANCE_HALF + 1.0)
              for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)]
@@ -1648,8 +1651,8 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
     """
     import numpy as np
     import trimesh
-    from gen_case import (BUMP_DEPTH, SW_SLOT_LEN, SW_SLOT_W, USB_H, USB_W,
-                          WALL,
+    from gen_case import (BUMP_DEPTH, SW_SLOT_W, USB_H, USB_W,
+                          WALL, power_switch_slot_z,
                           daughterboard_x_center,
                           power_switch_center_z, power_switch_x_center,
                           rear_lid_opening, usb_center_z)
@@ -1668,8 +1671,8 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
     windows = [
         ("電池蓋の口", ox0 - m, oz0 - m, ox1 + m, oz1 + m),
         ("電源スイッチのスロット", sx - SW_SLOT_W / 2 - m,
-         sz - SW_SLOT_LEN / 2 - m, sx + SW_SLOT_W / 2 + m,
-         sz + SW_SLOT_LEN / 2 + m),
+         power_switch_slot_z(half, w)[0] - m, sx + SW_SLOT_W / 2 + m,
+         power_switch_slot_z(half, w)[1] + m),
         ("USB-C の口", db_x - USB_W / 2 - m, usb_center_z() - USB_H / 2 - m,
          db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
     ]
@@ -1729,3 +1732,89 @@ def test_the_blender_script_only_imports_what_blender_has():
         "  **Blender の Python には build123d も numpy も無い。**\n"
         "  ここが落ちると .blend が 1 つも作られず、しかも Blender は\n"
         "  0 を返すので気づけない。データは part_kinds.py へ置くこと")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
+    """電源スイッチの**指の窪みが、電池蓋に覆われていない**こと。
+
+    ⚠️ 2026-08-12。電池蓋をコブの奥面へ移して座ぐりを広げたら、
+    **窪み（幅 10mm）が座ぐりに 2.22mm 食い込んだ。**どちらも外面の造作
+    なので、重なった部分は蓋の下に隠れる＝**指が入らない。**
+
+    干渉検査では出ない（蓋は座ぐりの中、スイッチは壁の裏で、立体としては
+    当たらない）。**「面の取り合い」は体積では見えない。**
+
+    窪みは操作のためのもので、**狭いと部品選択の前提（突出量 1.4mm で
+    足りる）が崩れる**——窪みが無ければ壁 2.4mm を貫く必要に戻る。
+    """
+    from gen_case import (power_switch_dish_w, power_switch_x_center,
+                          rear_lid_rebate)
+    from interface import plate_positions
+    from matrix import keymap_order
+
+    _, (w, _h) = plate_positions(keymap_order(halves()[half]))
+    sx = power_switch_x_center(half, w)
+    rx0, _rz0, rx1, _rz1 = rear_lid_rebate(half, w)
+    dw = power_switch_dish_w(half, w)      # **上限 SW_DISH_W ではなく実寸**
+    assert dw >= 5.0, (
+        f"{half}: 指の窪みが {dw:.2f}mm しか取れない。指が入らない"
+        "（蓋の座ぐりと子基板ポケットに挟まれている）")
+    d0, d1 = sx - dw / 2, sx + dw / 2
+    overlap = min(d1, rx1) - max(d0, rx0)
+    assert overlap <= 0, (
+        f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が電池蓋の座ぐり "
+        f"({rx0:.1f}..{rx1:.1f}) に {overlap:.2f}mm 重なる。"
+        "**窪みの一部が蓋に覆われて指が入らない**")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_every_part_can_be_put_in_from_outside(half):
+    """ケースに入る部品が、**外から入れられる**こと。
+
+    ⚠️ **「留まるか」だけを見ていて「入れられるか」を見ていなかった。**
+    2026-08-12 に電源スイッチで踏んだ——奥のリブで押し込みを止めたのは
+    よかったが、**そのリブのせいで手前からは入らず、上からはツマミが
+    スロットの上端に当たって入らなかった**（実形状で 12.6mm³）。
+    #35 の電池蓋（外から開かない）と同じ型で、**3 度目**だった。
+
+    gen_assembly.INSERT_PATH に書いた逃がし方を、**実形状でたどる。**
+    途中で 1 点でも当たれば、その部品は入らない（＝組み立てできない）。
+    """
+    from build123d import Location
+    from gen_assembly import INSERT_PATH
+
+    parts, _ = build_assembly(HALVES[half], half)
+    case = parts["case"]
+
+    def hit(part, d):
+        v = 0.0
+        for a in (Location(d) * part).solids():
+            for b in case.solids():
+                s_ = a & b
+                if s_ is not None and s_.volume > 1e-6:
+                    v += s_.volume
+        return v
+
+    missing = sorted(k for k in INSERT_PATH if k not in parts)
+    assert not missing, f"INSERT_PATH に居ない部品が書いてある: {missing}"
+
+    for name, path in sorted(INSERT_PATH.items()):
+        part = parts[name]
+        assert hit(part, (0, 0, 0)) < 1e-6, (
+            f"{half}: {name} が据わった位置で当たっている")
+        for step, d in enumerate(path, start=1):
+            v = hit(part, d)
+            assert v < 1e-6, (
+                f"{half}: {name} を {d} へ動かすと {v:.2f}mm³ 当たる"
+                f"（{step}/{len(path)} 手目）。**入れられない＝組み立てできない**")
+        # 最後は本当に外へ出ていること（当たらないだけでは中に居るかもしれない）
+        b_case = case.bounding_box()
+        b_end = (Location(path[-1]) * part).bounding_box()
+        outside = (b_end.min.Z > b_case.max.Z - 1e-6
+                   or b_end.min.Y > b_case.max.Y - 1e-6
+                   or b_end.max.Y < b_case.min.Y + 1e-6)
+        assert outside, (
+            f"{half}: {name} は当たらないが、まだケースの中に居る"
+            f"（最後の手 {path[-1]}）。**外まで出す経路を書くこと**")
+
