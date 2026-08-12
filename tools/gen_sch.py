@@ -65,7 +65,7 @@ MARGIN = 25.4
 GROUPS = [
     ("電源",       lambda ref, kind: kind in ("battery_land", "wire_land",
                                               "schottky", "res_1M")
-                                     or ref in ("C_BULK", "C_MCU")),
+                                     or ref in ("C_BULK", "C_RAIL")),
     ("シフトレジスタ", lambda ref, kind: kind == "74LVC595" or ref.startswith("C_U")),
     ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840" or ref == "C_DB"),
     ("ケーブル",   lambda ref, kind: kind == "ffc_12p"),

@@ -531,14 +531,14 @@
 		(shape input)
 		(at 416.56 29.21 180)
 		(effects (font (size 1.0 1.0)))
-		(uuid "ed76d6dc-64ed-5f17-b770-b5dc379954e1")
+		(uuid "136560c5-0b38-5212-9b41-65a86df4dff6")
 	)
 	(global_label
 		"GND"
 		(shape input)
 		(at 416.56 31.75 180)
 		(effects (font (size 1.0 1.0)))
-		(uuid "111de29b-e9db-5bb7-83f9-43fc3aa1b97f")
+		(uuid "13faabdf-a9ec-5cb0-bc18-739602fb75b3")
 	)
 	(global_label
 		"VBATT_SW"
@@ -1684,15 +1684,15 @@
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "bac15891-343b-5edd-a3da-0a6ccbad5293")
-		(property "Reference" "C_MCU" (at 427.99 24.13 0) (effects (font (size 1.27 1.27))))
+		(uuid "e6994f4b-be03-5b5e-a77a-e97ced97dcb9")
+		(property "Reference" "C_RAIL" (at 427.99 24.13 0) (effects (font (size 1.27 1.27))))
 		(property "Value" "cap_100n" (at 427.99 36.83 0) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "d277b1e9-e6bb-5e8d-b5a5-9a94a840caac"))
-		(pin "2" (uuid "1042cc2a-36ec-5541-8b41-83b845b7af9d"))
+		(pin "1" (uuid "2d79e424-9b81-575e-a4a5-e42253129ac7"))
+		(pin "2" (uuid "78ef4209-b832-57c2-a46e-2f142932e8f5"))
 		(instances
 			(project "hhkb_split_left"
 				(path "/ca108a28-007f-578b-bcff-b0e6a088389f"
-					(reference "C_MCU")
+					(reference "C_RAIL")
 					(unit 1)
 				)
 			)

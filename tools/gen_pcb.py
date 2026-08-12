@@ -299,18 +299,42 @@ PLACE = {
         "BT1": (0, -62.0), "SW_PWR": (0, -50.0), "D_PWR": (0, -40.0),
         "R_HI": (0, -32.0), "R_LO": (0, -27.0),
         "J_DB": (0, -6.9),
-        "C_BULK": (0, 2.5), "C_MCU": (0, 7.0),
-        "U1": (0, 13.0), "C_U1": (0, 26.0),
+        # レール系は J_DB（電源が基板を出入りするところ）に寄せる。
+        # C_U1 はここに書かない。**DECOUPLE_BESIDE が U1 から算出する。**
+        "C_BULK": (0, 2.0), "C_RAIL": (0, 6.5),
+        "U1": (0, 16.5),
     },
     "right": {
         "BT1": (0, -78.0), "SW_PWR": (0, -66.0), "D_PWR": (0, -56.0),
         "R_HI": (0, -48.0), "R_LO": (0, -43.0),
         "J_DB": (0, -23.5),
-        "C_BULK": (0, -13.0), "C_MCU": (0, -5.0),
-        "U1": (0, 4.0), "C_U1": (0, 16.0),
-        "U2": (0, 30.0), "C_U2": (0, 42.0),
+        "C_BULK": (0, -14.0), "C_RAIL": (0, -9.0),
+        # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
+        "U1": (0, 2.0), "U2": (0, 15.0),
     },
 }
+
+
+# **パスコンは IC の直近に置く。座標を手で書かない。**
+#
+# 手で書いていた結果、**C_U1 が U1 の VCC ピンから 17.0mm 離れていた**
+# （2026-08-12 に実測。指摘 6）。この距離ではパスコンとして働かない。
+# しかも C_RAIL（当時 C_MCU）のほうが U1 に近いという、逆転した並びだった。
+#
+# パスコンで効くのは配置上の直線距離ではなく、
+# **IC の電源ピン → パスコン → GND → 地板 → IC の GND ピン**と一周する
+# 経路の配線長（ループのインダクタンス）。だから
+#
+#   - 置く側は「相手の V3V3 パッドがある側」を**実際のパッド座標から決める**
+#   - コートヤードが触れない最短の位置まで寄せる
+#   - GND 側の戻りは地板で受ける（gnd_fanout が各 GND パッドの脇にビアを立てる）
+#
+# 通ったかどうかの判定は**配線後の実測**で行う
+# （test_pcb.test_decoupling_caps_are_close_to_their_ic_in_copper）。
+DECOUPLE_BESIDE = {"C_U1": "U1", "C_U2": "U2"}
+
+# コートヤードどうしの隙間（mm）。0 にすると DRC のコートヤード重なりで落ちる。
+BESIDE_GAP = 0.25
 
 
 def _center_courtyard_in_band(fp, band):
@@ -328,11 +352,82 @@ def _center_courtyard_in_band(fp, band):
     fp.SetPosition(pcbnew.VECTOR2I(pos.x, int(pos.y + want - mid)))
 
 
+def _courtyard_x_extent(fp):
+    """コートヤードの x の範囲（mm）。無ければ外形の箱で代用する。"""
+    for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+        shape = fp.GetCourtyard(layer)
+        if not shape.IsEmpty():
+            bb = shape.BBox()
+            return pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+    bb = fp.GetBoundingBox(False, False)
+    return pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+
+
+def _pad_with_net(fp, netname):
+    """そのフットプリントで指定ネットに繋がっているパッド。無ければ None。"""
+    for pad in fp.Pads():
+        if pad.GetNetname() == netname:
+            return pad
+    return None
+
+
+def _place_beside(board, cap_ref, ic_ref, band):
+    """パスコンを IC の**電源ピンがある側**へ、触れない最短距離で寄せる。
+
+    どちら側に置くかを手で書かない。**IC の V3V3 パッドが中心のどちら側に
+    あるかを実際の座標から決める。**IC の向きを変えてもついてくる。
+
+    寄せる先はコートヤードの縁 + BESIDE_GAP。DRC のコートヤード重なりを
+    出さない最短の位置になる。
+    """
+    ic = board.FindFootprintByReference(ic_ref)
+    cap = board.FindFootprintByReference(cap_ref)
+    vcc = _pad_with_net(ic, "V3V3")
+    if vcc is None:
+        raise RuntimeError(
+            f"{ic_ref} に V3V3 のパッドが無い。パスコンをどちら側に置くか"
+            "決められない（ネットの割り当てが先に済んでいる必要がある）")
+
+    side = 1.0 if vcc.GetPosition().x >= ic.GetPosition().x else -1.0
+    ic_l, ic_r = _courtyard_x_extent(ic)
+    cap_l, cap_r = _courtyard_x_extent(cap)
+    cx = pcbnew.ToMM(cap.GetPosition().x)
+    # コートヤードは原点に対して対称とは限らないので、縁からの寸法で測る
+    if side > 0:
+        want_left = ic_r + BESIDE_GAP
+        dx = want_left - cap_l
+    else:
+        want_right = ic_l - BESIDE_GAP
+        dx = want_right - cap_r
+    cap.SetPosition(pcbnew.VECTOR2I_MM(cx + dx,
+                                       pcbnew.ToMM(cap.GetPosition().y)))
+    _center_courtyard_in_band(cap, band)
+
+    # **コンデンサの V3V3 側のパッドが IC を向いているか。**
+    # 逆を向いていると、わざわざ寄せた意味が半分になる（電流が部品を
+    # 回り込む）。向いていなければ 180 度回す。
+    p_v3 = _pad_with_net(cap, "V3V3")
+    p_gnd = _pad_with_net(cap, "GND")
+    if p_v3 is not None and p_gnd is not None:
+        toward_ic = (p_v3.GetPosition().x - p_gnd.GetPosition().x) * side < 0
+        if not toward_ic:
+            cap.SetOrientationDegrees(cap.GetOrientationDegrees() + 180)
+
+
 def _place_electronics(board, half, net):
     """回路に宣言された電子部品を、段の間の帯に置いてネットを割り当てる。"""
     from circuit import netlist
     decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
-    for ref, spec in PLACE[half].items():
+
+    # 置く場所の一覧。**パスコンは PLACE に座標を持たない**（手で書いた
+    # 座標が 17mm ずれていたのが指摘 6 の原因）。いったん相手の IC と
+    # 同じところに出し、ネットを塗り終えてから _place_beside が寄せる。
+    spots = dict(PLACE[half])
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        if cap_ref in decl and ic_ref in spots:
+            spots[cap_ref] = spots[ic_ref]
+
+    for ref, spec in spots.items():
         band, x = spec[0], spec[1]
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
@@ -384,6 +479,13 @@ def _place_electronics(board, half, net):
                         f"フットプリント {lib}:{name} に無い。"
                         "pinmap.py かフットプリントのどちらかが間違っている")
                 pad.SetNet(net(netname))
+
+    # **パスコンを IC へ寄せるのは、ネットを塗り終えたあと。**
+    # どちら側へ寄せるかを V3V3 パッドの位置から決めるので、
+    # ネットが付いていないと決められない。
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        if cap_ref in decl and ic_ref in PLACE[half]:
+            _place_beside(board, cap_ref, ic_ref, PLACE[half][ic_ref][0])
 
 
 # アンテナの禁止域は interface.ANTENNA_KEEPOUT（凍結境界）から読む。
