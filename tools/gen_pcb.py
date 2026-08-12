@@ -34,6 +34,7 @@ from matrix import assignments, keymap_order, shape                # noqa: E402
 from bands import BAND_Y                                           # noqa: E402
 from circuit import WIRE_PAD_KINDS                                 # noqa: E402
 import gnd_fanout                                                   # noqa: E402
+import pinmap                                                       # noqa: E402
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -362,9 +363,27 @@ def _place_electronics(board, half, net):
             for pin, netname in pins.items():
                 if netname == "NC":
                     continue
-                pad = fp.FindPadByNumber(pin)
-                if pad is not None:
-                    pad.SetNet(net(netname))
+                # **ピン名をパッド番号に直してから引く。**
+                #
+                # circuit.py は名前（VCC / MR / A / K）で宣言し、
+                # フットプリントは番号（1..16）でパッドを持つ。
+                # ここを直接 FindPadByNumber(pin) に渡していたので、
+                # 74LVC595 の 16 パッドと D_PWR の 2 パッドが**ネット無しの
+                # まま基板になっていた**（2026-08-12 発見）。
+                # 列を駆動する回路と電源経路が丸ごと欠けていたのに、
+                # DRC 0 件・未配線 0 件で緑だった。
+                pad_no = pinmap.resolve(kind, pin)
+                if pad_no is None:
+                    continue          # 回路図だけにあるピン（XIAO の BAT）
+                pad = fp.FindPadByNumber(pad_no)
+                # **見つからなければ落とす。**以前はここが
+                # `if pad is not None:` で、黙って飛ばしていた。
+                if pad is None:
+                    raise RuntimeError(
+                        f"{ref}({kind}) のピン {pin} = パッド {pad_no} が "
+                        f"フットプリント {lib}:{name} に無い。"
+                        "pinmap.py かフットプリントのどちらかが間違っている")
+                pad.SetNet(net(netname))
 
 
 # アンテナの禁止域は interface.ANTENNA_KEEPOUT（凍結境界）から読む。
@@ -495,11 +514,13 @@ def build(half, keys):
         # **Flip は board.Add の後で呼ぶ。** 基板に属していない状態で反転すると
         # segfault する（実際に落とした）。
         d.Flip(d.GetPosition(), False)          # ソケットと同じ裏面へ
+        # **パッド番号は pinmap から引く。**ここで直に "1" / "2" と書くと、
+        # 回路図側（同じ pinmap を読む）と静かにずれる。
         sw = board.FindFootprintByReference(f"SW{i}")
-        sw.FindPadByNumber("1").SetNet(net(f"COL{c}"))
-        sw.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))
-        d.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))   # アノード
-        d.FindPadByNumber("1").SetNet(net(f"ROW{r}"))    # カソード
+        sw.FindPadByNumber(pinmap.resolve("keyswitch", "1")).SetNet(net(f"COL{c}"))
+        sw.FindPadByNumber(pinmap.resolve("keyswitch", "2")).SetNet(net(f"SW{i}_D"))
+        d.FindPadByNumber(pinmap.resolve("diode", "A")).SetNet(net(f"SW{i}_D"))
+        d.FindPadByNumber(pinmap.resolve("diode", "K")).SetNet(net(f"ROW{r}"))
 
     # ------------------------------------------------------------------
     # 配線はここではやらない

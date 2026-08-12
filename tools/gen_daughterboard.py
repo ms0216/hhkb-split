@@ -22,6 +22,7 @@ import pcbnew
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from circuit import daughterboard_netlist  # noqa: E402
+import pinmap  # noqa: E402
 from gen_pcb import (  # noqa: E402
     CORNER_R, JLC, KICAD_FP, TRACK_W, VIA_D, VIA_DRILL, _apply_jlcpcb_rules,
     _load, _rounded_rect_outline,
@@ -150,9 +151,15 @@ def build():
         for pin, netname in pins.items():
             if netname == "NC":
                 continue
-            pad = fp.FindPadByNumber(pin)
+            # **本体基板と同じ経路（pinmap）を通す。**この子基板は
+            # ピン名とパッド名が偶然そろっていたので無事だったが、
+            # 本体基板は同じ場所で 74LVC595 を丸ごと落としていた。
+            pad_no = pinmap.resolve(kind, pin)
+            if pad_no is None:
+                continue          # 回路図だけにあるピン（XIAO の BAT）
+            pad = fp.FindPadByNumber(pad_no)
             if pad is None:
-                raise RuntimeError(f"{ref} に端子 {pin} が無い")
+                raise RuntimeError(f"{ref} に端子 {pin}（パッド {pad_no}）が無い")
             pad.SetNet(net(netname))
 
     _route(board)
