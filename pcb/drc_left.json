@@ -1,7 +1,7 @@
 {
   "board": "hhkb_split_left.kicad_pcb",
-  "sha256": "0202c5edc93b17153f291003f4b76c8392db7acae58895056a53e139c4fb7ff9",
+  "sha256": "dc9b1f4dc9365b90a10c31cc1e6d4c19f2fdeae23716c6a35f1c0f6022b00459",
   "violations": 0,
-  "unconnected": 1,
+  "unconnected": 0,
   "details": []
 }
