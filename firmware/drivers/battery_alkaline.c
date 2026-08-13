@@ -103,6 +103,22 @@ static int alk_sample_fetch(const struct device *dev, enum sensor_channel chan) 
     return 0;
 }
 
+/* **「測った直後に読む」前提で書いてある。**
+ *
+ * ここは fetch とは別の文脈から呼ばれ、millivolts と state_of_charge を
+ * 別々に読む。間に alk_sample_fetch() が挟まると、**2 つが別の測定の値に
+ * なりうる**（電圧は新しく、% は古い、など）。ロックは置いていない。
+ *
+ * いま成立している理由は 2 つだけ:
+ *   - 読み手は zmk_battery_state_changed の listener で、ZMK が測った
+ *     直後に呼ばれる（firmware/src/low_battery_off.c の冒頭のコメント）
+ *   - その listener は**電圧しか読まない**ので、そもそも 2 値の
+ *     整合を必要としていない
+ *
+ * ⚠️ **電圧と % を一緒に使う読み手を足すときは、ここを見直すこと。**
+ * その時点でこの前提は崩れる（2 値を 1 回のクリティカルセクションで
+ * 取るか、fetch と channel_get をまとめて呼ぶ）。
+ */
 static int alk_channel_get(const struct device *dev, enum sensor_channel chan,
                            struct sensor_value *val) {
     const struct alk_data *data = dev->data;
