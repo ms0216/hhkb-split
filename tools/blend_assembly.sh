@@ -9,11 +9,15 @@
 set -e
 BLENDER=${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-HALVES=${*:-"left right"}
-"$BLENDER" -b -P "$(dirname "$0")/blend_assembly.py" -- $HALVES
+# 引数が無ければ両側。**`$*` の unquoted 展開ではなく位置パラメータで持つ**
+# （空白入りの引数が来ても壊れない）。
+if [ $# -eq 0 ]; then
+    set -- left right
+fi
+"$BLENDER" -b -P "$(dirname "$0")/blend_assembly.py" -- "$@"
 # **出来た物を確かめる。**tools/*.py より新しくなければ、作られていない。
 NEWEST=$(ls -t "$ROOT"/tools/*.py | head -1)
-for h in $HALVES; do
+for h in "$@"; do
     f="$ROOT/build/assembly/$h.blend"
     if [ ! -f "$f" ] || [ "$f" -ot "$NEWEST" ]; then
         echo "NG $h: $f が作られていない（または $NEWEST より古い）" >&2

@@ -15,10 +15,14 @@
 #            tools/refresh_view.sh left       # 片側だけ（速い）
 set -e
 cd "$(dirname "$0")/.."
-HALVES=${*:-"left right"}
-echo "== STL を出す（$HALVES）"
-.venv/bin/python3 tools/export_assembly.py $HALVES
-echo "== .blend を作る（$HALVES）"
-tools/blend_assembly.sh $HALVES
+# 引数が無ければ両側。**`$*` の unquoted 展開ではなく位置パラメータで持つ**
+# （空白入りの引数が来ても壊れない）。
+if [ $# -eq 0 ]; then
+    set -- left right
+fi
+echo "== STL を出す（$*）"
+.venv/bin/python3 tools/export_assembly.py "$@"
+echo "== .blend を作る（$*）"
+tools/blend_assembly.sh "$@"
 echo
 echo "開き方: build/assembly/left.blend をダブルクリック。"
