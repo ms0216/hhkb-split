@@ -625,7 +625,8 @@ BLE の規格:  タイムアウト > (1 + latency) × 間隔 × 2
 > **2 点だけで引いた線を、3 点目が来る前に信じていた。**
 
 **ログで追った（2026-08-10・段 2）。**15ms ＋ UART ログで焼き、Saleae で
-4 分ぶん取った（配線は [img/saleae-uart-hookup.svg](img/saleae-uart-hookup.svg)）。
+4 分ぶん取った（配線は [img/saleae-uart-hookup.svg](img/saleae-uart-hookup.svg)。
+[tools/gen_saleae_hookup.py](../../tools/gen_saleae_hookup.py) で生成。SVG を手で編集しない）。
 ログを出すぶん電流は底上げされ、**0.90 → 0.77mA**（落ち幅 0.13mA）で
 同じ現象が起きた。
 
@@ -693,7 +694,8 @@ BLE の規格:  タイムアウト > (1 + latency) × 間隔 × 2
 **テスターの数字を目で追う限り、ここが限界。**
 
 → **オシロで GND 側シャントを読む。**配線は
-[img/scope-shunt-hookup.svg](img/scope-shunt-hookup.svg)。
+[img/scope-shunt-hookup.svg](img/scope-shunt-hookup.svg)
+（[tools/gen_scope_shunt.py](../../tools/gen_scope_shunt.py) で生成。SVG を手で編集しない）。
 **USB を挿さなくなったので GND 側に入れられる**ようになった（片側が電池の
 − なので、普通のプローブ 1 本で読める）。100Ω で 0.3〜0.9mA が 30〜90mV。
 
@@ -1161,6 +1163,8 @@ One of the following:
 **0.085〜0.102。ばらつき 0.017mA**（分解能 0.01mA の 2 倍以内）。
 → **「底は 0.09mA 前後」**と言ってよい。
 
+図: [img/host-link.svg](img/host-link.svg)（[tools/gen_host_link.py](../../tools/gen_host_link.py) で生成。SVG を手で編集しない）
+
 ###### 独立の裏づけ — 候補 A を当てた
 
 ```
@@ -1220,8 +1224,9 @@ One of the following:
 
 ##### 治具にキーを 2 個足した（2026-08-10・**リセットボタンから解放**）
 
-**配線は [img/left-jig-keys.svg](img/left-jig-keys.svg)。**既存の配線は 1 本も
-動かしていない。
+**配線は [img/left-jig-keys.svg](img/left-jig-keys.svg)**
+（[tools/gen_left_jig_keys.py](../../tools/gen_left_jig_keys.py) で生成。SVG を手で編集しない）。
+**既存の配線は 1 本も動かしていない。**
 
 | キー | 割り当て | 効果 |
 |---|---|---|
