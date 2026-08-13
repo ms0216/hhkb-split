@@ -32,6 +32,7 @@ config HHKB_LOW_BATTERY_SOFT_OFF
 config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
 	int "何回続けて下回ったら止まるか"
 	default 2
+	range 1 255
 	depends on HHKB_LOW_BATTERY_SOFT_OFF
 	help
 	  1 回で止めない。BLE 送信中の電圧降下（電池の内部抵抗 × 送信電流）で
