@@ -228,7 +228,8 @@ GND だけで左 732 個・右 913 個**（84df0cb・86e0101 の実測）で、
 
 ## 次にやること
 
-1. ガーバー・BOM・CPL を出す（`kicad-cli pcb export gerbers` ほか）
+1. ~~ガーバー・BOM・CPL を出す~~（✅ 済み。`tools/export_fab.py` が出す。
+   発注前の門 2 つと `tools/test_export_fab_gate.py` 付き）
 2. **FFC ケーブルを決める。**`FFC_LENGTH` / `FFC_SLACK` は暫定値
    （[provisional-values](provisional-values.md)）。届くことは
    `test_the_ffc_cable_reaches_the_daughterboard` が見ている
