@@ -16,31 +16,23 @@
 **この案件でいちばん高くつく形（設定しただけで効いていない）そのもの。**
 
 `export_fab.py` は KiCad 同梱の Python でしか動かない（`pcbnew` を読む）ので、
-**ここでは判定の規則だけを、ソースから読み出して確かめる。**
-関数を呼べないぶん、**規則の文字列が実物と一致していることも確かめる。**
+**判定だけを `export_fab_gate.py` に分けてある。ここはその実物を import して、
+合成した文書を食わせた挙動で確かめる。**
+
+⚠️ **以前ここは規則の文字列を自前で二重定義していた**（実物のソースに
+その文字列が含まれるかを見るだけ）。**両方とも自分で書いた文字列なので、
+規則そのものが間違っていても通る**——CLAUDE.md 規則 3。いまは実物を呼ぶ。
 """
 
-import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOC = ROOT / "docs/hardware/open-gaps.md"
-SRC = ROOT / "tools/export_fab.py"
 
-# `_gate_antenna()` が使う 2 つの文字列。**実物から読む。**
-_UNRESOLVED = "## 23. ★未解決★ アンテナが地板に挟まれている"
-_ACCEPTED = r"^### 承知して発注する\s*$"
+sys.path.insert(0, str(ROOT / "tools"))
 
-
-def _rule_is_the_one_in_the_source():
-    """検査が見ている規則が、`export_fab.py` の中身と同じであること。"""
-    src = SRC.read_text()
-    assert _UNRESOLVED in src, "未解決の見出しの文字列が export_fab.py と違う"
-    assert _ACCEPTED in src, "承知の節を探す正規表現が export_fab.py と違う"
-
-
-def test_the_rule_matches_the_real_gate():
-    _rule_is_the_one_in_the_source()
+from export_fab_gate import UNRESOLVED_HEADING, is_gate_open  # noqa: E402
 
 
 def test_the_gate_is_not_opened_by_prose_that_merely_mentions_it():
@@ -53,9 +45,7 @@ def test_the_gate_is_not_opened_by_prose_that_merely_mentions_it():
         "\n"
         "**「### 承知して発注する」が無い限りガーバーを出さない。**\n"
     )
-    assert _UNRESOLVED in prose                       # 門は armed のはず
-    assert re.search(_ACCEPTED, prose, re.M) is None, (
-        "本文の引用で門が開いてしまう")
+    assert not is_gate_open(prose), "本文の引用で門が開いてしまう"
 
 
 def test_the_gate_opens_only_for_a_real_heading():
@@ -70,7 +60,13 @@ def test_the_gate_opens_only_for_a_real_heading():
         "\n"
         "2026-08-11 に誰それが承知した。駄目だったら子基板を作り直す。\n"
     )
-    assert re.search(_ACCEPTED, accepted, re.M) is not None
+    assert is_gate_open(accepted)
+
+
+def test_the_gate_opens_when_the_gap_is_resolved():
+    """**#23 が解決したら、承知の節が無くても通ること。**"""
+    resolved = "## 23. アンテナが地板に挟まれている（解決済み）\n"
+    assert is_gate_open(resolved)
 
 
 def test_the_gate_is_currently_armed():
@@ -81,9 +77,9 @@ def test_the_gate_is_currently_armed():
     どちらも、気づかずに通ってよい変化ではない。
     """
     doc = DOC.read_text()
-    if _UNRESOLVED not in doc:
+    if UNRESOLVED_HEADING not in doc:
         return                          # #23 が解決した。門は不要
-    assert re.search(_ACCEPTED, doc, re.M) is None, (
+    assert not is_gate_open(doc), (
         "承知の節ができている。**発注してよい状態か、人が確かめること**")
 
 

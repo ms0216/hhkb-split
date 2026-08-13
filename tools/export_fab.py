@@ -26,7 +26,6 @@
 """
 
 import csv
-import re
 import sys
 from pathlib import Path
 
@@ -63,6 +62,9 @@ from export_fab_rotation import (  # noqa: E402
     ROTATION_UNVERIFIED, rotation_for_jlcpcb,
 )
 
+# アンテナの門の判定も同じ理由で分けてある。**検査はここの実物を見る。**
+from export_fab_gate import is_gate_open  # noqa: E402
+
 
 def _gate_antenna():
     """アンテナの risk を承知した記録があること。
@@ -79,12 +81,13 @@ def _gate_antenna():
 
     直し方は「行頭から始まる見出しであること」を見る。本文の引用は
     鉤括弧の中にあるので行頭には来ない。
+
+    **判定そのものは export_fab_gate.is_gate_open() にある**
+    （pcbnew 抜きで検査するため。test_export_fab_gate.py が実物を見る）。
     """
     doc = (ROOT / "docs/hardware/open-gaps.md").read_text()
-    if "## 23. ★未解決★ アンテナが地板に挟まれている" not in doc:
-        return                                  # 解決済み
-    if re.search(r"^### 承知して発注する\s*$", doc, re.M):
-        return                                  # 承知の記録がある（見出しとして）
+    if is_gate_open(doc):
+        return
     raise SystemExit(
         "\n★ アンテナの risk を承知した記録が無い ★\n"
         "\n"
