@@ -11,7 +11,7 @@
 
 **HHKB オリジナルの使い勝手を極力踏襲する。** 分割にするために必要な変更だけを加え、
 それ以外は変えない。この方針は [tools/test_invariants.py](tools/test_invariants.py) に
-12 個のテストとして書き下してあり、設計の都合で妥協しようとすると機械的に落ちる。
+テストとして書き下してあり、設計の都合で妥協しようとすると機械的に落ちる。
 
 守っているもの:
 
@@ -49,7 +49,7 @@ build/         生成された STL（未印刷）
 メッシュ健全性を、OrcaSlicer CLI で実際にスライスできるかを検証する。
 
 ```bash
-python -m pytest tools          # 412 件（約 16 分）
+python -m pytest tools          # 全検査（約 14 分。件数は --collect-only で数える）
 python tools/gen_case.py        # ケースを生成
 python tools/verify.py          # メッシュとスライスの検証
 ```
@@ -83,7 +83,7 @@ XIAO は GPIO が 11 本しかなく普通のマトリクスに 1 本足りな�
 | タスク | 内容 | 状態 |
 |---|---|---|
 | [C1](docs/hardware/task-c1-smoke-test.md) | 疎通確認（XIAO・書き込み・ZMK が実機で動くか） | ✅ 合格 |
-| [C2](docs/hardware/task-c2-keyscan.md) | キースキャン（マトリクス・ゴースト・74HC595） | ✅ C2-a 合格 / ⬜ C2-b |
+| [C2](docs/hardware/task-c2-keyscan.md) | キースキャン（マトリクス・ゴースト・シフトレジスタ。治具は 74HC595、本番は 74LVC595） | ✅ C2-a 合格 / ⬜ C2-b |
 | [C3](docs/hardware/task-c3-ble-split.md) | BLE 分割（左右同時押しが崩れないか） | ⬜ |
 | [C4・C5](docs/hardware/task-c4-c5-power.md) | 乾電池給電・逆流の測定・電池残量 | ⬜ |
 | [C6](docs/hardware/task-c6-confirm-on-real-hhkb.md) | 実機の DIP スイッチとキーマップを確認 | ⬜ **部品不要** |
@@ -104,7 +104,7 @@ MX 軸のキーボードだった）。同じ穴に落ちないため。
 |---|---|
 | A. 実機寸法の確定 | ✅ 完了 |
 | B. 機構設計（プレート・ケース） | ✅ STL 生成・検証済み / ⬜ 未印刷（[B3](docs/hardware/task-b3-print-and-compare.md)） |
-| C. 電気・ファームウェア検証 | 🔶 進行中（**C1・C2-a 合格**。C2-b は 74HC595 待ち、C3〜C5 は部品待ち） |
+| C. 電気・ファームウェア検証 | 🔶 進行中（**C1・C2-a 合格**。C2-b は 74HC595（治具用。本番は 74LVC595）待ち、C3〜C5 は部品待ち） |
 | D. 基板設計（KiCad → JLCPCB） | 🔶 D1・D2a 完了（外形・キー配置・マトリクス）。[詳細](pcb/README.md) |
 | E. 組み立て・実機調整 | ⬜ 未着手 |
 

@@ -126,7 +126,7 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 ## 検査を回す順番（**時間を無駄にしないため**）
 
 **同じ検査を二重に回さない。**`gen_assembly.py`（実形状の干渉・約 20 分）は
-`pytest tools`（約 13 分）の `test_nothing_bites_into_anything_else` と
+`pytest tools`（約 14 分）の `test_nothing_bites_into_anything_else` と
 **同じことをしている。**両方叩くと 30 分以上を捨てる（2026-08-12 に実際にやった）。
 
 | 段 | やること | 時間 | 目的 |
@@ -134,7 +134,7 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 | 1 | **箱モードで当たりを見る**（`build_assembly(..., real=False)` を直接叩く） | 数十秒 | 大きな取り違えをその場で潰す |
 | 2 | **`tools/refresh_view.sh`** で STL と .blend | 約 6 分 | **利用者が見られるようにする**／自分も目で見る |
 | 3 | 変更をひととおり終える | — | **1 つ直すたびに 3 を回さない。まとめる** |
-| 4 | **`pytest tools` を 1 回**（実形状の干渉を含む） | 約 13 分 | 本番の検査 |
+| 4 | **`pytest tools` を 1 回**（実形状の干渉を含む） | 約 14 分 | 本番の検査 |
 | 5 | コミット | — | |
 
 **基板を触ったときだけ** `gen_pcb → autoroute → drc`（約 5 分）を 4 の前に足す。
