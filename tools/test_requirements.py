@@ -100,6 +100,36 @@ def test_the_pinned_versions_match_the_environment():
     assert not bad, "requirements と環境がずれている:\n  " + "\n  ".join(bad)
 
 
+def test_mesh_contains_works_which_needs_rtree():
+    """**rtree が、コメントだけでなく検査で守られていること。**
+
+    `rtree` は import 名で出てこない（trimesh が `mesh.contains()` の
+    空間索引に使う transitive 依存）ので、上の AST 走査には見えない。
+    **requirements-dev.txt の行を消しても全部緑になる**——matplotlib で
+    2 回踏んだ轍と同じ形。
+
+    ここは「入っているか」ではなく **`contains()` が実際に答えを出すか**を
+    見る。無いと trimesh は例外を投げるか、黙って全部 False を返す。
+    それは `test_assembly.py` の「電源スイッチの受けが中空か」
+    （301 行・1697 行）が**静かに嘘になる**ということ。
+
+    故意に外して確認済み（2026-08-13）:
+      - `pip uninstall -y rtree` → ここと pinned_versions の 2 件が赤
+      - **requirements-dev.txt の `rtree==` 行を消す** → **ここだけが赤。**
+        他の 4 件は緑（記載が無いので突き合わせる相手も無い）。
+        **これが matplotlib で 2 回踏んだ穴そのもの。**
+    """
+    import numpy as np
+    import trimesh
+
+    # 一辺 2 の立方体。中心は中、遠くの点は外。**答えが分かっている形。**
+    box = trimesh.creation.box(extents=(2.0, 2.0, 2.0))
+    got = box.contains(np.array([[0.0, 0.0, 0.0], [5.0, 5.0, 5.0]]))
+    assert list(got) == [True, False], (
+        f"mesh.contains() が中と外を見分けられない（得た値: {list(got)}）。"
+        "rtree が入っていない可能性が高い——requirements-dev.txt を見ること")
+
+
 def test_ci_installs_the_kicad_that_wrote_the_board_files():
     """CI が入れる KiCad の版が、基板ファイルを書いた版と一致すること。
 
