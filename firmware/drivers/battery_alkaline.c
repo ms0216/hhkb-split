@@ -15,11 +15,14 @@
 
 #define DT_DRV_COMPAT hhkb_battery_alkaline
 
+#include <stdint.h>
+
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(hhkb_battery, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -87,7 +90,13 @@ static int alk_sample_fetch(const struct device *dev, enum sensor_channel chan) 
     int32_t val = data->adc_raw;
     adc_raw_to_millivolts(adc_ref_internal(data->adc), data->acc.gain, as->resolution, &val);
 
-    data->millivolts = val * (uint64_t)cfg->full_ohm / cfg->output_ohm;
+    /* 電池を外すとノイズで負が返る。そのまま uint に上げると巨大値 →
+     * uint16 に折り返して**高残量に化け**、打ち止めが効かなくなる。 */
+    if (val < 0) {
+        val = 0;
+    }
+    uint32_t mv = (uint32_t)((uint64_t)val * cfg->full_ohm / cfg->output_ohm);
+    data->millivolts = (uint16_t)MIN(mv, UINT16_MAX);
     data->state_of_charge = alkaline_mv_to_pct(cfg, data->millivolts);
     LOG_DBG("ADC raw %d => %u mV => %u%%", data->adc_raw, data->millivolts,
             data->state_of_charge);
