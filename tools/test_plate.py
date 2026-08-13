@@ -231,7 +231,7 @@ def test_stab_offset_rejects_unknown_width():
         stab_offset_for(2.5)
 
 
-def test_corner_radius_is_applied():
+def test_corner_radius_is_applied_to_the_plate():
     """外形の角が丸められていること（直角なら頂点が 4 つのはず）。"""
     part, _, _ = build_plate(HALVES["left"], "left")
     outer = top_face(part).outer_wire()

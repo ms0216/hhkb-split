@@ -56,7 +56,7 @@ def test_keyscan_is_a_plain_diode_matrix():
     assert compatibles == ["zmk,kscan-gpio-matrix"], compatibles
 
 
-def test_diode_direction_is_col2row():
+def test_diode_direction_is_col2row_in_the_keyscan():
     """列が出力・行が入力。ダイオードのアノードが列側。
 
     逆にすると全キーが反応しない。基板のダイオード実装向きと直結する。

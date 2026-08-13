@@ -108,7 +108,7 @@ def test_the_pin_count_matches_the_connector():
     assert "12 ピン" in DOC.read_text(), "文書のコネクタ指定と本数が食い違う"
 
 
-def test_the_battery_never_reaches_the_bat_pin():
+def test_the_battery_never_reaches_the_bat_pin_on_the_daughterboard():
     """BAT 端子がケーブルに載っていないこと。
 
     **XIAO の BAT 端子はリポ用充電回路に直結している。**乾電池をつなぐと
