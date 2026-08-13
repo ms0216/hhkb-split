@@ -101,7 +101,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 ## よく使うコマンド
 
 ```
-.venv/bin/pytest tools -q                      # 全検査（402 件・約 14 分）
+.venv/bin/pytest tools -q                      # 全検査（448 件・約 14 分）
 .venv/bin/python3 tools/gen_case.py            # ケース・上ケース・蓋・脚
 .venv/bin/python3 tools/gen_assembly.py        # 組み立て干渉（0 でなければならない）
 tools/refresh_view.sh                          # ★**CAD を変えたら必ずこれ。**STL を出し直して .blend まで作る（片側だけなら `left`）

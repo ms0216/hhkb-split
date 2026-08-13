@@ -86,7 +86,9 @@ def slice_one(binary, stl, machine, filament, process):
         "--outputdir", str(outdir),
         str(stl),
     ]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+    # OrcaSlicer は CWD に 00000.log を吐く。リポジトリを汚さないよう outdir で走らせる
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
+                       cwd=outdir)
     return r, outdir
 
 
