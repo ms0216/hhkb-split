@@ -34,6 +34,26 @@ from matrix import assignments, keymap_order, shape                # noqa: E402
 from bands import BAND_Y                                           # noqa: E402
 from circuit import WIRE_PAD_KINDS                                 # noqa: E402
 import gnd_fanout                                                   # noqa: E402
+import pinmap                                                       # noqa: E402
+# 設計規則の数値は **pcbnew を要らない側**（pcb_rules）に置いてある。
+# 検査は母艦の venv（pcbnew 無し）から同じ値を読む。
+from pcb_rules import (                                            # noqa: E402
+    BESIDE_GAP, DECOUPLE_BESIDE, JLC, MIN_ISLAND_MM2, POWER_CLASSES,
+    POWER_NETS, TRACK_W, VIA_D, VIA_DRILL)
+
+# **銅の層。ここが唯一の出どころ。**層数を変えるときはここだけ直す。
+# 2026-08-12 に 4 層（F/In1/In2/B）から 2 層に落とした（指摘 2）。
+COPPER_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
+
+# **GND ベタを敷く層。2 層なので両面とも。**
+#
+# 4 層のときは In1.Cu の 1 層を GND 専用にして、自動配線器に対して
+# 「ここに信号を通すな」と全面予約できた（autoroute._protect_the_ground_plane）。
+# 2 層では信号層と GND 層が同じ 2 枚を兼ねるので**予約はできない。**
+# したがってベタは最初から配線を避けた歯抜けになる。
+# その分断を繋ぎ直すのが gnd_fanout のスティッチングビア。
+GND_POUR_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
+
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"
 KICAD_FP = Path("/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints")
@@ -128,43 +148,6 @@ def _rounded_rect_outline(board, w, h, r):
 
 
 
-# --------------------------------------------------------------------------
-# 配線の寸法
-#
-# **配線そのものはここではやらない。**Freerouting に委ねる
-# （tools/autoroute.py）。ここで持つのは、自動配線器へ渡す値だけ。
-#
-# 手書きのルータは削除した。衝突判定を持たないので任意のネット対を
-# 短絡させ、それは経路の調整では 0 にならなかった。経緯は
-# docs/superpowers/specs/2026-08-08-pcb-autoroute-design.md。
-#
-# **この 3 つは _apply_jlcpcb_rules がネットクラスに書き込む。**
-# 自動配線器はネットクラスしか見ないので、ここが唯一の出どころ。
-# --------------------------------------------------------------------------
-TRACK_W = 0.2           # JLCPCB の最小 0.127mm に対して余裕を見た値
-VIA_D, VIA_DRILL = 0.6, 0.3
-# --------------------------------------------------------------------------
-# JLCPCB の製造能力を、基板の設計規則として書き込む。
-#
-# **これが無い間、DRC は KiCad の既定値で通していただけだった。**
-# 「違反 0 件」は「JLCPCB で製造できる」を意味していない。規則を入れて
-# 初めて、線幅・ビア・アニュラリング・外形までの距離が能力の内側に
-# あることを機械が確かめられる。
-#
-# 値は JLCPCB の Capabilities（2層/4層・1oz・標準工程）から。
-# 追加費用のかかる高精度オプションは使わない前提で、標準値を採る。
-# --------------------------------------------------------------------------
-JLC = {
-    "track_min": 0.127,       # 最小線幅 5mil
-    "clearance_min": 0.127,   # 最小クリアランス 5mil
-    "via_dia_min": 0.45,      # 最小ビア外径
-    "via_drill_min": 0.20,    # 最小ビアドリル
-    "hole_min": 0.20,         # 最小 PTH ドリル
-    "hole_to_hole": 0.50,     # 穴どうしの最小距離
-    "edge_clearance": 0.30,   # 銅から基板外形までの最小距離
-    "silk_width": 0.15,       # シルクの最小線幅
-    "annular_ring": 0.13,     # 最小アニュラリング。KiCad 既定は 0.1 で足りない
-}
 
 
 def prewire_switch_diode(board):
@@ -203,6 +186,64 @@ def prewire_switch_diode(board):
             board.Add(t)
 
 
+# **Freerouting が自力では見つけない経路への「中継ビア」**（2026-08-13）。
+#
+# COL8（SW17-SW31 間）は、パッド同士のクリアランスだけ見れば
+# ST24（スタビライザー）の右穴の左側に幅 1.7mm の通路がある
+# （手計算・DRC 双方で確認済み）。にもかかわらず Freerouting は
+# 毎回この 1 本だけを配線し損ねた。
+#
+# 得られた部分配線を見ると、Freerouting は SW17 から**南（SW31 方向）
+# への探索を一度も試みず**、北（既に混雑した領域）へ迷い込んで
+# 力尽きていた。基板の物理的な制約ではなく、**探索ヒューリスティックが
+# 局所解にはまった**もの。
+#
+# 対策は、2 点間の中間に同じネットのビアを 1 個置くこと。
+# Freerouting にとっては「SW17→ビア」「ビア→SW31」という 2 つの
+# 近距離問題に分割され、どちらも迷わず解ける（実測 5 回連続成功）。
+#
+# **副作用があった。**COL8 側にビアを足すと、無関係なはずの V3V3
+# （D_PWR→J_DB、J_DB のパッド幅 0.30mm で元々ギリギリ）が
+# 5 回連続で未配線になった。物理的な干渉ではなく、ビアの追加で
+# Freerouting 内部の配線順序が変わり、際どいネットにしわ寄せが
+# 行っただけと判断（座標を変えても同じネットが詰まった）。
+# そこで V3V3 側にも中継ビアを足し、両立させた（2 回連続成功で確認）。
+#
+# **右基板専用。**左基板ではこの詰まりが起きていないので足さない。
+GUIDE_VIAS = {
+    # COL8: SW17(214.35,78.41) - SW31(219.12,116.51) 間。
+    # ST24 右穴の左側の通路（x=223.2、実測クリアランス 1.0mm 以上）の中間。
+    "COL8": (223.2, 91.5),
+    # V3V3: D_PWR(95.65,69.12) - J_DB pad6(72.75,85.38) 間。
+    # J_DB は 0.5mm ピッチの SMD で、隣のパッドとの隙間(0.2mm)にビアは
+    # 物理的に入らない。パッド 6 の長辺の外側、真上ぎりぎりに置く。
+    "V3V3": (72.75, 84.0),
+}
+
+
+def guide_vias(board, half):
+    """詰まりが再現された経路に、Freerouting 向けの中継ビアを打つ。
+
+    **消してはいけない。**探索の局所解を避けるためのヒントであって、
+    決まりきった配線ではない。DSN からもネットごと外さない
+    （PREWIRED に入れない）——Freerouting に「ここも経由候補」として
+    普通に見せる必要がある。
+    """
+    if half != "right":
+        return
+    for netname, (x, y) in GUIDE_VIAS.items():
+        n = board.FindNet(netname)
+        if n is None:
+            raise SystemExit(f"guide_vias: ネットが無い: {netname}")
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y)))
+        via.SetWidth(pcbnew.FromMM(VIA_D))
+        via.SetDrill(pcbnew.FromMM(VIA_DRILL))
+        via.SetNet(n)
+        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        board.Add(via)
+
+
 def _apply_jlcpcb_rules(board):
     d = board.GetDesignSettings()
     mm = pcbnew.FromMM
@@ -228,7 +269,44 @@ def _apply_jlcpcb_rules(board):
     nc.SetClearance(mm(TRACK_W))       # 0.2mm。線幅と同じ
     nc.SetViaDiameter(mm(VIA_D))
     nc.SetViaDrill(mm(VIA_DRILL))
+
+    # **電源用のネットクラスを足す**（指摘 8）。
+    #
+    # 自動配線器はネットクラスしか見ない。ここに登録しないと、
+    # POWER_TRACK_W をいくら定義しても**1 本も太くならない**
+    # （「設定しただけでは効いていない」——CLAUDE.md）。
+    # 効いたかどうかは配線後に実測する
+    # （test_pcb.test_power_nets_are_routed_with_the_wider_track）。
+    _add_power_netclasses(d, mm)
     return board
+
+
+def _add_power_netclasses(d, mm):
+    """電源のネットクラスを作り、ネットを割り当てる。
+
+    API は pcbnew を実際に叩いて確かめたもの（推測で書かない）。
+
+        SetNetclass(name, netclass)
+        SetNetclassPatternAssignment(pattern, netclass_name)
+        RecomputeEffectiveNetclasses()
+
+    **最後の Recompute を忘れると割り当てが効かない。**「設定しただけで
+    効いていない」の典型で、太くしたつもりで細いまま出る。
+
+    **クラスは複数作れる。**KiCad はそれを DSN にそのまま書き出し、
+    Freerouting も受け取る（生の DSN を読んで確認済み）。
+    """
+    ns = d.m_NetSettings
+    for name, (width, nets) in POWER_CLASSES.items():
+        cls = pcbnew.NETCLASS(name)
+        cls.SetTrackWidth(mm(width))
+        cls.SetClearance(mm(TRACK_W))
+        cls.SetViaDiameter(mm(VIA_D))
+        cls.SetViaDrill(mm(VIA_DRILL))
+        ns.SetNetclass(name, cls)
+        for net in nets:
+            ns.SetNetclassPatternAssignment(net, name)
+    ns.RecomputeEffectiveNetclasses()
 
 
 # 電子部品は**段と段の間**に置く。
@@ -287,29 +365,54 @@ PLACE = {
         # →(と R_HI)→ R_LO →(VBATT_SENSE)→ J_DB。
         # 以前は R_HI/R_LO が SW_PWR と D_PWR の間にあり、VBATT_SW が
         # 2 部品を飛び越して他のネットと交差していた。
-        # **J_DB はダイオード列を避けた隙間に置く。**
-        #
-        # 上段キーのダイオードは帯に 1.75mm 食い込み（y 61.55..66.25）、
-        # 19.05mm ピッチで並ぶ。帯の部品の中で J_DB だけ背が高く
-        # （y 65.175〜）、以前の x がちょうど D3 の列と重なっていた。
-        # Freerouting に通したときの短絡・コートヤード重なり・ROW0 未配線は
-        # 全部これが原因だった（実測）。D3..D4 の隙間へ動かし、玉突きで
-        # C_BULK・C_MCU も少しだけ空ける。
         "BT1": (0, -62.0), "SW_PWR": (0, -50.0), "D_PWR": (0, -40.0),
         "R_HI": (0, -32.0), "R_LO": (0, -27.0),
-        "J_DB": (0, -6.9),
-        "C_BULK": (0, 2.5), "C_MCU": (0, 7.0),
-        "U1": (0, 13.0), "C_U1": (0, 26.0),
+        # **J_DB は帯 1・x=63.0（子基板コネクタの直近）に置く**
+        # （2026-08-13・利用者の提案「FFC を曲げなくていい位置に」）。
+        #
+        # 帯 0（電源鎖と同じ帯）に置くと、J_DB が帯高さの 86% を占め
+        # （外接 7.95mm／帯 9.25mm）、5 本の行バスがその両脇の
+        # 1.3mm の隙間を全部くぐる必要があった。未配線を 0 にできる
+        # 帯 0 上の位置は無く（実測。ダイオード列の隙間・電源鎖の
+        # 圧縮・分散を数十通り試した）、**帯をまたいで逃がして初めて
+        # 未配線が 0〜2 まで減った。**
+        #
+        # x は総当たりで実測（45〜65 を 5mm 刻み、当たりの周辺をさらに
+        # 詰めた）。63.0 が最良。子基板コネクタの中心 X は +59.5mm
+        # （gen_case.daughterboard_x_center）で、63.0 はそこから 3.5mm
+        # ——ほぼ真横に来る。
+        #
+        # ⚠️ **未配線の本数は DSN_CLEARANCE_MARGIN_UM（autoroute.py）と
+        # 連動する。**左右で同じマージン値を使う制約（利用者の要望）の下、
+        # 両方の DRC 違反 0 と未配線最小を両立する値が 15µm で、
+        # そのとき左の未配線は 2 本（うち 1 本は COL1 の信号、
+        # もう 1 本は GND ベタの浮島）。マージンを動かすとここも動く。
+        "J_DB": (1, 63.0),
+        # レール系は J_DB が居た場所（電源が基板を出入りするところ）に
+        # 寄せたまま。C_U1 はここに書かない。**DECOUPLE_BESIDE が
+        # U1 から算出する。**
+        "C_BULK": (0, 2.0), "C_RAIL": (0, 6.5),
+        "U1": (0, 16.5),
     },
     "right": {
         "BT1": (0, -78.0), "SW_PWR": (0, -66.0), "D_PWR": (0, -56.0),
         "R_HI": (0, -48.0), "R_LO": (0, -43.0),
-        "J_DB": (0, -23.5),
-        "C_BULK": (0, -13.0), "C_MCU": (0, -5.0),
-        "U1": (0, 4.0), "C_U1": (0, 16.0),
-        "U2": (0, 30.0), "C_U2": (0, 42.0),
+        # **J_DB は帯 1・x=-77.5。**左と同じ理由（帯 0 に置くと未配線が
+        # 3〜27 本残る）。右基板は列が 9 本あり 595 系が 2 個あるぶん
+        # 帯 0 の混雑が左よりきつく、**0 まで詰め切れなかった。**
+        # x を 0.5mm 刻みで再探索し、-77.5 で未配線 1 本まで減った
+        # （M=15µm で 3 回実行して決定的）。残る 1 本（COL8-SW31、
+        # 基板最遠端の列）は gnd_fanout の格子や周辺部品の再配置では
+        # 解消しなかった（2026-08-13 に系統的に確認。故意に固定してみて
+        # 毎回同じネットが落ちることを確かめた——揺れではなく構造的な残り）。
+        # 子基板コネクタの中心 X は -76.2mm、-77.5 はそこから 1.3mm。
+        "J_DB": (1, -77.5),
+        "C_BULK": (0, -14.0), "C_RAIL": (0, -9.0),
+        # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
+        "U1": (0, 2.0), "U2": (0, 15.0),
     },
 }
+
 
 
 def _center_courtyard_in_band(fp, band):
@@ -327,11 +430,82 @@ def _center_courtyard_in_band(fp, band):
     fp.SetPosition(pcbnew.VECTOR2I(pos.x, int(pos.y + want - mid)))
 
 
+def _courtyard_x_extent(fp):
+    """コートヤードの x の範囲（mm）。無ければ外形の箱で代用する。"""
+    for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+        shape = fp.GetCourtyard(layer)
+        if not shape.IsEmpty():
+            bb = shape.BBox()
+            return pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+    bb = fp.GetBoundingBox(False, False)
+    return pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+
+
+def _pad_with_net(fp, netname):
+    """そのフットプリントで指定ネットに繋がっているパッド。無ければ None。"""
+    for pad in fp.Pads():
+        if pad.GetNetname() == netname:
+            return pad
+    return None
+
+
+def _place_beside(board, cap_ref, ic_ref, band):
+    """パスコンを IC の**電源ピンがある側**へ、触れない最短距離で寄せる。
+
+    どちら側に置くかを手で書かない。**IC の V3V3 パッドが中心のどちら側に
+    あるかを実際の座標から決める。**IC の向きを変えてもついてくる。
+
+    寄せる先はコートヤードの縁 + BESIDE_GAP。DRC のコートヤード重なりを
+    出さない最短の位置になる。
+    """
+    ic = board.FindFootprintByReference(ic_ref)
+    cap = board.FindFootprintByReference(cap_ref)
+    vcc = _pad_with_net(ic, "V3V3")
+    if vcc is None:
+        raise RuntimeError(
+            f"{ic_ref} に V3V3 のパッドが無い。パスコンをどちら側に置くか"
+            "決められない（ネットの割り当てが先に済んでいる必要がある）")
+
+    side = 1.0 if vcc.GetPosition().x >= ic.GetPosition().x else -1.0
+    ic_l, ic_r = _courtyard_x_extent(ic)
+    cap_l, cap_r = _courtyard_x_extent(cap)
+    cx = pcbnew.ToMM(cap.GetPosition().x)
+    # コートヤードは原点に対して対称とは限らないので、縁からの寸法で測る
+    if side > 0:
+        want_left = ic_r + BESIDE_GAP
+        dx = want_left - cap_l
+    else:
+        want_right = ic_l - BESIDE_GAP
+        dx = want_right - cap_r
+    cap.SetPosition(pcbnew.VECTOR2I_MM(cx + dx,
+                                       pcbnew.ToMM(cap.GetPosition().y)))
+    _center_courtyard_in_band(cap, band)
+
+    # **コンデンサの V3V3 側のパッドが IC を向いているか。**
+    # 逆を向いていると、わざわざ寄せた意味が半分になる（電流が部品を
+    # 回り込む）。向いていなければ 180 度回す。
+    p_v3 = _pad_with_net(cap, "V3V3")
+    p_gnd = _pad_with_net(cap, "GND")
+    if p_v3 is not None and p_gnd is not None:
+        toward_ic = (p_v3.GetPosition().x - p_gnd.GetPosition().x) * side < 0
+        if not toward_ic:
+            cap.SetOrientationDegrees(cap.GetOrientationDegrees() + 180)
+
+
 def _place_electronics(board, half, net):
     """回路に宣言された電子部品を、段の間の帯に置いてネットを割り当てる。"""
     from circuit import netlist
     decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
-    for ref, spec in PLACE[half].items():
+
+    # 置く場所の一覧。**パスコンは PLACE に座標を持たない**（手で書いた
+    # 座標が 17mm ずれていたのが指摘 6 の原因）。いったん相手の IC と
+    # 同じところに出し、ネットを塗り終えてから _place_beside が寄せる。
+    spots = dict(PLACE[half])
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        if cap_ref in decl and ic_ref in spots:
+            spots[cap_ref] = spots[ic_ref]
+
+    for ref, spec in spots.items():
         band, x = spec[0], spec[1]
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
@@ -362,9 +536,34 @@ def _place_electronics(board, half, net):
             for pin, netname in pins.items():
                 if netname == "NC":
                     continue
-                pad = fp.FindPadByNumber(pin)
-                if pad is not None:
-                    pad.SetNet(net(netname))
+                # **ピン名をパッド番号に直してから引く。**
+                #
+                # circuit.py は名前（VCC / MR / A / K）で宣言し、
+                # フットプリントは番号（1..16）でパッドを持つ。
+                # ここを直接 FindPadByNumber(pin) に渡していたので、
+                # 74LVC595 の 16 パッドと D_PWR の 2 パッドが**ネット無しの
+                # まま基板になっていた**（2026-08-12 発見）。
+                # 列を駆動する回路と電源経路が丸ごと欠けていたのに、
+                # DRC 0 件・未配線 0 件で緑だった。
+                pad_no = pinmap.resolve(kind, pin)
+                if pad_no is None:
+                    continue          # 回路図だけにあるピン（XIAO の BAT）
+                pad = fp.FindPadByNumber(pad_no)
+                # **見つからなければ落とす。**以前はここが
+                # `if pad is not None:` で、黙って飛ばしていた。
+                if pad is None:
+                    raise RuntimeError(
+                        f"{ref}({kind}) のピン {pin} = パッド {pad_no} が "
+                        f"フットプリント {lib}:{name} に無い。"
+                        "pinmap.py かフットプリントのどちらかが間違っている")
+                pad.SetNet(net(netname))
+
+    # **パスコンを IC へ寄せるのは、ネットを塗り終えたあと。**
+    # どちら側へ寄せるかを V3V3 パッドの位置から決めるので、
+    # ネットが付いていないと決められない。
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        if cap_ref in decl and ic_ref in PLACE[half]:
+            _place_beside(board, cap_ref, ic_ref, PLACE[half][ic_ref][0])
 
 
 # アンテナの禁止域は interface.ANTENNA_KEEPOUT（凍結境界）から読む。
@@ -383,7 +582,7 @@ def _antenna_keepout(board, half):
     zone.SetDoNotAllowVias(True)
     zone.SetDoNotAllowPads(True)
     layers = pcbnew.LSET()
-    for lay in (pcbnew.F_Cu, pcbnew.In1_Cu, pcbnew.In2_Cu, pcbnew.B_Cu):
+    for lay in COPPER_LAYERS:
         layers.addLayer(lay)
     zone.SetLayerSet(layers)
     pts = pcbnew.VECTOR_VECTOR2I()
@@ -393,19 +592,55 @@ def _antenna_keepout(board, half):
     board.Add(zone)
 
 
-def _pour(board, netitem, layer, w, h):
-    """その層いっぱいにベタを敷く。"""
-    zone = pcbnew.ZONE(board)
-    zone.SetNet(netitem)
-    zone.SetLayer(layer)
-    zone.SetLocalClearance(pcbnew.FromMM(0.25))
-    zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
-    pts = pcbnew.VECTOR_VECTOR2I()
-    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-        pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,
-                                      ORIGIN[1] + dy * h / 2))
-    zone.AddPolygon(pts)
-    board.Add(zone)
+def _pour(board, netitem, layers, w, h):
+    """指定した層いっぱいに GND のベタを敷く。
+
+    **2 層なので両面に敷く**（指摘 3）。配線やビアが載っているところは
+    KiCad が自動でよけるので、「配線を避けた歯抜けのベタ」になる。
+    その歯抜けで分断された島を繋ぎ直すのが gnd_fanout のスティッチングビア。
+
+    `layers` は単層でも並びでも受ける。
+    """
+    if isinstance(layers, int):
+        layers = (layers,)
+    for layer in layers:
+        zone = pcbnew.ZONE(board)
+        zone.SetNet(netitem)
+        zone.SetLayer(layer)
+        zone.SetLocalClearance(pcbnew.FromMM(0.25))
+        # **サーマルリリーフを使わずベタ付けにする。**リフロー実装なので
+        # 手はんだの熱の逃げを気にする必要が無く、GND のインピーダンスは
+        # 低いほどよい。
+        zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        # **浮いた銅は 1 つも残さない。**
+        #
+        # 2 層では配線がベタを割るので、GND のどこにも触れない区画が
+        # できる。そういう銅は**電位が決まっておらず、GND ではない**——
+        # 遮蔽の役に立たず、囲んでいる配線どうしを容量結合させ、
+        # 2.4GHz では寸法次第で再放射する。
+        #
+        # **取り得る手は常に 2 つあり、どちらかは必ず選べる。**
+        #
+        #   1. 繋ぐ  ビアが入るなら（gnd_fanout.stitch_islands）
+        #   2. 消す  ビアが入らないなら、その銅を残す理由が無い ← ここ
+        #
+        # **残さなければならない場面は無いので、0 を必達にする。**
+        # 一時「面積のしきい値より小さいものだけ消す」にしていたが、
+        # それは**問題を解かずに一部だけ隠す**やり方だった。
+        #
+        # ⚠️ 以前 ALWAYS にしたとき J_DB の GND パッドが切れた
+        # （2026-08-12）。原因は**当時そのパッドにファンアウトビアが
+        # 立てられていなかった**こと。パッドを含む区画は「繋がっている」
+        # と判定されるので消えない。全 GND パッドにビアが立つように
+        # なった今は前提が変わっている。**それでも DRC の未配線が
+        # 増えていないかを毎回確かめること。**
+        zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+        pts = pcbnew.VECTOR_VECTOR2I()
+        for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * w / 2,
+                                          ORIGIN[1] + dy * h / 2))
+        zone.AddPolygon(pts)
+        board.Add(zone)
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 
@@ -422,13 +657,22 @@ def build(half, keys):
 
     board = pcbnew.CreateEmptyBoard()
     _apply_jlcpcb_rules(board)
-    # **4 層。**行の引き回しが 2 層では通らない（通路が 1.65mm しかない）。
-    # 経緯は docs/hardware/decisions/2026-08-07-four-layer.md。
-    #   F.Cu   列のバス・信号
-    #   In1.Cu GND ベタ（全面）
-    #   In2.Cu 行の引き回し・電源
-    #   B.Cu   ソケット・ダイオード・行のバス・部品
-    board.SetCopperLayerCount(4)
+    # **2 層。**（2026-08-12。指摘 2。経緯は decisions/2026-08-07-four-layer.md
+    # の冒頭の追記）
+    #
+    #   F.Cu   信号（旧 In2.Cu ぶん）＋ GND ベタ
+    #   B.Cu   ソケット・ダイオード・部品・信号 ＋ GND ベタ
+    #
+    # 4 層にしたときの根拠は「行の引き回しが 2 層では通らない」だったが、
+    # その後 Freerouting に切り替えて配線をやり直したときに、
+    # **信号は実際には 2 層（In2.Cu と B.Cu）に収まっていた。**F.Cu は
+    # ビアのランドだけで配線 0 本、まるごと空いていた（実測）。
+    # 決定記録がその事実に追いついていなかった。
+    #
+    # **部品は全部 B.Cu 側のまま。**JLCPCB は片面実装と両面実装で
+    # 段取り費が倍（$25 → $50）違い、しかも安い枠（Economic PCBA）は
+    # 片面限定なので、実装面は動かさない。動かすのは銅箔だけ。
+    board.SetCopperLayerCount(2)
     _rounded_rect_outline(board, pcb_w, pcb_h, CORNER_R)
 
     # スイッチ
@@ -495,11 +739,13 @@ def build(half, keys):
         # **Flip は board.Add の後で呼ぶ。** 基板に属していない状態で反転すると
         # segfault する（実際に落とした）。
         d.Flip(d.GetPosition(), False)          # ソケットと同じ裏面へ
+        # **パッド番号は pinmap から引く。**ここで直に "1" / "2" と書くと、
+        # 回路図側（同じ pinmap を読む）と静かにずれる。
         sw = board.FindFootprintByReference(f"SW{i}")
-        sw.FindPadByNumber("1").SetNet(net(f"COL{c}"))
-        sw.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))
-        d.FindPadByNumber("2").SetNet(net(f"SW{i}_D"))   # アノード
-        d.FindPadByNumber("1").SetNet(net(f"ROW{r}"))    # カソード
+        sw.FindPadByNumber(pinmap.resolve("keyswitch", "1")).SetNet(net(f"COL{c}"))
+        sw.FindPadByNumber(pinmap.resolve("keyswitch", "2")).SetNet(net(f"SW{i}_D"))
+        d.FindPadByNumber(pinmap.resolve("diode", "A")).SetNet(net(f"SW{i}_D"))
+        d.FindPadByNumber(pinmap.resolve("diode", "K")).SetNet(net(f"ROW{r}"))
 
     # ------------------------------------------------------------------
     # 配線はここではやらない
@@ -516,6 +762,7 @@ def build(half, keys):
     prewire_switch_diode(board)
     _place_electronics(board, half, net)
     gnd_fanout.place(board)
+    guide_vias(board, half)
 
     # 取付穴（open-gaps #36・2026-08-12）。
     #
@@ -568,7 +815,7 @@ def build(half, keys):
     # 基準電位が連続していることの価値が大きい。**
     # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
     _antenna_keepout(board, half)
-    _pour(board, net("GND"), pcbnew.In1_Cu, pcb_w, pcb_h)
+    _pour(board, net("GND"), GND_POUR_LAYERS, pcb_w, pcb_h)
 
     # **未配線のまま pcb/unrouted/ に出す。**
     # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。

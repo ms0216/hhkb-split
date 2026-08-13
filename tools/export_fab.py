@@ -5,7 +5,7 @@
     /Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/\\
         Versions/3.9/bin/python3.9 tools/export_fab.py
 
-**出す前に 2 つの門を通る。**どちらも黙って越えられないようにしてある。
+**出す前に 3 つの門を通る。**どれも黙って越えられないようにしてある。
 
   1. アンテナの risk を承知した記録があること（open-gaps #23）
      基板を 1 回でまとめて発注すると決めた以上、アンテナは組み上げてから
@@ -14,6 +14,13 @@
   2. すべての部品に LCSC の部品番号があること
      JLCPCB に実装まで頼む方針なので、番号が欠けていると発注できない。
      **「あとで埋める」を許すと、発注直前に気づいて止まる。**
+
+  3. 回路図が基板と一致し、ERC が通ること（2026-08-12・指摘 1）
+     **DRC 0 件は、回路が正しいことの証拠にならない。**ネットの付いて
+     いないパッドは繋ぐ相手が居ないので「未配線」に数えられず、
+     74LVC595 の 16 パッドが丸ごと欠けたまま緑だった（open-gaps #37）。
+     正しい順序は **回路図 → ERC → アートワーク → DRC**。
+     その順序を、発注の直前でもう一度確かめる。
 
 出力先は pcb/fab/<基板名>/。JLCPCB の既定の命名に合わせる。
 """
@@ -40,8 +47,10 @@ BOARDS = {
 }
 
 LAYERS = [
-    (pcbnew.F_Cu, "F_Cu"), (pcbnew.In1_Cu, "In1_Cu"),
-    (pcbnew.In2_Cu, "In2_Cu"), (pcbnew.B_Cu, "B_Cu"),
+    # **銅は 2 層**（2026-08-12・指摘 2）。内層は無い。
+    # ここに In1/In2 を残すと、中身の無いガーバーを 2 枚 JLCPCB へ送ることに
+    # なり、4 層として作られて費用が上がる。
+    (pcbnew.F_Cu, "F_Cu"), (pcbnew.B_Cu, "B_Cu"),
     (pcbnew.F_Paste, "F_Paste"), (pcbnew.B_Paste, "B_Paste"),
     (pcbnew.F_SilkS, "F_Silkscreen"), (pcbnew.B_SilkS, "B_Silkscreen"),
     (pcbnew.F_Mask, "F_Mask"), (pcbnew.B_Mask, "B_Mask"),
@@ -190,9 +199,31 @@ def _bom(outdir, parts):
     return len(groups)
 
 
+def _gate_schematic():
+    """回路図が基板と一致し、ERC が通ることを確かめる（指摘 1）。
+
+    **ここで止めるのが最後の機会。**この門が無かったせいで、
+    列を駆動する回路が丸ごと欠けた基板が発注寸前まで来た。
+    """
+    import subprocess
+    r = subprocess.run(
+        [str(ROOT / ".venv/bin/pytest"), "-q",
+         str(ROOT / "tools/test_schematic.py"),
+         str(ROOT / "tools/test_pinmap.py")],
+        capture_output=True, text=True, cwd=str(ROOT))
+    if r.returncode != 0:
+        raise SystemExit(
+            "回路図と基板が一致していないか、ERC が通っていない。\n"
+            "**この状態で発注してはいけない。**\n"
+            "  .venv/bin/pytest tools/test_schematic.py tools/test_pinmap.py\n"
+            "を実行して中身を見ること。\n\n"
+            + (r.stdout or "")[-3000:])
+
+
 def main():
     _gate_antenna()
     _gate_parts()
+    _gate_schematic()
     for name, getparts in BOARDS.items():
         src = ROOT / "pcb" / f"{name}.kicad_pcb"
         board = pcbnew.LoadBoard(str(src))

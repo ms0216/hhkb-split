@@ -478,24 +478,26 @@ def test_the_board_says_which_half_it_is(half):
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_main_board_is_four_layers_with_a_ground_plane(half):
-    """本体基板が 4 層で、内層 1 に GND のベタがあること。
+def test_the_main_board_is_two_layers_with_ground_poured_on_both(facts, half):
+    """本体基板が 2 層で、**両面とも** GND のベタが塗られていること。
 
-    2 層では行の引き回しが通らない（通路が 1.65mm しかない）。
-    連続した GND 面は、分割の左右で 2.4GHz を至近距離で動かすこの設計では
-    配線の都合以上に効く。
+    2026-08-12 に 4 層から 2 層へ落とした（指摘 2）。4 層にした当時の
+    根拠「行の引き回しが 2 層では通らない」は、その後 Freerouting に
+    切り替えて配線をやり直したときに崩れていた——**信号は実際には
+    In2.Cu と B.Cu の 2 層に収まり、F.Cu は配線 0 本で空いていた**（実測）。
 
-    **「層を 4 に設定した」だけでは足りない。**ベタが実際に塗られている
-    （filled_polygon がある）ことまで見る。
+    2 層になると GND 専用層が無くなるので、**両面に敷く**（指摘 3）。
+
+    **「層を 2 に設定した」「ゾーンを足した」だけでは足りない。**
+    それぞれの面でベタが実際に塗られていることまで見る。
+    この案件では「足した」と「塗られた」を 2 回取り違えている。
     """
-    txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
-    m = re.search(r"\(layers\s*\n(.*?)\n\t\)", txt, re.S)
-    assert m, f"{half}: 層の定義が読めない"
-    cu = re.findall(r'"(\w+\.Cu)"', m.group(1))
-    assert cu == ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"], f"{half}: 層構成が {cu}"
-    zone = re.search(r"\(zone\b[\s\S]{0,400}?\(layer \"In1\.Cu\"", txt)
-    assert zone, f"{half}: 内層 1 に GND のベタが無い"
-    assert "filled_polygon" in txt, f"{half}: ベタが塗られていない"
+    f = facts[half]
+    assert f["layers"] == ["F.Cu", "B.Cu"], f"{half}: 層構成が {f['layers']}"
+    poured = {lay for lay, net, filled in f["zones"] if net == "GND" and filled}
+    assert poured == {"F.Cu", "B.Cu"}, (
+        f"{half}: GND ベタが塗られている面が {sorted(poured)}。"
+        "両面（F.Cu と B.Cu）に要る")
 
 
 # --------------------------------------------------------------------------
@@ -505,6 +507,31 @@ def test_the_main_board_is_four_layers_with_a_ground_plane(half):
 # SOIC-16 はコートヤード 10.49mm で、帯 9.25mm にそもそも入らない。
 # 位置を微調整しても 0 にはならない。算数で入らないものを、機械が言う。
 # --------------------------------------------------------------------------
+
+def _sexpr_blocks(txt, head):
+    """トップレベルの `(head ...)` を括弧の対応で切り出して順に返す。
+
+    **正規表現で切らない。**非貪欲でも次の塊まで食ってしまい、
+    誤検出したことがある（GND 基準面の検査で実際に起きた）。
+    """
+    for m in re.finditer(r"\n\t\(" + head + r"\b", txt):
+        i = m.start() + 1
+        depth, j = 0, i
+        while True:
+            if txt[j] == "(":
+                depth += 1
+            elif txt[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        yield txt[i:j + 1]
+
+
+def _zone_blocks(txt):
+    """ゾーン（ベタ・禁止域）の S 式を順に返す。"""
+    return _sexpr_blocks(txt, "zone")
+
 
 def _footprint_blocks(txt):
     """(参照名, フットプリントの S 式) を順に返す。括弧の対応で切り出す。"""
@@ -607,35 +634,24 @@ def test_the_electronics_fit_inside_their_band(half):
     assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
 
 
-@pytest.mark.parametrize("half", NAMES)
-def test_the_ground_plane_is_not_cut_by_routing(half):
-    """In1.Cu に配線が 1 本も無いこと。
-
-    **In1.Cu は GND のベタ専用。**ここに信号を通すと基準面が切れる。
-    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
-    連続していることの価値が大きい（4 層にしたのはそのため）。
-
-    KiCad の DSN は 4 層すべてを (type signal) として書き出すので、
-    そのまま渡すと自動配線器がここを使う。autoroute.py の
-    _protect_the_ground_plane が (type power) に直している。
-    **その細工が効いているかを、ここで確かめる。**DRC は面が切れていても
-    何も言わない。
-    """
-    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
-    # **セグメントの塊ごとに見る。**非貪欲でも `(segment ...` から
-    # 次のゾーンの `(layer "In1.Cu")` まで食ってしまい、誤検出した。
-    on_in1 = [b for b in re.findall(r"\(segment\n(?:\t\t\([^\n]*\)\n)+\t\)", txt)
-              if '(layer "In1.Cu")' in b]
-    assert not on_in1, (
-        f"{half}: GND 基準面（In1.Cu）に配線が {len(on_in1)} 本ある。"
-        "autoroute.py の _protect_the_ground_plane を確かめること")
+# `test_the_ground_stays_one_island_after_routing` は削除した（2026-08-12）。
+#
+# 4 層のときは GND 専用層があり「その層に配線が 0 本か」で面の連続を
+# 保証できた。**2 層では信号層と兼ねるので、面が割れるのは避けられない。**
+# 「島が 1 つ」は達成し得ない条件になった。
+# 代わりに `test_few_pieces_of_ground_copper_are_left_floating` が
+# **浮いている（GND のどこにも触れていない）区画の数**を見る。
+# 割れていても、ビアで繋がっていれば問題ない。
 
 
 @pytest.mark.parametrize("half", NAMES)
 def test_every_ground_pad_reaches_the_plane(half):
     """電子部品の GND パッドの脇にビアが立っていること。
 
-    GND ベタは In1.Cu の 1 層だけ、GND パッドは全部 B.Cu の SMD。
+    GND パッドは全部 B.Cu の SMD。ベタは F.Cu・B.Cu の両面にあるが、
+    B.Cu 側のパッドから F.Cu 側のベタへ電位を渡すにはビアが要る
+    （2026-08-13 訂正：4 層時代は In1.Cu が GND 専用層だったが、
+    2 層化で両面ベタに変わった。判定条件自体は層数に依存しない）。
     間にビアが無いとベタに届かない。**ImportSpecctraSES は既存の配線を
     作り直すので、取り込みのたびにファンアウトが消える**（実測 7→0）。
     autoroute.py が立て直しているかを見る。
@@ -929,36 +945,36 @@ def test_the_ground_plane_still_covers_the_board(name):
     """GND ベタが基板の大半を覆ったままであること。
 
     **禁止域を開けることの代償はここに出る。**地板は戻り電流の道なので、
-    穴で分断すると、その向こうの部品の戻り電流が遠回りする。
+    大きく削れるとその向こうの部品の戻り電流が遠回りする。
 
-    **数で見てはいけない。**最初「塗られた多角形が 1 個であること」と
-    書いたが、地板を横断する帯を故意に入れても 1 個のままだった。
-    KiCad は切り離された側を**孤島として黙って削除する**ので、
-    多角形は 1 個のまま面積だけが半分になる（頂点 12246 → 6248 で気づいた）。
-    面積で見る。
+    ⚠️ **2026-08-13 に測り方を直した。**以前は正規表現で**最初に見つけた
+    多角形 1 個**の面積を測っていた。4 層のときはベタが 1 枚の連続した
+    面だったので、それで用が足りていた。**2 層ではベタが配線で細かく
+    分かれる**ので、最初の 1 個は全体の 0.24% しかなく、嘘の赤が出た。
 
-    いまの左の禁止域は基板の縁から入る**切り欠き**で、内部に穴を作って
-    いない。切り欠きの向こうには部品もビアも無く、近くを通るのは
-    SW6_D と ROW0 だけ。**どちらも走査の kHz** なので遠回りは効かない。
+    面ごとに**塗られた多角形すべての合計**で測る。
+
+    しきい値について
+    ----------------
+    実測（2026-08-13）は **左 B.Cu 76.4% / F.Cu 82.4%、
+    右 B.Cu 79.8% / F.Cu 84.4%、子基板 B.Cu 62.4%**。
+    一方、**地板を故意に割ったときは 39.5% まで落ちる**（4 層時代の実測）。
+
+    55% はその 2 つを分ける値であって、**現在値に合わせて置いた数字では
+    ない**。「正常なら 60% 以上、割れたら 40% 前後」という 2 つの実測の
+    間を取っている。
     """
-    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
-    blk = re.search(r"\(filled_polygon[\s\S]*?\n\t\t\)", text)
-    assert blk, f"{name}: GND ベタが 1 枚も塗られていない"
-    pts = [(float(a), float(b)) for a, b in
-           re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", blk.group(0))]
-    area = abs(sum(pts[i][0] * pts[(i + 1) % len(pts)][1]
-                   - pts[(i + 1) % len(pts)][0] * pts[i][1]
-                   for i in range(len(pts)))) / 2
-    xs = [(float(a), float(b)) for a, b in
-          re.findall(r"\(gr_line[\s\S]{0,120}?\(start ([-\d.]+) ([-\d.]+)\)", text)]
-    board = ((max(p[0] for p in xs) - min(p[0] for p in xs))
-             * (max(p[1] for p in xs) - min(p[1] for p in xs)))
-    ratio = area / board
-    # いまは左 86.5% / 右 89.3%。地板を割ると 39.5% まで落ちる（実測）。
-    assert ratio >= 0.80, (
-        f"{name}: GND ベタが基板の {ratio * 100:.1f}% しか覆っていない。"
-        "禁止域か配線が地板を割り、切り離された側が孤島として削除された"
-        "可能性がある。戻り電流の道が切れるので、割らない形に直すこと")
+    facts = _board_facts(name) if name in NAMES else None
+    if facts is None:
+        pytest.skip(f"{name} は対象外")
+    per = facts["gnd_coverage"]
+    assert per, f"{name}: GND ベタが 1 枚も塗られていない"
+    thin = {k: v for k, v in per.items() if v < 0.55}
+    assert not thin, (
+        f"{name}: GND ベタの被覆率が低い面がある "
+        + " / ".join(f"{k} {v*100:.1f}%" for k, v in sorted(thin.items()))
+        + "\n  禁止域か配線が地板を大きく削っている可能性がある。"
+        "戻り電流の道が遠回りになるので、削らない形に直すこと")
 
 
 # --------------------------------------------------------------------------
@@ -1037,3 +1053,277 @@ def test_the_mounting_holes_are_isolated_from_ground(half):
     assert not nets, (
         f"{half}: 取付穴にネットが付いている: {sorted(nets)}。"
         "**絶縁のままにすること**（electrical-design 3-3）")
+
+
+# ======================================================================
+# 2026-08-12 の回路レビュー（熟練エンジニアの指摘 4・6・7・8）
+#
+# **どれも「配置」ではなく「出来上がった銅」を測る。**
+# 設定しただけ・置いただけでは効いていない、というのがこの案件で
+# 何度も踏んだ型なので、判定は配線後の実物に対して行う。
+# ======================================================================
+
+KPY_PATH = ("/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/"
+            "Versions/3.9/bin/python3.9")
+
+
+def _board_facts(half):
+    """基板の中身を **pcbnew から**取り出す。
+
+    ⚠️ **S 式を正規表現で読まない。**KiCad 10 はビアのネットを
+    `(net "COL0")` と**名前**で書く（番号ではない）。番号を期待した
+    正規表現が 1 件も拾えず、「GND のビアが 0 個」という嘘の赤を出した
+    （2026-08-12）。書式は版で変わるので、KiCad 自身に読ませる。
+    """
+    import subprocess
+    script = r"""
+import json, pcbnew, sys
+sys.path.insert(0, %r)
+import gnd_fanout
+b = pcbnew.LoadBoard(%r)
+tracks, vias = [], []
+for t in b.GetTracks():
+    if t.GetClass() == "PCB_VIA":
+        p = t.GetPosition()
+        vias.append([pcbnew.ToMM(p.x), pcbnew.ToMM(p.y), t.GetNetname()])
+    else:
+        s, e = t.GetStart(), t.GetEnd()
+        tracks.append([b.GetLayerName(t.GetLayer()), t.GetNetname(),
+                       pcbnew.ToMM(t.GetWidth()),
+                       pcbnew.ToMM(s.x), pcbnew.ToMM(s.y),
+                       pcbnew.ToMM(e.x), pcbnew.ToMM(e.y)])
+pads = {}
+for fp in b.GetFootprints():
+    for pad in fp.Pads():
+        q = pad.GetPosition()
+        pads["%%s/%%s" %% (fp.GetReference(), pad.GetNumber())] = [
+            pcbnew.ToMM(q.x), pcbnew.ToMM(q.y), pad.GetNetname()]
+zones = []
+for z in b.Zones():
+    if z.GetIsRuleArea():
+        continue
+    for lay in z.GetLayerSet().CuStack():
+        zones.append([b.GetLayerName(lay), z.GetNetname(),
+                      z.HasFilledPolysForLayer(lay)])
+floating = sum(1 for _z, _l, _p, f in gnd_fanout._islands(b) if f)
+bb = b.GetBoardEdgesBoundingBox()
+board_mm2 = pcbnew.ToMM(bb.GetWidth()) * pcbnew.ToMM(bb.GetHeight())
+cov = {}
+for z in b.Zones():
+    if z.GetIsRuleArea() or z.GetNetname() != "GND":
+        continue
+    for lay in z.GetLayerSet().CuStack():
+        if not z.HasFilledPolysForLayer(lay):
+            continue
+        ps = z.GetFilledPolysList(lay)
+        a = sum(abs(ps.Outline(i).Area()) for i in range(ps.OutlineCount())) / 1e12
+        nm = b.GetLayerName(lay)
+        cov[nm] = cov.get(nm, 0.0) + a / board_mm2
+print(json.dumps({"tracks": tracks, "vias": vias, "pads": pads,
+                  "zones": zones, "floating": floating,
+                  "gnd_coverage": cov,
+                  "layers": [b.GetLayerName(l)
+                             for l in b.GetEnabledLayers().CuStack()]}))
+""" % (str(ROOT / "tools"), str(PCB / f"hhkb_split_{half}.kicad_pcb"))
+    out = subprocess.run([KPY_PATH, "-c", script],
+                         capture_output=True, text=True, check=True)
+    import json as _json
+    return _json.loads(out.stdout.strip().splitlines()[-1])
+
+
+# パスコンと IC の電源ピンの間に許す距離（mm）。
+#
+# **物理から一意に決まる値ではない。**0805 のパッドと TSSOP-16 の
+# 寸法から、隣に置いたときに構造的に決まるのが 2.64mm なので、
+# 配置の揺れを見て 6mm を上限に置く。
+# **17mm だった状態を二度と作らないための番人**であって、
+# 「6mm なら十分」という主張ではない。
+MAX_DECOUPLE_MM = 6.0
+
+# GND ビアの下限（実測 左 732 / 右 913 の 75%）。
+# **「これだけあれば十分」ではなく、静かな後退を見つけるための番人。**
+# DRC は「判定が厳しすぎてビアが減った」を検出しないので、数で見る。
+MIN_GND_VIAS = {"left": 550, "right": 700}
+
+# 浮いた（GND のどこにも触れていない）区画の上限。**0 が必達。**
+#
+# 一時は「現実に 0 にできないので増加を検出する」としていたが、**誤り**
+# だった（2026-08-13・利用者の指摘）。取り得る手は常に 2 つあり、
+# どちらかは必ず選べる。
+#
+#   1. 繋ぐ  ビアが入るなら（gnd_fanout.stitch_islands）
+#   2. 消す  ビアが入らないなら、その銅を残す理由が無い
+#
+# 浮いた銅は**電位が定義されておらず GND ではない**。遮蔽の役に立たず、
+# 囲んでいる配線どうしを容量結合させ、2.4GHz では再放射する。
+# 残す利益がゼロなので、**番人ではなく必達条件**として 0 を要求する。
+MAX_FLOATING_ISLANDS = 0
+
+
+@pytest.fixture(scope="module")
+def facts():
+    return {h: _board_facts(h) for h in NAMES}
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_power_nets_can_carry_the_current_they_actually_see(facts, half):
+    """**電源の配線が、実際に流れる電流を流せる幅であること**（指摘 8）。
+
+    ⚠️ **「規定幅の何割か」で見るのをやめた**（2026-08-13）。
+    それは代理指標で、しかも**実測値を見てから閾値を置いていた**
+    （96.5% を見てから 90% と書いた）。データに閾値を合わせる行為で、
+    現状が悪くてもその悪さを固定してしまう。
+
+    本当に問うべきは「**その幅で、実際に流れる電流を流せるか**」で、
+    これは計算できる。閾値を置く必要がない。
+
+      必要な幅 = 実際に流れる電流 ÷ 経験則（1A あたり 1mm）
+
+    電流の出どころは `circuit.BLE_TX_CURRENT`（送信中の消費電流。
+    この系で最大の電流）。**この検査は数字を持たない**——回路の宣言と
+    経験則から毎回導く。電流の見積もりを直せば、ここも自動で追随する。
+
+    利用者の指摘は「1A あたり 1mm 程度」「今回は 1A も流さないので現在の
+    幅でも十分な可能性は高いが、**電源ラインから疑うという初歩的な疑いを
+    無くしたい**」。だから求めるのは「足りていること」であって、
+    「太いこと」ではない。余裕がどれだけあるかも表示する。
+    """
+    import math
+    from circuit import BLE_TX_CURRENT
+    from pcb_rules import JLC, POWER_CLASSES
+
+    # 経験則: 1A あたり 1mm（利用者の指摘。外皮温度上昇を抑える目安）
+    MM_PER_AMP = 1.0
+    need_mm = BLE_TX_CURRENT * MM_PER_AMP
+
+    power_nets = {n for _w, nets in POWER_CLASSES.values() for n in nets}
+    worst = None
+    bad = []
+    for layer, net, w, x1, y1, x2, y2 in facts[half]["tracks"]:
+        if net not in power_nets:
+            continue
+        if w < JLC["track_min"] - 1e-6:
+            bad.append(f"{net} {w}mm ({layer}) — 製造の最小 {JLC['track_min']}mm 未満")
+        elif w < need_mm - 1e-9:
+            bad.append(f"{net} {w}mm ({layer}) — {BLE_TX_CURRENT*1000:.0f}mA には "
+                       f"{need_mm:.3f}mm 要る")
+        if worst is None or w < worst[0]:
+            worst = (w, net, layer)
+
+    assert worst is not None, f"{half}: 電源の配線が 1 本も無い"
+    assert not bad, (
+        f"{half}: 電流を流せない幅の配線がある\n  " + "\n  ".join(sorted(set(bad))))
+
+    # 余裕を記録に残す（落とすためではなく、後から読む人のため）
+    print(f"\n  {half}: 最も細い電源配線 {worst[0]}mm（{worst[1]} / {worst[2]}）"
+          f" — {BLE_TX_CURRENT*1000:.0f}mA に必要な {need_mm:.3f}mm の "
+          f"{worst[0]/need_mm:.0f} 倍")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_there_are_enough_ground_vias_to_tie_the_two_planes(facts, half):
+    """**GND のビアが十分な数あること**（指摘 4）。
+
+    理屈の上ではビアが 1 個でも表と裏の GND は繋がる。しかし電流が流れると
+    その 1 個に集中し、抵抗とインダクタンスが電位差として現れる。
+    **多いほど電位が揃う。**
+    """
+    n = sum(1 for _x, _y, net in facts[half]["vias"] if net == "GND")
+    assert n >= MIN_GND_VIAS[half], (
+        f"{half}: GND のビアが {n} 個しかない（下限 {MIN_GND_VIAS[half]}）")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_decoupling_caps_are_close_to_their_ic_in_copper(facts, half):
+    """**パスコンと IC の電源ピンが近いこと**（指摘 6）。
+
+    利用者の指摘のとおり、効くのは配置上の直線距離ではなく
+    **IC の電源ピン → パスコン → GND → 地板 → IC の GND ピン**と
+    一周する経路の配線長（ループのインダクタンス）。
+    GND 側の復路は両面のベタと、各 GND パッド脇のビアが受け持つ
+    （別の検査が見ている）ので、ここでは往路のパッド間を測る。
+
+    2026-08-12 の実測では **17.0mm** あった。パスコンとして働かない距離。
+    """
+    import math
+    import pinmap
+    from pcb_rules import DECOUPLE_BESIDE
+    pads = facts[half]["pads"]
+    far = []
+    for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
+        a = pads.get(f"{ic_ref}/{pinmap.resolve('74LVC595', 'VCC')}")
+        b = pads.get(f"{cap_ref}/{pinmap.resolve('cap_100n', '1')}")
+        if a is None or b is None:
+            continue
+        d = math.dist(a[:2], b[:2])
+        if d > MAX_DECOUPLE_MM:
+            far.append(f"{cap_ref}→{ic_ref}: {d:.2f}mm")
+    assert not far, (
+        f"{half}: パスコンが IC から遠い（上限 {MAX_DECOUPLE_MM}mm）\n  "
+        + "\n  ".join(far))
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_few_pieces_of_ground_copper_are_left_floating(facts, half):
+    """**浮いた GND の区画が増えていないこと**（指摘 5 の番人）。
+
+    配線に囲まれて GND のどこにも触れていない銅は、電位が決まって
+    おらず **GND ではない**。遮蔽の役に立たず、囲んでいる配線どうしを
+    容量結合させ、2.4GHz では寸法次第でアンテナになる。
+
+    **DRC はこれを何も言わない。**
+    """
+    n = facts[half]["floating"]
+    assert n <= MAX_FLOATING_ISLANDS, (
+        f"{half}: 浮いた GND の区画が {n} 箇所ある（**0 でなければならない**）。\n"
+        "  繋ぐ（gnd_fanout.stitch_islands）か、消す（ゾーンの島削除）かの\n"
+        "  どちらかが効かなくなっている。**浮いた銅を残す理由は無い。**")
+
+
+@pytest.mark.parametrize("half", NAMES)
+def test_there_is_exactly_one_bulk_capacitor_shared_by_the_board(half):
+    """**バルクコンデンサは 1 個で、その基板の IC 全部で共用していること**
+    （指摘 7）。
+
+    指摘は「可能な範囲で数を減らし、複数の IC で共用できるように」。
+    調べた結果、**すでに 1 枚あたり 1 個で、これ以上減らせない**。
+    レール（V3V3）に付いているので、その基板の IC は全部これを共用している。
+
+    バルクは「電池の内部抵抗が上がったときに BLE 送信のパルスを支える」
+    ためのもの。パスコン（0.1µF）とは役割が違うので**統合できない**——
+    パスコンは IC ごとに直近へ置くことに意味がある。
+
+    **この検査は「減らせ」ではなく「増えたら気づく」ために置く。**
+    後から不用意にバルクが増えたら落ちる。
+    """
+    from circuit import netlist
+    parts = netlist(half)
+    bulk = [p for p in parts if p[1] == "cap_100u"]
+    assert len(bulk) == 1, (
+        f"{half}: バルクコンデンサが {len(bulk)} 個ある: "
+        f"{[p[0] for p in bulk]}。1 個で足りるはず"
+        "（レールに付いていて全 IC が共用する）")
+    assert set(bulk[0][2].values()) == {"V3V3", "GND"}, (
+        f"{half}: バルクがレール（V3V3-GND）に付いていない: {bulk[0][2]}")
+
+
+# ======================================================================
+# **「判定が厳しすぎる」ことを検出するための検査**
+#
+# DRC は「緩すぎ」だけを見る。規則より厳しく置いても DRC は緑のままで、
+# **ビアが減っているのに誰も気づけない。**実際 2026-08-12 に、
+# ビアの半径を二重に数えていたせいで格子点の 8 割を無言で捨てていた。
+#
+# だから**結果の量**を測る。減ったら落ちる。
+# ここの数字は「これだけあれば十分」という物理的主張ではなく、
+# **静かな後退を見つけるための番人。**
+# ======================================================================
+
+# 実測値（2026-08-12・2 層化と判定の修正後）
+#   左  ファンアウト 9 + スティッチング 175 + フェンス 121 = 305
+#   右  ファンアウト 12 + スティッチング 210 + フェンス 174 = 396
+# 下限はその 8 割。配線のやり直しで多少ぶれるため。
+MIN_GND_VIAS = {"left": 240, "right": 310}
+
+# 浮いた（GND のどこにも触れていない）区画の上限。実測は左右とも 9。
+MAX_FLOATING_ISLANDS = 12

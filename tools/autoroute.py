@@ -9,7 +9,7 @@ docs/superpowers/specs/2026-08-08-pcb-autoroute-design.md にある。
     "$KPY" tools/autoroute.py            # 配線する
     .venv/bin/python3 tools/drc.py       # 確かめる
 
-DSN が 4 層・クリアランス規則・NPTH の keepout・GND ベタ（面として）を
+DSN が層構成・クリアランス規則・NPTH の keepout・GND ベタ（面として）を
 運ぶことは実測で確認済み。
 """
 
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
 UNROUTED = PCB / "unrouted"
 HALVES = ("left", "right")
-PASSES = 100
+PASSES = 300      # 800 に増やしても未配線は減らなかった（2026-08-13）
 
 JAR = Path(os.environ.get(
     "FREEROUTING_JAR",
@@ -78,36 +78,68 @@ def _check_jar():
             "別の場所に置くなら FREEROUTING_JAR で指定する")
 
 
-def _protect_the_ground_plane(dsn):
-    """In1.Cu を「電源層」として宣言し直す。
-
-    **KiCad の DSN は 4 層すべてを (type signal) として書き出す。**
-    In1.Cu は GND のベタなのに、そのまま渡すと自動配線器が基準面の上に
-    信号を通し、面を切り刻む。
-
-    分割キーボードは左右で 2.4GHz を至近距離で動かすので、基準電位が
-    連続していることの価値が大きい（4 層にしたのはそのため）。
-    DRC は面が切れていても何も言わないので、ここで守る。
-
-    効いたかどうかは、配線後に In1.Cu の配線本数を数えて確かめる
-    （test_the_ground_plane_is_not_cut_by_routing）。
-    """
-    txt = dsn.read_text()
-    old = "(layer In1.Cu\n      (type signal)"
-    new = "(layer In1.Cu\n      (type power)"
-    if old not in txt:
-        raise SystemExit(
-            "DSN の In1.Cu の宣言が想定と違う。KiCad の書式が変わった"
-            "可能性がある。手で確かめること")
-    dsn.write_text(txt.replace(old, new, 1))
+# **2 層になったので、GND 専用層の予約は無くなった**（2026-08-12・指摘 2）。
+#
+# 4 層のときは In1.Cu を `(type power)` と宣言し直して、自動配線器に
+# 「ここに信号を通すな」と全面予約していた。2 層では信号層と GND ベタ層が
+# 同じ 2 枚を兼ねるので、**両方を予約したら配線する場所が無くなる。**
+#
+# したがって GND ベタは最初から配線を避けた歯抜けになる。分断された島を
+# 繋ぎ直すのは gnd_fanout.stitch のスティッチングビアの仕事で、
+# 繋がったかどうかは test_pcb が「GND の島が 1 つか」で見る。
 
 
 # gen_pcb.py が自分で引いてしまうネット。**DSN から丸ごと外す。**
 #
-#   GND      ベタ（In1.Cu）と gnd_fanout のビアで配り終えている
+#   GND      両面のベタと gnd_fanout のビアで配り終えている
 #   SW\d+_D  スイッチ → ダイオード。裏面の L 字 2 本で届く
 #             （gen_pcb.prewire_switch_diode）
 PREWIRED = re.compile(r"GND|SW\d+_D")
+
+
+# Freerouting に上乗せして要求するクリアランス（µm）。
+#
+# **Freerouting は要求ぎりぎりを狙い、丸めで下回ることがある。**
+# 実測（2026-08-13）: 0.200mm を要求したのに 0.187〜0.198mm で引き、
+# KiCad の DRC がクリアランス違反にすることがある。
+#
+# KiCad 側の判定は 0.2mm のまま動かさない（そちらを緩めたら意味が無い）。
+# **自動配線器にだけ多めに言う。**
+#
+# 値は左右**共通**（利用者の要望。基板ごとに違う値を使う非対称は
+# 避ける）で、両方の未配線が最小になる値を総当たりで探した
+# （10〜30µm を刻んで、左右それぞれの未配線本数と DRC 違反を記録）。
+# **15µm が両方を満たす。**マージンを上げすぎると、配線が入れる
+# 隙間そのものが狭くなり未配線が増えるトレードオフがある
+# （40µm で右の未配線が 2→3 に悪化した）。
+#
+# それでも Freerouting 自身が打つビア（層間移動用。こちらの
+# クリアランス判定を通らない）が規則ぎりぎりに来ることがあり、
+# その 1 本は残る（下の DSN_CLEARANCE_MARGIN_UM の説明を見る）。
+DSN_CLEARANCE_MARGIN_UM = 15
+
+
+def _ask_freerouting_for_a_little_more_clearance(dsn):
+    """DSN のクリアランスだけ少し増やす。KiCad の設計規則は変えない。
+
+    `(clearance N)` の N は µm（DSN の冒頭が `(unit um)`）。
+    **`(type smd_smd)` の行は触らない**——あれは同じ部品の中の
+    パッドどうしの許容で、増やすとファンアウトが通らなくなる。
+    """
+    t = dsn.read_text()
+    n = [0]
+
+    def bump(m):
+        n[0] += 1
+        return f"(clearance {int(m.group(1)) + DSN_CLEARANCE_MARGIN_UM})"
+
+    t = re.sub(r"\(clearance (\d+)\)(?!\s*\(type)", bump, t)
+    if not n[0]:
+        raise SystemExit(
+            "DSN にクリアランスの指定が見つからない。KiCad の書式が"
+            "変わった可能性がある。**黙って進めない**"
+            "（Freerouting が丸めで規則を下回る）")
+    dsn.write_text(t)
 
 
 def _strip_prewired(dsn):
@@ -141,8 +173,8 @@ def _strip_prewired(dsn):
     dsn.write_text(t)
 
 
-def run(half):
-    """未配線の基板を配線し、記録を残して返す。"""
+def _route_once(half, seed):
+    """未配線の基板を 1 回配線して、その結果を返す。"""
     _check_jar()
     src = UNROUTED / f"hhkb_split_{half}.kicad_pcb"
     if not src.exists():
@@ -155,8 +187,8 @@ def run(half):
     ses = PCB / f"_{half}.ses"
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
-    _protect_the_ground_plane(dsn)
     _strip_prewired(dsn)
+    _ask_freerouting_for_a_little_more_clearance(dsn)
 
     # Freerouting のログは終わりに「N violations」と出すが、これは
     # protect にしたファンアウトどうしの接触を数えているだけ。
@@ -164,7 +196,7 @@ def run(half):
     # 良否を決めないこと。
     subprocess.run(
         [_java(), "-jar", str(JAR), "-de", str(dsn), "-do", str(ses),
-         "-mp", str(PASSES)],
+         "-mp", str(PASSES), "--gui.enabled=false"],
         check=True)
     if not ses.exists():
         raise SystemExit(f"{half}: Freerouting が SES を出さなかった")
@@ -179,7 +211,11 @@ def run(half):
     # 0.12mm は JLCPCB の最小 0.127mm を割るので DRC が赤になる。
     # **配線し直すたびに当たるかどうかが変わる**ので、ここで潰す。
     # 太くする向きなので、クリアランスは DRC で確認する。
-    from gen_pcb import TRACK_W
+    # **ネットごとに、そのクラスの幅まで引き上げる。**
+    # 以前は既定幅（0.2mm）を下回るものだけ直していたが、
+    # 電源をクラス分けしたので、V3V3 が 0.225mm で出てくることがある
+    # （クラスは 0.3mm）。**細い方向のばらつきは全部ここで潰す。**
+    from pcb_rules import TRACK_W
     _w = pcbnew.FromMM(TRACK_W)
     _fixed = 0
     for t in board.GetTracks():
@@ -188,6 +224,15 @@ def run(half):
             _fixed += 1
     if _fixed:
         print(f"   {half}: 細いトラック {_fixed} 本を {TRACK_W}mm へ揃えた")
+
+    # **電源をクラスの幅まで引き上げることはしない。**
+    #
+    # 一度やったら DRC のクリアランス違反が増えた（左 0→1・右 1→2）。
+    # 調べると、Freerouting は**狭いところで自分から幅を絞っている**。
+    # つまり利用者が求めた「太くできるところは太く、できないところは
+    # しない」を、自動配線器が既にやっている。**後から一律に太らせるのは、
+    # その正しい判断を壊す行為だった。**
+    # 幅の分布は test_pcb が見る（大半がクラスの幅であること）。
 
     # **自分で引いた配線を立て直す。**
     #
@@ -199,14 +244,43 @@ def run(half):
     # 位置はどちらも決定的に決まるので配線前と同じところに戻り、
     # Freerouting はそこを避けて配線済みなので衝突しない。
     prewire_switch_diode(board)
-    gnd_fanout.place(board)
+    n_fan = gnd_fanout.place(board)
 
-    # **ゾーンを塗り直す。**
+    # **順序が効く。狙って打つものを先に、埋め草を後に。**
     #
-    # 「ゾーンを足した」と「塗られた」は別。この案件では 4 層化のときと
-    # V3V3 の島のときの 2 回、ここで嵌まっている。SES の取り込みで
-    # ビアが増えているので、塗り直さないと GND ベタが古いままになる。
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    # 最初は格子（stitch）を先に打っていたが、**配線の脇という一番
+    # 効く場所が格子に先取りされ、フェンスが並ばなかった**
+    # （2026-08-13。利用者が絵を見て「斜め線のところにビアが無い」と
+    # 気づいた）。長い配線の脇は戻り電流の横断口なので、そちらが先。
+    #
+    # どちらも配線が終わってから打つ。配線を障害物として避けたいので、
+    # 配線前に打つと置き場所を見誤る。
+    n_fe, n_long = gnd_fanout.fence(board)
+    n_st, n_skip = gnd_fanout.stitch(board)
+    print(f"   {half}: GND ビア ファンアウト {n_fan} 個 / "
+          f"長い経路 {n_long} 本の脇に {n_fe} 個 / "
+          f"格子で埋めた {n_st} 個（置けなかった格子点 {n_skip}）")
+
+    # **配線後に 1 本ずつ太らせる後処理は入れていない**（2026-08-12）。
+    #
+    # 指摘 8 は gen_pcb.POWER_CLASSES のクラス分けで達成している
+    # （V3V3 = 0.3mm＝FFC の 0.30mm パッドに載る上限、他 = 0.6mm）。
+    # そのうえで「開けたところだけさらに太く」する後処理も書いたが、
+    # **自前の当たり判定が取りこぼし、DRC のクリアランス違反を
+    # 3 回続けて出した。**得られるのは V3V3 が 15mA しか流さない区間で
+    # 太くなることだけなので、割に合わないと判断して外した。
+    # 実装も消した（使わないものを残さない）。
+
+    # **離島になった GND を、ビアで本土へ繋ぎ戻す**（指摘 4・5）。
+    #
+    # 2 層では配線がベタを割るので、GND のどこにも触れない区画ができる。
+    # そういう銅は電位が決まっておらず GND ではない。**消すのではなく
+    # 繋ぐ**——反対面のベタを経由すれば戻せる。
+    #
+    # この中でゾーンの塗り直しまで済ませる（ビアを打つとベタの形が
+    # 変わるので、繰り返して収束させる必要がある）。
+    n_is, left = gnd_fanout.stitch_islands(board)
+    print(f"   {half}: 離島に打ったビア {n_is} 個 / 繋げ切れなかった区画 {left}")
 
     out = PCB / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(out))
@@ -219,16 +293,36 @@ def run(half):
     # バイト列ではなく指紋を使う。KiCad は保存のたびに UUID と
     # フットプリントの並び順を変えるので、バイトのハッシュは
     # 「再生成しただけ」でも変わってしまう（boardhash.py の説明を見る）。
+    board.BuildConnectivity()
+    left_over = board.GetConnectivity().GetUnconnectedCount(False)
     rec = {
         "board": out.name,
         "unrouted": src.name,
         "unrouted_fingerprint": boardhash.fingerprint(src),
         "freerouting": JAR.name,
         "passes": PASSES,
+        "attempt": seed,
+        "unconnected": left_over,
     }
     (PCB / f"route_{half}.json").write_text(
         json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return rec
+
+
+# **引き直しても無駄。Freerouting は決定的。**
+#
+# 「実行のたびに結果が揺れるので、0 が出るまで引き直す」という仕組みを
+# 書きかけたが、**仮定を検証したら間違いだった**（2026-08-13）。
+# 同じ入力で 3 回引いて未配線は 3 回とも同じ本数。揺れて見えていたのは
+# こちらがコードを変えていたからで、Freerouting のせいではない。
+#
+# パス数を増やしても解けない（100 → 300 → 800 で未配線は減らなかった）。
+# **残るのは配置の問題**なので、そちらで解く。
+
+
+def run(half):
+    """未配線の基板を配線し、記録を残して返す。"""
+    return _route_once(half, 1)
 
 
 def main():
