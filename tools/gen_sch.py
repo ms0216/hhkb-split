@@ -38,6 +38,7 @@ KiCad は同名のグローバルラベルを同一ネットとして扱うの�
 import subprocess
 import sys
 import uuid as _uuid
+from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,15 +51,44 @@ OUT = ROOT / "pcb"
 KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
 
 # KiCad 10 が書き出す書式版。template/*.kicad_sch から読み取った。
-SCH_VERSION = "20250114"
+# KiCad 10.0.5 が自分で保存したファイルの値に合わせてある
+# （generator は "hhkb_split" のまま独自ジェネレータと明示、
+#  version と generator_version だけ実際のフォーマットに追随させる）。
+SCH_VERSION = "20260306"
 
 # --- 図面の寸法（mm）---
 BODY_HW = 6.35          # シンボル本体の半幅
 PIN_LEN = 5.08          # ピンの長さ
-PIN_PITCH = 2.54        # ピンの縦の間隔
+# **ピンの縦の間隔。**KiCad の標準グリッド 2.54mm ではなく 5.08mm
+# （2 グリッド分）にしてある。
+#
+# グローバルラベルの矢印は必ずピン先端にくっつく（KiCad の仕様。
+# ラベルを付ける以上、避けられない）。文字サイズ 1.0mm のラベルだと
+# 矢印の高さがピンピッチとほぼ同じになり、隣どうしのラベルが
+# 上下に重なってピン番号ごと読めなくなる（2026-08-13・利用者が
+# スクリーンショットで指摘）。ラベルの矢印を小さくする／ワイヤーで
+# ずらすはどちらも別の副作用を生んだ（前者は重なりを軽くしただけ、
+# 後者は他ネットの配線と交差して短絡した）ので、ピッチを広げて
+# 物理的に間隔を作る方に倒した。
+#
+# ⚠️ **1.27mm（KiCad の標準グリッド 50mil）の整数倍でなければならない。**
+# 3.81mm（1.5 グリッド）を試したら、シンボル本体の半高
+# `h = max(n+1,4)*PIN_PITCH/2` の `/2` で 1.905 の奇数倍が発生し、
+# 1.27mm グリッドに乗らない座標のワイヤーができた
+# （実測: 5.3975mm のワイヤー = 1.27mm の 4.25 倍）。
+# KiCad はグリッド外の端点をピンとして認識せず、ピンの 8 割が
+# 「未接続」判定になった（ERC: endpoint_off_grid 81 件、
+# pin_not_connected 多数）。5.08mm（4 グリッド、2 の倍数）なら
+# `/2` しても 2.54mm＝2 グリッドの整数倍で必ず乗る。
+PIN_PITCH = 5.08
 COL_W = 60.96           # 部品の列の間隔
 ROW_GAP = 7.62          # 部品の縦の余白
-MARGIN = 25.4
+# **左端の余白。**実配線グループ（電源・シフトレジスタ・ケーブル）の
+# ワイヤーラベルを縦の帯に並べる場所を兼ねる。最大 3 本
+# （シフトレジスタの SPI_SCK・CS・U1_U2）が並ぶので、
+# 12.7mm 間隔 × 3 本が収まる余裕を見た
+# （2026-08-13。25.4mm だと 3 本目がシート枠の外に出た）。
+MARGIN = 38.1
 
 # 参照名の接頭辞から、シンボルの見た目の名前を決めるための塊の順序。
 # **回路図は人が読むものなので、宣言順ではなく機能順に並べる。**
@@ -271,8 +301,73 @@ def build(parts, project):
     x, y, col_h = MARGIN, MARGIN, 0.0
     max_x = max_y = 0.0
 
-    def place(ref, kind, pins, x, y):
-        """1 部品を置き、各ピンにグローバルラベルを添える。"""
+    # **ネットごとのピン座標を集める（配線を引くかどうかの判断に使う）。**
+    #
+    # ここに集めるのは「配線候補にするグループ」（マトリクス以外）の
+    # ピンだけ。マトリクスはキーごとに独立したネットが多く、機械的に
+    # 線で結ぶと 61 キー分の線が基板全体を這って読めなくなる
+    # （モジュールの説明の通り）。
+    #
+    # **接続数で判断する。**電源・シフトレジスタ・ケーブルは部品数が
+    # 少なく GND・V3V3 のような共有ネット（3 本以上つながる）と
+    # 1 対 1 のネット（分圧の間・信号の中継など）が混ざっている。
+    # 1 対 1 のものだけを実配線にする——3 本以上を線で束ねるのは
+    # バス配線の設計が要り、複雑さに見合わない。
+    net_pins = defaultdict(list)   # netname -> [(px, py), ...]
+    all_pins = []   # [(ref, px, py), ...] 全ピン座標。実配線ワイヤーが
+                     # 他部品のピン列を横切っていないか判定するのに使う。
+    bus_pins = defaultdict(list)   # netname -> [(ref, px, py), ...]（V3V3・GND 用）
+    bus_segments = []   # [(x0, x1, y), ...] バス水平線の区間。net_pins の
+                         # 迂回判定で「バス線を貫通していないか」も見る。
+    bus_drop_jobs = []   # [(title, netname, ref, px, py, bus_y), ...]
+                          # バスの枝は、グループの処理順に関わらず
+                          # 「全部品を置き終えたあと」に一括で描く。
+                          # グループごとにその場で描くと、まだ配置していない
+                          # 後続グループのピン（all_pins に無い）を貫通しても
+                          # 気づけない（実測：電源グループの V3V3 の枝が、
+                          # まだ置いていないシフトレジスタの COL0 ラベルを
+                          # 貫通して短絡した）。
+
+    # **バス線を横切る場合も迂回対象にする。**バスは他グループの部品を
+    # 含む横長の線なので、素通りすると無関係なネットが電気的に繋がる
+    # （実測：U1_U2 がシフトレジスタの GND バスの上を通過し、69 ピンが
+    # 1 ネットに誤統合された）。
+    def _crosses_bus(yy, xx0, xx1):
+        return any(abs(yy - by) < 0.1
+                   and not (xx1 < bx0 or xx0 > bx1)
+                   for bx0, bx1, by in bus_segments)
+
+    # **V3V3・GND は「1 本の共通バスから枝を引く」。**ただのグローバル
+    # ラベルの並びだと、回路の意図（電源レール・ノイズ対策のための
+    # パスコン）が図から読み取れない（2026-08-13・利用者の指摘：
+    # 「同じネットが正しく共通化されておらず、回路の思想が見えない」）。
+    #
+    # **過去に 2 度撤回・復元している。**
+    #   1 度目：複数のピンが同じ列（同じ x 座標）に並ぶとジャンクション
+    #     の UUID が衝突し、KiCad の解析が混乱して無関係な 69 ピンが
+    #     1 つのネットに誤統合される事故を起こした → いったん部品ごと
+    #     独立シンボル方式に撤回。
+    #   2 度目：独立シンボル方式でも「V3V3 を 1 本の線で引いて共通化
+    #     されている、という回路の思想が見えない」という当初の指摘が
+    #     再燃し、バス方式に戻した（今回）。
+    # 今回は、独立シンボル方式で学んだ 2 つの教訓を両方バスの枝にも
+    # 適用する。
+    #   a) **枝は先に横（ピンの列から出る）、それから縦。**縦線が
+    #      ピンの列（x = px）に乗る区間を作らない。同じ部品が V3V3・
+    #      GND を両方持つ場合（74LVC595 の VCC・MR）、真っ直ぐ縦に
+    #      伸ばすと 1 ピッチ隣の自分自身の別ピン（Q0=COLn 等）を
+    #      素通りする（実測：37〜69 ピンの巨大ネットに誤統合された）。
+    #   b) **バスの枝は全部品を置き終えたあとに一括で描く。**グループ
+    #      の処理順に依存する短絡を避ける。
+    BUS_NETS = ("V3V3", "GND")
+
+    def place(ref, kind, pins, x, y, wire_candidate):
+        """1 部品を置く。ピンには次のどちらかを添える。
+
+        wire_candidate な部品のピンで、そのネットの接続数が 2 以下なら
+        座標だけ net_pins に記録し、あとで build() の最後に 1 本の
+        ワイヤーとして結ぶ。それ以外はグローバルラベル。
+        """
         _, h = lib[kind]
         pin_rows = _symbol_pins(kind)
         top = (len(pin_rows) - 1) * PIN_PITCH / 2
@@ -301,10 +396,30 @@ def build(parts, project):
             # ネットが 1 本も繋がらない（netlist を出して確かめてある）。
             px = x - (BODY_HW + PIN_LEN)
             py = y - (top - i * PIN_PITCH)
+            all_pins.append((ref, px, py))
             if netname == "NC":
                 labels.append(f"\t(no_connect (at {px:.2f} {py:.2f}) "
                               f"(uuid {_q(_uid(project, ref, name, 'nc'))}))")
+            elif wire_candidate and netname in BUS_NETS and net_count[netname] >= 2:
+                # 1 本しかない（このグループ内にそのネットの部品が
+                # 1 個だけ）ときはバス化しない。長さ 0 の横線ができて
+                # KiCad が「線に触れていない」と判定する
+                # （実測：J_MAIN 単体の「ケーブル」グループで
+                #  label_dangling）。
+                bus_pins[netname].append((ref, name, px, py))
+            elif wire_candidate and net_count[netname] == 2:
+                net_pins[netname].append((px, py))
             else:
+                # **ラベルの矢印は、ピン先端に直接置く。**動かさない。
+                #
+                # ピン番号の数字と矢印の形が重なって見た目は完全には
+                # 綺麗にならないが（2026-08-13・利用者がスクリーンショットで
+                # 指摘）、動かす方式を 3 回試して 3 回とも新しい交差
+                # バグを生んだ（別部品のピンとの短絡・他ネットの配線との
+                # 短絡・GND と V3V3 が電気的に統合される、の順に悪化）。
+                # **電気的な安全性を優先し、動かさない方針に確定する。**
+                # ピッチを広げた分（PIN_PITCH 5.08mm）、文字は重ならず
+                # 並ぶので、矢印の頭が番号に触れる程度で読解には支障ない。
                 labels.append(
                     "\t(global_label\n"
                     f"\t\t{_q(netname)}\n"
@@ -326,8 +441,37 @@ def build(parts, project):
         ]
         return "\n".join(s)
 
-    texts = []
+    texts, wires = [], []
+    # **配線を引くグループ。**マトリクスは 54〜68 個のキーが独立した
+    # ネットを持ち、線で結ぶと基板全体を這って読めなくなる
+    # （モジュール冒頭の説明の通り）。それ以外は 10 個前後で、
+    # 実配線を引いても十分読める（2026-08-13・利用者の指摘）。
+    #
+    # **座標は行・列の一括計算式ではなく、部品ごとに手で決める**
+    # （2026-08-13・利用者の提案）。一括計算式は「同じ行に何個並ぶか」
+    # を変えるたびに、意図しない場所で水平線が別の部品を貫通する
+    # 事故を繰り返した（機械的な配置ルールでは避けきれなかった）。
+    # ここでは信号の流れ（電池→スイッチ→整流→分圧、SPI→シフト
+    # レジスタ→ケーブル）に沿って (行, 列) を明示する。
+    WIRE_LAYOUT = {
+        "電源": {
+            "BT1_+": (0, 0), "SW_PWR_1": (0, 1), "BT1_-": (0, 2),
+            "SW_PWR_2": (1, 0), "D_PWR": (1, 1), "C_BULK": (1, 2),
+            "C_RAIL": (2, 0), "R_HI": (2, 1), "R_LO": (2, 2),
+        },
+        "シフトレジスタ": {
+            "U1": (0, 0), "U2": (0, 1), "C_U1": (0, 2), "C_U2": (0, 3),
+        },
+        "マイコン": {
+            "U_MCU": (0, 0), "C_DB": (0, 1),
+        },
+        "ケーブル": {
+            "J_DB": (0, 0), "J_MAIN": (0, 0),
+        },
+    }
+
     for title, group in _ordered(parts):
+        wire_candidate = title in WIRE_LAYOUT
         # 塊の頭で改列し、見出しを置く
         if col_h:
             y += col_h + ROW_GAP * 2
@@ -337,19 +481,251 @@ def build(parts, project):
             f"\t\t(at {MARGIN:.2f} {y - PIN_PITCH * 3:.2f} 0)\n"
             f"\t\t{_effects(size=2.54)}\n"
             f"\t\t(uuid {_q(_uid(project, 'ttl', title))})\n\t)")
-        x = MARGIN + BODY_HW + PIN_LEN + 25.4
-        for ref, kind, pins in group:
-            _, h = lib[kind]
-            if x > MARGIN + COL_W * 11:
-                x = MARGIN + BODY_HW + PIN_LEN + 25.4
-                y += col_h + ROW_GAP
-                col_h = 0
-            body.append(place(ref, kind, pins, x, y + h))
-            col_h = max(col_h, h * 2 + ROW_GAP)
-            max_x, max_y = max(max_x, x), max(max_y, y + h * 2)
-            x += COL_W
-        y += col_h + ROW_GAP
-        col_h = 0
+        net_count = defaultdict(int)
+        if wire_candidate:
+            for _ref, _kind, pins in group:
+                for _pin, net in pins.items():
+                    if net != "NC":
+                        net_count[net] += 1
+        net_pins.clear()
+        bus_pins.clear()
+
+        if wire_candidate:
+            layout = WIRE_LAYOUT[title]
+            x0 = MARGIN + BODY_HW + PIN_LEN + 25.4
+            # **バス線の分だけ、部品の上下に余白を空ける。**V3V3 は
+            # 部品群の上、GND は部品群の下にバスを通す（電源が上から
+            # 下りて GND へ抜けていく、一般的な回路図の描き方に合わせる。
+            # 2026-08-13・利用者の指摘）。固定 PIN_PITCH*2 では足りず、
+            # 部品本体（74LVC595 なら半高 40mm 超）とバス線が重なった
+            # ことがあるので、そのグループの最大部品の半高ぶんを足す。
+            top_h = max((h for _, h in (lib[k] for _r, k, _p in group)),
+                        default=0)
+            y0 = y + top_h + PIN_PITCH * 2
+            for ref, kind, pins in group:
+                row, col = layout[ref]
+                _, h = lib[kind]
+                px_ = x0 + col * COL_W
+                py_ = y0 + row * (ROW_GAP + 2 * max(h, 12.7))
+                body.append(place(ref, kind, pins, px_, py_ + h, wire_candidate))
+                max_x, max_y = max(max_x, px_), max(max_y, py_ + h * 2)
+
+            group_top = y0 - top_h
+            group_bottom = max_y
+            bus_y_of = {"V3V3": group_top - PIN_PITCH,
+                        "GND": group_bottom + PIN_PITCH}
+            for netname in BUS_NETS:
+                pts = bus_pins.get(netname)
+                if not pts:
+                    continue
+                bus_y = bus_y_of[netname]
+                bus_x1 = max(px for _r, _n, px, _py in pts)
+                bus_x0 = min(px for _r, _n, px, _py in pts) - PIN_PITCH
+                bus_segments.append((bus_x0, bus_x1, bus_y))
+                wires.append(
+                    "\t(wire\n"
+                    f"\t\t(pts (xy {bus_x0:.2f} {bus_y:.2f}) "
+                    f"(xy {bus_x1:.2f} {bus_y:.2f}))\n"
+                    "\t\t(stroke (width 0.508) (type default))\n"
+                    f"\t\t(uuid {_q(_uid(project, 'bus', title, netname))})\n"
+                    "\t)")
+                wires.append(
+                    "\t(label\n"
+                    f"\t\t{_q(netname)}\n"
+                    f"\t\t(at {bus_x0:.2f} {bus_y:.2f} 0)\n"
+                    f"\t\t{_effects(size=1.0)}\n"
+                    f"\t\t(uuid {_q(_uid(project, 'buslbl', title, netname))})\n"
+                    "\t)")
+                for ref, name, px, py in pts:
+                    bus_drop_jobs.append((title, netname, ref, name, px, py, bus_y))
+            if bus_pins.get("GND"):
+                max_y = bus_y_of["GND"]
+            y = max_y + PIN_PITCH * 2 + ROW_GAP
+        else:
+            row_len = 11
+            x = MARGIN + BODY_HW + PIN_LEN + 25.4
+            for ref, kind, pins in group:
+                _, h = lib[kind]
+                if x > MARGIN + COL_W * row_len:
+                    x = MARGIN + BODY_HW + PIN_LEN + 25.4
+                    y += col_h + ROW_GAP
+                    col_h = 0
+                body.append(place(ref, kind, pins, x, y + h, wire_candidate))
+                col_h = max(col_h, h * 2 + ROW_GAP)
+                max_x, max_y = max(max_x, x), max(max_y, y + h * 2)
+                x += COL_W
+            y += col_h + ROW_GAP
+            col_h = 0
+
+        # **ちょうど 2 点のネットを 1 本のワイヤーで結ぶ。**
+        # net_pins は place() が「net_count == 2」のときだけ書き込む
+        # （1 本しかない・3 本以上つながるネットは place() 側で
+        #  ラベルへ回るので、ここには来ない）。
+        for wi, (netname, pts) in enumerate(net_pins.items()):
+            assert len(pts) == 2, (netname, pts)   # net_count と食い違ったら壊れている
+            (x1, y1), (x2, y2) = pts
+            # **部品を手動で隣接配置してあるので、基本は 2 点の間だけを
+            # 結ぶ最短の L 字（水平 → 垂直）で足りる。**以前はここで
+            # シート左端まで回り込む経路を使っていたが、それは「部品が
+            # 離れている」ことを前提にした設計で、隣どうしに並べた今は
+            # 不要な迂回でしかない（実測：C_RAIL の隣に R_HI・R_LO を
+            # 置いても、この迂回経路のせいで VBATT_SENSE の線が
+            # 見出しの外まで伸びていた）。
+            #
+            # **ただし、水平区間が相手部品の別のピンを横切る場合だけは
+            # 例外。**U1.Q7S → U2.DS のように、隣の部品の中で高さが
+            # 違うピンへ向かうと、その部品の別のピン（Q7S など）の
+            # 前を素通りしてしまい、無関係なピンと短絡する
+            # （実測：ERC が「出力どうし接続」を報告）。
+            # その場合だけ、相手部品の外（上端の外）を回る。
+            # **境界（相手部品の先頭ピン列の x）を含めて判定する。**
+            # U1.Q7S → U2.DS のようなケースでは、U2 のブロックする
+            # ピン（Q7S）がちょうど x2（U2 側の目的ピンの x）と同じ列に
+            # 並ぶ。厳密な不等号 `<` だと境界のこのケースを見逃す
+            # （実測：blocked=False のまま短絡が再発した）。
+            blocked = any(
+                abs(py - y1) < 0.1 and min(x1, x2) <= px <= max(x1, x2)
+                and (px, py) not in ((x1, y1), (x2, y2))
+                for _ref, px, py in all_pins
+            ) or _crosses_bus(y1, x1, x2)
+            if not blocked:
+                wires.append(
+                    "\t(wire\n"
+                    f"\t\t(pts (xy {x1:.2f} {y1:.2f}) (xy {x2:.2f} {y1:.2f}))\n"
+                    "\t\t(stroke (width 0) (type default))\n"
+                    f"\t\t(uuid {_q(_uid(project, 'wire', title, netname, 'h'))})\n"
+                    "\t)")
+                if y1 != y2:
+                    wires.append(
+                        "\t(wire\n"
+                        f"\t\t(pts (xy {x2:.2f} {y1:.2f}) (xy {x2:.2f} {y2:.2f}))\n"
+                        "\t\t(stroke (width 0) (type default))\n"
+                        f"\t\t(uuid {_q(_uid(project, 'wire', title, netname, 'v'))})\n"
+                        "\t)")
+            else:
+                # 相手部品の上端の外を回る。**衝突しなくなるまで
+                # PIN_PITCH ずつ上へずらす。**1 段上げただけでは、
+                # そこにまた別のピン（同じ部品の GND 等）が並んでいる
+                # ことがある（実測：Q7S の 1 段上が GND のラベルと
+                # 一致し、今度は BT1_- と誤って繋がった）。
+                all_x = (x1, x2)
+                detour_y = min(y1, y2) - PIN_PITCH
+                for _ in range(20):
+                    hit = any(
+                        abs(py - detour_y) < 0.1
+                        and min(all_x) <= px <= max(all_x)
+                        for _ref, px, py in all_pins
+                    ) or _crosses_bus(detour_y, *all_x)
+                    if not hit:
+                        break
+                    detour_y -= PIN_PITCH
+                else:
+                    raise SystemExit(
+                        f"{netname}: 迂回経路が 20 段上げても衝突を"
+                        "避けられない。部品の配置を見直すこと")
+                for seg, (a, b) in enumerate([
+                    ((x1, y1), (x1, detour_y)),
+                    ((x1, detour_y), (x2, detour_y)),
+                    ((x2, detour_y), (x2, y2)),
+                ]):
+                    wires.append(
+                        "\t(wire\n"
+                        f"\t\t(pts (xy {a[0]:.2f} {a[1]:.2f}) "
+                        f"(xy {b[0]:.2f} {b[1]:.2f}))\n"
+                        "\t\t(stroke (width 0) (type default))\n"
+                        f"\t\t(uuid {_q(_uid(project, 'wire', title, netname, f'd{seg}'))})\n"
+                        "\t)")
+                y1 = detour_y   # ラベル位置の計算に使う
+            # **ワイヤーだけではネット名が付かない。**
+            # KiCad は名前の無いワイヤーに `Net-(REF-PadN)` という
+            # 自動生成の名前を振る。宣言した名前（VBATT_RAW 等）と
+            # 一致させるには、ラベルを 1 個添える必要がある
+            # （実測：付けなかったら test_schematic の突き合わせが落ちた）。
+            # **global_label ではなくローカルの label にする**——
+            # このネットは同じワイヤーの中で完結しており、他のシートや
+            # 別の場所と束ねる必要が無い。
+            # 水平区間の中点に置く。部品を隣接配置してあるので区間は
+            # 短く、他のワイヤーと交差する余地がない。
+            lx, ly = (x1 + x2) / 2, y1
+            wires.append(
+                "\t(label\n"
+                f"\t\t{_q(netname)}\n"
+                f"\t\t(at {lx:.2f} {ly:.2f} 0)\n"
+                f"\t\t{_effects(size=1.0)}\n"
+                f"\t\t(uuid {_q(_uid(project, 'wlbl', title, netname))})\n"
+                "\t)")
+
+    # **バスの枝は、全部品を置き終えたあとにまとめて描く。**理由は
+    # bus_drop_jobs への追加箇所を参照。
+    for title, netname, ref, name, px, py, bus_y in bus_drop_jobs:
+        up = netname == "V3V3"
+        # **先に横（ピンの列から出る）、それから縦。**逆順だと縦線が
+        # ピンの列（x = px）を通ってしまい、隣のピンを素通りする。
+        # 同じ部品が V3V3・GND を両方持つ場合（74LVC595 の VCC・MR）、
+        # 隣は 1 ピッチ違いのピンなので、真っ直ぐ縦に伸ばすとそこを
+        # 串刺しにする（実測：U1.VCC の枝が隣の Q0=COL0 を素通りして
+        # 37〜69 ピンの巨大ネットに誤統合された）。
+        jog_x = px - PIN_PITCH
+        # **ジョグ先の列も、通過区間に無関係なピンが無いか見る。**
+        # 自分自身の他のピン（同じ ref）も対象にする——除外すると、
+        # 1 個の部品が同じバスネットに 2 本のピンを持つケースを
+        # 見逃す。
+        ylo, yhi = min(py, bus_y), max(py, bus_y)
+        for _ in range(10):
+            # all_pins は (ref, x, y) のみを持つ。同じ ref の別ピンも
+            # 判定対象に含めたいので、(ref, px, py) 自身の座標だけを
+            # 除外する形にする。
+            blocked = any(
+                (r, ppx, ppy) != (ref, px, py) and abs(ppx - jog_x) < 0.1
+                and ylo - 0.1 <= ppy <= yhi + 0.1
+                for r, ppx, ppy in all_pins
+            ) or _crosses_bus(py, min(px, jog_x), max(px, jog_x))
+            if not blocked:
+                break
+            jog_x -= PIN_PITCH
+        else:
+            raise SystemExit(
+                f"{netname}: {ref}.{name} のバスの枝が 10 段ずらしても"
+                "衝突を避けられない")
+        wires.append(
+            "\t(wire\n"
+            f"\t\t(pts (xy {px:.2f} {py:.2f}) (xy {jog_x:.2f} {py:.2f}))\n"
+            "\t\t(stroke (width 0) (type default))\n"
+            f"\t\t(uuid {_q(_uid(project, ref, name, 'busdrop', 'h'))})\n"
+            "\t)")
+        wires.append(
+            "\t(wire\n"
+            f"\t\t(pts (xy {jog_x:.2f} {py:.2f}) (xy {jog_x:.2f} {bus_y:.2f}))\n"
+            "\t\t(stroke (width 0) (type default))\n"
+            f"\t\t(uuid {_q(_uid(project, ref, name, 'busdrop', 'v'))})\n"
+            "\t)")
+        wires.append(
+            "\t(wire\n"
+            f"\t\t(pts (xy {jog_x:.2f} {bus_y:.2f}) (xy {px:.2f} {bus_y:.2f}))\n"
+            "\t\t(stroke (width 0) (type default))\n"
+            f"\t\t(uuid {_q(_uid(project, ref, name, 'busdrop', 'h2'))})\n"
+            "\t)")
+        # **バス線と枝の分岐点にジャンクションを置く。**KiCad は T 字
+        # （線の途中から別の線が分岐する形）を座標の一致だけでは
+        # 接続と認識しないことがある（実測：座標はすべて正しいのに
+        #  ERC が pin_not_connected を出し続けた。junction が
+        #  1 個も無かった）。
+        #
+        # **UUID には ref・name を含める。**同じ列（同じ x）に複数の
+        # ピンが並ぶと UUID が重複し、KiCad の解析が混乱して無関係な
+        # ピンどうしが 1 つの巨大ネットに誤統合される事故が起きた
+        # （実測：69 ピンが 1 ネットに統合）。
+        # **diameter は 0 ではなく 1.016（KiCad の既定値）。**
+        # KiCad 純正テンプレートを確認したら diameter 0 のジャンクション
+        # は無く、全部 1.016 だった。0 だと KiCad の接続解析で無効化
+        # される疑いがある（69 ピンの誤統合の原因候補。実測でも
+        # 解消した）。
+        wires.append(
+            f"\t(junction (at {px:.2f} {bus_y:.2f}) "
+            f"(diameter 1.016) (color 0 0 0 0)\n"
+            f"\t\t(uuid {_q(_uid(project, 'busjct', title, netname, ref, name))})\n"
+            "\t)")
+        all_pins.append((ref, jog_x, bus_y))
 
     # 電源フラグ
     fx = MARGIN + BODY_HW + PIN_LEN + 25.4
@@ -402,7 +778,7 @@ def build(parts, project):
         "(kicad_sch",
         f"\t(version {SCH_VERSION})",
         '\t(generator "hhkb_split")',
-        '\t(generator_version "9.0")',
+        '\t(generator_version "10.0")',
         f"\t(uuid {_q(_uid(project, 'sheet'))})",
         f"\t(paper \"User\" {w:.2f} {hgt:.2f})",
         "\t(title_block",
@@ -415,7 +791,7 @@ def build(parts, project):
     head.append(_pwr_flag_sym(f'{project}:{PWR_FLAG_KIND}'))
     head.append("\t)")
     tail = ["\t(sheet_instances", '\t\t(path "/" (page "1"))', "\t)", ")"]
-    return "\n".join(head + labels + texts + body + tail) + "\n"
+    return "\n".join(head + labels + wires + texts + body + tail) + "\n"
 
 
 SHEETS = {
@@ -449,6 +825,13 @@ def netlist_from_sch(path):
     out = {}
     for net in ET.parse(xml).getroot().find("nets"):
         name = net.get("name")
+        # **ローカルラベルのネットには先頭に `/`（ルートシートパス）が付く。**
+        # グローバルラベル（マトリクス側）はプロジェクト全体スコープなので
+        # 付かない。同じ VBATT_RAW でも由来によって名前の見た目が変わると
+        # 突き合わせ検査が誤って「食い違い」を報告する（実測）ので、
+        # ここで剥がして揃える。1 階層しか無いこの回路図では、
+        # 先頭の `/` は名前の一部ではなく scope の印にすぎない。
+        name = name.lstrip("/")
         for node in net.findall("node"):
             out.setdefault(node.get("ref"), {})[node.get("pin")] = name
     xml.unlink()
