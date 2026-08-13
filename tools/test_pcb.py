@@ -648,7 +648,10 @@ def test_the_electronics_fit_inside_their_band(half):
 def test_every_ground_pad_reaches_the_plane(half):
     """電子部品の GND パッドの脇にビアが立っていること。
 
-    GND ベタは In1.Cu の 1 層だけ、GND パッドは全部 B.Cu の SMD。
+    GND パッドは全部 B.Cu の SMD。ベタは F.Cu・B.Cu の両面にあるが、
+    B.Cu 側のパッドから F.Cu 側のベタへ電位を渡すにはビアが要る
+    （2026-08-13 訂正：4 層時代は In1.Cu が GND 専用層だったが、
+    2 層化で両面ベタに変わった。判定条件自体は層数に依存しない）。
     間にビアが無いとベタに届かない。**ImportSpecctraSES は既存の配線を
     作り直すので、取り込みのたびにファンアウトが消える**（実測 7→0）。
     autoroute.py が立て直しているかを見る。
