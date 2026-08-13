@@ -11,8 +11,23 @@ name: Build ZMK firmware
 
 on:
   push:
+    # **文書だけの push で 8 ターゲットを焼かない。**ファームの作業で 1 日に
+    # 20 回押した日に実行が詰まった（checks.yml の real-shape と同じ理由）。
+    # ⚠️ この一覧が**足りないと、変えたのにビルドされない。**
+    # 一覧の外を直したあとで .uf2 が要るときは workflow_dispatch で回す
+    # （Actions タブ → Build ZMK firmware → Run workflow）。
+    paths:
+      - "config/**"
+      - "firmware/**"
+      - "build.yaml"
+      - "zephyr/**"
+      - ".github/workflows/build.yml"
   pull_request:
   workflow_dispatch:
+
+# 呼び先はサードパーティの再利用ワークフロー。既定スコープのまま渡さない。
+permissions:
+  contents: read
 
 jobs:
   build:
