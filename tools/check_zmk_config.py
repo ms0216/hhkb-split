@@ -29,6 +29,10 @@ ZMK_VARIANT = "//zmk"
 
 REQUIRED = ["Kconfig.shield", "{name}.overlay", "{name}.keymap"]
 
+# ZMK 本体に入っているシールド。ローカルにファイルが無いのが正しい。
+# settings_reset は BLE のボンドを消す救援イメージ（build.yaml 参照）。
+UPSTREAM_SHIELDS = {"settings_reset"}
+
 
 def load_yaml(path, problems):
     try:
@@ -134,6 +138,9 @@ def main():
             # 分割シールドは 1 つのディレクトリに左右 2 つのシールド名を置く慣例。
             # ディレクトリ名 = シールド名とは限らないので、<name>.overlay が
             # あるディレクトリを探す。
+            if name in UPSTREAM_SHIELDS:
+                notes.append(f"  {board} / {name}  (ZMK 本体のシールド)")
+                continue
             d = find_shield_dir(name)
             if d is None:
                 problems.append(f"シールド '{name}': {name}.overlay が見つからない")

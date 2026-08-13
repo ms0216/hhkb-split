@@ -133,15 +133,20 @@ def main(names=None):
     # ⚠️ 2026-08-12。底面の電池蓋を廃止したのに build/battery_lid_*.stl が
     # 残り、ここが拾って合格を出していた。**存在しない部品を刷らせる。**
     # 調査中に出した残骸（lid.stl / c.stl）も同じように拾っていた。
-    # 生成器側でも片付けるようにしたが、ここでも**目に見える形で**出す。
+    # 生成器側でも片付けるようにしたが、警告だけでは誰も読まず、
+    # 廃止済みの tilt_foot_3.stl / tilt_foot_6.stl（改名前の残骸）を
+    # 8 か月「刷れます」と言い続けた（2026-08-13）。
+    # **古い STL はスライスせず、検査を赤にする。**
     newest = max((q.stat().st_mtime for q in TOOLS.glob("*.py")
                   if not q.name.startswith("test_")), default=0.0)
     stale = [p for p in stls if p.stat().st_mtime < newest]
     if stale:
-        print("⚠️ tools/*.py より古い STL がある（作り直すか、消すこと）:")
+        print("!! tools/*.py より古い STL がある。作り直すか、消すこと"
+              "（どの生成器も出さない残骸なら消す）:")
         for q in stale:
             print(f"     {q.name}")
         print()
+        stls = [p for p in stls if p not in stale]
     if names:
         stls = [p for p in stls if p.stem in names]
 
@@ -174,7 +179,9 @@ def main(names=None):
     print(f"\n{len(stls) - len(failed)}/{len(stls)} 件がスライス成功")
     if failed:
         print("失敗: " + ", ".join(failed))
-    return 1 if failed else 0
+    if stale:
+        print(f"古い STL {len(stale)} 件（上記）。合格にしない")
+    return 1 if failed or stale else 0
 
 
 if __name__ == "__main__":

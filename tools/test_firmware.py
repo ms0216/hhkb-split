@@ -110,3 +110,23 @@ def test_this_repository_is_registered_as_a_zmk_module():
                  "firmware/src/low_battery_off.c",
                  "firmware/dts/bindings/sensor/hhkb,battery-alkaline.yaml"):
         assert (ROOT / path).exists(), f"{path} が無い"
+
+
+def test_the_zmk_config_validator_passes():
+    """ZMK 設定の静的検査（check_zmk_config.py）が通ること。
+
+    この検証器は shields_list_contains の綴りずれなど**ビルドが無言で
+    無視する失敗**を捕まえるために書かれたのに、どこからも呼ばれておらず、
+    settings_reset（ZMK 本体のシールド）を誤検出して exit 1 のまま
+    放置されていた（2026-08-13 に発見）。検査対象に入っていない検査器は、
+    無いのと同じ。ここで毎回回す。
+    """
+    import contextlib
+    import io
+
+    import check_zmk_config
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = check_zmk_config.main()
+    assert rc == 0, buf.getvalue()
