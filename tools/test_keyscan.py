@@ -99,6 +99,22 @@ def test_column_counts_match_the_shift_registers():
     assert _gpio_count(LEFT, "col-gpios") == LEFT_COLS == 6
     assert _gpio_count(RIGHT, "col-gpios") == RIGHT_COLS == 9
     assert "ngpios = <16>" in _strip(RIGHT.read_text()), "右は 595 を 2 個使う"
+    # **共有 dtsi の既定は左向けの 8。**右だけが overlay で 16 に上書きする。
+    # ここが 16 になっていると、左が 595 を 2 個載せている前提になる。
+    assert "ngpios = <8>" in _strip(DTSI.read_text()), (
+        "共有 dtsi の既定 ngpios は左向けの 8 のはず")
+
+
+def test_the_declared_matrix_width_covers_both_halves():
+    """`columns` が左右の合計と一致すること。
+
+    足りないと右端の列（RC(0,14) ＝ ` ）が transform から溢れる。
+    **2026-08-13 に故意に <14> へ落として確かめたら、どの検査も
+    気づかなかった**ので足した。散文コメントが主張している数でもある。
+    """
+    m = re.search(r"columns\s*=\s*<(\d+)>", _strip(DTSI.read_text()))
+    assert m, "columns が見当たらない"
+    assert int(m.group(1)) == LEFT_COLS + RIGHT_COLS == 15
 
 
 # --------------------------------------------------------------------------
@@ -126,7 +142,7 @@ def test_positions_stay_inside_the_declared_matrix():
 
 
 def test_left_and_right_occupy_their_own_columns():
-    """左が列 0..5、右が列 6..13。重なるとキーが入れ替わる。"""
+    """左が列 0..5、右が列 6..14。重なるとキーが入れ替わる。"""
     entries = _map_entries()
     left, right = entries[:LEFT_KEYS], entries[LEFT_KEYS:]
     assert all(c < LEFT_COLS for _, c in left)
