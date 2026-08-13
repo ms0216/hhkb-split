@@ -32,8 +32,6 @@ import pinmap                                                    # noqa: E402
 # 参照名の割り方は gen_sch.expanded に集約した
 
 ROOT = Path(__file__).resolve().parent.parent
-KPY = ("/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/"
-       "Versions/3.9/bin/python3.9")
 KICAD_CLI = gen_sch.KICAD_CLI
 
 PROJECTS = ["hhkb_split_left", "hhkb_split_right", "hhkb_split_daughterboard"]
@@ -45,6 +43,10 @@ UNCONNECTED = re.compile(r"unconnected-\(.*\)")
 
 def _pcb_netlist(project):
     """基板の {参照名: {パッド番号: ネット名}}。pcbnew は KiCad の Python にしか無い。"""
+    import pcb_parts
+    from conftest import require_kicad_python
+
+    require_kicad_python("回路図と基板の突き合わせ")
     pcb = ROOT / "pcb" / f"{project}.kicad_pcb"
     script = (
         "import json,pcbnew;"
@@ -53,8 +55,8 @@ def _pcb_netlist(project):
         "{p.GetNumber():p.GetNetname() for p in f.Pads()}"
         " for f in b.GetFootprints()}))"
     )
-    out = subprocess.run([KPY, "-c", script], capture_output=True, text=True,
-                         check=True)
+    out = subprocess.run([pcb_parts.KICAD_PYTHON, "-c", script],
+                         capture_output=True, text=True, check=True)
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
@@ -126,6 +128,17 @@ def test_the_schematic_passes_erc(project, tmp_path):
     を見つける。**種別を書かないと ERC はただ通るだけの飾りになる**ので、
     pinmap.py に種別まで持たせてある。
     """
+    import pcb_parts
+
+    # **kicad-cli が無いと報告ファイルが出ず、read_text で落ちる。**
+    # 「無い環境では飛ばす／REQUIRE_KICAD=1 なら落とす」に揃える。
+    if not pcb_parts.kicad_available():
+        import os
+        if os.environ.get("REQUIRE_KICAD") == "1":
+            pytest.fail(f"ERC: kicad-cli が無い（{pcb_parts.KICAD_CLI}）。"
+                        "このジョブは飛ばしてはいけない")
+        pytest.skip(f"ERC: kicad-cli が無い環境（{pcb_parts.KICAD_CLI}）")
+
     sch = gen_sch.write(project, tmp_path / f"{project}.kicad_sch")
     rpt = tmp_path / "erc.json"
     subprocess.run(

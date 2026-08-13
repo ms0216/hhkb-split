@@ -1063,8 +1063,8 @@ def test_the_mounting_holes_are_isolated_from_ground(half):
 # 何度も踏んだ型なので、判定は配線後の実物に対して行う。
 # ======================================================================
 
-KPY_PATH = ("/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/"
-            "Versions/3.9/bin/python3.9")
+# pcbnew を持つ Python の場所は pcb_parts に一本化してある
+# （KICAD_PYTHON で差し替えられる）。
 
 
 def _board_facts(half):
@@ -1076,6 +1076,11 @@ def _board_facts(half):
     （2026-08-12）。書式は版で変わるので、KiCad 自身に読ませる。
     """
     import subprocess
+
+    import pcb_parts
+    from conftest import require_kicad_python
+
+    require_kicad_python("配線後の実物から銅を測る検査")
     script = r"""
 import json, pcbnew, sys
 sys.path.insert(0, %r)
@@ -1125,7 +1130,7 @@ print(json.dumps({"tracks": tracks, "vias": vias, "pads": pads,
                   "layers": [b.GetLayerName(l)
                              for l in b.GetEnabledLayers().CuStack()]}))
 """ % (str(ROOT / "tools"), str(PCB / f"hhkb_split_{half}.kicad_pcb"))
-    out = subprocess.run([KPY_PATH, "-c", script],
+    out = subprocess.run([pcb_parts.KICAD_PYTHON, "-c", script],
                          capture_output=True, text=True, check=True)
     import json as _json
     return _json.loads(out.stdout.strip().splitlines()[-1])

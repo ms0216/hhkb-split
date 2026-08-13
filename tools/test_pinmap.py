@@ -21,8 +21,6 @@ from circuit import (WIRE_PAD_KINDS, board_refs, daughterboard_netlist,
                      netlist)
 
 ROOT = Path(__file__).resolve().parent.parent
-KPY = ("/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/"
-       "Versions/3.9/bin/python3.9")
 
 BOARDS = {
     "left": (lambda: netlist("left"), "hhkb_split_left.kicad_pcb"),
@@ -34,6 +32,10 @@ BOARDS = {
 def _board_pads(pcb_name):
     """基板上の {参照名: {パッド番号: ネット名}}。**pcbnew は KiCad の Python に
     しか無い**ので別プロセスで読む。"""
+    import pcb_parts
+    from conftest import require_kicad_python
+
+    require_kicad_python("基板のパッドとネットの突き合わせ")
     script = (
         "import json,pcbnew;"
         f"b=pcbnew.LoadBoard({str(ROOT / 'pcb' / pcb_name)!r});"
@@ -41,8 +43,8 @@ def _board_pads(pcb_name):
         "{p.GetNumber():p.GetNetname() for p in f.Pads()}"
         " for f in b.GetFootprints()}))"
     )
-    out = subprocess.run([KPY, "-c", script], capture_output=True, text=True,
-                         check=True)
+    out = subprocess.run([pcb_parts.KICAD_PYTHON, "-c", script],
+                         capture_output=True, text=True, check=True)
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 

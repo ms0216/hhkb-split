@@ -39,6 +39,18 @@ DATA = Path(__file__).resolve().parent / "pcb_parts.json"
 KICAD_CLI = os.environ.get(
     "KICAD_CLI", "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli")
 
+# **pcbnew を持っている Python。**KiCad 同梱のものにしか入っていない。
+# KICAD_CLI と同じく環境変数で差し替えられる。
+#
+# **固定パスのままだと、KiCad の無い環境で FileNotFoundError になる。**
+# CI の checks ジョブ（KiCad を入れない）で実際にそうなっていて、
+# skip ではなく赤が 7 件、2026-08-13 まで常駐していた。
+# 場所が違う環境では KICAD_PYTHON で指す。
+KICAD_PYTHON = os.environ.get(
+    "KICAD_PYTHON",
+    "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/"
+    "Versions/3.9/bin/python3.9")
+
 BOARDS = {
     "left": "pcb/hhkb_split_left.kicad_pcb",
     "right": "pcb/hhkb_split_right.kicad_pcb",
@@ -110,6 +122,11 @@ def _export_step(name, out):
 def kicad_available():
     """kicad-cli が使えるか。**実形状を作れる環境かの判定はここに一本化。**"""
     return Path(KICAD_CLI).exists()
+
+
+def kicad_python_available():
+    """pcbnew を持つ Python があるか。**判定はここに一本化。**"""
+    return Path(KICAD_PYTHON).exists()
 
 
 def board_sha256(name):
