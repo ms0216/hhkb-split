@@ -186,6 +186,64 @@ def prewire_switch_diode(board):
             board.Add(t)
 
 
+# **Freerouting が自力では見つけない経路への「中継ビア」**（2026-08-13）。
+#
+# COL8（SW17-SW31 間）は、パッド同士のクリアランスだけ見れば
+# ST24（スタビライザー）の右穴の左側に幅 1.7mm の通路がある
+# （手計算・DRC 双方で確認済み）。にもかかわらず Freerouting は
+# 毎回この 1 本だけを配線し損ねた。
+#
+# 得られた部分配線を見ると、Freerouting は SW17 から**南（SW31 方向）
+# への探索を一度も試みず**、北（既に混雑した領域）へ迷い込んで
+# 力尽きていた。基板の物理的な制約ではなく、**探索ヒューリスティックが
+# 局所解にはまった**もの。
+#
+# 対策は、2 点間の中間に同じネットのビアを 1 個置くこと。
+# Freerouting にとっては「SW17→ビア」「ビア→SW31」という 2 つの
+# 近距離問題に分割され、どちらも迷わず解ける（実測 5 回連続成功）。
+#
+# **副作用があった。**COL8 側にビアを足すと、無関係なはずの V3V3
+# （D_PWR→J_DB、J_DB のパッド幅 0.30mm で元々ギリギリ）が
+# 5 回連続で未配線になった。物理的な干渉ではなく、ビアの追加で
+# Freerouting 内部の配線順序が変わり、際どいネットにしわ寄せが
+# 行っただけと判断（座標を変えても同じネットが詰まった）。
+# そこで V3V3 側にも中継ビアを足し、両立させた（2 回連続成功で確認）。
+#
+# **右基板専用。**左基板ではこの詰まりが起きていないので足さない。
+GUIDE_VIAS = {
+    # COL8: SW17(214.35,78.41) - SW31(219.12,116.51) 間。
+    # ST24 右穴の左側の通路（x=223.2、実測クリアランス 1.0mm 以上）の中間。
+    "COL8": (223.2, 91.5),
+    # V3V3: D_PWR(95.65,69.12) - J_DB pad6(72.75,85.38) 間。
+    # J_DB は 0.5mm ピッチの SMD で、隣のパッドとの隙間(0.2mm)にビアは
+    # 物理的に入らない。パッド 6 の長辺の外側、真上ぎりぎりに置く。
+    "V3V3": (72.75, 84.0),
+}
+
+
+def guide_vias(board, half):
+    """詰まりが再現された経路に、Freerouting 向けの中継ビアを打つ。
+
+    **消してはいけない。**探索の局所解を避けるためのヒントであって、
+    決まりきった配線ではない。DSN からもネットごと外さない
+    （PREWIRED に入れない）——Freerouting に「ここも経由候補」として
+    普通に見せる必要がある。
+    """
+    if half != "right":
+        return
+    for netname, (x, y) in GUIDE_VIAS.items():
+        n = board.FindNet(netname)
+        if n is None:
+            raise SystemExit(f"guide_vias: ネットが無い: {netname}")
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y)))
+        via.SetWidth(pcbnew.FromMM(VIA_D))
+        via.SetDrill(pcbnew.FromMM(VIA_DRILL))
+        via.SetNet(n)
+        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        board.Add(via)
+
+
 def _apply_jlcpcb_rules(board):
     d = board.GetDesignSettings()
     mm = pcbnew.FromMM
@@ -704,6 +762,7 @@ def build(half, keys):
     prewire_switch_diode(board)
     _place_electronics(board, half, net)
     gnd_fanout.place(board)
+    guide_vias(board, half)
 
     # 取付穴（open-gaps #36・2026-08-12）。
     #
