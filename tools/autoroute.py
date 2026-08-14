@@ -126,7 +126,14 @@ def _check_jar():
 #             なるので、**子基板だけ**に効かせる（下の PREWIRED_DB）。
 PREWIRED = re.compile(r"GND|SW\d+_D")
 # 子基板だけ、これも自分で引いてある。
-PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3")
+#
+# ⚠️ **ROW2/3/4 を入れるのが対**（2026-08-14・利用者「D3〜D5 を XIAO
+# パッドの外側を通るようにできませんか」）。`gen_daughterboard._prewire_rows`
+# が列の外の帯に 3 本引くので、**ここに足さないと DSN に「未配線」として
+# 残り、Freerouting が同じネットをもう一度引いて自分自身と交差する。**
+# 2026-08-14 に手配線をやめた原因がまさにこれで、当時 ROW は
+# protect にならないまま引かれていた（交差 5 件のうち 3 件が自己交差）。
+PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3|ROW[234]")
 
 
 # Freerouting に上乗せして要求するクリアランス（µm）。
@@ -296,8 +303,13 @@ def _route_once(half, seed):
         # GND 7 本あったものが、取り込み後は V3V3 0・GND 4 になっていた。
         # 2026-08-14）。DSN では protect の障害物として渡してあるので、
         # Freerouting はここを避けて残りを引いている。
-        from gen_daughterboard import _prewire_power
+        from gen_daughterboard import _prewire_power, _prewire_rows
         _prewire_power(board)
+        # **列の外の ROW2/3/4 も立て直す**（2026-08-14）。
+        # 上と同じ理由——SES 取り込みが既存の配線を全部作り直すので、
+        # gen_daughterboard で引いた 12 区間が消える（実測: 立て直しを
+        # 入れる前は 3 本とも「Missing connection」になった）。
+        _prewire_rows(board)
         # **子基板は配線後にベタを敷く**（2026-08-14・open-gaps #41）。
         # 主基板は gen_pcb が配置段階で敷いてから配線するが、子基板は
         # 手配線をやめて Freerouting に移したので、主基板と同じ

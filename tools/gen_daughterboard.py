@@ -336,6 +336,8 @@ def build():
                 raise RuntimeError(f"{ref} に端子 {pin}（パッド {pad_no}）が無い")
             pad.SetNet(net(netname))
 
+    _shrink_silk(board)
+
     # **順序が効く**（2026-08-14・利用者の指摘）。
     #
     #   1. アンテナの禁止域 … 配置と配線の**制約**なので最初。
@@ -372,6 +374,29 @@ def build():
     _antenna_keepout(board)
     _add_power_netclasses(board)
     _prewire_power(board)
+    # **ROW2/3/4 は列の外の帯を通す**（2026-08-14・利用者の指定）。
+    #
+    # ⚠️ **ファンアウトのビアはこの線を避けない。**`gnd_fanout.spots` は
+    # 意図的にパッドだけを見る（配線前後で同じ座標を返すため）。
+    # ここで引いた線とビアがぶつかっていないかは **DRC で確かめる**。
+    _prewire_rows(board)
+    # **GND のファンアウトを配線より前に打つ**（2026-08-14）。
+    #
+    # ⚠️ **主基板にあってここに無かった。**`gen_pcb` は配置段階で
+    # `gnd_fanout.place` を呼ぶので、ビアが DSN に載って Freerouting が
+    # 避ける（実測: 未配線の左 5 個・右 10 個）。**子基板は 0 個だった。**
+    #
+    # `autoroute` は SES 取り込みのあとに `place` をもう一度呼び、
+    # 「位置は決定的なので配線前と同じところに戻り、Freerouting は
+    # そこを避けて配線済み」と書いてある。**その前提が子基板では
+    # 成り立っていなかった。**空き地だと思って引かれた ROW1 の上に、
+    # あとからビアが立った（DRC のクリアランス違反 1 件・**0.0091mm**
+    # ＝実質短絡。2026-08-14 に実測）。
+    #
+    # `spots()` はパッドだけを見るので、ここで呼んでも `autoroute` が
+    # 呼んでも同じ座標を返す（実測で一致を確認済み）。
+    import gnd_fanout
+    gnd_fanout.place(board)
 
     UNROUTED.mkdir(parents=True, exist_ok=True)
     path = UNROUTED / "hhkb_split_daughterboard.kicad_pcb"
@@ -529,7 +554,17 @@ def _prewire_power(board):
         # 斜めを向いて隣の CS に突っ込んだ（実測で 2 回短絡）。
         if ref == "J_MAIN":
             p = pad.GetPosition()
-            e = pcbnew.VECTOR2I(p.x, p.y - pcbnew.FromMM(1.2))  # 板の内側へ
+            # **列の外側（＝板の手前・下）へ逃がす**
+            # （2026-08-14・利用者「反対側（列の外側 = J_MAIN 側）に」）。
+            #
+            # 縦（板の内側＝上）へ 1.2mm 伸ばしていたが、**そこは
+            # ROW2/3/4 が列の左へ抜ける通路**で、3 本ともこの先端を
+            # 越えるために一度上がって降り直していた
+            # （往復 2.70mm × 3 本 = **8.1mm** の無駄）。
+            #
+            # 反対の下へ向ければ通路が空く。**下は MP パッドが居るので
+            # そこだけ避ける**（MP は y -13.50..-11.30・x ±3.75..5.55）。
+            e = pcbnew.VECTOR2I(p.x, p.y + pcbnew.FromMM(1.2))       # 列の外側へ
             _track(board, p, e, pcbnew.B_Cu, pad.GetNet())
             n_gnd += 1
             continue
@@ -570,6 +605,226 @@ def _prewire_power(board):
         _track(board, p, e, pcbnew.B_Cu, pad.GetNet())
         n_gnd += 1
     print(f"      電源を自分で配線: V3V3 {n_v3} 区間 / GND 引き出し {n_gnd} 本")
+
+
+# リファレンスの文字高（mm）。**この基板だけ小さくする。**
+#
+# 主基板は 1.0mm のままでよい（`silk_overlap` は左 5・右 6 件）。
+# **子基板だけ 14 件**あった——板が 21mm 幅しかないのに電源部 5 個が
+# 奥に固まっていて、`SW_PWR_1` のような 8 文字が隣の部品へ乗る。
+#
+# **0.8mm が下限。**総当たりで測った（2026-08-14。ゾーンを塗り直して
+# いない仮の基板なので `copper_edge_clearance` は無視して警告だけ見る）:
+#
+#     1.0mm … silk_overlap 14
+#     0.9mm … silk_overlap  8
+#     0.8mm … silk_overlap  6   ← ここ
+#     0.7mm … silk_overlap  6 ＋ **text_height 11**（KiCad の下限に触れる）
+#
+# **線幅（0.15mm）は動かさない。**JLCPCB のシルク最小線幅で、
+# `pcb_rules.JLC["silk_width"]` が唯一の出所。細くするとかすれる。
+# 高さだけ縮めるので、線幅との比は 0.8/0.15 ≒ 5.3 倍で読める範囲に残る。
+SILK_REF_MM = 0.8
+
+
+def _shrink_silk(board):
+    """リファレンスの文字を `SILK_REF_MM` まで縮める。
+
+    **全部品を置き終えてから呼ぶ**（gen_pcb の線幅の正規化と同じ理由。
+    先に呼ぶと、あとで足した部品だけ 1.0mm のまま残る）。
+    """
+    n = 0
+    for fp in board.GetFootprints():
+        r = fp.Reference()
+        if pcbnew.ToMM(r.GetTextWidth()) > SILK_REF_MM:
+            r.SetTextSize(pcbnew.VECTOR2I_MM(SILK_REF_MM, SILK_REF_MM))
+            n += 1
+    print(f"      シルクの参照名 {n} 個を {SILK_REF_MM}mm へ")
+
+
+# ROW2/3/4 を通す「列の外の帯」の順序。**外周から内側へ。**
+# 利用者の指定（2026-08-14）「D3 = ROW2 が最も外周側」。
+OUTER_LANE_ROWS = ("ROW2", "ROW3", "ROW4")
+
+
+def _prewire_rows(board):
+    """**ROW2/3/4 を XIAO のパッド列の外側に通す**（2026-08-14・利用者）。
+
+    自動配線器はこの帯を使わない。実測（配線後の基板）では列の外へ出て
+    いたのは 2 本だけで、ROW4 はパッドの x=-7.62 で止まっていた。
+    **経路に選択の余地が無いものは自分で引く**——`_prewire_power` と
+    同じ理屈（autoroute.py 冒頭の「一直線にしたいなら DSN の設定では
+    なく自分で引く」）。
+
+    帯に何本入るかは**設計規則から出す。数字を書かない**:
+
+        板の左端 -10.50 + 端クリアランス 0.30 + 線幅/2  →  -10.10
+        パッドの左端 -8.47 − クリアランス 0.20 − 線幅/2 →  -8.77
+        使える幅 1.33mm ／ 1 本あたり 0.40mm → **4 本入る**（要るのは 3 本）
+
+    経路は **L 字 3 回だけ**（2026-08-14・利用者「クネクネ迂回はやめて。
+    最短で」）:
+
+        FFC パッド → 列の端をこえる高さまで上へ → **外周レーンまで一気に
+        左へ** → レーンを上がる → XIAO パッドへ右に入る
+
+    ⚠️ **途中で上下に振らないこと。**一度は「上へ → 左へ → **下へ** →
+    左へ → 上へ」と 5 回折れていた。中ほどの上下は 12 番 GND の引き出しが
+    列の内側へ伸びていた頃の名残で、その引き出しを列の外側（下）へ
+    向けた時点で**不要になっていた**。消したら 3 本の総長が
+    **83.37 → 71.07mm**（各行とも外周経由の最短と一致）。
+
+    横へ抜ける高さ（`over`）だけ行ごとにずらせば 3 本は交差しない。
+
+    ⚠️ **`autoroute.PREWIRED_DB` に `ROW[234]` を入れるのが対。**
+    入れないと DSN に未配線として残り、Freerouting が二重に引いて
+    **同じネットが自分自身と交差する**（2026-08-14 に実際に起きた）。
+    """
+    d = board.GetDesignSettings()
+    edge = pcbnew.ToMM(d.m_CopperEdgeClearance)
+    clr = pcbnew.ToMM(d.m_NetSettings.GetDefaultNetclass().GetClearance())
+
+    pads = {}
+    for fp in board.Footprints():
+        ref = fp.GetReference()
+        if ref not in ("U_MCU", "J_MAIN"):
+            continue
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if n in OUTER_LANE_ROWS:
+                pads.setdefault(n, {})[ref] = pad
+
+    # パッド列の左端（=帯の内側の限界）と板の左端から、レーンの中心を出す。
+    xs = [pcbnew.ToMM(p.GetPosition().x) - ORIGIN[0] - pcbnew.ToMM(p.GetSize().x) / 2
+          for n in OUTER_LANE_ROWS for r, p in pads[n].items() if r == "U_MCU"]
+    inner = min(xs) - clr - TRACK_W / 2          # いちばん外側に置けるレーン
+    outer_limit = -DB_W / 2 + edge + TRACK_W / 2
+    pitch = TRACK_W + clr
+
+    # **横へ出る帯は、FFC のパッド列と取付パッド（MP）の間に収める。**
+    #
+    # ⚠️ MP はネットを持たない機構用のパッドなので「GND でも ROW でも
+    # ない相手」で、クリアランスがそのまま効く。最初これを見ずに
+    # y=-10.75..-11.55 へ降ろしたら、**MP（y -13.50..-11.30）に刺さって
+    # 短絡・クリアランス・マスクブリッジの 3 件を出した**（2026-08-14）。
+    # `_prewire_power` が同じ罠を踏んでいて、そこにも同じ注意書きがある。
+    row_y = max(p.GetPosition().y for n_ in OUTER_LANE_ROWS
+                for r, p in pads[n_].items() if r == "J_MAIN")
+    mp_top = min((q.GetPosition().y - q.GetSize().y // 2)
+                 for fp in board.Footprints() if fp.GetReference() == "J_MAIN"
+                 for q in fp.Pads() if q.GetNumber() == "MP")
+    need = pcbnew.FromMM(TRACK_W / 2 + clr)
+    lo, hi = row_y + need, mp_top - need         # 使える帯（y は下が正）
+    if hi - lo < (len(OUTER_LANE_ROWS) - 1) * pcbnew.FromMM(pitch):
+        raise RuntimeError(
+            "FFC の列と取付パッドの隙間に横枝 3 本が入らない"
+            f"（{pcbnew.ToMM(hi - lo):.2f}mm）。**黙って詰めないこと**")
+
+    # **ROW2 が最も外周**（利用者の指定「D3 = ROW2 が最も外周側」）。
+    # `OUTER_LANE_ROWS` の先頭ほど外側なので、レーンは外から内へ配る。
+    #
+    # ⚠️ 一度これを逆に書いて **ROW2 を最も内側（-8.77）**に置いた
+    # （2026-08-14。利用者の指摘で判明）。指定と反対だったうえ、
+    # 「この割り当てでは交差 0 にできない」という誤った結論まで出した。
+    outermost = outer_limit + (len(OUTER_LANE_ROWS) - 1) * pitch
+    if outermost > inner:
+        outermost = inner                        # 帯に余裕があるとき
+
+    n = 0
+    for i, name in enumerate(OUTER_LANE_ROWS):
+        lane = outermost - (len(OUTER_LANE_ROWS) - 1 - i) * pitch
+        if lane < outer_limit:
+            raise RuntimeError(
+                f"{name}: レーン x={lane:.2f} が板の端を越える"
+                f"（限界 {outer_limit:.2f}）。**黙って詰めないこと**")
+        mcu = pads[name]["U_MCU"]
+        ffc = pads[name]["J_MAIN"]
+        # **外周へ行くものほど、深い（＝ FFC から遠い）帯で左へ抜ける。**
+        #
+        # ⚠️ 逆に書いて 3 交差を出した（2026-08-14）。ROW2 は最も外の
+        # レーン（-10.10）まで行くので、浅い帯で折れると **ROW3/ROW4 の
+        # 縦のレーンを横切ってしまう。**深い帯で折れれば、内側の 2 本の
+        # レーンの**下**をくぐって外へ抜けられる。
+        #
+        #   ROW4（最も内のレーン）… 浅い帯で折れる
+        #   ROW2（最も外のレーン）… 深い帯で折れる
+        # **帯は ROW2 が最も深い**（総当たりで求めた解。2026-08-14）。
+        drop = lo + (len(OUTER_LANE_ROWS) - 1 - i) * pcbnew.FromMM(pitch)
+        lane_x = pcbnew.FromMM(ORIGIN[0] + lane)
+        # ⚠️ **パッド列の下を横切らない**（2026-08-14）。
+        #
+        # 最初は FFC パッドの真下へ降りてから左へ走らせていたが、
+        # 列は 0.5mm ピッチなので **隣のパッド（12 番 GND など）を
+        # 横断して短絡した**（tracks_crossing 2・shorting 2・
+        # マスクブリッジ 5 の計 9 件）。列の下に横断する余地は無い。
+        #
+        # **列の左端の外へ出てから降りる。**12 番（x=-2.75・縁 -2.90）が
+        # 列の左端なので、その外側を通れば列とは交わらない。
+        # **列の上（内側）を、行ごとに違う高さで左へ抜ける。**
+        # パッドは y=-9.15 から上へ 0.65mm（高さ 1.3）なので、その上に
+        # 行ごとの通路を作る。外周へ行くものほど**上**を通り、
+        # 列の左端より外の**行ごとに違う x** で下へ降りる。そうすると
+        # 3 本は最後まで一度も同じ線に乗らない。
+        left_edge = min(q.GetPosition().x - q.GetSize().x // 2
+                        for fp in board.Footprints()
+                        if fp.GetReference() == "J_MAIN"
+                        for q in fp.Pads() if q.GetNumber().isdigit())
+        # **並びは総当たりで求めた**（2026-08-14）。手で推論して 3 回外した
+        # （12 交差 → 6 → 6）。上下の順序を揃えるという直感は**成り立たない**。
+        #
+        #   通路 y … ROW2 が最も上（＝列から最も離れる）
+        #   降りる x … **ROW2 が最も内側**（ここだけ逆。外周へ行くものが
+        #              手前で降り、外側の帯を通って外のレーンへ向かう）
+        #   帯 y   … ROW2 が最も深い
+        # ⚠️ **GND の引き出しの先端より内側を通す**（2026-08-14）。
+        # 12 番（GND）はパッドから列の内側へ 1.2mm 伸びており
+        # （x=-2.75・y=-9.15 → -7.95）、通路がその横腹を貫いていた
+        # （交差 1・短絡 1）。**`_prewire_power` が先に引くので、
+        # ここでは「そこにある」前提で避ける。**
+        # **通路は列の内側（上）に取る。この往復は無駄ではない**
+        # （2026-08-14・利用者「迂回するような動きはしてほしくない。最短で」
+        #  を受けて総当たりで確認した）。
+        #
+        # 「下へ出てそのまま左」なら往復が消えて短くなるが、**交差 0 の解が
+        # 1 つも無い**（3 折れでも 4 折れでも必ず 3 交差）。外周レーンは
+        # FFC パッドより左にあるので、下を横に走ると他のレーンを必ず貫く。
+        #
+        # 上に出す形での交差 0 は **1 通りだけ**（総長 77.97mm）。下へ出す
+        # 案の最短 78.27mm より**むしろ短い**ので、迂回に見えるこの形が
+        # 実は最短だった。
+        #
+        # ⚠️ **GND の引き出しの先端より内側を通す。**12 番（GND）は
+        # パッドから列の内側へ 1.2mm 伸びており（x=-2.75・y=-9.15 → -7.95）、
+        # 通路がその横腹を貫いていた（交差 1・短絡 1）。
+        # **通路は列のすぐ上まで下げる**（2026-08-14）。
+        #
+        # 以前は 12 番（GND）の引き出しが列の**内側**へ 1.2mm 伸びていて、
+        # その先端（y=-7.95）を越える高さまで上がる必要があった。
+        # **利用者が引き出しを列の外側（下）へ向けたので、この制約は消えた。**
+        # パッドの端（0.65mm）だけ越えれば横へ抜けられ、そのぶん
+        # 降り直しが縮む。
+        over = row_y - pcbnew.FromMM(0.65 + TRACK_W / 2 + clr) \
+            - i * pcbnew.FromMM(pitch)
+        # **折れは 3 回だけ。上げてから下げる往復を作らない**
+        # （2026-08-14・利用者「まだクネクネ迂回してる。やめてほしい」）。
+        #
+        # 直前まで「上へ → 左へ → **下へ** → 左へ → 上へ」と 5 回折れて
+        # いた。中ほどの上下は **12 番 GND の引き出しが列の内側へ
+        # 伸びていた頃の名残**で、利用者がその引き出しを列の外側（下）へ
+        # 向けた時点で**不要になっていた**。残したまま「意図がある」と
+        # 言えなくなっていたのはこちらの見落とし。
+        #
+        # いまは「上へ → 左へ（外周レーンまで一気に） → 上へ → 右へ」の
+        # **3 折れ**。総長も 83.37 → **71.07mm** に縮む（総当たりで確認）。
+        pts = [pcbnew.VECTOR2I(ffc.GetPosition().x, over),
+               pcbnew.VECTOR2I(lane_x, over),
+               pcbnew.VECTOR2I(lane_x, mcu.GetPosition().y),
+               mcu.GetPosition()]
+        for s, e in zip([ffc.GetPosition()] + pts, pts):
+            if s != e:
+                _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
+                n += 1
+    print(f"      列の外へ ROW2/3/4 を {n} 区間")
 
 
 def _antenna_keepout(board):
