@@ -350,8 +350,19 @@ def build_assembly(keys, half, real=False):
         assert drop_d > 0.3, (
             f"{half}: J_DB の口とソケットの間が {drop_d:.2f}mm しかなく、"
             "FFC を折り下げる場所が無い")
+        # 幕の上端は、**幕がかかる範囲のいちばん手前**での板の下面に
+        # 合わせる。**板は手前へ向かって下がっている**（チルト）ので、
+        # 口の位置（jy）だけで高さを決めると、手前側で板を突き抜ける。
+        #
+        # 2026-08-14 に実際に起きた: J_DB が帯またぎで手前へ移り
+        # （58b3aaf）、x 帯に入るソケットが 1 個だけになって幕が
+        # 19.45mm と長くなった結果、板に 98.3mm^3 食い込んだ。
+        # **古い pcb_parts.json がこれを緑にしていた**（記録を取り直して露見）。
+        z_top = min(z_board_bottom,
+                    rim_front + (y_free + h_plate / 2) * tilt
+                    - PLATE_TO_PCB - PCB_T)
         with Locations((jx, (y_free + jy) / 2, z_lo)):
-            Box(FFC_RIBBON_W, drop_d, z_board_bottom - 0.5 - z_lo,
+            Box(FFC_RIBBON_W, drop_d, z_top - 0.5 - z_lo,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 床の上を左右方向へ走る
         x0, x1 = sorted((jx, db_x))
