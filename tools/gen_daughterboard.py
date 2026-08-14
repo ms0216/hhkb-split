@@ -697,7 +697,7 @@ def _prewire_rows(board):
     # パッド列の左端（=帯の内側の限界）と板の左端から、レーンの中心を出す。
     xs = [pcbnew.ToMM(p.GetPosition().x) - ORIGIN[0] - pcbnew.ToMM(p.GetSize().x) / 2
           for n in OUTER_LANE_ROWS for r, p in pads[n].items() if r == "U_MCU"]
-    inner = min(xs) - clr - TRACK_W / 2          # いちばん外側に置けるレーン
+    inner = min(xs) - clr - TRACK_W / 2          # いちばんパッド寄りに置けるレーン
     outer_limit = -DB_W / 2 + edge + TRACK_W / 2
     pitch = TRACK_W + clr
 
@@ -720,19 +720,32 @@ def _prewire_rows(board):
             "FFC の列と取付パッドの隙間に横枝 3 本が入らない"
             f"（{pcbnew.ToMM(hi - lo):.2f}mm）。**黙って詰めないこと**")
 
-    # **ROW2 が最も外周**（利用者の指定「D3 = ROW2 が最も外周側」）。
-    # `OUTER_LANE_ROWS` の先頭ほど外側なので、レーンは外から内へ配る。
+    # **束は「板端」と「パッドの縁」のまん中に置く**（2026-08-14・利用者
+    # 「右に寄せるというより、絶縁部も含めて中央揃えが正しいのでは」）。
     #
-    # ⚠️ 一度これを逆に書いて **ROW2 を最も内側（-8.77）**に置いた
-    # （2026-08-14。利用者の指摘で判明）。指定と反対だったうえ、
-    # 「この割り当てでは交差 0 にできない」という誤った結論まで出した。
-    outermost = outer_limit + (len(OUTER_LANE_ROWS) - 1) * pitch
-    if outermost > inner:
-        outermost = inner                        # 帯に余裕があるとき
+    # ⚠️ **クリアランスを足した内側で中央を取ると、まん中にならない。**
+    # 板端側は端クリアランス 0.30、パッド側は銅間クリアランス 0.20 と
+    # **足す量が違う**ので、その差 0.10mm がそのまま偏りになる
+    # （実測: 板端 0.56mm に対しパッド側 0.46mm）。
+    #
+    # どちらへ寄せても「規則は満たすが余裕が無い」側ができる:
+    #   板端へ寄せる  … ROW2 が板端まで 0.30mm（規則ちょうど）
+    #   パッドへ寄せる … ROW4 が D6 のパッドまで 0.20mm（規則ちょうど）
+    #
+    # **障害物の縁そのもの**（板端 -10.50 と パッドの左端 -8.47）で
+    # まん中を取り、そこへ束の中心を置く。左右の空きが等しくなる。
+    span = (len(OUTER_LANE_ROWS) - 1) * pitch
+    mid = (-DB_W / 2 + min(xs)) / 2              # 板端とパッド縁のまん中
+    innermost = mid + span / 2                   # 束の内側の端
+    if innermost > inner or innermost - span < outer_limit:
+        raise RuntimeError(
+            f"列の外の帯に {len(OUTER_LANE_ROWS)} 本入らない"
+            f"（{outer_limit:.2f}..{inner:.2f}・要 {span:.2f}mm）")
 
     n = 0
     for i, name in enumerate(OUTER_LANE_ROWS):
-        lane = outermost - (len(OUTER_LANE_ROWS) - 1 - i) * pitch
+        # i=0 が ROW2（最も外）。内側の ROW4 を基準に、外へ 1 本ずつ。
+        lane = innermost - (len(OUTER_LANE_ROWS) - 1 - i) * pitch
         if lane < outer_limit:
             raise RuntimeError(
                 f"{name}: レーン x={lane:.2f} が板の端を越える"
