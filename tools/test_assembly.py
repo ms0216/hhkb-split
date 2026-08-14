@@ -86,10 +86,27 @@ def test_nothing_bites_into_anything_else(half):
 
     import pcb_parts
 
-    if (os.environ.get("GITHUB_ACTIONS") == "true"
-            and os.environ.get("REQUIRE_KICAD") != "1"):
-        pytest.skip("checks ジョブには干渉検査を置かない"
-                    "（real-shape ジョブが唯一の干渉検査。利用者の決定）")
+    # **手元でも既定では走らせない**（2026-08-15・利用者
+    # 「検査が想定より大幅に長い。削減できるなら削減して」）。
+    #
+    # ⚠️ **CI では前から分離されていたのに、手元だけが背負っていた。**
+    # checks ジョブは skip し、real-shape ジョブ（`REQUIRE_KICAD=1`）だけが
+    # 走らせる作りだったが、**ローカルには門が無く毎回走っていた。**
+    # 実測: この 2 件を含む `pytest tools` は 30 分以上かかっていた
+    # （上の docstring 自身が「real-shape ジョブと同じ 43 分の検査」と
+    # 書いている）。**門を入れてもまだ 20 分以上かかる**ので、
+    # **重いものが他にも残っている**——次に削るときはそこから測ること。
+    #
+    # 同じファイルの重い検査 4 件は `_github_actions_only` で既に
+    # `REQUIRE_KICAD=1` の門の内側にいる。**そこへ揃える。**
+    #
+    # ⚠️ **「kicad が無い環境を緑にしない」という元の意図は残す。**
+    # 門を通った（＝走らせると決めた）ときだけ、kicad の不在を失敗にする。
+    # 走らせないと決めた実行では、そもそも検査していないので skip が正しい。
+    if os.environ.get("REQUIRE_KICAD") != "1":
+        pytest.skip(
+            "実形状の干渉: 重いので既定では走らせない"
+            "（REQUIRE_KICAD=1 で実行。CI は real-shape ジョブが見る）")
     assert pcb_parts.kicad_available(), (
         f"kicad-cli が無い（{pcb_parts.KICAD_CLI}）。実形状の干渉検査が"
         "できない環境を緑にしない（利用者の決定 2026-08-11）")
