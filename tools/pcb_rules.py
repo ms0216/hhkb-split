@@ -107,7 +107,8 @@ POWER_TRACK_W = 0.2
 #              細ピッチのパッドが無い。最初から太く引ける
 POWER_CLASSES = {
     "PowerFFC":  (POWER_TRACK_W, ("V3V3",)),
-    "PowerWide": (0.6, ("GND", "VBATT_RAW", "VBATT_SW")),
+    # VBATT_RAW は 2026-08-14 に廃止（電池の + はスイッチへ直結・#41）。
+    "PowerWide": (0.6, ("GND", "VBATT_SW")),
 }
 POWER_NETS = tuple(n for _w, nets in POWER_CLASSES.values() for n in nets)
 

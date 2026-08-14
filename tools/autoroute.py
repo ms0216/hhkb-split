@@ -30,7 +30,11 @@ from gen_pcb import prewire_row_bus, prewire_switch_diode
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
 UNROUTED = PCB / "unrouted"
-HALVES = ("left", "right")
+HALVES = ("left", "right")             # マトリクスを持つ基板
+# **配線する基板は 3 枚。**子基板は 2026-08-14 に手配線をやめて
+# ここへ来た（open-gaps #41）。部品が 9 個に増えて、衝突判定を持たない
+# 手書きルータでは DRC が収束しなくなったため。
+BOARDS = HALVES + ("daughterboard",)
 PASSES = 300      # 800 に増やしても未配線は減らなかった（2026-08-13）
 
 # ⚠️ **DSN に `(autoroute_settings ...)` を足さないこと**（2026-08-14 に実測）。
@@ -268,13 +272,22 @@ def _route_once(half, seed):
     #
     # 位置はどちらも決定的に決まるので配線前と同じところに戻り、
     # Freerouting はそこを避けて配線済みなので衝突しない。
-    prewire_switch_diode(board)
-    # **行のバスも引き直す。**SES 取り込みで消えているので、
-    # gen_pcb で引いたのと同じ直線をここで復活させる。
-    # DSN では `(type protect)` の障害物として渡してあるので、
-    # Freerouting はこれを避けて J_DB への 1 本だけを引いている。
-    n_row = prewire_row_bus(board)
-    print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
+    # **マトリクスがある基板だけ。**子基板にはスイッチも行も無い。
+    if half in HALVES:
+        prewire_switch_diode(board)
+        # **行のバスも引き直す。**SES 取り込みで消えているので、
+        # gen_pcb で引いたのと同じ直線をここで復活させる。
+        # DSN では `(type protect)` の障害物として渡してあるので、
+        # Freerouting はこれを避けて J_DB への 1 本だけを引いている。
+        n_row = prewire_row_bus(board)
+        print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
+    else:
+        # **子基板は配線後にベタを敷く**（2026-08-14・open-gaps #41）。
+        # 主基板は gen_pcb が配置段階で敷いてから配線するが、子基板は
+        # 手配線をやめて Freerouting に移したので、主基板と同じ
+        # 「配線 → ベタ → ビア」の順に揃える。
+        _restore_rule_area_layers(board)
+        _pour_daughterboard_ground(board)
     n_fan = gnd_fanout.place(board)
 
     # **順序が効く。狙って打つものを先に、埋め草を後に。**
@@ -357,7 +370,9 @@ def run(half):
 
 
 def main():
-    for half in HALVES:
+    # **子基板も同じ仕組みで配線する**（2026-08-14・open-gaps #41）。
+    # 手書きのルータをやめたので、3 枚とも Freerouting を通る。
+    for half in BOARDS:
         rec = run(half)
         print(f"OK {half:5s} {rec['unrouted']} → {rec['board']}"
               f"  ({rec['freerouting']}, {rec['passes']} パス)")
@@ -367,3 +382,65 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def _pour_daughterboard_ground(board):
+    """**子基板の GND ベタを両面に敷く**（2026-08-14・open-gaps #41）。
+
+    2026-08-14 まで裏面だけだった。主基板は最初から両面
+    （`gen_pcb.GND_POUR_LAYERS`）なのに、**2.4GHz のアンテナが載って
+    いるこの基板だけ片面**という非対称だった（利用者の指摘
+    「MAIN PCB に施していて DB に施していないものがある」）。
+    基準電位の安定はここでこそ効く。
+
+    アンテナの真下は `gen_daughterboard._antenna_keepout` が両面とも
+    抜いてある（禁止域は配置の段階で入っていて、DSN にも乗る）。
+    """
+    from gen_daughterboard import DB_D, DB_W
+    from gen_pcb import ORIGIN
+    gnd = board.FindNet("GND")
+    if gnd is None:
+        raise SystemExit("子基板に GND が無い")
+    for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+        zone = pcbnew.ZONE(board)
+        zone.SetNet(gnd)
+        zone.SetLayer(layer)
+        zone.SetLocalClearance(pcbnew.FromMM(0.25))
+        # **サーマルリリーフを使わずベタ付けにする。**GND は放熱より
+        # 接続の確実さと低インピーダンスを優先する。リリーフのままだと
+        # FFC の GND パッドでスポークが 1 本しか取れず、DRC が
+        # 「接続が不完全」と出た。
+        zone.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)
+        zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
+        pts = pcbnew.VECTOR_VECTOR2I()
+        for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            pts.append(pcbnew.VECTOR2I_MM(ORIGIN[0] + dx * DB_W / 2,
+                                          ORIGIN[1] + dy * DB_D / 2))
+        zone.AddPolygon(pts)
+        board.Add(zone)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+
+
+def _restore_rule_area_layers(board):
+    """**SES 取り込みで消えたルール領域の層を戻す**（2026-08-14・#41）。
+
+    アンテナの禁止域は `gen_daughterboard` が F.Cu と B.Cu を指定して
+    作るが、**DSN → Freerouting → SES を往復すると層が空になる**
+    （`GetLayer()` が -1 になる。実測）。層を持たないゾーンは何も禁止
+    しないので、**そのあとに敷いたベタがアンテナの真下に入り込む**
+    （実測 3297 頂点。test_daughterboard が気づいた）。
+
+    ⚠️ **「宣言したから効いている」と思わないこと。**この案件で
+    3 回目の同じ型（#23 の禁止域・主基板の的外れな禁止域・これ）。
+    """
+    n = 0
+    for zone in board.Zones():
+        if not zone.GetIsRuleArea():
+            continue
+        ls = pcbnew.LSET()
+        for lay in (pcbnew.F_Cu, pcbnew.B_Cu):
+            ls.addLayer(lay)
+        zone.SetLayerSet(ls)
+        n += 1
+    if n:
+        print(f"   ルール領域 {n} 個の層を戻した（SES 往復で消える）")

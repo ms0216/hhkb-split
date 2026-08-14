@@ -64,17 +64,30 @@ def test_every_ic_has_a_decoupling_capacitor(board):
         f"{board}: IC が {n_ic} 個に対して 0.1µF が {n_cap} 個しかない"
 
 
-@pytest.mark.parametrize("board", ["left", "right"])
-def test_there_is_a_bulk_capacitor(board):
-    """電源にバルク容量がある。
+def test_there_is_a_bulk_capacitor(_board=None):
+    """バルク容量が **XIAO と同じ基板に** ある。
 
     アルカリ乾電池は消耗すると内部抵抗が上がる。BLE の送信は 10〜15mA の
     パルスなので、内部抵抗が上がった電池では電圧降下として現れる。
     バルクが無いと**電池を使い切る前にブラウンアウトする**。
+
+    **どこに在るかまで見る**（2026-08-14・open-gaps #41）。
+    2026-08-14 まで主基板に置いていたが、守る相手は XIAO が µs 級の
+    無線送信で引く電流変動（electrical-design 1-5）で、その XIAO は
+    子基板にいる。主基板に置くと **FFC 100mm のインダクタンスの外側**
+    から供給することになり間に合わない。
+    「どこかに 1 個ある」だけを見ていると、また主基板へ戻っても気づけない。
     """
-    parts = BOARDS[board]()
-    assert any(p[1] == "cap_100u" for p in parts), \
-        f"{board}: バルクコンデンサが無い"
+    # **BOARDS 経由で取る。**直接 daughterboard_netlist() を呼ぶと、
+    # test_the_rules_actually_bite が差し替えた壊れ版を素通りして
+    # しまい、「バルクを消す」を検出できない（実際に空振りした）。
+    parts = BOARDS["daughterboard"]()
+    assert any(k == "cap_100u" for _r, k, _p in parts), \
+        "子基板にバルクコンデンサが無い。**XIAO と同じ基板に置くこと**"
+    # 主基板側に戻っていないこと（戻すなら理由ごと open-gaps を書き直す）
+    for board in ("left", "right"):
+        assert not any(p[1] == "cap_100u" for p in BOARDS[board]()), \
+            f"{board}: バルクが主基板に戻っている。FFC を挟むと効かない"
 
 
 @pytest.mark.parametrize("board", ["left", "right"])
@@ -106,11 +119,14 @@ def test_the_battery_never_reaches_the_bat_pin():
             assert pins.get("BAT") == "NC", f"{ref}: BAT 端子に {pins['BAT']} が繋がっている"
 
 
-@pytest.mark.parametrize("board", ["left", "right"])
-def test_the_battery_reaches_the_rail_only_through_the_diode(board):
+def test_the_battery_reaches_the_rail_only_through_the_diode(board="daughterboard"):
     """電池が 3V3 へ直結していないこと。
 
     ショットキー経由でなければ、USB を挿したときに電池へ充電電流が流れる。
+
+    **見るのは子基板**（2026-08-14・open-gaps #41）。電源部はそちらへ
+    移した。主基板は FFC で V3V3 を受け取るだけで、電池もショットキーも
+    持たない。
     """
     nets = nets_of(BOARDS[board]())
     on_rail = {ref for ref, _ in nets["V3V3"]}
@@ -119,8 +135,7 @@ def test_the_battery_reaches_the_rail_only_through_the_diode(board):
     assert "SW_PWR" not in on_rail, f"{board}: スイッチが 3V3 へ直結している"
 
 
-@pytest.mark.parametrize("board", ["left", "right"])
-def test_the_divider_sits_behind_the_power_switch(board):
+def test_the_divider_sits_behind_the_power_switch(board="daughterboard"):
     """電池電圧の分圧がスライドスイッチの後ろにあること。
 
     前に置くと、電源を切っても分圧に電流が流れ続けて電池が減る。
@@ -347,12 +362,19 @@ def test_the_rules_actually_bite():
          lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74LVC595" else p)
                      for r, k, p in ps],
          test_the_shift_register_control_pins_are_tied),
+        # ⚠️ **壊し方は実在するネット／端子で書く。**2026-08-14 に
+        # VBATT_RAW を廃止し SW_PWR を 1 端子にしたので、以前の
+        # 「SW_PWR の端子 2」「VBATT_RAW へ移す」は**存在しないものを
+        # 触る空振り**になっていた（落ちるのは別の理由か、落ちない）。
         ("電池を 3V3 へ直結する",
-         lambda ps: [(r, k, {**p, "2": "V3V3"} if r == "SW_PWR" else p)
+         lambda ps: [(r, k, {**p, "1": "V3V3"} if r == "SW_PWR" else p)
                      for r, k, p in ps],
          test_the_battery_reaches_the_rail_only_through_the_diode),
+        # 分圧をスイッチの手前へ ＝ 電池の生の側へ。いまは基板に
+        # VBATT_RAW が無いので、**スイッチを通らないネット**を作って
+        # そこへ繋ぐ（電源を切っても分圧に電流が流れ続ける状態）。
         ("分圧をスイッチの手前へ移す",
-         lambda ps: [(r, k, {**p, "1": "VBATT_RAW"} if r == "R_HI" else p)
+         lambda ps: [(r, k, {**p, "1": "VBATT_UNSWITCHED"} if r == "R_HI" else p)
                      for r, k, p in ps],
          test_the_divider_sits_behind_the_power_switch),
         # 文書を写しただけの表は静かにずれる。**回路の側を動かしても
@@ -362,18 +384,35 @@ def test_the_rules_actually_bite():
                      for r, k, p in ps],
          lambda _half: test_the_cable_pinout_table_matches_the_circuit()),
     ]
+    # **子基板側も壊せるようにする**（2026-08-14）。
+    # バルクが子基板へ移ったのに、ここが `netlist`（主基板）しか
+    # 差し替えていなかったため、「バルクを消す」が**空振りしていた**
+    # （消す対象がそもそも主基板に無い＝壊れないので検出できない）。
+    original_db = circuit.daughterboard_netlist
     missed = []
     for label, break_it, rule in checks:
         circuit.netlist = lambda half, _b=break_it: _b(original(half))
+        circuit.daughterboard_netlist = lambda _b=break_it: _b(original_db())
         BOARDS["left"] = lambda: circuit.netlist("left")
+        BOARDS["daughterboard"] = lambda: circuit.daughterboard_netlist()
         try:
-            rule("left")
+            # **規則ごとに見る基板が違う。**電源は子基板へ移ったので、
+            # 「left」を渡すと電源系の規則が素通りする（2026-08-14・#41）。
+            # 既定の引数を持つ規則はそれに任せる。
+            import inspect
+            sig = inspect.signature(rule)
+            if sig.parameters and list(sig.parameters.values())[0].default is not inspect.Parameter.empty:
+                rule()
+            else:
+                rule("left")
             missed.append(label)
         except AssertionError:
             pass
         finally:
             circuit.netlist = original
+            circuit.daughterboard_netlist = original_db
             BOARDS["left"] = lambda: netlist("left")
+            BOARDS["daughterboard"] = daughterboard_netlist
     assert not missed, f"故意に壊しても検出できない規則がある: {missed}"
 
 
@@ -440,6 +479,11 @@ def test_the_cable_pinout_table_matches_the_circuit():
     for num, net, xiao_pin in rows:
         assert j_db[num] == net, (
             f"FFC {num} 番: 文書は {net}、circuit.py は {j_db[num]}")
+        # **予備ピンは行き先が無い。**ネットが NC のものは XIAO の
+        # どのピンにも繋がらないので、ピン列の照合対象から外す
+        # （2026-08-14 に 6 番を予備にした・#41）。
+        if net == "NC":
+            continue
         # XIAO のピン列も照合する。**ここがずれると実配線を間違える。**
         assert mcu.get(xiao_pin) == net, (
             f"FFC {num} 番: 文書は XIAO の {xiao_pin} と書いているが、"

@@ -343,10 +343,6 @@
       },
       {
         "netclass": "PowerWide",
-        "pattern": "VBATT_RAW"
-      },
-      {
-        "netclass": "PowerWide",
         "pattern": "VBATT_SW"
       }
     ]

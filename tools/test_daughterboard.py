@@ -116,7 +116,17 @@ def test_the_battery_never_reaches_the_bat_pin_on_the_daughterboard():
     """
     bat = _mcu_pins()["BAT"]
     assert bat == "NC", f"BAT 端子に {bat} が繋がっている"
-    assert bat not in cable_signals().values(), "BAT の信号がケーブルに載っている"
+    # ⚠️ **`NC` はネット名ではなく「繋がっていない」という印。**
+    # 以前ここは `bat not in cable_signals().values()` と書いていたが、
+    # bat == "NC" なので、**ケーブルに 1 本でも予備ピン（NC）があると
+    # 落ちる**（2026-08-14 に FFC の 6 番を予備にして実際に落ちた）。
+    # BAT が載っていないことは上の行で言えている。ここで見るべきは
+    # 「BAT に繋がる実ネットがケーブルに載っていないこと」だが、
+    # BAT は NC なのでそんなネットは存在しない。**この検査は上の 1 行で
+    # 足りる。**残すなら、実ネットのときだけ見る。
+    if bat != "NC":
+        assert bat not in cable_signals().values(), \
+            "BAT の信号がケーブルに載っている"
 
 
 def test_the_connector_spec_matches_the_board():
@@ -311,14 +321,36 @@ def test_the_ground_pour_is_actually_absent_under_the_antenna():
     """
     text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
 
-    m = re.search(r'\(zone[\s\S]*?\(keepout[\s\S]*?\)\s*\(polygon[\s\S]*?\n\t\t\)', text)
-    assert m, "子基板にアンテナのルール領域（キープアウト）が無い"
-    ka = [(float(a), float(b)) for a, b in
-          re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", m.group(0))]
+    # ⚠️ **正規表現でゾーンを跨がないこと**（2026-08-14 に踏んだ）。
+    # 以前は `\(zone[\s\S]*?\(keepout[\s\S]*?\)\s*\(polygon...` と
+    # 書いていたが、`[\s\S]*?` が最初のゾーン（GND のベタ）を越えて
+    # 次の keepout まで走り、**ベタ自身の polygon を禁止域として読んで
+    # いた**。結果「アンテナの下にベタが 3297 点ある」と言い続けた
+    # （実際には 0 点。pcbnew で数え直して分かった）。
+    # **ゾーンの塊を先に切り出してから、その中だけを見る。**
+    zones = re.findall(r"\n\t\(zone[\s\S]*?\n\t\)", text)
+    ka = None
+    for z in zones:
+        if "(keepout" not in z:
+            continue
+        poly = re.search(r"\(polygon[\s\S]*?\n\t\t\)", z)
+        if poly:
+            ka = [(float(a), float(b)) for a, b in
+                  re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", poly.group(0))]
+            break
+    assert ka, "子基板にアンテナのルール領域（キープアウト）が無い"
     x_lo, x_hi = min(p[0] for p in ka), max(p[0] for p in ka)
     y_lo, y_hi = min(p[1] for p in ka), max(p[1] for p in ka)
-    assert (x_hi - x_lo) > 15.0 and (y_hi - y_lo) > 2.0, \
-        f"キープアウトが小さすぎる（{x_hi-x_lo:.1f} x {y_hi-y_lo:.1f}mm）"
+    # **大きさはアンテナに合わせる。**2026-08-14 まで `> 15.0mm` を
+    # 要求していたが、それは XIAO の全幅（18.3mm）を使っていた頃の
+    # 数字で、**アンテナは 3.5mm 角**。広すぎる禁止域は地板を無駄に
+    # 削るだけだったので、`interface.antenna_x_band()` の幅に直した。
+    from interface import ANTENNA_L, ANTENNA_W, antenna_x_band
+    want_w = antenna_x_band()[1] - antenna_x_band()[0]
+    assert abs((x_hi - x_lo) - want_w) < 0.1, (
+        f"キープアウトの幅 {x_hi-x_lo:.2f}mm がアンテナの帯 {want_w:.2f}mm と違う")
+    assert (y_hi - y_lo) >= ANTENNA_L - 0.01, (
+        f"キープアウトの高さ {y_hi-y_lo:.2f}mm がアンテナ {ANTENNA_L}mm を覆わない")
 
     EPS = 0.01      # 境界ちょうどはベタの回り込みの頂点が載るので内側で見る
     n = 0
@@ -389,3 +421,38 @@ def test_no_copper_on_the_near_layer_under_the_antenna():
     assert not bad, (
         f"アンテナの真下（近いほうの層）に銅がある: {bad[:4]}"
         f"{' ほか' if len(bad) > 4 else ''}")
+
+
+def test_the_row_order_matches_between_firmware_and_circuit():
+    """**行 N がファームと回路で同じピンを指すこと**（2026-08-14・#41）。
+
+    `row-gpios` は**並び順が行番号**（1 本目が行 0）。一方 `circuit.py` は
+    ピン名 → ネット名で持つ。**2 つが 1 対 1 で対応していないと、
+    押したキーと違う行が読まれる**（キーマップ全体がずれる）。
+
+    ここが緩いと危ない理由: 行の並びは 2026-08-14 に
+    **昇順ではなくなった。**ROW0/1 は FFC より上、ROW2/3/4 は下へ
+    伸びるので、昇順に並べると盤面で 3 交差する。群ごとに近い順へ
+    並べて 0 交差にし、そのズレをファームのピン割り当てで吸収している。
+    **つまり「D4 が行 4」ではない。**見た目で確かめられないので機械で見る。
+
+    ⚠️ 既存の `test_the_firmware_and_the_board_use_the_same_pins` は
+    **集合しか見ていない。**D4 と D6 を入れ替えても通ってしまう。
+    """
+    text = _strip((SHIELD / "hhkb_split.dtsi").read_text())
+    m = re.search(r"\brow-gpios\s*=?\s*(.*?);", text, re.S)
+    assert m, "row-gpios が見つからない"
+    fw = [f"D{n}" for n in re.findall(r"&xiao_d\s+(\d+)", m.group(1))]
+
+    mcu = _mcu_pins()
+    circuit = {net: pin for pin, net in mcu.items() if net.startswith("ROW")}
+    assert len(fw) == len(circuit), (
+        f"行の本数が違う: ファーム {len(fw)} / 回路 {len(circuit)}")
+    for i, pin in enumerate(fw):
+        want = circuit.get(f"ROW{i}")
+        assert pin == want, (
+            f"**行 {i} のピンが食い違う。**ファーム {pin} / 回路 {want}\n"
+            f"  ファームの並び（行 0..）: {fw}\n"
+            f"  回路の割り当て: {circuit}\n"
+            "row-gpios は**並び順が行番号**。circuit.py の XIAO の"
+            "ピン割り当てと 1 対 1 で合わせること")

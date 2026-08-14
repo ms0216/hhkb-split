@@ -268,9 +268,13 @@ def test_net_count_is_exactly_rows_plus_cols_plus_keys(name, rows, cols):
     assert len(matrix) == rows + cols + len(HALVES[name]), \
         f"{name}: マトリクスのネットが {len(matrix)} 本"
     # 電源・通信のネットも載っていること
-    for n in ("GND", "V3V3", "VBATT_RAW", "VBATT_SW", "VBATT_SENSE",
+    # VBATT_RAW は 2026-08-14 に廃止（電池の + はスイッチへ直結・#41）。
+    for n in ("GND", "V3V3", "VBATT_SW", "VBATT_SENSE",
               "SPI_SCK", "SPI_MOSI", "CS"):
         assert n in nets, f"{name}: ネット {n} が無い"
+    assert "VBATT_RAW" not in nets, (
+        f"{name}: **VBATT_RAW が復活している。**電池の + は基板を通さず"
+        "スイッチへ直結する（open-gaps #41）")
 
 
 @pytest.mark.parametrize("name", NAMES)
