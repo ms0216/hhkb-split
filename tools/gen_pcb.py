@@ -217,7 +217,7 @@ def prewire_row_bus(board):
             continue
         pad = fp.FindPadByNumber("1")          # K 側＝行
         name = pad.GetNetname()
-        if not name.startswith("ROW"):
+        if not name.startswith("ROW_"):
             continue
         rows.setdefault(name, []).append(pad)
 
@@ -802,6 +802,11 @@ def build(half, keys):
         return nets[name]
 
     rc = assignments(half)
+    # 行 r → ケーブルのネット名（左右の overlay の row-gpios が出所）。
+    # **行番号をそのまま名前にしない**——左右で違う行を同じ線に載せるので、
+    # 行番号の名前は片側で嘘になる（2026-08-15・利用者の指摘）。
+    from matrix import row_nets
+    rows = row_nets(half)
     for i, ((kx, ky), (r, c)) in enumerate(zip(positions, rc), start=1):
         d = _load(KICAD_FP / f"{DIODE_FP[0]}.pretty", DIODE_FP[1])
         d.SetPosition(pcbnew.VECTOR2I_MM(ORIGIN[0] + kx + DIODE_OFFSET[0],
@@ -819,7 +824,7 @@ def build(half, keys):
         sw.FindPadByNumber(pinmap.resolve("keyswitch", "1")).SetNet(net(f"COL{c}"))
         sw.FindPadByNumber(pinmap.resolve("keyswitch", "2")).SetNet(net(f"SW{i}_D"))
         d.FindPadByNumber(pinmap.resolve("diode", "A")).SetNet(net(f"SW{i}_D"))
-        d.FindPadByNumber(pinmap.resolve("diode", "K")).SetNet(net(f"ROW{r}"))
+        d.FindPadByNumber(pinmap.resolve("diode", "K")).SetNet(net(rows[r]))
 
     # ------------------------------------------------------------------
     # 配線はここではやらない

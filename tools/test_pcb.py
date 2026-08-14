@@ -212,14 +212,17 @@ def test_matrix_wiring_matches_the_firmware(name):
     いつか片方だけ直して破綻するので、同じ出所（hhkb_split.dtsi の
     matrix-transform）から導いていることを毎回確かめる。
     """
-    from matrix import assignments
+    from matrix import assignments, row_nets
     rc = assignments(name)
+    # 行 r のネット名は**行番号ではなくケーブル上の位置**（2026-08-15）。
+    # 左右で違う行を同じレーンに載せるので、行番号の名前は片側で嘘になる。
+    rows = row_nets(name)
     pads = pads_with_nets(name)
     for i, (r, c) in enumerate(rc, start=1):
         assert pads[f"SW{i}"]["1"] == f"COL{c}", \
             f"{name}: SW{i} が COL{c} につながっていない"
-        assert pads[f"D{i}"]["1"] == f"ROW{r}", \
-            f"{name}: D{i} のカソードが ROW{r} につながっていない"
+        assert pads[f"D{i}"]["1"] == rows[r], \
+            f"{name}: D{i} のカソードが {rows[r]}（行 {r}）につながっていない"
         # スイッチとダイオードは同じ中間ノードで繋がる
         assert pads[f"SW{i}"]["2"] == pads[f"D{i}"]["2"] == f"SW{i}_D", \
             f"{name}: SW{i} とダイオードが繋がっていない"
@@ -238,7 +241,7 @@ def test_diode_direction_is_col2row(name):
         # 接頭辞だけで拾うと巻き込む（実際に巻き込んだ）。
         if not re.fullmatch(r"D\d+", ref):
             continue
-        assert p["1"].startswith("ROW"), f"{ref}: カソードが行側にない"
+        assert p["1"].startswith("ROW_"), f"{ref}: カソードが行側にない"
         assert p["2"].startswith("SW"), f"{ref}: アノードがスイッチ側にない"
 
 

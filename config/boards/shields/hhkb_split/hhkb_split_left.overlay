@@ -17,3 +17,30 @@
 		, <&shifter 5 GPIO_ACTIVE_HIGH>
 		;
 };
+
+	/*
+	 * **J_DB から遠い行ほど、J_DB のパッド列で「板の内側」の枠へ**
+	 * （2026-08-15・利用者の指摘で組み直した）。
+	 *
+	 * 行が載るのは FFC の 8〜12 番で、**子基板側は 8=ROW_A … 12=ROW_E**。
+	 * 左基板の J_DB は板の右端にあり、**12 番(ROW_E) の x が最小＝
+	 * 板の内側**、1 番が板端寄り。行バスは J_DB の上下へ伸びるので、
+	 * **遠くまで行く枝を内側の枠に置くと、他の枝を跨がずに列を離れられる。**
+	 *
+	 *   J_DB からの距離: 行4 56.4 > 行3 37.3 > 行0 19.8 > 行2 18.3 > 行1 0.8
+	 *   → 行4=ROW_E / 行3=ROW_D / 行0=ROW_C / 行2=ROW_B / 行1=ROW_A
+	 *
+	 * **この向きで未配線 0**（逆向きだと 1 本残った。実測・2026-08-15）。
+	 *
+	 * ⚠️ **右基板は逆順になる。**J_DB が反対の端にあり、同じ 12 番でも
+	 * 板端／内側の意味が入れ替わるため。揃えようとしないこと。
+	 */
+&kscan0 {
+	row-gpios
+		= <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+		, <&xiao_d 1 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+		, <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+		, <&xiao_d 6 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+		, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+		;
+};

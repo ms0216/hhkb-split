@@ -138,7 +138,7 @@ PREWIRED = re.compile(r"GND|SW\d+_D")
 # ⚠️ **右列を自分で引いたら、その 5 本も入れる**（2026-08-14）。
 # SPI_MOSI / SPI_SCK / CS / SPARE2。入れないと Freerouting が二重に引く。
 PREWIRED_DB = re.compile(
-    r"GND|SW\d+_D|V3V3|ROW[01234]|SPARE2?|SPI_MOSI|SPI_SCK|CS")
+    r"GND|SW\d+_D|V3V3|ROW_[A-E]|SPARE2?|SPI_MOSI|SPI_SCK|CS")
 
 
 # Freerouting に上乗せして要求するクリアランス（µm）。

@@ -453,35 +453,55 @@ def test_no_copper_on_the_near_layer_under_the_antenna():
 
 
 def test_the_row_order_matches_between_firmware_and_circuit():
-    """**行 N がファームと回路で同じピンを指すこと**（2026-08-14・#41）。
+    """**ファームの行の並びと、子基板のレーンが 1 対 1 で対応すること。**
 
-    `row-gpios` は**並び順が行番号**（1 本目が行 0）。一方 `circuit.py` は
-    ピン名 → ネット名で持つ。**2 つが 1 対 1 で対応していないと、
-    押したキーと違う行が読まれる**（キーマップ全体がずれる）。
+    ⚠️ **2026-08-15 に構造が変わった。**それまで `row-gpios` は共通の
+    dtsi に 1 つだけあり、この検査は「行 N が ROW{N} に載っているか」を
+    見ていた。いまは:
 
-    ここが緩いと危ない理由: 行の並びは 2026-08-14 に
-    **昇順ではなくなった。**ROW0/1 は FFC より上、ROW2/3/4 は下へ
-    伸びるので、昇順に並べると盤面で 3 交差する。群ごとに近い順へ
-    並べて 0 交差にし、そのズレをファームのピン割り当てで吸収している。
-    **つまり「D4 が行 4」ではない。**見た目で確かめられないので機械で見る。
+      - `row-gpios` は**左右の overlay**が別々に持つ（並び順が行番号）
+      - ケーブルのネット名は**行番号ではなくレーンの位置**（ROW_A..E）
+      - 対応は `matrix.ROW_LANES`（XIAO のピン → レーン）が唯一の出所
 
-    ⚠️ 既存の `test_the_firmware_and_the_board_use_the_same_pins` は
-    **集合しか見ていない。**D4 と D6 を入れ替えても通ってしまう。
+    なぜ分けたか: **行がどの GPIO に来るかは左右で物理的に違う**
+    （J_DB が左は板の右端・右は左端にあり、同じ FFC のピンでも行バスへ
+    近づく向きが逆）。共通に書くと、どちらかの基板で必ず交差が出る。
     """
-    text = _strip((SHIELD / "hhkb_split.dtsi").read_text())
-    m = re.search(r"\brow-gpios\s*=?\s*(.*?);", text, re.S)
-    assert m, "row-gpios が見つからない"
-    fw = [f"D{n}" for n in re.findall(r"&xiao_d\s+(\d+)", m.group(1))]
+    import matrix
 
     mcu = _mcu_pins()
-    circuit = {net: pin for pin, net in mcu.items() if net.startswith("ROW")}
-    assert len(fw) == len(circuit), (
-        f"行の本数が違う: ファーム {len(fw)} / 回路 {len(circuit)}")
-    for i, pin in enumerate(fw):
-        want = circuit.get(f"ROW{i}")
-        assert pin == want, (
-            f"**行 {i} のピンが食い違う。**ファーム {pin} / 回路 {want}\n"
-            f"  ファームの並び（行 0..）: {fw}\n"
-            f"  回路の割り当て: {circuit}\n"
-            "row-gpios は**並び順が行番号**。circuit.py の XIAO の"
-            "ピン割り当てと 1 対 1 で合わせること")
+    for half in ("left", "right"):
+        pins = matrix.row_pins(half)
+        assert len(pins) == 5, f"{half}: 行が {len(pins)} 本（期待 5）"
+        assert len(set(pins)) == 5, f"{half}: 同じピンを 2 回使っている: {pins}"
+        for pin in pins:
+            assert pin in matrix.ROW_LANES, (
+                f"{half}: {pin} は行のレーンではない。"
+                f"使えるのは {sorted(matrix.ROW_LANES)}"
+                "（子基板のレーンは物理で固定・gen_daughterboard を見ること）")
+            net = matrix.ROW_LANES[pin]
+            assert mcu.get(pin) == net, (
+                f"{half}: {pin} は circuit.py で {mcu.get(pin)} だが、"
+                f"matrix.ROW_LANES は {net} と言っている。**片方だけ直すと"
+                "押したキーと違う行が読まれる**")
+        nets = matrix.row_nets(half)
+        assert sorted(nets) == sorted(matrix.ROW_LANES.values()), (
+            f"{half}: レーンを使い切っていない: {nets}")
+
+
+def test_the_two_halves_may_order_their_rows_differently():
+    """**左右で行の並びが違ってよい**ことの記録（2026-08-15・利用者）。
+
+    「左右で ROW の順番を変えてもいい（左右で違う FW になるのは確定
+    している）」という判断があった。**揃っていることを要求する検査を
+    書かない**ための歯止め。要求すると、どちらかの基板で交差が出る
+    並びを強いることになる。
+
+    使うピンの集合は同じ（子基板は 1 種類しか作らない）が、順序は自由。
+    """
+    import matrix
+
+    left, right = matrix.row_pins("left"), matrix.row_pins("right")
+    assert set(left) == set(right), (
+        "左右で使うピンの集合は同じはず（子基板は 1 種類）。"
+        f"左 {left} / 右 {right}")

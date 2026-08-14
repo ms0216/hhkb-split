@@ -39,6 +39,50 @@ def col_offset(half):
     return int(m.group(1))
 
 
+# **子基板のレーン（物理）↔ ケーブルのネット名。**
+#
+# 子基板は 1 種類しか作らないので、**XIAO のどのピンが FFC の何番に
+# 繋がるかは固定**（`gen_daughterboard` の OUTER/INNER_LANE_PADS）。
+# ここはその写しではなく、**同じ事実をネット名の側から見た表**。
+#
+# ⚠️ **名前は行番号ではなく「ケーブル上の位置」**（2026-08-15・利用者
+# 「DB の ROWx というピン名前付は不適切になるかもしれません」）。
+# **どの行を載せるかは左右で違う**ので、ROW2 のような名前を付けると
+# 左では行 2、右では行 4 を運ぶ嘘の名前になる。
+ROW_LANES = {                    # XIAO のピン → ケーブルのネット名
+    "D5": "ROW_A",               # FFC 8  … 列の内側・内
+    "D6": "ROW_B",               # FFC 9  … 列の内側・垂直
+    "D3": "ROW_C",               # FFC 10 … 列の外・最も内側
+    "D2": "ROW_D",               # FFC 11 … 列の外・真ん中
+    "D1": "ROW_E",               # FFC 12 … 列の外・最も板端
+}
+
+
+def row_pins(half):
+    """その半分の `row-gpios` を ["D6", "D5", ...] で返す。**並び順が行番号。**
+
+    ⚠️ **出所は左右の overlay**（2026-08-15）。以前は共通の dtsi に
+    1 つだけ書いていたが、**行がどの GPIO に来るかは左右で物理的に違う**
+    （J_DB が左は板の右端・右は左端にあり、同じ FFC のピンでも行バスへ
+    近づく向きが逆）。共通に書くと、どちらかの基板で必ず交差が出る。
+    """
+    path = ROOT / f"config/boards/shields/hhkb_split/hhkb_split_{half}.overlay"
+    m = re.search(r"row-gpios\s*(.*?);", _strip(path.read_text()), re.S)
+    if not m:
+        raise RuntimeError(
+            f"{half}: overlay に row-gpios が無い。**共通の dtsi ではなく"
+            "左右の overlay が持つ**（片方だけ直すと行がずれる）")
+    pins = [f"D{n}" for n in re.findall(r"&xiao_d\s+(\d+)", m.group(1))]
+    if len(pins) != 5:
+        raise RuntimeError(f"{half}: row-gpios が {len(pins)} 本（期待 5）")
+    return pins
+
+
+def row_nets(half):
+    """行番号 → ケーブルのネット名。**基板の配線はこれを見る。**"""
+    return [ROW_LANES[p] for p in row_pins(half)]
+
+
 def transform_map():
     """transform の map を [(row, col), ...] で返す（キーマップの並び順）。"""
     body = re.search(r"map\s*=\s*<(.*?)>\s*;", DTSI.read_text(), re.S).group(1)

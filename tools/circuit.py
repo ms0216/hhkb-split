@@ -403,17 +403,22 @@ def netlist(half):
         # （両基板でジャンパ。利用者と合意済み・2026-08-14）。
         "1": "GND", "2": "V3V3", "3": "SPI_MOSI", "4": "CS",
         "5": "SPI_SCK", "6": "SPARE2",
-        "7": "SPARE", "8": "ROW3", "9": "ROW4", "10": "ROW1", "11": "ROW2",
-        "12": "ROW0",
+        "7": "SPARE", "8": "ROW_A", "9": "ROW_B", "10": "ROW_C", "11": "ROW_D",
+        "12": "ROW_E",
     }))
 
     # ---- マトリクス ----
     # col2row。列 → スイッチ → ダイオード → 行。
     n_keys = 27 if half == "left" else 34
-    from matrix import assignments
+    from matrix import assignments, row_nets
+    # ⚠️ **行のネット名は「ケーブル上の位置」**（2026-08-15・利用者）。
+    # 行番号そのものを名前にすると、**左右で違う行を同じ線に載せた
+    # 瞬間に嘘になる**（左の ROW2 が右では行 4 を運ぶ）。
+    # 行 r がどの線に載るかは、左右の overlay の `row-gpios` が決める。
+    rows = row_nets(half)
     for i, (r, c) in enumerate(assignments(half), start=1):
         parts.append((f"SW{i}", "keyswitch", {"1": f"COL{c}", "2": f"SW{i}_D"}))
-        parts.append((f"D{i}", "diode", {"A": f"SW{i}_D", "K": f"ROW{r}"}))
+        parts.append((f"D{i}", "diode", {"A": f"SW{i}_D", "K": rows[r]}))
     assert len([p for p in parts if p[1] == "keyswitch"]) == n_keys
 
     return parts
@@ -452,8 +457,8 @@ def daughterboard_netlist():
             # GND は 1 本（1 番）。詳しい経緯は J_DB 側の注記を読むこと。
             "1": "GND", "2": "V3V3", "3": "SPI_MOSI", "4": "CS",
             "5": "SPI_SCK", "6": "SPARE2",
-            "7": "SPARE", "8": "ROW3", "9": "ROW4", "10": "ROW1", "11": "ROW2",
-            "12": "ROW0",
+            "7": "SPARE", "8": "ROW_A", "9": "ROW_B", "10": "ROW_C", "11": "ROW_D",
+            "12": "ROW_E",
         }),
         # ---- 電源（2026-08-14 に主基板から移した・open-gaps #41）----
         #
@@ -510,7 +515,7 @@ def daughterboard_netlist():
             # 後から線を足すことはできないので、空きピンのうち
             # 「XIAO のパッド列の外・最も板端寄り」を通る 1 本を確保する。
             # ネット名 SPARE。**用途が決まるまで何も繋がない。**
-            "D1": "ROW0",
+            "D1": "ROW_E",
             # **行の割り当ては「盤面の都合」で決める**（2026-08-14・利用者）。
             # ROW0/1 は J_DB より上、ROW2/3/4 は下へ伸びる。昇順に並べると
             # 上下 2 群が必ず交差する（実測: 主基板で 3 交差）。
@@ -565,7 +570,7 @@ def daughterboard_netlist():
             #
             # **行はただの GPIO 入力**なのでどのピンでもよい。FFC との
             # 並びのズレは dtsi（`row-gpios` の並べ替え）で吸収する。
-            "D2": "ROW2", "D3": "ROW1", "D4": "SPARE", "D5": "ROW3", "D6": "ROW4",
+            "D2": "ROW_D", "D3": "ROW_C", "D4": "SPARE", "D5": "ROW_A", "D6": "ROW_B",
             # **右列も左列と同じ形で自分で引く**（2026-08-14・利用者
             # 「D1〜D6 を完璧に真似る形で、左右対称に」）。
             # D9 は用途未定の予備（SPARE2）。左列の D4=SPARE と対で、
