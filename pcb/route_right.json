@@ -5,5 +5,5 @@
   "freerouting": "freerouting-2.3.0.jar",
   "passes": 300,
   "attempt": 1,
-  "unconnected": 0
+  "unconnected": 1
 }
