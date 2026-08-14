@@ -49,3 +49,21 @@ def require_kicad_python(what):
             f"{what}: pcbnew を持つ Python が無い（{pcb_parts.KICAD_PYTHON}）。"
             "このジョブは飛ばしてはいけない。KICAD_PYTHON で場所を指せる")
     pytest.skip(f"{what}: KiCad の Python が無い環境（KICAD_PYTHON で指せる）")
+
+
+def require_kicad_cli(what):
+    """kicad-cli が無ければ skip。REQUIRE_KICAD=1 なら fail。
+
+    ⚠️ **fixture の中で使うこと。**kicad-cli を呼ぶ道は
+    `gen_sch.write`（netlist の書き出し）のように**間接的**なことが
+    あり、テスト本体に guard を置いても fixture の側で先に落ちる。
+    落ちると skip ではなく **error** になる（2026-08-14・6 件）。
+    """
+    import os
+
+    if pcb_parts.kicad_available():
+        return
+    if os.environ.get("REQUIRE_KICAD") == "1":
+        pytest.fail(f"{what}: kicad-cli が無い（{pcb_parts.KICAD_CLI}）。"
+                    "このジョブは飛ばしてはいけない。KICAD_CLI で場所を指せる")
+    pytest.skip(f"{what}: kicad-cli が無い環境（KICAD_CLI で指せる）")

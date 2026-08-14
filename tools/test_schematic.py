@@ -62,7 +62,18 @@ def _pcb_netlist(project):
 
 @pytest.fixture(scope="module")
 def pair(tmp_path_factory):
-    """(回路図 netlist, 基板 netlist) を 3 基板ぶん。"""
+    """(回路図 netlist, 基板 netlist) を 3 基板ぶん。
+
+    ⚠️ **ここは kicad-cli と KiCad の Python の両方を使う。**
+    `gen_sch.write` が netlist の書き出しで kicad-cli を呼び、
+    `_pcb_netlist` が pcbnew を読む。**fixture の中で落ちると
+    テストは skip ではなく error になる**ので、入口で両方見る
+    （2026-08-14 に error 6 件でこれを踏んだ）。
+    """
+    from conftest import require_kicad_cli, require_kicad_python
+
+    require_kicad_cli("回路図と基板の突き合わせ")
+    require_kicad_python("回路図と基板の突き合わせ")
     d = tmp_path_factory.mktemp("sch")
     out = {}
     for p in PROJECTS:
@@ -128,16 +139,10 @@ def test_the_schematic_passes_erc(project, tmp_path):
     を見つける。**種別を書かないと ERC はただ通るだけの飾りになる**ので、
     pinmap.py に種別まで持たせてある。
     """
-    import pcb_parts
-
     # **kicad-cli が無いと報告ファイルが出ず、read_text で落ちる。**
-    # 「無い環境では飛ばす／REQUIRE_KICAD=1 なら落とす」に揃える。
-    if not pcb_parts.kicad_available():
-        import os
-        if os.environ.get("REQUIRE_KICAD") == "1":
-            pytest.fail(f"ERC: kicad-cli が無い（{pcb_parts.KICAD_CLI}）。"
-                        "このジョブは飛ばしてはいけない")
-        pytest.skip(f"ERC: kicad-cli が無い環境（{pcb_parts.KICAD_CLI}）")
+    from conftest import require_kicad_cli
+
+    require_kicad_cli("ERC")
 
     sch = gen_sch.write(project, tmp_path / f"{project}.kicad_sch")
     rpt = tmp_path / "erc.json"

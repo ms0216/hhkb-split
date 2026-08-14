@@ -19,7 +19,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
-KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+# **場所の定義は pcb_parts に一本化**（KICAD_CLI で差し替え可能）。
+sys.path.insert(0, str(ROOT / "tools"))
+from pcb_parts import KICAD_CLI                                  # noqa: E402
 HALVES = ("left", "right", "daughterboard")
 
 
