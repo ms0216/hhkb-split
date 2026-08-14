@@ -51,7 +51,14 @@ COPPER_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
 # 2 層では信号層と GND 層が同じ 2 枚を兼ねるので**予約はできない。**
 # したがってベタは最初から配線を避けた歯抜けになる。
 # その分断を繋ぎ直すのが gnd_fanout のスティッチングビア。
-GND_POUR_LAYERS = (pcbnew.F_Cu, pcbnew.B_Cu)
+#
+# ⚠️ **COPPER_LAYERS から導く**（2026-08-15）。同じ値を独立に書いていて、
+# 上のコメントが「層数を変えるときはここだけ直す」と言っているのに
+# **二重管理**だった。しかも `COPPER_LAYERS` はどこからも読まれておらず、
+# `test_constants` が「読まれていないのに [記録のみ] が無い」と赤に
+# なっていた（私の作業より前から）。**片方を消すのではなく繋ぐ**——
+# 2 層のいまはベタを両面に敷くので、銅の層と一致するのが正しい。
+GND_POUR_LAYERS = COPPER_LAYERS
 
 
 KEYSWITCH_LIB = ROOT / "pcb/lib/keyswitch.pretty"

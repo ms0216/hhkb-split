@@ -460,9 +460,14 @@ def test_step_component_counts_match_the_circuit():
     for half in ("left", "right"):
         n_keys = len(HALVES[half])
         c = data[half]["counts"]
-        # マトリクスのダイオードはキーごとに 1、電源のショットキーが 1
-        assert c["diode_sod123"] == n_keys + 1, (
-            f"{half}: ダイオード {c['diode_sod123']} 個 ≠ キー {n_keys} + 1。"
+        # マトリクスのダイオードはキーごとに 1。
+        #
+        # ⚠️ **ショットキー（D_PWR）はもう主基板に無い**（2026-08-14・#41）。
+        # 電源部を子基板へ移したので、以前の `n_keys + 1` の +1 が余る。
+        # **この検査は移設のときに追随しておらず、それから赤のまま
+        # 残っていた**（2026-08-15 に気づいた）。子基板側で数える。
+        assert c["diode_sod123"] == n_keys, (
+            f"{half}: ダイオード {c['diode_sod123']} 個 ≠ キー {n_keys}。"
             "STEP のモデルが増減した（黙って消えるので数えるしかない）")
         # FFC コネクタは 3 立体で 1 個
         assert c["ffc_conn"] == 3, f"{half}: FFC コネクタの立体が {c['ffc_conn']}"
@@ -505,6 +510,13 @@ def test_step_component_counts_match_the_circuit():
         f"XIAO の USB が手前（y中心 {y_mid:.1f}）を向いている。"
         "フットプリントの (model (rotate ...)) を確認")
 
+
+    # **ショットキーは子基板にある**（#41）。移設先でも数えておく——
+    # 「主基板から消えた」だけ見て、行き先を見ないと黙って消えても気づけない。
+    db = data["db"]["counts"]
+    assert db.get("diode_sod123") == 1, (
+        f"子基板のショットキーが {db.get('diode_sod123')} 個"
+        "（D_PWR の 1 個のはず。電源部は子基板にある・#41）")
 
 def test_step_board_outline_matches_the_envelope():
     """STEP の板の外形と、占有空間の板が矛盾しないこと。

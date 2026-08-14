@@ -70,8 +70,15 @@ def test_rows_are_wired_to_the_mcu_not_the_shift_register():
     ZMK 公式の指示。入力を MCU に繋いでおくと割り込みで起こせるので、
     常時スキャンせずに済み電池が持つ。シフトレジスタは列（出力）専用。
     """
-    rows = re.search(r"row-gpios(.*?);", _strip(DTSI.read_text()), re.S).group(1)
-    assert "xiao_d" in rows and "shifter" not in rows
+    # ⚠️ **`row-gpios` は左右の overlay にある**（2026-08-15）。以前は
+    # 共通の dtsi に 1 つだけあったが、**行がどの GPIO に来るかは左右で
+    # 物理的に違う**（J_DB が左は板の右端・右は左端にあり、同じ FFC の
+    # ピンでも行バスへ近づく向きが逆）ので分けた。`col-gpios` と同じ形。
+    for path in (LEFT, RIGHT):
+        m = re.search(r"row-gpios(.*?);", _strip(path.read_text()), re.S)
+        assert m, f"{path.name}: row-gpios が無い"
+        rows = m.group(1)
+        assert "xiao_d" in rows and "shifter" not in rows, path.name
 
 
 def test_columns_come_from_the_shift_register():
@@ -85,7 +92,9 @@ def test_columns_come_from_the_shift_register():
 # --------------------------------------------------------------------------
 
 def test_row_pin_count_matches_the_physical_rows():
-    assert _gpio_count(DTSI, "row-gpios") == ROWS
+    # 左右それぞれで数える（上と同じ理由で overlay にある）。
+    for path in (LEFT, RIGHT):
+        assert _gpio_count(path, "row-gpios") == ROWS, path.name
 
 
 def test_column_counts_match_the_shift_registers():

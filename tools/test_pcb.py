@@ -329,14 +329,23 @@ def test_net_count_is_exactly_rows_plus_cols_plus_keys(name, rows, cols):
     """
     txt = (ROOT / f"pcb/hhkb_split_{name}.kicad_pcb").read_text()
     nets = {n for n in re.findall(r'\(net (?:\d+ )?"([^"]*)"\)', txt) if n}
-    matrix = {n for n in nets if re.fullmatch(r"(ROW|COL)\d+|SW\d+_D", n)}
+    # ⚠️ **行のネット名は ROW_A..E**（2026-08-15）。行番号ではなく
+    # ケーブル上の位置。左右で違う行を同じレーンに載せるため。
+    matrix = {n for n in nets if re.fullmatch(r"ROW_[A-E]|COL\d+|SW\d+_D", n)}
     assert len(matrix) == rows + cols + len(HALVES[name]), \
         f"{name}: マトリクスのネットが {len(matrix)} 本"
-    # 電源・通信のネットも載っていること
-    # VBATT_RAW は 2026-08-14 に廃止（電池の + はスイッチへ直結・#41）。
-    for n in ("GND", "V3V3", "VBATT_SW", "VBATT_SENSE",
-              "SPI_SCK", "SPI_MOSI", "CS"):
+    # 電源・通信のネットも載っていること。
+    #
+    # ⚠️ **VBATT_SW / VBATT_SENSE は主基板に無い**（2026-08-14・#41）。
+    # 電池・スイッチ・ショットキー・分圧は**全部 子基板へ移した**ので、
+    # 主基板が受け取るのは V3V3 と GND だけ。**この検査は移設のときに
+    # 追随しておらず、それから赤のまま残っていた**（2026-08-15 に気づいた）。
+    for n in ("GND", "V3V3", "SPI_SCK", "SPI_MOSI", "CS"):
         assert n in nets, f"{name}: ネット {n} が無い"
+    for n in ("VBATT_SW", "VBATT_SENSE"):
+        assert n not in nets, (
+            f"{name}: **{n} が主基板に戻っている。**電源部は子基板にある"
+            "（#41。FFC を渡るのは V3V3 と GND だけ）")
     assert "VBATT_RAW" not in nets, (
         f"{name}: **VBATT_RAW が復活している。**電池の + は基板を通さず"
         "スイッチへ直結する（open-gaps #41）")
@@ -1365,16 +1374,31 @@ def test_there_is_exactly_one_bulk_capacitor_shared_by_the_board(half):
 
     **この検査は「減らせ」ではなく「増えたら気づく」ために置く。**
     後から不用意にバルクが増えたら落ちる。
+
+    ⚠️ **2026-08-14 にバルクは子基板へ移った**（open-gaps #41）。守る相手が
+    XIAO の µs 級の電流変動なので、FFC を挟まない側に置くのが筋だった。
+    **主基板にバルクは無いのが正しい状態。**この検査は移設のときに
+    追随しておらず、**それから赤のまま残っていた**（2026-08-15 に気づいた）。
+
+    見るものを 2 つにする:
+      - 主基板には**無い**こと（戻ってきたら気づく）
+      - 子基板に**ちょうど 1 個**あり、レールに付いていること
     """
-    from circuit import netlist
-    parts = netlist(half)
-    bulk = [p for p in parts if p[1] == "cap_100u"]
+    from circuit import daughterboard_netlist, netlist
+
+    on_main = [p for p in netlist(half) if p[1] == "cap_100u"]
+    assert not on_main, (
+        f"{half}: 主基板にバルクがある: {[p[0] for p in on_main]}。"
+        "**バルクは子基板にある**（#41。守る相手は XIAO の電流変動で、"
+        "FFC を挟まない側に置く）")
+
+    bulk = [p for p in daughterboard_netlist() if p[1] == "cap_100u"]
     assert len(bulk) == 1, (
-        f"{half}: バルクコンデンサが {len(bulk)} 個ある: "
+        f"子基板のバルクが {len(bulk)} 個ある: "
         f"{[p[0] for p in bulk]}。1 個で足りるはず"
         "（レールに付いていて全 IC が共用する）")
     assert set(bulk[0][2].values()) == {"V3V3", "GND"}, (
-        f"{half}: バルクがレール（V3V3-GND）に付いていない: {bulk[0][2]}")
+        f"バルクがレール（V3V3-GND）に付いていない: {bulk[0][2]}")
 
 
 # ======================================================================
