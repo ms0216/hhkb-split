@@ -1,12 +1,14 @@
 {
   "board": "hhkb_split_daughterboard.kicad_pcb",
-  "sha256": "aabd5912ccfccb50535ad3459a2e14447485d1ba26678ce66812a11054cd2e0c",
-  "violations": 0,
+  "sha256": "549e8eaf73d0636242b17a6c669ec0aa291c07a4cc54fd0c242edfff8c8ab1a6",
+  "violations": 1,
   "unconnected": 0,
   "warnings": 16,
   "warning_kinds": {
     "silk_over_copper": 10,
     "silk_overlap": 6
   },
-  "details": []
+  "details": [
+    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1000 mm)"
+  ]
 }

@@ -374,7 +374,7 @@ def build():
     _antenna_keepout(board)
     _add_power_netclasses(board)
     _prewire_power(board)
-    # **ROW2/3/4 は列の外の帯を通す**（2026-08-14・利用者の指定）。
+    # **外側レーンの 3 本は列の外の帯を通す**（2026-08-14・利用者の指定）。
     #
     # ⚠️ **ファンアウトのビアはこの線を避けない。**`gnd_fanout.spots` は
     # 意図的にパッドだけを見る（配線前後で同じ座標を返すため）。
@@ -558,7 +558,7 @@ def _prewire_power(board):
             # （2026-08-14・利用者「反対側（列の外側 = J_MAIN 側）に」）。
             #
             # 縦（板の内側＝上）へ 1.2mm 伸ばしていたが、**そこは
-            # ROW2/3/4 が列の左へ抜ける通路**で、3 本ともこの先端を
+            # 外側レーンが列の左へ抜ける通路**で、3 本ともこの先端を
             # 越えるために一度上がって降り直していた
             # （往復 2.70mm × 3 本 = **8.1mm** の無駄）。
             #
@@ -642,13 +642,42 @@ def _shrink_silk(board):
     print(f"      シルクの参照名 {n} 個を {SILK_REF_MM}mm へ")
 
 
-# ROW2/3/4 を通す「列の外の帯」の順序。**外周から内側へ。**
-# 利用者の指定（2026-08-14）「D3 = ROW2 が最も外周側」。
-OUTER_LANE_ROWS = ("ROW2", "ROW3", "ROW4")
+# 「列の外の帯」を通す 3 本。**外周から内側へ。**
+#
+# ⚠️ **ROW の名前で持たない**（2026-08-14・利用者。3 度指摘された）。
+# 「どのレーンを通るか」は **XIAO のパッド**の話であって、そこに載る
+# 信号が ROW0 か ROW2 かは無関係。ROW 名で書くと、利用者が内外を
+# 入れ替えるたびに表と実物がずれ、**ここで実際に交差を 2 件出した。**
+# **パッド番号で持ち、ネット名はパッドから引く。**
+#
+# 列の外は D1（最も板端）→ D2（真ん中）→ D3（最も内側）。
+# **D1 は用途未定の予備**だが、後から線は足せないので今のうちに通す。
+OUTER_LANE_PADS = ("D1", "D2", "D3")
+
+
+def _lane_nets(board, pad_numbers):
+    """XIAO のパッド番号の並び → そこに載っているネット名の並び。
+
+    **レーンの並びはパッドで決まり、信号はパッドから引く**（利用者・
+    2026-08-14）。ROW 名を表に書くと、内外の割り当てを変えるたびに
+    表と実物がずれる。ここで一度だけ実物を見て名前に直す。
+    """
+    mcu = board.FindFootprintByReference("U_MCU")
+    out = []
+    for num in pad_numbers:
+        pad = mcu.FindPadByNumber(pinmap.resolve("xiao_nrf52840", num))
+        n = pad.GetNetname()
+        if not n:
+            raise RuntimeError(
+                f"{num}: ネットが付いていない。**レーンに載せる以上、"
+                "circuit.py で何かに繋いでおくこと**")
+        out.append(n)
+    return tuple(out)
 
 
 def _prewire_rows(board):
-    """**ROW2/3/4 を XIAO のパッド列の外側に通す**（2026-08-14・利用者）。
+    """**外側レーンの 3 本（D1/D2/D3）を XIAO のパッド列の外側に通す**
+    （2026-08-14・利用者）。
 
     自動配線器はこの帯を使わない。実測（配線後の基板）では列の外へ出て
     いたのは 2 本だけで、ROW4 はパッドの x=-7.62 で止まっていた。
@@ -684,6 +713,7 @@ def _prewire_rows(board):
     edge = pcbnew.ToMM(d.m_CopperEdgeClearance)
     clr = pcbnew.ToMM(d.m_NetSettings.GetDefaultNetclass().GetClearance())
 
+    outer = _lane_nets(board, OUTER_LANE_PADS)
     pads = {}
     for fp in board.Footprints():
         ref = fp.GetReference()
@@ -691,12 +721,12 @@ def _prewire_rows(board):
             continue
         for pad in fp.Pads():
             n = pad.GetNetname()
-            if n in OUTER_LANE_ROWS:
+            if n in outer:
                 pads.setdefault(n, {})[ref] = pad
 
     # パッド列の左端（=帯の内側の限界）と板の左端から、レーンの中心を出す。
     xs = [pcbnew.ToMM(p.GetPosition().x) - ORIGIN[0] - pcbnew.ToMM(p.GetSize().x) / 2
-          for n in OUTER_LANE_ROWS for r, p in pads[n].items() if r == "U_MCU"]
+          for n in outer for r, p in pads[n].items() if r == "U_MCU"]
     inner = min(xs) - clr - TRACK_W / 2          # いちばんパッド寄りに置けるレーン
     outer_limit = -DB_W / 2 + edge + TRACK_W / 2
     pitch = TRACK_W + clr
@@ -708,14 +738,14 @@ def _prewire_rows(board):
     # y=-10.75..-11.55 へ降ろしたら、**MP（y -13.50..-11.30）に刺さって
     # 短絡・クリアランス・マスクブリッジの 3 件を出した**（2026-08-14）。
     # `_prewire_power` が同じ罠を踏んでいて、そこにも同じ注意書きがある。
-    row_y = max(p.GetPosition().y for n_ in OUTER_LANE_ROWS
+    row_y = max(p.GetPosition().y for n_ in outer
                 for r, p in pads[n_].items() if r == "J_MAIN")
     mp_top = min((q.GetPosition().y - q.GetSize().y // 2)
                  for fp in board.Footprints() if fp.GetReference() == "J_MAIN"
                  for q in fp.Pads() if q.GetNumber() == "MP")
     need = pcbnew.FromMM(TRACK_W / 2 + clr)
     lo, hi = row_y + need, mp_top - need         # 使える帯（y は下が正）
-    if hi - lo < (len(OUTER_LANE_ROWS) - 1) * pcbnew.FromMM(pitch):
+    if hi - lo < (len(outer) - 1) * pcbnew.FromMM(pitch):
         raise RuntimeError(
             "FFC の列と取付パッドの隙間に横枝 3 本が入らない"
             f"（{pcbnew.ToMM(hi - lo):.2f}mm）。**黙って詰めないこと**")
@@ -734,18 +764,18 @@ def _prewire_rows(board):
     #
     # **障害物の縁そのもの**（板端 -10.50 と パッドの左端 -8.47）で
     # まん中を取り、そこへ束の中心を置く。左右の空きが等しくなる。
-    span = (len(OUTER_LANE_ROWS) - 1) * pitch
+    span = (len(outer) - 1) * pitch
     mid = (-DB_W / 2 + min(xs)) / 2              # 板端とパッド縁のまん中
     innermost = mid + span / 2                   # 束の内側の端
     if innermost > inner or innermost - span < outer_limit:
         raise RuntimeError(
-            f"列の外の帯に {len(OUTER_LANE_ROWS)} 本入らない"
+            f"列の外の帯に {len(outer)} 本入らない"
             f"（{outer_limit:.2f}..{inner:.2f}・要 {span:.2f}mm）")
 
     n = 0
-    for i, name in enumerate(OUTER_LANE_ROWS):
-        # i=0 が ROW2（最も外）。内側の ROW4 を基準に、外へ 1 本ずつ。
-        lane = innermost - (len(OUTER_LANE_ROWS) - 1 - i) * pitch
+    for i, name in enumerate(outer):
+        # i=0 が最も外（D1）。いちばん内側のレーンを基準に、外へ 1 本ずつ。
+        lane = innermost - (len(outer) - 1 - i) * pitch
         if lane < outer_limit:
             raise RuntimeError(
                 f"{name}: レーン x={lane:.2f} が板の端を越える"
@@ -759,10 +789,10 @@ def _prewire_rows(board):
         # 縦のレーンを横切ってしまう。**深い帯で折れれば、内側の 2 本の
         # レーンの**下**をくぐって外へ抜けられる。
         #
-        #   ROW4（最も内のレーン）… 浅い帯で折れる
-        #   ROW2（最も外のレーン）… 深い帯で折れる
-        # **帯は ROW2 が最も深い**（総当たりで求めた解。2026-08-14）。
-        drop = lo + (len(OUTER_LANE_ROWS) - 1 - i) * pcbnew.FromMM(pitch)
+        #   最も内のレーン（D3）… 浅い帯で折れる
+        #   最も外のレーン（D1）… 深い帯で折れる
+        # **帯は最も外のものが最も深い**（総当たりで求めた解。2026-08-14）。
+        drop = lo + (len(outer) - 1 - i) * pcbnew.FromMM(pitch)
         lane_x = pcbnew.FromMM(ORIGIN[0] + lane)
         # ⚠️ **パッド列の下を横切らない**（2026-08-14）。
         #
@@ -837,33 +867,44 @@ def _prewire_rows(board):
             if s != e:
                 _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
                 n += 1
-    print(f"      列の外へ ROW2/3/4 を {n} 区間")
+    print(f"      列の外へ {'/'.join(outer)} を {n} 区間")
     _prewire_inner_rows(board, row_y, clr, pitch)
 
 
 # 列の**内側**（XIAO のパッド列と FFC のあいだ）を通す 2 本。
 # 利用者の指定（2026-08-14）:
-#   D6（ROW1）… 垂直に下ろして、直角に曲げて FFC へ
-#   D2（ROW0）… D5 と同じ長さだけ**逆向き（右）**へ水平に伸ばしてから
-#                垂直に下ろし、直角に曲げて FFC へ
-INNER_LANE_ROWS = ("ROW1", "ROW0")
+#   D6 … 垂直に下ろして、直角に曲げて FFC へ
+#   残り … 外側レーンの最内と同じ長さだけ**逆向き（右）**へ水平に
+#          伸ばしてから垂直に下ろし、直角に曲げて FFC へ
+# 列の**内側**を通る 3 本。**先頭が「垂直に下ろす」もの。**
+#
+# D6 が垂直（FFC の真ん中＝9 番）、そこから外へ D5・D4。
+# ⚠️ **ここも ROW 名で持たない**（上の OUTER_LANE_PADS と同じ理由）。
+#
+# **順序は「XIAO で奥のものほど、FFC では外側」。**D4(y 95.49) が
+# FFC 7(x 149.75)、D5(98.03) が 8(149.25)、D6(100.57) が 9(148.75) と
+# **両端が逆順**なので、奥のものほど降りる x を右に・帯を深く取る。
+# 逆に並べると D4 と D5 が丸ごと重なる（2026-08-14 に実測・交差 2 件）。
+INNER_LANE_PADS = ("D6", "D5", "D4")
+VERTICAL_PAD = "D6"            # **唯一、真下へ下ろす 1 本**
 
 
 def _prewire_inner_rows(board, row_y, clr, pitch):
-    """**ROW0/ROW1 を列の内側で L 字に引く**（2026-08-14・利用者）。
+    """**内側レーンの 3 本（D6/D5/D4）を列の内側で L 字に引く**
+    （2026-08-14・利用者）。
 
     Freerouting に任せると盤面を斜めに横断していた（実測 ROW0 は
-    直線 22.4mm に対し 39.1mm）。ROW2/3/4 と同じ理屈で、経路に選択の
+    直線 22.4mm に対し 39.1mm）。外側レーンと同じ理屈で、経路に選択の
     余地が無いものは自分で引く。
 
-    ⚠️ **横枝の帯は ROW2/3/4 の帯より「上」に取る**（＝ y が小さい側。
-    2026-08-14）。最初 ROW2/3/4 と同じ `lo..hi`（FFC と MP のあいだ）を
+    ⚠️ **横枝の帯は外側レーンの帯より「上」に取る**（＝ y が小さい側。
+    2026-08-14）。最初 外側レーンと同じ `lo..hi`（FFC と MP のあいだ）を
     使ったら **y=110.6/111.0**、つまり外周組の帯（107.4/107.8/108.2）と
     FFC のパッド（109.15）の**両方より下**に降りた。縦に下りる 2 本が
     横に走る 3 本を必ず突き抜けるので、**不要な交差が 7 件**出た
     （利用者の指摘）。
 
-    ROW0/ROW1 は FFC へ**上から**入るだけなので、外周組の帯より下へ
+    内側の 3 本は FFC へ**上から**入るだけなので、外周組の帯より下へ
     行く理由が無い。帯を外周組より上に置けば、縦の 2 本は横の 3 本と
     出会う前に FFC のパッドへ落ちる。
 
@@ -871,28 +912,37 @@ def _prewire_inner_rows(board, row_y, clr, pitch):
     入れないと DSN に未配線として残り、Freerouting が二重に引く
     （ROW2/3/4 で実際に起きた）。
     """
+    inner = _lane_nets(board, INNER_LANE_PADS)
+    outer = _lane_nets(board, OUTER_LANE_PADS)
+    vertical = _lane_nets(board, (VERTICAL_PAD,))[0]
     pads = {}
     for fp in board.Footprints():
         ref = fp.GetReference()
         if ref not in ("U_MCU", "J_MAIN"):
             continue
         for pad in fp.Pads():
-            if pad.GetNetname() in INNER_LANE_ROWS:
+            if pad.GetNetname() in inner:
                 pads.setdefault(pad.GetNetname(), {})[ref] = pad
 
-    # **D5（ROW4）のパッドから出る水平の枝**と同じ長さ（1.465mm）。
+    # **外側レーンの最も内側の 1 本（D3）が、パッドから出る水平の枝**と
+    # 同じ長さ。垂直に下ろさない線は、この長さだけ横へ伸ばしてから下ろす。
     # **数字を書かず実物から測る。**
     #
-    # ⚠️ **「ROW4 の水平区間」で最大を取ってはいけない**（2026-08-14）。
-    # ROW4 には水平区間が 2 つある:
-    #   パッドから出る枝  1.465mm  ← 利用者の言う「D5 と同じ長さ」
-    #   FFC の近くの帯    7.835mm  ← 別物
-    # `max` で拾って 7.835mm を使い、**D2 が BT1_- のパッドの上を
+    # ⚠️ **「その行の水平区間」で最大を取ってはいけない**（2026-08-14）。
+    # 水平区間は 2 つある:
+    #   パッドから出る枝  ← こちらが基準
+    #   FFC の近くの帯    ← 別物
+    # `max` で拾って長い方を使い、**D2 が BT1_- のパッドの上を
     # 縦断して短絡した。**MCU のパッドに接している方だけを見る。
+    #
+    # ⚠️ **基準の行を固定の名前で書かない**（2026-08-14）。以前は
+    # `"ROW4"` と直書きしていたが、**利用者が D ピンの内外を入れ替えた
+    # 時点で ROW4 は内側へ移り、この枝自体が消えた。**基準は
+    # 「外側レーンのうち最も内側」——`outer` の末尾。
     mcu_y = {p.GetPosition().y for fp in board.Footprints()
              if fp.GetReference() == "U_MCU" for p in fp.Pads()}
     run = next(abs(t.GetStart().x - t.GetEnd().x) for t in board.GetTracks()
-               if t.GetNetname() == "ROW4"
+               if t.GetNetname() == outer[-1]
                and t.GetStart().y == t.GetEnd().y
                and t.GetStart().y in mcu_y)
 
@@ -906,14 +956,14 @@ def _prewire_inner_rows(board, row_y, clr, pitch):
     # **FFC 寄り＝ MCU のパッド列より下にある横区間**だけを見る。
     col_y = max(p.GetPosition().y for fp in board.Footprints()
                 if fp.GetReference() == "U_MCU"
-                for p in fp.Pads() if p.GetNetname() in OUTER_LANE_ROWS)
+                for p in fp.Pads() if p.GetNetname() in outer)
     top = min(t.GetStart().y for t in board.GetTracks()
-              if t.GetNetname() in OUTER_LANE_ROWS
+              if t.GetNetname() in outer
               and t.GetStart().y == t.GetEnd().y
               and t.GetStart().y > col_y)
 
     n = 0
-    for i, name in enumerate(INNER_LANE_ROWS):
+    for i, name in enumerate(inner):
         mcu = pads[name]["U_MCU"]
         ffc = pads[name]["J_MAIN"]
         band = top - (i + 1) * pcbnew.FromMM(pitch)
@@ -924,17 +974,24 @@ def _prewire_inner_rows(board, row_y, clr, pitch):
                 f"{name}: 横枝の帯（y={pcbnew.ToMM(band):.2f}）が"
                 f" MCU パッド（y={pcbnew.ToMM(mcu.GetPosition().y):.2f}）"
                 "より上。**黙って詰めないこと**")
-        if name == "ROW1":
+        if name == vertical:
             # 垂直に下ろす → 帯で右へ → FFC の真上で下ろす
             drop_x = mcu.GetPosition().x
         else:
-            # **D5 と同じ長さだけ右へ伸ばしてから下ろす**（利用者の指定）。
+            # **外側レーンの最内と同じ長さだけ右へ伸ばしてから下ろす**
+            # （利用者の指定。当時の言葉では「D5 と同じ長さ」）。
             #
             # ⚠️ **ここで勝手に長さを変えないこと**（2026-08-14）。
             # 一度 BT1_- に当たると見て 8.42mm へ伸ばしたが、
-            # **「D5 と同じ長さ」という指定そのものを書き換えていた。**
+            # **「同じ長さ」という指定そのものを書き換えていた。**
             # 当たるなら当たると報告して判断を仰ぐ。黙って動かさない。
-            drop_x = mcu.GetPosition().x + run
+            # ⚠️ **2 本以上あるときは、降りる x もずらす**（2026-08-14）。
+            # 以前は内側が 1 本しか無く、`run` を足すだけで足りていた。
+            # **利用者が D ピンの内外を入れ替えて内側が 2 本になった**
+            # 時点で、両方が同じ x=143.84 に降りて**丸ごと重なった**
+            # （tracks_crossing 2 件）。帯と同じピッチで外へ 1 本ずつ。
+            drop_x = mcu.GetPosition().x + run \
+                + (i - 1) * pcbnew.FromMM(pitch)
         pts = [pcbnew.VECTOR2I(drop_x, mcu.GetPosition().y),
                pcbnew.VECTOR2I(drop_x, band),
                pcbnew.VECTOR2I(ffc.GetPosition().x, band),
@@ -943,7 +1000,7 @@ def _prewire_inner_rows(board, row_y, clr, pitch):
             if s != e:
                 _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
                 n += 1
-    print(f"      列の内へ ROW0/ROW1 を {n} 区間")
+    print(f"      列の内へ {'/'.join(inner)} を {n} 区間")
 
 
 def _antenna_keepout(board):
