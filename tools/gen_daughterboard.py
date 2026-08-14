@@ -153,6 +153,63 @@ def _track(board, p1, p2, layer, net):
     board.Add(t)
 
 
+# 直角の折れに入れる 45 度の面取り（mm）。**可能な限り小さく**
+# （2026-08-14・利用者「可能な限り最小のコーナーで 135 度 *2 に」）。
+#
+# 直角のまま曲げると、外側の角で銅が尖り、エッチングの際に
+# 過剰腐食（アンダーカット）を受けやすい。45 度 2 回に割れば角が鈍る。
+#
+# **見た目はほぼ角のまま**にしたいので、値は最小の一辺にする。
+# 線幅と同じだけ落とせば、外側の角は完全に消えて 135 度が 2 つになる。
+# それ以上大きくしても角の鋭さは変わらない（斜めが長くなるだけ）。
+MITER_MM = TRACK_W
+
+
+def _polyline(board, pts, layer, net, miter_mm=MITER_MM):
+    """点列を配線でつなぐ。**直角の折れは 45 度 2 回に割る。**
+
+    折れ点そのものは通らず、その手前と先に `miter_mm` ずつ寄った 2 点を
+    斜めで結ぶ。**線分が短くて両側に取れないときは、その半分までに
+    切り詰める**（詰めすぎて線が裏返るのを防ぐ）。
+
+    返すのは引いた区間の本数。
+    """
+    m = pcbnew.FromMM(miter_mm)
+    out = []
+    for i, p in enumerate(pts):
+        if i == 0 or i == len(pts) - 1:
+            out.append(p)
+            continue
+        a, b = pts[i - 1], pts[i + 1]
+        # **入ってくる向きと出ていく向きが同じなら折れていない。**
+        if (a.x == p.x and p.x == b.x) or (a.y == p.y and p.y == b.y):
+            out.append(p)
+            continue
+
+        def _back(q):
+            """p から q の方へ、m だけ（ただし半分を超えずに）戻った点。"""
+            dx, dy = q.x - p.x, q.y - p.y
+            L = max(abs(dx), abs(dy))          # 直角なのでどちらかは 0
+            if L == 0:
+                return p
+            k = min(m, L // 2)
+            return pcbnew.VECTOR2I(p.x + dx * k // L, p.y + dy * k // L)
+
+        c1, c2 = _back(a), _back(b)
+        if c1 == p or c2 == p:                 # 面取りが取れないほど短い
+            out.append(p)
+            continue
+        out.append(c1)
+        out.append(c2)
+
+    n = 0
+    for s, e in zip(out, out[1:]):
+        if s != e:
+            _track(board, s, e, layer, net)
+            n += 1
+    return n
+
+
 def _via(board, pos, net):
     """ビアを 1 個立てる。上の _track と同じ理由でここにある。"""
     v = pcbnew.PCB_VIA(board)
@@ -530,10 +587,8 @@ def _prewire_power(board):
                pcbnew.VECTOR2I(lane, below),
                pcbnew.VECTOR2I(lane, up.GetPosition().y),
                up.GetPosition()]
-        for s, e in zip([ffc.GetPosition()] + pts, pts):
-            if s != e:
-                _track(board, s, e, pcbnew.B_Cu, ffc.GetNet())
-                n_v3 += 1
+        n_v3 += _polyline(board, [ffc.GetPosition()] + pts,
+                          pcbnew.B_Cu, ffc.GetNet())
 
     # ---- GND ----
     #
@@ -863,10 +918,8 @@ def _prewire_rows(board):
                pcbnew.VECTOR2I(lane_x, over),
                pcbnew.VECTOR2I(lane_x, mcu.GetPosition().y),
                mcu.GetPosition()]
-        for s, e in zip([ffc.GetPosition()] + pts, pts):
-            if s != e:
-                _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
-                n += 1
+        n += _polyline(board, [ffc.GetPosition()] + pts,
+                       pcbnew.B_Cu, mcu.GetNet())
     print(f"      列の外へ {'/'.join(outer)} を {n} 区間")
     _prewire_inner_rows(board, row_y, clr, pitch)
 
@@ -996,10 +1049,8 @@ def _prewire_inner_rows(board, row_y, clr, pitch):
                pcbnew.VECTOR2I(drop_x, band),
                pcbnew.VECTOR2I(ffc.GetPosition().x, band),
                ffc.GetPosition()]
-        for s, e in zip([mcu.GetPosition()] + pts, pts):
-            if s != e:
-                _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
-                n += 1
+        n += _polyline(board, [mcu.GetPosition()] + pts,
+                       pcbnew.B_Cu, mcu.GetNet())
     print(f"      列の内へ {'/'.join(inner)} を {n} 区間")
 
 
