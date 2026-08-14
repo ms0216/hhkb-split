@@ -40,21 +40,78 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+# **基板の解析はキャッシュする**（2026-08-15・利用者「検査が想定より
+# 大幅に長い。原因を突き止め、削減できるなら削減して」）。
+#
+# ⚠️ **同じファイルを検査ごとに読み直して正規表現をかけていた。**
+# 配線済みの右基板は 37,000 行あり、`.*?` を挟んだ `re.S` の走査が
+# **1 回で 400 秒**かかる。中身の違う 4 つの検査が揃って 400 秒だった
+# ことが手がかりになった（＝検査本体ではなく共通の前処理が重い）。
+#
+# 実測（`--durations`・実形状の門を入れた後の 48 分の内訳）:
+#   test_stabilizers_are_on_the_wide_keys[right]            401.55s
+#   test_switch_positions_match_the_plate[right]            401.52s
+#   test_switch_footprint_size_matches_the_key_width[right] 401.39s
+#   test_every_footprint_is_inside_the_outline[right]       400.02s
+#   （左は各 195s）→ **上位 8 件だけで約 39 分**
+#
+# ⚠️ **キャッシュしてよいのは「検査の実行中にファイルが変わらない」から。**
+# CLAUDE.md にも「検査の実行中にファイルを編集しない」と書いてある
+# （編集途中を読んで偽の赤／偽の緑が出た事故が 2 回）。
+_CACHE = {}
+
+
+def _pcb_text(name):
+    """基板ファイルの中身。**1 回だけ読む。**"""
+    key = ("text", name)
+    if key not in _CACHE:
+        _CACHE[key] = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    return _CACHE[key]
+
+
 def footprints(name):
-    """(ライブラリ名, 参照, x, y) の一覧をレイアウト座標（Y 上向き）で返す。"""
-    s = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    """(ライブラリ名, 参照, x, y) の一覧をレイアウト座標（Y 上向き）で返す。
+
+    ⚠️ **`.*?` でフットプリントを跨がないこと**（2026-08-15）。
+    以前は 1 つの正規表現で `(footprint ...` から `(at ...` と
+    `(property "Reference" ...` を一度に拾っていたが、**`.*?` が
+    フットプリントの境界を越えて 200 万文字を走査**し、
+    カタストロフィック・バックトラッキングを起こしていた。
+
+    **実測: 右基板 1 回で 403 秒。**しかも**取りこぼしていた**——
+    44 件しか返らず、正しくは 83 件（`pads_with_nets` が返す数と一致）。
+    `.*?` が境界を越えるので `(at` と `Reference` の対応がずれ、
+    **部品の約半分がこの関数を使う検査から漏れていた。**
+    footprints() を使う検査（スイッチ位置・外形内・スタビ・幅）は
+    **半分の部品しか見ていなかった**ことになる。
+    直したら 83 件すべてを見て、そのうえで緑だった（実害は無かった）。
+
+    `pads_with_nets` と同じく**フットプリント単位で切ってから中を見る**。
+    実測 0.01 秒（4 万倍）で、件数も正しくなる。
+    """
+    key = ("footprints", name)
+    if key in _CACHE:
+        return _CACHE[key]
     out = []
-    for m in re.finditer(
-        r'\(footprint "([^"]+)".*?\(at ([-\d.]+) ([-\d.]+)\).*?'
-        r'\(property "Reference" "([^"]+)"', s, re.S):
-        lib, x, y, ref = m.group(1), float(m.group(2)), float(m.group(3)), m.group(4)
-        out.append((lib, ref, x - ORIGIN[0], ORIGIN[1] - y))
+    for fp in re.finditer(r'\n\t\(footprint "([^"]+)"(.*?)\n\t\)',
+                          _pcb_text(name), re.S):
+        lib, body = fp.group(1), fp.group(2)
+        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)", body)
+        ref = re.search(r'\(property "Reference" "([^"]+)"', body)
+        if not at or not ref:
+            continue
+        x, y = float(at.group(1)), float(at.group(2))
+        out.append((lib, ref.group(1), x - ORIGIN[0], ORIGIN[1] - y))
+    _CACHE[key] = out
     return out
 
 
 def outline_extent(name):
     """Edge.Cuts に引いた線分と円弧から、外形の外接矩形を出す。"""
-    s = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    key = ("outline", name)
+    if key in _CACHE:
+        return _CACHE[key]
+    s = _pcb_text(name)
     xs, ys = [], []
     for blk in re.finditer(r"\(gr_(?:line|arc)\b(.*?)\n\t\)", s, re.S):
         b = blk.group(1)
@@ -63,7 +120,8 @@ def outline_extent(name):
         for m in re.finditer(r"\((?:start|end|mid) ([-\d.]+) ([-\d.]+)\)", b):
             xs.append(float(m.group(1)) - ORIGIN[0])
             ys.append(ORIGIN[1] - float(m.group(2)))
-    return min(xs), min(ys), max(xs), max(ys)
+    _CACHE[key] = (min(xs), min(ys), max(xs), max(ys))
+    return _CACHE[key]
 
 
 # --------------------------------------------------------------------------
@@ -187,7 +245,10 @@ def test_corner_radius_is_applied():
 
 def pads_with_nets(name):
     """{参照: {パッド番号: ネット名}} を返す。"""
-    s = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
+    key = ("pads", name)
+    if key in _CACHE:
+        return _CACHE[key]
+    s = _pcb_text(name)
     out = {}
     for fp in re.finditer(r'\n\t\(footprint "[^"]+"(.*?)\n\t\)', s, re.S):
         body = fp.group(1)
@@ -201,6 +262,7 @@ def pads_with_nets(name):
             if nm:
                 pads[pm.group(1)] = nm.group(1)
         out[ref] = pads
+    _CACHE[key] = out
     return out
 
 
