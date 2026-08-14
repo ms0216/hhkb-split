@@ -135,7 +135,10 @@ PREWIRED = re.compile(r"GND|SW\d+_D")
 # protect にならないまま引かれていた（交差 5 件のうち 3 件が自己交差）。
 # ⚠️ **SPARE も入れる**（2026-08-14・利用者）。D1 は用途未定だが
 # FFC 12 番まで**列の外の帯を自分で引いてある**ので、ROW と同じ扱い。
-PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3|ROW[01234]|SPARE")
+# ⚠️ **右列を自分で引いたら、その 5 本も入れる**（2026-08-14）。
+# SPI_MOSI / SPI_SCK / CS / SPARE2。入れないと Freerouting が二重に引く。
+PREWIRED_DB = re.compile(
+    r"GND|SW\d+_D|V3V3|ROW[01234]|SPARE2?|SPI_MOSI|SPI_SCK|CS")
 
 
 # Freerouting に上乗せして要求するクリアランス（µm）。
@@ -312,6 +315,9 @@ def _route_once(half, seed):
         # gen_daughterboard で引いた 12 区間が消える（実測: 立て直しを
         # 入れる前は 3 本とも「Missing connection」になった）。
         _prewire_rows(board)
+        # **右列も同じ**（2026-08-14）。SES 取り込みで消えるので立て直す。
+        from gen_daughterboard import RIGHT_OUTER_LANE_PADS
+        _prewire_rows(board, RIGHT_OUTER_LANE_PADS, side=+1)
         # **子基板は配線後にベタを敷く**（2026-08-14・open-gaps #41）。
         # 主基板は gen_pcb が配置段階で敷いてから配線するが、子基板は
         # 手配線をやめて Freerouting に移したので、主基板と同じ

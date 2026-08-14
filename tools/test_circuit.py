@@ -379,8 +379,14 @@ def test_the_rules_actually_bite():
          test_the_divider_sits_behind_the_power_switch),
         # 文書を写しただけの表は静かにずれる。**回路の側を動かしても
         # 落ちること**をここで確かめる（文書を壊す向きは別に確認済み）。
-        ("ケーブルの 3 番を SCK から MOSI へ変える",
-         lambda ps: [(r, k, {**p, "3": "SPI_MOSI"} if r == "J_DB" else p)
+        # ⚠️ **壊し方は「いまと違う値」で書く**（2026-08-14）。以前は
+        # 「3 番を SCK から MOSI へ」と書いていたが、**並びを左右対称へ
+        # 組み替えて 3 番がもともと MOSI になり、元と同じ値を代入する
+        # 空振りになっていた。**（`test_the_rules_actually_bite` 自身が
+        # それを捕まえた。）**現在値を見て、違う値に変える。**
+        ("ケーブルの 3 番を別の信号へ変える",
+         lambda ps: [(r, k, {**p, "3": ("CS" if p.get("3") != "CS"
+                                        else "SPI_SCK")} if r == "J_DB" else p)
                      for r, k, p in ps],
          lambda _half: test_the_cable_pinout_table_matches_the_circuit()),
     ]

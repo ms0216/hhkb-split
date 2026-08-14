@@ -78,27 +78,56 @@ def test_the_cable_carries_every_pin_the_firmware_uses():
     assert not missing, f"ケーブルに無い信号: {sorted(missing)}"
 
 
-def test_the_cable_carries_power_and_two_grounds():
-    """電源と GND。GND が 2 本なのは戻り電流の経路を短くするため。"""
+def test_the_cable_carries_power_and_a_ground():
+    """電源と GND がケーブルに載っていること。
+
+    ⚠️ **2026-08-14 に GND が 2 本から 1 本へ減った。**利用者の指示で
+    XIAO の左右の列を鏡像に配線し、**GND はレーンに載せず地板で受ける**
+    と決めたため（レーンに載せると FFC まで 1 本の細線で運ぶ形になる）。
+
+    **「2 本」を数えるのをやめ、下の `test_how_far_the_return_path_is`
+    で距離そのものを見る。**本数は手段で、目的は戻り経路の短さ。
+    """
     sigs = cable_signals()
     assert "V3V3" in sigs.values(), "電源が無い"
-    assert list(sigs.values()).count("GND") == 2, "GND は 2 本"
+    assert "GND" in sigs.values(), "GND が 1 本も無い"
 
 
-def test_ground_sits_next_to_the_fastest_signal():
-    """SCK の隣が GND であること。
+# **SCK から最寄りの GND までの、許せる距離（ピン数）。**
+#
+# 実測（2026-08-14）: GND 2 本のとき SCK の隣が GND で 1 ピン（0.5mm）。
+# 鏡像化して GND が 1 本になり **4 ピン（2.0mm）** に伸びた。
+#
+# ⚠️ **この 4 は「測って許容と判断した値」ではない。**いまの設計を
+# 記録し、**それ以上悪化したら気づく**ための上限。0.5mm でどれだけ
+# 改善するかは実測していない（利用者と確認済み）。
+#
+# **問題が出たときの逃げ道は決めてある**（利用者・2026-08-14）:
+# D9(SPARE2) を両基板で GND へジャンパすると、SCK の隣が GND に戻る。
+# そのために SPARE2 は用途未定のまま配線だけ通してある。
+SCK_TO_GROUND_MAX_PINS = 4
 
-    ループ面積が小さいほど放射も受信も減る。並び順は設計であって偶然ではない。
 
-    **両端が GND でないことは承知の上。**1 番は CS。配線の交差を避ける
-    制約が先に決まり、両端 GND にすると交差が戻る。CS は 1 スキャンに
-    1 回しか動かないので端に置く害が最も小さい。
+def test_how_far_the_return_path_is():
+    """**SCK から最寄りの GND までの距離**を見る（ループ面積の代理）。
+
+    ケーブルを渡る信号の戻り電流は、最も近い GND を通ろうとする。
+    行きと戻りが囲む面積は「GND までの距離 × ケーブル長 100mm」で、
+    面積が大きいほど放射も受信も増える。
+
+    **見るのは SCK だけでよい。**ROW は走査のたびにゆっくり変わる
+    だけで、遷移が速く連続的なのは SPI クロックだから。
     """
     sigs = cable_signals()
     n = next((k for k, v in sigs.items() if v == "SPI_SCK"), None)
     assert n is not None, "SCK がケーブルに無い"
-    assert "GND" in (sigs.get(n - 1), sigs.get(n + 1)), \
-        f"SCK は {n} 番。両隣は {sigs.get(n - 1)} と {sigs.get(n + 1)}"
+    gnd = [k for k, v in sigs.items() if v == "GND"]
+    assert gnd, "GND がケーブルに無い"
+    d = min(abs(n - k) for k in gnd)
+    assert d <= SCK_TO_GROUND_MAX_PINS, (
+        f"SCK({n} 番) から最寄りの GND まで {d} ピン"
+        f"（上限 {SCK_TO_GROUND_MAX_PINS}）。**戻り経路が伸びた。**"
+        "並びを変えたなら、なぜ許せるかを書いてから上限を動かすこと")
 
 
 def test_the_pin_count_matches_the_connector():
