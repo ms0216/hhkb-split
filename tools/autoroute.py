@@ -25,13 +25,26 @@ import pcbnew
 
 import boardhash
 import gnd_fanout
-from gen_pcb import prewire_switch_diode
+from gen_pcb import prewire_row_bus, prewire_switch_diode
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
 UNROUTED = PCB / "unrouted"
 HALVES = ("left", "right")
 PASSES = 300      # 800 に増やしても未配線は減らなかった（2026-08-13）
+
+# ⚠️ **DSN に `(autoroute_settings ...)` を足さないこと**（2026-08-14 に実測）。
+#
+# 利用者の指摘「ROW0 がなぜ表裏を行き来するのか。同じ面で横一直線の方が
+# 自然では」を受けて `(via_costs N)` + `(start_ripup_costs 100)` を
+# structure の末尾に入れてみた。**左が未配線 1 → 66 本に激増した。**
+# via_costs を 200 でも 80 でも同じ 66 本だったので、**効いているのは
+# 値ではなくブロックの存在そのもの**（右は 0 のままだった）。
+#
+# 行バスを一直線にしたいなら、この道ではなく **自分で引く**
+# （prewire_switch_diode と同じやり方）。ROW4 は 0 ビア・片面で
+# 通っているので経路は存在する。DIODE_OFFSET の注記にある
+# 「行のバスを y=+3.65 に通せる」が本来の設計意図。
 
 JAR = Path(os.environ.get(
     "FREEROUTING_JAR",
@@ -94,6 +107,13 @@ def _check_jar():
 #   GND      両面のベタと gnd_fanout のビアで配り終えている
 #   SW\d+_D  スイッチ → ダイオード。裏面の L 字 2 本で届く
 #             （gen_pcb.prewire_switch_diode）
+#   ROW\d+   行のバス。裏面の一直線で引く（gen_pcb.prewire_row_bus）。
+#             **ダイオードの K 側は行ごとに y が完全に一致していて、
+#             ライン上にスルーホールが無い**ので経路に迷いが無い。
+#             自動配線器に任せると表裏を 5〜7 回行き来していた
+#             （2026-08-14・利用者の指摘）。
+#             ⚠️ 全部は外せない。**J_DB へ戻る 1 本だけは残す**——
+#             コネクタは行のラインから外れた y にあり、直線では届かない。
 PREWIRED = re.compile(r"GND|SW\d+_D")
 
 
@@ -244,6 +264,12 @@ def _route_once(half, seed):
     # 位置はどちらも決定的に決まるので配線前と同じところに戻り、
     # Freerouting はそこを避けて配線済みなので衝突しない。
     prewire_switch_diode(board)
+    # **行のバスも引き直す。**SES 取り込みで消えているので、
+    # gen_pcb で引いたのと同じ直線をここで復活させる。
+    # DSN では `(type protect)` の障害物として渡してあるので、
+    # Freerouting はこれを避けて J_DB への 1 本だけを引いている。
+    n_row = prewire_row_bus(board)
+    print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
     n_fan = gnd_fanout.place(board)
 
     # **順序が効く。狙って打つものを先に、埋め草を後に。**

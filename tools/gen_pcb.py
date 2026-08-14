@@ -26,7 +26,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 from interface import (
-    ANTENNA_KEEPOUT,
     PCB_INSET_Y,CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
                        plate_positions, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
@@ -183,6 +182,66 @@ def prewire_switch_diode(board):
             t.SetLayer(pcbnew.B_Cu)
             t.SetNet(a.GetNet())
             board.Add(t)
+
+
+def prewire_row_bus(board):
+    """**行のバスを裏面の一直線で引く。**（2026-08-14・利用者の指摘）
+
+    「ROW0 がなぜこんなにクネクネして表裏を行き来するのか。同じ面で
+    横一直線にした方が絶対効率的では」——実測すると指摘のとおりだった:
+
+        ROW0  222.2mm  ビア 7 本  区間 54
+        ROW1  207.7mm  ビア 7 本  区間 27
+        ROW4  148.3mm  ビア 0 本  区間  9  ← 片面で一直線
+
+    **一直線が引けることは幾何が保証している。**同じ行のダイオードの
+    K 側パッド（pad 1）は **y が完全に一致**しており（実測: 各行とも
+    y の種類は 1 つ）、**全部が B.Cu の SMD**。行のライン上に
+    スルーホールは 1 つも無い（ROW1 だけ J_DB のパッド 11 個が
+    近いが、これらも SMD で同じ裏面）。
+
+    `DIODE_OFFSET` の注記にある「行のバスを y=+3.65 に通せる」が
+    最初からの設計意図で、守っていなかったのは自動配線器の側。
+
+    ⚠️ **via_costs では直せない。**DSN に `(autoroute_settings)` を
+    足すと左が未配線 66 本に壊れた（autoroute.py の冒頭を読むこと）。
+    **自分で引くのが正しい道。**
+
+    **autoroute.py も SES 取り込みのあとに呼ぶ**（取り込みが既存の
+    配線を作り直すため）。DSN からは ROW\\d+ を外してあるので、
+    Freerouting はここを避けて配線する。
+    """
+    rows = {}
+    for fp in board.GetFootprints():
+        if not re.fullmatch(r"D\d+", fp.GetReference()):
+            continue
+        pad = fp.FindPadByNumber("1")          # K 側＝行
+        name = pad.GetNetname()
+        if not name.startswith("ROW"):
+            continue
+        rows.setdefault(name, []).append(pad)
+
+    n = 0
+    for name, pads in sorted(rows.items()):
+        pads.sort(key=lambda p: p.GetPosition().x)
+        ys = {p.GetPosition().y for p in pads}
+        # **揃っていることを確かめてから引く。**ずれていたら黙って
+        # 斜めに引かず、気づけるように止める。
+        if len(ys) != 1:
+            raise RuntimeError(
+                f"{name}: ダイオードの K 側が同じ y に並んでいない "
+                f"（{sorted(pcbnew.ToMM(y) for y in ys)}）。"
+                "DIODE_OFFSET か行の割り当てが変わった")
+        for a, b_ in zip(pads, pads[1:]):
+            t = pcbnew.PCB_TRACK(board)
+            t.SetStart(a.GetPosition())
+            t.SetEnd(b_.GetPosition())
+            t.SetWidth(pcbnew.FromMM(TRACK_W))
+            t.SetLayer(pcbnew.B_Cu)
+            t.SetNet(a.GetNet())
+            board.Add(t)
+            n += 1
+    return n
 
 
 # **Freerouting が自力では見つけない経路への「中継ビア」**（2026-08-13）。
@@ -354,8 +413,9 @@ PLACE = {
     #   GND(12) ROW4 ROW3 ROW2 ROW1 ROW0(7) VBATT_SENSE(6) V3V3(5)
     #   MOSI(4) SCK(3) GND(2) CS(1)
     # の順に並ぶ。行は下（マトリクス）へ降りるので横の順序に関わらない。
-    # 残りは**左に分圧と電池、右に V3V3 の消費側と 595** と置けば、
-    # 扇状の広がりが交差しない。
+    # 残りは**J_DB 側に分圧と電池、その反対側に V3V3 の消費側と 595**
+    # と置けば、扇状の広がりが交差しない（2026-08-14 まで「左に電池、
+    # 右に 595」と書いていたが、それだと左基板で J_DB が反対端に来る）。
     #
     # 全部をひとつの帯（奥から 1 本目）に置く。帯をまたぐと配線が段を
     # 縦断して途中の穴と他のネットに当たる。
@@ -364,8 +424,37 @@ PLACE = {
         # →(と R_HI)→ R_LO →(VBATT_SENSE)→ J_DB。
         # 以前は R_HI/R_LO が SW_PWR と D_PWR の間にあり、VBATT_SW が
         # 2 部品を飛び越して他のネットと交差していた。
-        "BT1": (0, -62.0), "SW_PWR": (0, -50.0), "D_PWR": (0, -40.0),
-        "R_HI": (0, -32.0), "R_LO": (0, -27.0),
+        # ⚠️ **電源ブロックは J_DB と同じ側に置く。**左は J_DB が板の
+        # 右端（内側）にあるので、鎖も右端から内へ伸びる。
+        #
+        # 2026-08-14 まで左右とも板の**左端**に並べていた。右は J_DB も
+        # 左端なので近かったが、**左は J_DB が反対の端にあり、整流点
+        # D_PWR から J_DB まで 104.6mm あった**（右は 28.1mm）。
+        # BLE 送信の最大電流は D_PWR → J_DB → FFC → XIAO を通るので、
+        # ここが電源経路で最も効く。座標だけ左右で揃えた結果、
+        # **左だけが悪い**状態になっていた（open-gaps #41）。
+        # **鎖は U1 の左側（マイナス側）に置く。**
+        #
+        # 2026-08-14 まで BT1 が -62.0 で、**整流点 D_PWR が板の左端に
+        # あるのに V3V3 の消費側（C_U1 11.6 / U1 13.6 / J_DB 63.3）は
+        # 全部プラス側**だった。V3V3 の銅 132.4mm・VBATT_SENSE 109.8mm。
+        # 左側には V3V3 を必要とするものが何も無い。
+        #
+        # ⚠️ **プラス側へは出せない。**帯 0 は U1(12.6..20.4)・
+        # 取付穴 H4(33.0..38.0)・**アンテナ禁止域(44.5..74.5・凍結境界)**
+        # で分断され、鎖に要る連続 26mm が無い。一度そこへ置いて
+        # DRC 13 件・未配線 7 件を出した（R_HI が C_U1 と、D_PWR が U1 と
+        # 重なった）。J_DB(63.0) が禁止域の中にあるのは帯 1 で y が外れる
+        # ため。**帯 0 では真似できない。**
+        #
+        # 空いているのは H5(-24.0..-19.0) の右から U1 の左までの約 31mm。
+        # **鎖の終端（D_PWR）を U1 側に寄せ、そこから左へ遡って並べる。**
+        # ⚠️ **座標は手で試さず、コートヤードの幅から積む。**
+        # BT1/SW_PWR は 2 ランドで中心 +0/+4 に出るので占有は 7.08mm、
+        # D_PWR は 4.80mm、R_HI/R_LO は 3.44mm。H5 の右端(-19.01)から
+        # 隙間 0.3mm で積むと下の値になり、C_U1(8.87) の手前で収まる。
+        "BT1": (0, -17.17), "SW_PWR": (0, -9.79), "D_PWR": (0, -1.65),
+        "R_HI": (0, 2.77), "R_LO": (0, 6.51),
         # **J_DB は帯 1・x=63.0（子基板コネクタの直近）に置く**
         # （2026-08-13・利用者の提案「FFC を曲げなくていい位置に」）。
         #
@@ -387,10 +476,8 @@ PLACE = {
         # そのとき左の未配線は 2 本（うち 1 本は COL1 の信号、
         # もう 1 本は GND ベタの浮島）。マージンを動かすとここも動く。
         "J_DB": (1, 63.0),
-        # レール系は J_DB が居た場所（電源が基板を出入りするところ）に
-        # 寄せたまま。C_U1 はここに書かない。**DECOUPLE_BESIDE が
-        # U1 から算出する。**
-        "C_BULK": (0, 2.0),
+        # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
+        # C_U1 はここに書かない。**DECOUPLE_BESIDE が U1 から算出する。**
         "U1": (0, 16.5),
     },
     "right": {
@@ -406,7 +493,7 @@ PLACE = {
         # 毎回同じネットが落ちることを確かめた——揺れではなく構造的な残り）。
         # 子基板コネクタの中心 X は -76.2mm、-77.5 はそこから 1.3mm。
         "J_DB": (1, -77.5),
-        "C_BULK": (0, -14.0),
+        # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
         "U1": (0, 2.0), "U2": (0, 15.0),
     },
@@ -563,32 +650,6 @@ def _place_electronics(board, half, net):
     for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
         if cap_ref in decl and ic_ref in PLACE[half]:
             _place_beside(board, cap_ref, ic_ref, PLACE[half][ic_ref][0])
-
-
-# アンテナの禁止域は interface.ANTENNA_KEEPOUT（凍結境界）から読む。
-
-
-def _antenna_keepout(board, half):
-    """アンテナの真上を全層で禁止域にする。**配線もビアもベタも入れない。**"""
-    spec = ANTENNA_KEEPOUT[half]
-    if spec is None:
-        return                       # 右は入れられない。理由は上の注記
-    cx, cy, w, h = spec
-    zone = pcbnew.ZONE(board)
-    zone.SetIsRuleArea(True)
-    zone.SetDoNotAllowZoneFills(True)   # KiCad 10 の名前
-    zone.SetDoNotAllowTracks(True)
-    zone.SetDoNotAllowVias(True)
-    zone.SetDoNotAllowPads(True)
-    layers = pcbnew.LSET()
-    for lay in COPPER_LAYERS:
-        layers.addLayer(lay)
-    zone.SetLayerSet(layers)
-    pts = pcbnew.VECTOR_VECTOR2I()
-    for dx, dy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-        pts.append(to_kicad(cx + dx * w / 2, cy + dy * h / 2))
-    zone.AddPolygon(pts)
-    board.Add(zone)
 
 
 def _pour(board, netitem, layers, w, h):
@@ -758,7 +819,12 @@ def build(half, keys):
     #
     #   1. スイッチ → ダイオード（prewire_switch_diode）
     #   2. GND のパッド → ベタ（tools/gnd_fanout.py）
+    #   3. 行のバス（prewire_row_bus・2026-08-14）
     prewire_switch_diode(board)
+    # **行のバスはここで引く。**DSN からネットごと外すのではなく、
+    # 引いた線を `(type protect)` の障害物として渡す（ROW は J_DB へ
+    # 戻る 1 本だけ自動配線器に任せるので、ネットは外せない）。
+    prewire_row_bus(board)
     _place_electronics(board, half, net)
     gnd_fanout.place(board)
     guide_vias(board, half)
@@ -813,7 +879,6 @@ def build(half, keys):
     # GND ベタ（内層 1）。**分割の左右で 2.4GHz を至近距離で動かすので、
     # 基準電位が連続していることの価値が大きい。**
     # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
-    _antenna_keepout(board, half)
     _pour(board, net("GND"), GND_POUR_LAYERS, pcb_w, pcb_h)
 
     # **未配線のまま pcb/unrouted/ に出す。**

@@ -70,6 +70,7 @@ XIAO_FP = (ROOT / "pcb/lib/hhkb_split.pretty", "XIAO_nRF52840")
 
 FFC_FP = ("Connector_FFC-FPC", "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal")
 CAP_FP = ("Capacitor_SMD", "C_0805_2012Metric")
+BULK_FP = ("Capacitor_SMD", "C_1206_3216Metric")   # 100µF（C15008）
 MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")
 
 
@@ -135,6 +136,25 @@ def build():
     c.SetValue("0.1uF")
     board.Add(c)
     c.Flip(c.GetPosition(), False)
+
+    # **バルク（裏面）。2026-08-14 に主基板から移した**（open-gaps #41）。
+    #
+    # 守る相手は XIAO が µs 級の無線送信で引く電流変動
+    # （electrical-design.md 1-5）。主基板に置くと FFC 100mm の
+    # インダクタンスの外側から供給することになり、間に合わない。
+    #
+    # **x は XIAO のパッド列（原点から ±7.62）の内側に収める。**
+    # 一度 7.62 ちょうどに置いて、パッドと 0.146mm まで寄り
+    # （規則 0.2）、コートヤードにも THT が 2 本入って DRC 3 件を
+    # 出した（2026-08-14）。パッドは幅 1.7 なので列は ±6.77..8.47。
+    # 1206 のコートヤード 3.5mm を中心 4.5 に置くと 2.75..6.25 で、
+    # 列の手前 0.52mm で止まる。y は C_DB と同じ帯（XIAO の下・裏面）。
+    b_ = _load(KICAD_FP / f"{BULK_FP[0]}.pretty", BULK_FP[1])
+    b_.SetPosition(to_kicad(4.5, 11.0))
+    b_.SetReference("C_BULK")
+    b_.SetValue("100uF")
+    board.Add(b_)
+    b_.Flip(b_.GetPosition(), False)
 
     # 取付穴（ケースのボスと同じ位置）
     for i, (mx, my) in enumerate(DB_BOSS_POS, start=1):
@@ -373,19 +393,21 @@ def _route(board):
             out = pcbnew.VECTOR2I(pos.x, pos.y + pcbnew.FromMM(2.0))
             _track(board, pos, out, pcbnew.B_Cu, pad.GetNet())
 
-    # パスコン。**GND 側はベタで受けるので配線しない。**
+    # パスコンとバルク。**GND 側はベタで受けるので配線しない。**
     # 両方を配線すると、GND の枝が基板を横断して他のネットと交差した。
-    for pad in c.Pads():
-        n = pad.GetNetname()
-        if n == "GND" or n not in xiao:
-            continue
-        near = min(xiao[n], key=lambda p: (p.GetPosition() - pad.GetPosition()).EuclideanNorm())
-        pa, pb = pad.GetPosition(), near.GetPosition()
-        # **縦から曲げる。**横から曲げると、パッド列に沿って降りる途中で
-        # 別の（ネットの無い）パッドを貫く。5V のパッドを貫いて短絡していた。
-        corner = pcbnew.VECTOR2I(pa.x, pb.y)
-        _track(board, pa, corner, pcbnew.B_Cu, pad.GetNet())
-        _track(board, corner, pb, pcbnew.B_Cu, pad.GetNet())
+    for fp in (c, board.FindFootprintByReference("C_BULK")):
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if n == "GND" or n not in xiao:
+                continue
+            near = min(xiao[n],
+                       key=lambda p: (p.GetPosition() - pad.GetPosition()).EuclideanNorm())
+            pa, pb = pad.GetPosition(), near.GetPosition()
+            # **縦から曲げる。**横から曲げると、パッド列に沿って降りる途中で
+            # 別の（ネットの無い）パッドを貫く。5V のパッドを貫いて短絡していた。
+            corner = pcbnew.VECTOR2I(pa.x, pb.y)
+            _track(board, pa, corner, pcbnew.B_Cu, pad.GetNet())
+            _track(board, corner, pb, pcbnew.B_Cu, pad.GetNet())
 
 
 def main():

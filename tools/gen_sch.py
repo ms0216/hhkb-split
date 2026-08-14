@@ -48,7 +48,10 @@ import pinmap                                                    # noqa: E402
 from circuit import (daughterboard_netlist, netlist)             # noqa: E402
 
 OUT = ROOT / "pcb"
-KICAD_CLI = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+# **場所の定義は pcb_parts に一本化してある**（KICAD_CLI で差し替え可能）。
+# ここに固定パスを持っていたせいで、KiCad の無い環境で
+# test_schematic の fixture が FileNotFoundError で落ちていた。
+from pcb_parts import KICAD_CLI                                  # noqa: E402,F401
 
 # KiCad 10 が書き出す書式版。template/*.kicad_sch から読み取った。
 # KiCad 10.0.5 が自分で保存したファイルの値に合わせてある
@@ -95,9 +98,11 @@ MARGIN = 38.1
 GROUPS = [
     ("電源",       lambda ref, kind: kind in ("battery_land", "wire_land",
                                               "schottky", "res_1M")
-                                     or ref == "C_BULK"),
+                                     ),
     ("シフトレジスタ", lambda ref, kind: kind == "74LVC595" or ref.startswith("C_U")),
-    ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840" or ref == "C_DB"),
+    # **C_BULK はここ。**守る相手が XIAO なので子基板にいる（open-gaps #41）。
+    ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840"
+                                     or ref in ("C_DB", "C_BULK")),
     ("ケーブル",   lambda ref, kind: kind == "ffc_12p"),
     ("マトリクス", lambda ref, kind: kind in ("keyswitch", "diode")),
 ]
@@ -456,14 +461,14 @@ def build(parts, project):
     WIRE_LAYOUT = {
         "電源": {
             "BT1_+": (0, 0), "SW_PWR_1": (0, 1), "BT1_-": (0, 2),
-            "SW_PWR_2": (1, 0), "D_PWR": (1, 1), "C_BULK": (1, 2),
+            "SW_PWR_2": (1, 0), "D_PWR": (1, 1),
             "R_HI": (2, 0), "R_LO": (2, 1),
         },
         "シフトレジスタ": {
             "U1": (0, 0), "U2": (0, 1), "C_U1": (0, 2), "C_U2": (0, 3),
         },
         "マイコン": {
-            "U_MCU": (0, 0), "C_DB": (0, 1),
+            "U_MCU": (0, 0), "C_DB": (0, 1), "C_BULK": (0, 2),
         },
         "ケーブル": {
             "J_DB": (0, 0), "J_MAIN": (0, 0),

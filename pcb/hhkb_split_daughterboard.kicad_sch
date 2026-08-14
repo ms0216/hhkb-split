@@ -3,7 +3,7 @@
 	(generator "hhkb_split")
 	(generator_version "10.0")
 	(uuid "569e6ce2-5cbf-5b99-8a67-ce450b40985c")
-	(paper "User" 234.95 411.48)
+	(paper "User" 295.91 411.48)
 	(title_block
 		(title "hhkb_split_daughterboard")
 		(comment 1 "tools/gen_sch.py が circuit.py から自動生成。手で編集しない")
@@ -20,6 +20,37 @@
 			(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
 			(property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
 			(symbol "cap_100n_1_1"
+				(rectangle
+					(start -6.35 10.16)
+					(end 6.35 -10.16)
+					(stroke (width 0.254) (type default))
+					(fill (type background))
+				)
+				(pin passive line
+					(at -11.43 2.54 0)
+					(length 5.08)
+					(name "1" (effects (font (size 1.0 1.0))))
+					(number "1" (effects (font (size 1.0 1.0))))
+				)
+				(pin passive line
+					(at -11.43 -2.54 0)
+					(length 5.08)
+					(name "2" (effects (font (size 1.0 1.0))))
+					(number "2" (effects (font (size 1.0 1.0))))
+				)
+			)
+		)
+		(symbol "hhkb_split_daughterboard:cap_100u"
+			(pin_numbers (hide no))
+			(pin_names (offset 1.016))
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "U" (at 0 11.43 0) (effects (font (size 1.27 1.27))))
+			(property "Value" "cap_100u" (at 0 -11.43 0) (effects (font (size 1.27 1.27))))
+			(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+			(property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+			(symbol "cap_100u_1_1"
 				(rectangle
 					(start -6.35 10.16)
 					(end 6.35 -10.16)
@@ -404,7 +435,7 @@
 		(uuid "4d4eacd5-c93e-5ee2-b032-78f2ef1f8e88")
 	)
 	(wire
-		(pts (xy 58.42 43.18) (xy 124.46 43.18))
+		(pts (xy 58.42 43.18) (xy 185.42 43.18))
 		(stroke (width 0.508) (type default))
 		(uuid "4043d0d1-9169-55dc-8f2b-84add918fe8a")
 	)
@@ -415,7 +446,7 @@
 		(uuid "1d877e86-3f29-57a7-a765-5e1572f50fd3")
 	)
 	(wire
-		(pts (xy 58.42 175.26) (xy 124.46 175.26))
+		(pts (xy 58.42 175.26) (xy 185.42 175.26))
 		(stroke (width 0.508) (type default))
 		(uuid "90130ae7-684e-5137-b1ab-81cf681d9970")
 	)
@@ -473,6 +504,24 @@
 		(uuid "374cc5a1-b53e-58e1-9242-bd1a6267af23")
 	)
 	(wire
+		(pts (xy 185.42 96.52) (xy 180.34 96.52))
+		(stroke (width 0) (type default))
+		(uuid "61167514-1a10-5bef-99f4-e94788a4705a")
+	)
+	(wire
+		(pts (xy 180.34 96.52) (xy 180.34 43.18))
+		(stroke (width 0) (type default))
+		(uuid "814b67f9-4907-5658-9dc9-7905eee2cd8f")
+	)
+	(wire
+		(pts (xy 180.34 43.18) (xy 185.42 43.18))
+		(stroke (width 0) (type default))
+		(uuid "2f67c21a-4e62-5ffe-aea8-468668425e33")
+	)
+	(junction (at 185.42 43.18) (diameter 1.016) (color 0 0 0 0)
+		(uuid "87fe50d4-97e5-5e43-8188-68d4b934d884")
+	)
+	(wire
 		(pts (xy 63.50 160.02) (xy 58.42 160.02))
 		(stroke (width 0) (type default))
 		(uuid "20661e19-faff-5790-96cd-a36b9f3f1bbe")
@@ -507,6 +556,24 @@
 	)
 	(junction (at 124.46 175.26) (diameter 1.016) (color 0 0 0 0)
 		(uuid "9fc77e1c-1dc1-5391-b5ae-463662295c2f")
+	)
+	(wire
+		(pts (xy 185.42 101.60) (xy 180.34 101.60))
+		(stroke (width 0) (type default))
+		(uuid "a1f2d015-e4ce-57f6-9c85-66562ad07208")
+	)
+	(wire
+		(pts (xy 180.34 101.60) (xy 180.34 175.26))
+		(stroke (width 0) (type default))
+		(uuid "044a34f8-c593-5cc1-934a-0ca784e9f74b")
+	)
+	(wire
+		(pts (xy 180.34 175.26) (xy 185.42 175.26))
+		(stroke (width 0) (type default))
+		(uuid "4484ee69-eac7-54e5-b21d-580a58faff2c")
+	)
+	(junction (at 185.42 175.26) (diameter 1.016) (color 0 0 0 0)
+		(uuid "c8aa6859-213a-50a1-bbd1-023c775ae70a")
 	)
 	(wire
 		(pts (xy 63.50 246.38) (xy 58.42 246.38))
@@ -611,6 +678,28 @@
 			(project "hhkb_split_daughterboard"
 				(path "/569e6ce2-5cbf-5b99-8a67-ce450b40985c"
 					(reference "C_DB")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_daughterboard:cap_100u")
+		(at 196.85 99.06 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f3d85bc0-8567-5d74-95a4-113097c31482")
+		(property "Reference" "C_BULK" (at 196.85 87.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "cap_100u" (at 196.85 110.49 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "ebfbdfc0-3943-58a1-ab14-72b830fe37f4"))
+		(pin "2" (uuid "6effa9ce-2be9-5453-b75d-142951c1eb91"))
+		(instances
+			(project "hhkb_split_daughterboard"
+				(path "/569e6ce2-5cbf-5b99-8a67-ce450b40985c"
+					(reference "C_BULK")
 					(unit 1)
 				)
 			)

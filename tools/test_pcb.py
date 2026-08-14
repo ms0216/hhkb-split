@@ -886,58 +886,54 @@ def test_the_declared_socket_envelope_contains_the_real_footprint(name):
         f"{SOCK_X_HI - worst_x_hi:.2f}mm も余っている")
 
 
-@pytest.mark.parametrize("name", NAMES)
-def test_the_antenna_keepout_is_actually_empty(name):
-    """アンテナの禁止域に、銅が本当に 1 つも無いこと。
+def test_the_antenna_clears_the_main_board():
+    """**アンテナが本体基板と平面で重ならないこと。**（2026-08-14）
 
-    **設定しただけでは効いていない。**Freerouting 2.3.0 は DSN に書いた
-    禁止域を守らない（4 層とも正しく出ていることは確認済み）。宣言を
-    信じると、実際は配線が通っているのに「対策した」と思い込む。
+    ここは open-gaps #23——発注を止めている門——の中身そのもの。
 
-    右は入れられなかった（`ANTENNA_KEEPOUT["right"] is None`）。
-    裏面を列のバス 9 本が横断しており、子基板の x を 0.5mm 刻みで
-    全部試しても最良で 9 本掛かる。理由は interface.py に書いた。
+    以前は「アンテナの真上の銅を抜く」禁止域（30x15mm）を左基板に
+    開けていた。**測ったらアンテナを覆っていなかった。**
+
+        禁止域        y 30.60 .. 45.60
+        本体基板の後端 y 48.70
+        アンテナ      y 49.50 .. 53.00   ← 禁止域の 3.90mm 奥
+
+    アンテナは本体基板の後端より**奥**にいる（`XIAO_OVERHANG` 1.8mm を
+    入れた効果）。平面的に基板の外なので、地板に覆われていない。
+    禁止域は的を外したまま 450mm² の銅を捨て、左基板の配線を
+    圧迫していた（実害: 電源ブロックが置けず DRC 5 件）。
+
+    **前の検査は「禁止域の中が空か」しか見ておらず、位置が合っているかを
+    誰も確かめていなかった。**`interface.py` には
+    `test_the_antenna_keepout_actually_covers_the_antenna` が照合すると
+    書いてあったが、**その検査は存在しなかった。**これはその穴を塞ぐもの。
+
+    ⚠️ **余裕は 0.80mm しかない。**製造公差と組み立てのばらつきで
+    簡単に入れ替わる薄さなので、ここが縮んだら気づけるようにしておく。
+    足りるかどうかは **#23 の手 0（アルミ箔で RSSI・¥0・1 日）** で測る。
     """
-    from interface import ANTENNA_KEEPOUT
+    import interface as I
+    import gen_case as G
+    from gen_plate import plate_positions, halves
 
-    spec = ANTENNA_KEEPOUT[name]
-    if spec is None:
-        return
-    cx, cy, w, h = spec
-    # レイアウト座標 → KiCad 座標（Y 下向き・原点 ORIGIN）
-    x_lo, x_hi = ORIGIN[0] + cx - w / 2, ORIGIN[0] + cx + w / 2
-    y_lo, y_hi = ORIGIN[1] - cy - h / 2, ORIGIN[1] - cy + h / 2
-    text = (PCB / f"hhkb_split_{name}.kicad_pcb").read_text()
-
-    # **境界ちょうどは中ではない。**ベタは禁止域を避けて回り込むので、
-    # その輪郭の頂点が縁の上に載る。それを「銅がある」と数えると
-    # 正しく効いているのに落ちる（実際に落ちた）。少し内側で見る。
-    EPS = 0.01
-
-    def inside(x, y):
-        return (x_lo + EPS <= x <= x_hi - EPS
-                and y_lo + EPS <= y <= y_hi - EPS)
-
-    bad = []
-    for seg in re.findall(r"\n\t\(segment[\s\S]*?\n\t\)", text):
-        a = re.search(r"\(start ([-\d.]+) ([-\d.]+)\)", seg)
-        b = re.search(r"\(end ([-\d.]+) ([-\d.]+)\)", seg)
-        lay = re.search(r'\(layer "([^"]+)"\)', seg)
-        if a and b and (inside(float(a.group(1)), float(a.group(2)))
-                        or inside(float(b.group(1)), float(b.group(2)))):
-            bad.append(f"配線({lay.group(1)})")
-    for via in re.findall(r"\n\t\(via[\s\S]*?\n\t\)", text):
-        a = re.search(r"\(at ([-\d.]+) ([-\d.]+)\)", via)
-        if a and inside(float(a.group(1)), float(a.group(2))):
-            bad.append("ビア")
-    n_fill = 0
-    for zp in re.findall(r"\(filled_polygon[\s\S]*?\n\t\t\)", text):
-        for xs, ys in re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", zp):
-            if inside(float(xs), float(ys)):
-                n_fill += 1
-    assert not bad and n_fill == 0, (
-        f"{name}: アンテナの禁止域に銅がある。"
-        f"{bad[:5]}{'' if not bad else ' ほか'} / ベタの頂点 {n_fill} 点")
+    H = halves()
+    for half in NAMES:
+        if half == "daughterboard":
+            continue
+        _, (_w, h) = plate_positions(H[half])
+        # 子基板の中心 y。**gen_case が実際に使っている式をそのまま使う**
+        # （ここで別の式を書くと、片方だけ直って静かにずれる）。
+        db_y = (h / 2 + G.BUMP_DEPTH) - G.WALL - G.DB_FROM_REAR - G.DB_D / 2
+        lo, hi = I.antenna_y_span(G.DB_D / 2)
+        antenna_front = db_y + lo
+        pcb_rear = h / 2 - I.PCB_INSET_Y
+        gap = antenna_front - pcb_rear
+        assert gap > 0, (
+            f"{half}: **アンテナが本体基板の下に入っている**"
+            f"（アンテナ前端 y={antenna_front:.2f} < 基板後端 y={pcb_rear:.2f}・"
+            f"{-gap:.2f}mm 潜っている）。\n"
+            "両面 GND ベタが真上に来るので 2.4GHz が塞がれる。"
+            "open-gaps #23 を読むこと")
 
 
 @pytest.mark.parametrize("name", NAMES)

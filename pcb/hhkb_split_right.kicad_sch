@@ -180,37 +180,6 @@
 				)
 			)
 		)
-		(symbol "hhkb_split_right:cap_100u"
-			(pin_numbers (hide no))
-			(pin_names (offset 1.016))
-			(exclude_from_sim no)
-			(in_bom yes)
-			(on_board yes)
-			(property "Reference" "U" (at 0 11.43 0) (effects (font (size 1.27 1.27))))
-			(property "Value" "cap_100u" (at 0 -11.43 0) (effects (font (size 1.27 1.27))))
-			(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
-			(property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
-			(symbol "cap_100u_1_1"
-				(rectangle
-					(start -6.35 10.16)
-					(end 6.35 -10.16)
-					(stroke (width 0.254) (type default))
-					(fill (type background))
-				)
-				(pin passive line
-					(at -11.43 2.54 0)
-					(length 5.08)
-					(name "1" (effects (font (size 1.0 1.0))))
-					(number "1" (effects (font (size 1.0 1.0))))
-				)
-				(pin passive line
-					(at -11.43 -2.54 0)
-					(length 5.08)
-					(name "2" (effects (font (size 1.0 1.0))))
-					(number "2" (effects (font (size 1.0 1.0))))
-				)
-			)
-		)
 		(symbol "hhkb_split_right:diode"
 			(pin_numbers (hide no))
 			(pin_names (offset 1.016))
@@ -476,6 +445,13 @@
 		(at 63.50 101.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d1fe5b21-1249-53c3-ac6d-9b416c5eeaaa")
+	)
+	(global_label
+		"V3V3"
+		(shape input)
+		(at 124.46 99.06 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "6572b620-5c48-5299-93bf-b7c6a325176a")
 	)
 	(global_label
 		"VBATT_SW"
@@ -1599,17 +1575,6 @@
 		(uuid "d5ef714a-59b5-578a-a02c-b75e5ade0b35")
 	)
 	(wire
-		(pts (xy 119.38 43.18) (xy 185.42 43.18))
-		(stroke (width 0.508) (type default))
-		(uuid "3ff022c3-9a1f-5a22-8b69-564c459ca805")
-	)
-	(label
-		"V3V3"
-		(at 119.38 43.18 0)
-		(effects (font (size 1.0 1.0)))
-		(uuid "d409a545-87da-5250-a17e-538a4b90217e")
-	)
-	(wire
 		(pts (xy 119.38 149.86) (xy 185.42 149.86))
 		(stroke (width 0.508) (type default))
 		(uuid "48429853-a339-5b91-a14a-7bf386de4ae1")
@@ -1729,42 +1694,6 @@
 		(uuid "4c3b69c0-d8b6-5205-838d-1f948f5d5c07")
 	)
 	(wire
-		(pts (xy 124.46 99.06) (xy 119.38 99.06))
-		(stroke (width 0) (type default))
-		(uuid "b9c1435c-751a-578f-ae07-48ef84940714")
-	)
-	(wire
-		(pts (xy 119.38 99.06) (xy 119.38 43.18))
-		(stroke (width 0) (type default))
-		(uuid "01116a58-693c-5fc7-b0d3-9f0b1318b374")
-	)
-	(wire
-		(pts (xy 119.38 43.18) (xy 124.46 43.18))
-		(stroke (width 0) (type default))
-		(uuid "b1dda540-c827-55d4-9398-be664b5aa145")
-	)
-	(junction (at 124.46 43.18) (diameter 1.016) (color 0 0 0 0)
-		(uuid "7dabcbef-2d53-5d40-bd5a-166d7ff0df19")
-	)
-	(wire
-		(pts (xy 185.42 99.06) (xy 180.34 99.06))
-		(stroke (width 0) (type default))
-		(uuid "c829dee6-3dcb-55a9-98e8-2c05a65a2c60")
-	)
-	(wire
-		(pts (xy 180.34 99.06) (xy 180.34 43.18))
-		(stroke (width 0) (type default))
-		(uuid "c01727a0-953d-503b-8cf7-8fe7b63b6364")
-	)
-	(wire
-		(pts (xy 180.34 43.18) (xy 185.42 43.18))
-		(stroke (width 0) (type default))
-		(uuid "255a8d93-c49d-5ecb-8fff-591b515c4590")
-	)
-	(junction (at 185.42 43.18) (diameter 1.016) (color 0 0 0 0)
-		(uuid "2ff646e7-bc90-51aa-955d-715c5490849f")
-	)
-	(wire
 		(pts (xy 185.42 68.58) (xy 180.34 68.58))
 		(stroke (width 0) (type default))
 		(uuid "52df678d-de4f-52b4-9393-6443d559f808")
@@ -1781,24 +1710,6 @@
 	)
 	(junction (at 185.42 149.86) (diameter 1.016) (color 0 0 0 0)
 		(uuid "07a56e3a-3ebe-5688-89cd-bc19cd2aa649")
-	)
-	(wire
-		(pts (xy 185.42 104.14) (xy 175.26 104.14))
-		(stroke (width 0) (type default))
-		(uuid "8c283e4f-06d7-5516-a3c7-5fa705c92e3e")
-	)
-	(wire
-		(pts (xy 175.26 104.14) (xy 175.26 149.86))
-		(stroke (width 0) (type default))
-		(uuid "c43e1460-d48b-5980-80ea-76286b5d4460")
-	)
-	(wire
-		(pts (xy 175.26 149.86) (xy 185.42 149.86))
-		(stroke (width 0) (type default))
-		(uuid "5255e9d2-f6a0-56d4-8836-72cd9d935d21")
-	)
-	(junction (at 185.42 149.86) (diameter 1.016) (color 0 0 0 0)
-		(uuid "c33e77f5-1bca-5e0f-aaf1-ef07f6236a91")
 	)
 	(wire
 		(pts (xy 124.46 137.16) (xy 119.38 137.16))
@@ -2196,28 +2107,6 @@
 			(project "hhkb_split_right"
 				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
 					(reference "D_PWR")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "hhkb_split_right:cap_100u")
-		(at 196.85 101.60 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "306e6f49-f60b-58de-8e0f-a8f29d7a28e6")
-		(property "Reference" "C_BULK" (at 196.85 90.17 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "cap_100u" (at 196.85 113.03 0) (effects (font (size 1.27 1.27))))
-		(pin "1" (uuid "3b4f2f24-60bc-5ada-9cb1-fe2494650175"))
-		(pin "2" (uuid "ff86a1f4-fd18-540a-b417-19f1f6ceed7c"))
-		(instances
-			(project "hhkb_split_right"
-				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
-					(reference "C_BULK")
 					(unit 1)
 				)
 			)
