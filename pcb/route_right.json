@@ -1,9 +1,9 @@
 {
   "board": "hhkb_split_right.kicad_pcb",
   "unrouted": "hhkb_split_right.kicad_pcb",
-  "unrouted_fingerprint": "8897c65826db38334d8fecc3df4b4382dd807014cd954bb9434d7a52324c71eb",
+  "unrouted_fingerprint": "44e6f301a7db74472e5d7b890187c78734423e0be9c844fcfd1af9fd964a752f",
   "freerouting": "freerouting-2.3.0.jar",
   "passes": 300,
   "attempt": 1,
-  "unconnected": 0
+  "unconnected": 1
 }

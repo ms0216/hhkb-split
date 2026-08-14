@@ -95,7 +95,7 @@ MARGIN = 38.1
 GROUPS = [
     ("電源",       lambda ref, kind: kind in ("battery_land", "wire_land",
                                               "schottky", "res_1M")
-                                     or ref in ("C_BULK", "C_RAIL")),
+                                     or ref == "C_BULK"),
     ("シフトレジスタ", lambda ref, kind: kind == "74LVC595" or ref.startswith("C_U")),
     ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840" or ref == "C_DB"),
     ("ケーブル",   lambda ref, kind: kind == "ffc_12p"),
@@ -457,7 +457,7 @@ def build(parts, project):
         "電源": {
             "BT1_+": (0, 0), "SW_PWR_1": (0, 1), "BT1_-": (0, 2),
             "SW_PWR_2": (1, 0), "D_PWR": (1, 1), "C_BULK": (1, 2),
-            "C_RAIL": (2, 0), "R_HI": (2, 1), "R_LO": (2, 2),
+            "R_HI": (2, 0), "R_LO": (2, 1),
         },
         "シフトレジスタ": {
             "U1": (0, 0), "U2": (0, 1), "C_U1": (0, 2), "C_U2": (0, 3),
@@ -568,7 +568,7 @@ def build(parts, project):
             # 結ぶ最短の L 字（水平 → 垂直）で足りる。**以前はここで
             # シート左端まで回り込む経路を使っていたが、それは「部品が
             # 離れている」ことを前提にした設計で、隣どうしに並べた今は
-            # 不要な迂回でしかない（実測：C_RAIL の隣に R_HI・R_LO を
+            # 不要な迂回でしかない（実測：当時の C_RAIL の隣に R_HI・R_LO を
             # 置いても、この迂回経路のせいで VBATT_SENSE の線が
             # 見出しの外まで伸びていた）。
             #
