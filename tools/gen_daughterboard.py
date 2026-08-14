@@ -74,21 +74,66 @@ MOUNT_FP = ("MountingHole", "MountingHole_2.2mm_M2")
 # 部品の向き（度）。**信号の流れに合わせて入口と出口を向ける。**
 # 書かないものは 0°。
 POWER_ROT = {
-    # R_LO は SENSE が右・GND が左に来ていて、R_HI の SENSE（左端）から
-    # 遠かった。180° 回すと SENSE 同士が隣り合う（2026-08-14・利用者の図）。
-    "R_LO": 180,
+    # **縦向きに置く**（2026-08-14・利用者「R_LO/HI, D_PWR を横向きに配置
+    # するからそうなるのでは？縦向きに配置してみて」）。
+    #
+    # 横置きだと長辺がそのまま x を食う。一列に並べると
+    #   R_LO 3.45 + R_HI 3.45 + SW_PWR 3.09 + D_PWR 4.79 = 14.78mm
+    # だが、**XIAO の THT パッド列（±6.77..8.47）が両面を貫く**ので
+    # 使えるのは中央の 13.54mm しかなく、1.24mm 足りなかった
+    # （R_LO が D0 に乗って短絡・PTH 侵入・マスクブリッジの 3 件）。
+    #
+    # 縦向きにすると x の占有が **3.45 → 1.99mm**（1206 の D_PWR は
+    # 4.79 → 2.39）。3 部品で 4.9mm 空くので中央に収まる。
+    #
+    # 90° と 270° の違いは端子の向き。信号は左（SENSE）→右（VBATT_SW）
+    # へ流れるので、鎖の順に入口と出口が向くほうを選ぶ。
+    # **ここから下の角度は、利用者が KiCad で直した基板から読み取った値**
+    # （2026-08-14）。総当たりで解けなかった配置を利用者が手で解いた。
+    # `pcb/hhkb_split_daughterboard.kicad_pcb` が出所。
+    #
+    #   R_LO   -90°  … VBATT_SENSE が右（R_HI 側）、GND が左
+    #   R_HI    90°  … VBATT_SW が左、VBATT_SENSE が右で R_LO と隣り合う
+    #   SW_PWR 180°  … 1 パッドのランドなので向きは配線の都合
+    #   D_PWR  180°  … 横置き。VBATT_SW が左、V3V3 が右（C_BULK 側）
+    #
+    # ⚠️ **ここに書くのは Flip する前の角度。**裏面部品は `fp.Flip()` を
+    # 通るので、**基板上の見かけの角度とは 180° ずれる**（`SetOrientation`
+    # → `Flip` の順）。実測して合わせること: 0 と書くと基板では 180° に
+    # なる。R_LO/R_HI/C_* の ±90 は Flip で符号が入れ替わるだけなので
+    # 見かけと一致する。
+    "R_LO": -90,
+    "R_HI": 90,
+    "SW_PWR": 0,      # 基板上では 180°
+    "D_PWR": 0,       # 基板上では 180°
 }
 
+# **座標は利用者が KiCad で直した基板から読み取った**（2026-08-14）。
+#
+# 電源の鎖を「盤面の奥に一列 → 中央へ降りる」形に置く案は利用者の図から。
+# **総当たりでは解けなかった**（一列・コンデンサ・BT1 が同じ帯を奪い合い、
+# 私の探索は解ゼロを返した）。利用者が手で解いた結果がこれで、出所は
+# `pcb/hhkb_split_daughterboard.kicad_pcb`。
+#
+# ⚠️ **この値を推測で動かさないこと。**動かすなら、KiCad で直して
+# そのファイルから読み直す。私が総当たりで出した座標は、BT1 を固定扱いに
+# したり一列の間隔を 0.35mm 一律にしたりと、**制約の立て方そのものを
+# 間違えて何度も解ゼロを出した**（利用者の指摘で判明）。
+#
+# 並び（CAD 座標・x は右が正、y は奥が正、原点は板の中心）:
+#
+#   奥の分圧   y=13.59 … R_LO(-5.40) → R_HI(-3.00)。板端から 0.41mm 下げた
+#   スイッチ           … SW_PWR(-0.50, 12.00)。一列から外して手前へ
+#   整流               … D_PWR(3.50, 7.50) 横置き。**C_BULK の真下**
+#   3V3 の隣           … C_BULK(3.00, 10.97) → C_DB(5.40, 10.50)
+#
+# V3V3 は D_PWR → C_BULK → C_DB → XIAO の 3V3 と、ほぼ一直線に並ぶ。
 POWER_PLACE = {                 # 参照名 → (x, y)
-    "R_HI":     (-4.60, 14.40),   # 分圧の上（VBATT_SW → SENSE）。D0 の隣
-    "R_LO":     (-3.25, 12.10),   # 分圧の下（SENSE → GND）
-    "D_PWR":    ( 4.05, 14.20),   # VBATT_SW → V3V3。3V3 パッド側
-    # ⚠️ **中央の縦帯（x ±0.9）を空けておく。**GND のスティッチングビアが
-    # そこを使う。x=0 に置いて短絡 3 件＋クリアランス 1 件を出した。
-    # VBATT_SW の枝が 10mm になるが、**DC の µA なので害が無い**
-    # （速い信号や大電流ならこの長さは許せない）。
-    "SW_PWR":   (-2.75,  6.80),   # 電池から来る線を受ける
-    "BT1":      ( 4.20,  5.00),   # 電池の −（GND）。ベタで受ける
+    "R_LO":     (-5.40, 13.59),   # 分圧の下（SENSE → GND）
+    "R_HI":     (-3.00, 13.59),   # 分圧の上（VBATT_SW → SENSE）
+    "SW_PWR":   (-0.50, 12.00),   # 電池から来る線を受けるランド
+    "D_PWR":    ( 3.50,  7.50),   # VBATT_SW → V3V3。C_BULK の真下
+    "BT1":      (-0.50,  3.50),   # 電池の −（GND）。ベタで受ける
 }
 
 
@@ -196,7 +241,18 @@ def build():
     # コートヤードにも THT が 2 本入って DRC 3 件を出した。
     # パッドは幅 1.7 なので列は ±6.77..8.47。
     c = _load(KICAD_FP / f"{CAP_FP[0]}.pretty", CAP_FP[1])
-    c.SetPosition(to_kicad(5.0, 11.0))      # 0805（2.05mm）→ 3.98..6.02
+    # **3V3 パッドの隣を取る**（2026-08-14）。ここが一等地で、他の部品より
+    # 先に決める。V3V3/GND 両パッドへの**往復ループ長**で総当たりし
+    # 10.17 → **4.49mm**（効くのは距離ではなくループ長）。
+    c.SetPosition(to_kicad(5.40, 10.50))
+    # **縦置き・V3V3 が手前／GND が奥**（2026-08-14・利用者「C_DB を
+    # 180 度回転しては？」）。
+    #
+    # ⚠️ 一度 -90° にして「向きは合っている」と報告したが**逆だった**。
+    # 実測すると -90° では V3V3 が奥(+0.95)・GND が手前(-0.95) で、
+    # XIAO の 3V3(9.59 手前)／GND(12.13 奥) と上下が逆。**2 本が交差して
+    # ループが伸びる。**90° にすると C_BULK と同じ並びになる。
+    c.SetOrientationDegrees(90)
     c.SetReference("C_DB")
     c.SetValue("0.1uF")
     board.Add(c)
@@ -207,7 +263,10 @@ def build():
     # （electrical-design.md 1-5）。主基板に置くと FFC 100mm の
     # インダクタンスの外側から供給することになり、間に合わない。
     b_ = _load(KICAD_FP / f"{BULK_FP[0]}.pretty", BULK_FP[1])
-    b_.SetPosition(to_kicad(0, 11.0))
+    # **C_DB の真横**（2026-08-14・利用者が KiCad で確定）。V3V3 パッドが
+    # C_DB の V3V3 と同じ高さに揃い、2 つのコンデンサが 3V3 の隣に並ぶ。
+    # 出所は POWER_PLACE と同じく `pcb/hhkb_split_daughterboard.kicad_pcb`。
+    b_.SetPosition(to_kicad(3.00, 10.97))
     # **縦置き**（2026-08-14・利用者の指摘「横向きに置く理由は？」）。
     # 1206 のコートヤードは 3.5x2.1mm。縦にすると x 方向の占有が
     # 3.5 → 2.1mm になり、**1.4mm を左右に返せる**。
@@ -293,21 +352,224 @@ def build():
     # 22.4mm のところを **39.1mm**（75% 増）かけて盤面を斜めに横断し、
     # ROW3 は板の縁の外（x=-9.68）まで回り込んでいた。
     #
-    # レーンは**経路に選択の余地が無い**（下の docstring の順序が唯一解）。
-    # 主基板の行バスと同じ理屈で、ここは自分で引くほうが良い。
-    # 一方、電源 5 点の配線は**選択の余地があり、手で書くと破綻した**
-    # （DRC 41 件）。そこは Freerouting に渡す。
+    # **手配線はやめた**（2026-08-14・利用者「手配線をやめてください」）。
     #
-    # ここで引いた線は DSN に `(type protect)` で乗り、自動配線器は
-    # これを避けて電源だけを解く。
-    _route(board)
+    # ここは長く `_route()` でレーンを手で引いていた。理屈は「レーンは
+    # 経路に選択の余地が無いので自分で引くほうが良い。引いた線は DSN に
+    # `(type protect)` で乗るので自動配線器は避ける」だった。
+    #
+    # ⚠️ **その前提が実装と食い違っていた。**protect にするのは
+    # `autoroute._strip_prewired` だが、対象は `PREWIRED = GND|SW\d+_D`
+    # だけで、**ROW/CS/SPI は protect にならず DSN に「未配線」として
+    # 残る。**Freerouting が同じネットをもう一度引き、**同じネットの
+    # 2 本の経路どうしが交差した**（2026-08-14 に実測: 交差 5 件のうち
+    # 左列 3 件が ROW2/ROW3/ROW4 の自分自身との交差）。
+    #
+    # 2026-08-14 まで気づかなかったのは、`autoroute.py` の
+    # `if __name__` がファイル中央にあり、**子基板の処理が NameError で
+    # 落ちて手配線のまま保存されていた**ため（同日に修正）。落下が
+    # 直った瞬間に二重配線が表に出た。
     _antenna_keepout(board)
     _add_power_netclasses(board)
+    _prewire_power(board)
 
     UNROUTED.mkdir(parents=True, exist_ok=True)
     path = UNROUTED / "hhkb_split_daughterboard.kicad_pcb"
     board.Save(str(path))
     return path, len(nets)
+
+
+def _prewire_power(board):
+    """電源のパッドどうしを、**パッドの座標から計算して**直線で繋ぐ。
+
+    **座標を書かない。**`POWER_PLACE` を動かせば配線も追随する。
+
+    ⚠️ **なぜ自動配線器に任せないか**（2026-08-14・利用者が絵で指摘）。
+    V3V3 は 4 つのパッドがほぼ一直線に並んでいるのに、Freerouting は
+    **8.37mm・6 セグメント**で斜めに蛇行していた。行バスと同じ理屈で、
+    **経路に選択の余地が無いものは自分で引く**（autoroute.py の冒頭に
+    「一直線にしたいなら DSN の設定ではなく自分で引く」と実測つきで
+    書いてある。`(autoroute_settings)` を足すと未配線が 1 → 66 に激増した）。
+
+    ⚠️ **GND パッドの引き出しも、ここが唯一の出所。**
+    2026-08-14 に手配線 `_route` を消したとき、この引き出しも一緒に
+    消えて **FFC の GND パッドが未配線になった**（ベタの上にあるだけでは
+    繋がらない。DRC の「Missing connection」1 件がこれだった）。
+
+    引いた線は `autoroute._strip_prewired` が `(type protect)` にして
+    DSN へ渡す。**PREWIRED に V3V3 を足してあるのが対**——足し忘れると
+    Freerouting が同じネットを二重に引く。
+    """
+    def cad(p):
+        return (pcbnew.ToMM(p.x) - ORIGIN[0], ORIGIN[1] - pcbnew.ToMM(p.y))
+
+    pads = {}
+    for fp in board.Footprints():
+        for pad in fp.Pads():
+            n = pad.GetNetname()
+            if n in ("V3V3", "GND"):
+                pads.setdefault(n, []).append((fp.GetReference(), pad))
+
+    # ---- V3V3 ----
+    #
+    # **上の群（D_PWR → C_BULK → C_DB → XIAO）だけ引く。**
+    #
+    # ⚠️ **FFC の 1 本（0.75, -9.15）は x 順の鎖に入れない。**混ぜると
+    # D_PWR(2.50) の左に入り、板を縦断する線が他のパッドを横切って
+    # DRC が 4 件出た（2026-08-14 に実測）。17mm 上がる経路は
+    # 「縦に降ろしてから横」の別扱いが要る——下の `_v3_from_ffc` がそれ。
+    v = [(cad(p.GetPosition()), ref, p) for ref, p in pads.get("V3V3", [])
+         if ref != "J_MAIN"]
+    v.sort(key=lambda t: t[0][0])           # x の小さい順＝流れの順
+    n_v3 = 0
+    for (a, _ra, pa), (b, _rb, pb) in zip(v, v[1:]):
+        # **L 字で繋ぐ。**y が完全に一致していれば横 1 本になる
+        # （`_track` は同じ点なら引かないので、余分な線は残らない）。
+        # 先に x を合わせてから y——縦に降ろす区間を右側（消費側）に
+        # 寄せると、左から来る他の枝と当たりにくい。
+        corner = pcbnew.VECTOR2I(pb.GetPosition().x, pa.GetPosition().y)
+        for s, e in ((pa.GetPosition(), corner), (corner, pb.GetPosition())):
+            if s != e:
+                _track(board, s, e, pcbnew.B_Cu, pa.GetNet())
+                n_v3 += 1
+
+    # ---- FFC の V3V3 を上の群へ繋ぐ ----
+    #
+    # **鎖とは別扱い。**FFC のパッド列（y=-9.15）から 17mm 上がるので、
+    # x 順に混ぜると板を縦断して他のパッドを横切る（上の ⚠️）。
+    #
+    # **通す隙間は、パッド列の右端の外側。**FFC の右端は CS(x=2.75) で、
+    # その右は基板の縁（x=+10.5）まで何も無い。だから
+    # 「① 列の下へ降りる → ② 右へ出る → ③ 上がる → ④ 左へ入る」で、
+    # 列とも上の群とも交差しない。②の y は列より下、④の y は D_PWR の
+    # 高さ。**座標は書かず、パッドから計算する**（POWER_PLACE を
+    # 動かせば追随する。これは `_prewire_power` 全体の約束）。
+    #
+    # ⚠️ **Freerouting より先に引くのが効く。**この線は
+    # `autoroute._strip_prewired` が `(type protect)` にして DSN へ渡すので、
+    # SPI_MOSI や ROW0 のほうが避けて通る。逆順だと通れない
+    # （実測: 配線後の板では SPI_MOSI が (1.25,-9.15)→(7.62,7.05) と
+    # この回廊を斜めに塞いでいた）。
+    ffc = next((p for ref, p in pads.get("V3V3", []) if ref == "J_MAIN"), None)
+    up = min(v, key=lambda t: t[0][0])[2] if v else None      # 上の群の左端
+    if ffc is not None and up is not None:
+        row_y = ffc.GetPosition().y
+        # 列のパッドのうち、いちばん右にあるものの外側へ回る。
+        right = max(q.GetPosition().x for fp in board.Footprints()
+                    if fp.GetReference() == "J_MAIN" for q in fp.Pads()
+                    if q.GetPosition().y == row_y)
+        # 列の外側の車線。**取り付けパッド（MP）の内側に収める。**
+        #
+        # ⚠️ 0.9mm 固定で書いたら、x=153.65 に出て **MP の左端 153.75 に
+        # 0.0414mm まで食い込んだ**（2026-08-14）。MP はネットを持たない
+        # 機構用のパッドなので「GND でも V3V3 でもない相手」で、
+        # クリアランスがそのまま効く。**列の右端しか見ていなかった。**
+        #
+        # 帯は上下からも挟まれていて逃げ場が無い（実測）。
+        #   上: GND ビアの縁 110.90 → V3V3 は 111.20 以下に置けない
+        #   下: MP の上端 111.30  → V3V3 は 111.00 以上に置けない
+        # **x で避けるしかない。**MP は x 153.75〜155.55 と 144.45〜146.25
+        # の 2 か所だけなので、その内側（列の右端 152.75 との隙間）を通す。
+        mp = [q for fp in board.Footprints()
+              if fp.GetReference() == "J_MAIN" for q in fp.Pads()
+              if q.GetNumber() == "MP"]
+        lane = right + pcbnew.FromMM(0.9)
+        for q in mp:
+            edge = q.GetPosition().x - q.GetSize().x // 2
+            if edge <= right:
+                continue                          # 列より左の MP は無関係
+            limit = edge - pcbnew.FromMM(TRACK_W / 2 + 0.2)
+            lane = min(lane, limit)
+        # ⚠️ **「列の下」の帯は GND のビアが先に使う。**
+        #
+        # 1.1mm 固定で書いたら、`gnd_fanout` が FFC の GND パッドから
+        # 逃がしたビア（y=110.60・縁 110.30）と重なって**短絡した**
+        # （2026-08-14。V3V3 と GND、GND と ROW0 の 2 件）。
+        # `ELEC_REF` に `J_MAIN` を足してファンアウトが効き始めた
+        # 瞬間に出たので、**それまでは「空いている」ように見えていた。**
+        #
+        # **数字を書かずに、実際に立つビアの位置から決める。**
+        # `spots` はパッドだけを見て決まる（配線に依存しない）ので、
+        # まだビアが無いこの時点でも**同じ答えが得られる。**
+        import gnd_fanout                         # 関数内＝循環 import 回避
+        need = pcbnew.FromMM(TRACK_W / 2 + 0.2)   # 半幅 + クリアランス
+        floor = row_y + pcbnew.FromMM(1.1)
+        for _pad, (vx, vy) in gnd_fanout.spots(board):
+            vy = pcbnew.FromMM(vy)
+            if vy <= row_y:
+                continue                          # 列より上のビアは無関係
+            edge = vy + pcbnew.FromMM(gnd_fanout.VIA_DIAMETER_MM / 2)
+            floor = max(floor, edge + need)
+        below = floor                             # 列より下（y は下が正）
+        pts = [pcbnew.VECTOR2I(ffc.GetPosition().x, below),
+               pcbnew.VECTOR2I(lane, below),
+               pcbnew.VECTOR2I(lane, up.GetPosition().y),
+               up.GetPosition()]
+        for s, e in zip([ffc.GetPosition()] + pts, pts):
+            if s != e:
+                _track(board, s, e, pcbnew.B_Cu, ffc.GetNet())
+                n_v3 += 1
+
+    # ---- GND ----
+    #
+    # **ベタへ短く引き出すだけ。**GND はベタで配るので、パッドどうしを
+    # 繋ぐ必要は無い。**ベタの上にあるだけでは繋がらない**ので、
+    # パッドから短い枝を 1 本出してベタに食い込ませる。
+    #
+    # ⚠️ **向きは「部品の外側へ」。**「板の中心へ」で書いて、C_DB の
+    # GND(y=11.85) から下へ 1.5mm 引いたら**同じ部品の V3V3(9.95) に
+    # 突き当たった**（短絡・クリアランス・マスクブリッジで 3 件。
+    # 2026-08-14）。2 端子の部品は、相手の端子と反対を向く。
+    fps = {fp.GetReference(): fp for fp in board.Footprints()}
+    n_gnd = 0
+    for ref, pad in pads.get("GND", []):
+        # ⚠️ **FFC は向きを縦に固定する**（2026-08-14）。パッドは 0.5mm
+        # ピッチで**横に並ぶ**ので、縦（板の内側）へ伸ばすぶんには隣に
+        # 当たらない。部品の中心から見た向きで決めると、端のパッドほど
+        # 斜めを向いて隣の CS に突っ込んだ（実測で 2 回短絡）。
+        if ref == "J_MAIN":
+            p = pad.GetPosition()
+            e = pcbnew.VECTOR2I(p.x, p.y - pcbnew.FromMM(1.2))  # 板の内側へ
+            _track(board, p, e, pcbnew.B_Cu, pad.GetNet())
+            n_gnd += 1
+            continue
+        fp = fps[ref]
+        c = fp.GetPosition()
+        p = pad.GetPosition()
+        # 部品の中心 → このパッド の向きへ伸ばす（＝相手の端子から離れる）。
+        # 1 端子のランド（BT1/SW_PWR）は中心と一致するので、そのときだけ
+        # 板の中心から離れる向きを使う。
+        dx, dy = p.x - c.x, p.y - c.y
+        if dx == 0 and dy == 0:
+            x, y = cad(p)
+            dx, dy = 0, (1 if y > 0 else -1)
+        L = (dx * dx + dy * dy) ** 0.5
+        # ⚠️ **長さを一律にしない。**1.2mm 固定で書いたら、0.5mm ピッチの
+        # FFC で GND の枝が隣の CS まで届いて短絡した（2026-08-14）。
+        #
+        # ⚠️ **「隣のパッドまでの距離」で測るのも駄目。**FFC はパッドが
+        # 横に並ぶので隣までは 0.5mm しかなく、**縦に伸ばす枝まで 0.25mm に
+        # 縮んで**ベタに届かず未配線になった（長さ 0.0000mm の線ができた）。
+        #
+        # **伸ばす向きに実際に何があるか**で決める。他のパッドを、
+        # 進行方向へ射影して測り、当たるものだけ見る。
+        ux, uy = dx / L, dy / L
+        room = pcbnew.FromMM(1.2)
+        for q in fp.Pads():
+            if q is pad:
+                continue
+            v = q.GetPosition() - p
+            t = v.x * ux + v.y * uy                 # 進行方向の成分
+            if t <= 0:
+                continue                            # 後ろにあるものは無関係
+            side = abs(-v.x * uy + v.y * ux)        # 横へのずれ
+            if side < pcbnew.FromMM(0.9):           # 進路上にある
+                room = min(room, int(t * 0.5))
+        step = max(room, pcbnew.FromMM(0.4))        # ベタに食い込む最低限
+        e = pcbnew.VECTOR2I(int(p.x + ux * step), int(p.y + uy * step))
+        _track(board, p, e, pcbnew.B_Cu, pad.GetNet())
+        n_gnd += 1
+    print(f"      電源を自分で配線: V3V3 {n_v3} 区間 / GND 引き出し {n_gnd} 本")
 
 
 def _antenna_keepout(board):
@@ -422,237 +684,6 @@ def _add_power_netclasses(board):
     # **忘れると効かない。**「設定しただけで効いていない」の典型。
     ns.RecomputeEffectiveNetclasses()
 
-
-def _route(board):
-    """FFC と XIAO を結ぶ。
-
-    **ファンアウトの順序が要点。** FFC は基板の手前、XIAO のパッドは
-    左右 2 列。手前から上がってくる配線は、**近いパッドへ行くものほど
-    外側のレーン**を使う。そうすると、パッドへ抜ける横向きの枝が、
-    まだ上へ伸びている他のレーンを横切らない。
-
-    順序を無視して素直に結んだら、ネットどうしが 6 箇所で短絡した。
-
-    縦のレーンは表面（F.Cu）。裏面は FFC とパスコンの実装面で、
-    2 列のパッドの間しか通せず 12 本は入らない。
-    """
-    mm = pcbnew.VECTOR2I_MM
-    j = board.FindFootprintByReference("J_MAIN")
-    u = board.FindFootprintByReference("U_MCU")
-    c = board.FindFootprintByReference("C_DB")
-
-    # ネット名 → XIAO 側のパッド
-    xiao = {}
-    for pad in u.Pads():
-        n = pad.GetNetname()
-        if n:
-            xiao.setdefault(n, []).append(pad)
-
-    # 外側のレーンの x と間隔。
-    # **6.9 だと XIAO のパッド列（原点から 7.62）に 0.72mm まで寄り、
-    # ビアがパッドに当たる。**間隔 0.55 もビアの対角が 0.778mm で、
-    # φ0.6 のビアどうしが 0.178mm しか離れない（規則は 0.2）。
-    # LANE_STEP 0.65: 片側 5 本（ROW4 を D9 へ移して 6 → 5 本になった）を
-    # 6.4 から 0.65 刻みで置くと最内が 3.8mm。アンテナの実外形
-    # （interface.ANTENNA_X±W/2 = 1.9±1.75）の外に出る。0.7 のままだと
-    # 最内 3.6mm が外形に 0.05mm 掛かる。0.65 でもビアと隣レーンの配線は
-    # 0.225mm（規則 0.2）で足りる。
-    LANE0, LANE_STEP = 6.4, 0.65  # 6.5 は D6 のパッドと 0.17mm（規則 0.2）で落ちた
-
-    # **FFC に近いパッドは、パッド列の「外」を回す**（2026-08-14・利用者の
-    # 指摘「両側 2 ピンぐらいは外側から回せるのでは」「D6/D7 は横に振らず
-    # 下へ降ろせばいい」）。
-    #
-    # 内側のレーンは XIAO の 2 列の間（幅 13.4mm）を全部の信号で奪い合う。
-    # だが**列の外にも 2.03mm ある**（パッド外縁 ±8.47 と板の縁 ±10.5）。
-    # 縁から 0.3mm 逃げて 0.4mm 刻みなら **4 本/側**入る。
-    # FFC の courtyard の右端は 6.10 で、板の縁まで 4.40mm 空いているので
-    # 横に出る余地もある。
-    #
-    # **外へ回すのは FFC に近い順**（＝ y が小さい側）。そのぶん内側の
-    # レーンが減り、盤面中央が電源部やコンデンサに使える。
-    # ⚠️ **刻みはビアの径で決まる。配線の幅ではない。**
-    # 最初 0.4mm 刻みで 3 本置いて、DRC が 13 件出た（板の縁との
-    # クリアランス 4 件＋隣のレーンとの短絡 9 件）。
-    #
-    #   ビア φ0.6 + クリアランス 0.2      → **間隔 0.80mm 必要**
-    #   板の縁 10.5 − 縁クリアランス 0.3 − ビア半径 0.3 → **最外 9.90**
-    #   パッド外縁 8.47 + 0.2 + ビア半径 0.3           → **最内 8.97**
-    #   → (9.90 − 8.97) / 0.80 + 1 = **2 本/側**
-    # ⚠️ **刻みはビアの径で決まる。配線の幅ではない。**
-    # 最初 0.4mm 刻みで 3 本置いて DRC 13 件（縁とのクリアランス 4 +
-    # 隣レーンとの短絡 9）。
-    #
-    #   ビア φ0.6 + クリアランス 0.2 → **間隔 0.80mm**
-    #   板の縁 10.5 − 0.3 − 0.3      → **最外 9.90**
-    #   パッド外縁 8.47 + 0.2 + 0.3  → **最内 8.97**
-    #   → **2 本/側**
-    #
-    # ⚠️ **ビアを省いて裏面のまま走らせる案は駄目**（2026-08-14 に実測）。
-    # 間隔は 0.40mm で済み 3 本入る（外側の帯に裏面部品は無い）が、
-    # **層の分離を失う。**内側レーンへ向かう横枝は B.Cu を走るので、
-    # 外側レーンも B.Cu だと必ず交差する（実測 12 件）。
-    # **ビアは無駄ではなく、層を分けるために要る。**
-    OUTER0, OUTER_STEP = 9.90, 0.80
-    OUTER_N = 2                  # 片側何本を外へ回すか（幾何の上限）
-    # **アンテナの真下を通さない**（open-gaps #23）。
-    #
-    # 縦のレーンは表面を走り、アンテナの y 帯を必ず横切る。だが**横切る
-    # 場所（x）は選べる。**アンテナは 3.5mm 角の小さな部品で、XIAO の
-    # 全幅 18.3mm のうち 2 割弱しか占めていない。**その帯だけ空ければよい。**
-    #
-    # 一度「迂回路が無い」と書いたが、**アンテナが XIAO の全幅にあるという
-    # 誤った前提**で考えていた。利用者の実測（3.5x1.5mm）で覆った。
-    from interface import antenna_x_band
-    BAND_LO, BAND_HI = antenna_x_band()
-    # ビアの間隔。**x を詰めるぶん、y を離す。**同じ量で詰めると
-    # ビアの対角が 0.778mm になり、φ0.6 どうしが 0.178mm しか離れない（規則 0.2）。
-    ROW_STEP = 0.9
-    used = []
-
-    for sign in (-1, +1):               # 左の列 / 右の列
-        targets = []
-        for pad in j.Pads():
-            n = pad.GetNetname()
-            # **GND はベタで受ける。**レーンを使わないので、ファンアウトの
-            # 順序にも影響しない。これがピン順を素直にできた理由。
-            if not n or n == "GND" or n not in xiao:
-                continue
-            for xp in xiao[n]:
-                # **原点と比べる。**0 と比べていて、絶対座標の x は常に
-                # 正なので全ネットが右の群に入っていた。
-                if (pcbnew.ToMM(xp.GetPosition().x) < ORIGIN[0]) == (sign < 0):
-                    targets.append((pcbnew.ToMM(xp.GetPosition().y), pad, xp))
-        # FFC は手前（KiCad の +y）にある。手前に近いパッドから順に外側へ。
-        targets.sort(key=lambda t: -t[0])
-        # **レーンの x を先に決める。**外から内へ 0.7mm 刻み。
-        #
-        # 内側ほどアンテナに近づく。**帯に入る候補を飛ばして外側だけ使う**
-        # ことも試したが、飛んだ 1 本が他のレーンと交差して DRC が落ちた。
-        # 間隔を詰める方法も駄目（ビア φ0.6 と隣の配線が 0.11mm。必要 0.6mm）。
-        #
-        # **いまは LANE0 を 6.0 → 6.5 へ動かして全体を外へ寄せてある。**
-        # それでも、この側の**いちばん内側の 1 本はアンテナの下に残る**
-        # （open-gaps #23。アンテナの正確な位置が実測できたら詰める）。
-        # **FFC に近い OUTER_N 本を外側のレーンへ。**残りが内側。
-        # targets は「手前（FFC 側）から順」に並んでいる。
-        # **1 本目（FFC にいちばん近い）はレーンを使わない。**真下へ降ろす
-        # ので、割り当ては 2 本目からになる。ここを詰めないと外側の
-        # レーンが 1 本無駄になる。
-        n_lane = max(0, len(targets) - 1)
-        n_out = min(OUTER_N, n_lane)
-        lanes = [None]                      # 1 本目のぶん（使わない）
-        lanes += [sign * (OUTER0 - k * OUTER_STEP) for k in range(n_out)]
-        lanes += [sign * (LANE0 - k * LANE_STEP)
-                  for k in range(n_lane - n_out)]
-        under = [x for x in lanes if x is not None and BAND_LO <= x <= BAND_HI]
-        if under:
-            print(f"      ⚠ アンテナの帯に入るレーン {len(under)} 本: "
-                  f"{[round(x, 2) for x in under]}")
-        for i, (ty, fpad, xpad) in enumerate(targets):
-            # **FFC より手前にあるパッドは、真下へ降ろすだけでよい**
-            # （2026-08-14・利用者の指摘「D6/D7 は横向きではなく下向きに
-            # 伸ばせる」）。レーンを 1 本も使わず、横に振らないので
-            # 他の縦線とも交差しない。
-            #
-            # パッド列は x=±7.62、FFC の courtyard は ±6.10 なので、
-            # **縦線はコネクタの脇を素通りできる。**曲がるのは
-            # コネクタより手前（y が小さい側）に出てから。
-            # **その列で FFC にいちばん近い 1 本だけ。**targets は
-            # 手前から順に並んでいるので i == 0 がそれ。
-            # 2 本目以降を真下に降ろすと、1 本目の縦線を横切る。
-            # （一度 `|x| > 7.0` で判定して**全パッドが該当**し、
-            #  20mm の配線が盤面を横断して DRC 38 件を出した。）
-            if i == 0:
-                tx0 = pcbnew.ToMM(xpad.GetPosition().x)
-                fy0 = pcbnew.ToMM(fpad.GetPosition().y)
-                fx0 = pcbnew.ToMM(fpad.GetPosition().x)
-                net0 = fpad.GetNet()
-                # パッドから真下へ → 横へ → FFC のパッドへ。
-                #
-                # **曲がるのは、外側レーンの横枝より奥（y 小）。**
-                #
-                # 外側レーン（±9.10/±9.90）へ向かう横枝は、FFC から出て
-                # **パッド列 x=±7.62 を必ず横切る。**真下パスはその x を
-                # 縦に使うので、横枝と同じ高さで曲がると必ず当たる
-                # （実測 3 件）。
-                #
-                # 横枝は FFC のすぐ手前（fy0 - 1.4 以降）に並ぶので、
-                # 真下パスは**それより奥**で曲げて、横枝の下をくぐらせる。
-                # ROW_STEP ぶん外側レーンの本数だけ空けた先に置く。
-                # ⚠️ **曲がる高さは未解決**（2026-08-14・open-gaps #41）。
-                # 外側レーンへ向かう横枝は x=±7.62 を必ず横切り、真下パスは
-                # その x を縦に使うので交差する（残り 3 件はこれ）。
-                # `fy0 - 0.7`（枝より FFC 寄り）を試す価値がある。
-                # 逆向き（枝より奥）は試して 5 → 11 件に悪化した。
-                turn = fy0 - 1.4
-                _track(board, mm(tx0, ty), mm(tx0, turn), pcbnew.B_Cu, net0)
-                _track(board, mm(tx0, turn), mm(fx0, turn), pcbnew.B_Cu, net0)
-                _track(board, mm(fx0, turn), mm(fx0, fy0), pcbnew.B_Cu, net0)
-                used.append(net0.GetNetname())
-                continue
-
-            # **絶対座標にする。**相対値のまま fx/ty（絶対）と混ぜていて、
-            # 145.9mm の配線ができていた。DRC の「配線の長さ」が異常値だった
-            # ことで気づいた。
-            lane = ORIGIN[0] + lanes[i]
-            fx = pcbnew.ToMM(fpad.GetPosition().x)
-            fy = pcbnew.ToMM(fpad.GetPosition().y)
-            tx = pcbnew.ToMM(xpad.GetPosition().x)
-            net = fpad.GetNet()
-            # **横枝の段。**真下へ降ろした 1 本目が段 0 を使っているので、
-            # レーン側は段 1 から始める（同じ段を使うと交差する。実測 2 件）。
-            row = fy - (1.4 + i * ROW_STEP)   # 外側へ行くものほど手前で曲げる
-
-            # 1. 裏面でファンアウト（縦 → 横）。**順序のおかげで交差しない。**
-            #    先に曲がるのは外側のレーンへ行くもので、その横枝は
-            #    まだ上へ伸びている他の縦線より外側にしか来ない。
-            for a, b in (((fx, fy), (fx, row)), ((fx, row), (lane, row))):
-                if a != b:
-                    _track(board, mm(*a), mm(*b), pcbnew.B_Cu, net)
-
-            # 2. 縦に走る（レーンごとに x が違うので交差しない）。
-            #
-            # **アンテナの帯に入るレーンだけ、裏面のまま走らせる。**
-            # 表面（F.Cu）はアンテナから 1.6mm、裏面（B.Cu）は 3.2mm。
-            # **金属を消せないなら、せめて倍の距離へ離す。**
-            # 板厚 1.6mm ぶん遠ざかるだけだが、**あとから直せない場所**なので
-            # 無料でできることはやっておく（open-gaps #23）。
-            if BAND_LO <= lanes[i] <= BAND_HI:
-                _track(board, mm(lane, row), mm(lane, ty), pcbnew.B_Cu, net)
-            else:
-                _via(board, mm(lane, row), net)
-                _track(board, mm(lane, row), mm(lane, ty), pcbnew.F_Cu, net)
-                _via(board, mm(lane, ty), net)
-
-            # 3. 裏面でパッドへ。**FFC のパッド列より外側なので、
-            #    裏面の縦線とも交差しない。**
-            _track(board, mm(lane, ty), mm(tx, ty), pcbnew.B_Cu, net)
-            used.append(net.GetNetname())
-
-    # GND のパッドはベタへ短く引き出す。**ベタの上にあるだけでは
-    # 繋がったことにならない**（DRC が「未接続」と出た）。
-    for pad in j.Pads():
-        if pad.GetNetname() == "GND":
-            pos = pad.GetPosition()
-            out = pcbnew.VECTOR2I(pos.x, pos.y + pcbnew.FromMM(2.0))
-            _track(board, pos, out, pcbnew.B_Cu, pad.GetNet())
-
-    # パスコンとバルク。**GND 側はベタで受けるので配線しない。**
-    # 両方を配線すると、GND の枝が基板を横断して他のネットと交差した。
-    for fp in (c, board.FindFootprintByReference("C_BULK")):
-        for pad in fp.Pads():
-            n = pad.GetNetname()
-            if n == "GND" or n not in xiao:
-                continue
-            near = min(xiao[n],
-                       key=lambda p: (p.GetPosition() - pad.GetPosition()).EuclideanNorm())
-            pa, pb = pad.GetPosition(), near.GetPosition()
-            # **縦から曲げる。**横から曲げると、パッド列に沿って降りる途中で
-            # 別の（ネットの無い）パッドを貫く。5V のパッドを貫いて短絡していた。
-            corner = pcbnew.VECTOR2I(pa.x, pb.y)
-            _track(board, pa, corner, pcbnew.B_Cu, pad.GetNet())
-            _track(board, corner, pb, pcbnew.B_Cu, pad.GetNet())
 
 
 def main():

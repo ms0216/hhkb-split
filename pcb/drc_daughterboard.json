@@ -1,14 +1,14 @@
 {
   "board": "hhkb_split_daughterboard.kicad_pcb",
-  "sha256": "964479d40cabecbdfdc21f094663102f87c2847662bca940b2c816eda3781836",
-  "violations": 6,
-  "unconnected": 1,
+  "sha256": "aa11ee7b982188091540d8e35ce1ea0e600575d737477defe808766bc679bfff",
+  "violations": 1,
+  "unconnected": 0,
+  "warnings": 24,
+  "warning_kinds": {
+    "silk_overlap": 14,
+    "silk_over_copper": 10
+  },
   "details": [
-    "２つのネットを短絡するアイテム (ネット V3V3 と GND)",
-    "Tracks crossing",
-    "Tracks crossing",
-    "Tracks crossing",
-    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.0750 mm)",
-    "２つのネットを短絡するアイテム (ネット GND と VBATT_SW)"
+    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.0091 mm)"
   ]
 }

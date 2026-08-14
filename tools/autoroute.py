@@ -118,7 +118,15 @@ def _check_jar():
 #             （2026-08-14・利用者の指摘）。
 #             ⚠️ 全部は外せない。**J_DB へ戻る 1 本だけは残す**——
 #             コネクタは行のラインから外れた y にあり、直線では届かない。
+#   V3V3     子基板で自分で引く（gen_daughterboard._prewire_power）。
+#             4 つのパッドがほぼ一直線なのに Freerouting が 8.37mm・
+#             6 セグメントで蛇行し、GND のスタブと交差した（2026-08-14）。
+#             ⚠️ **主基板の V3V3 も対象になる。**あちらは FFC から各所へ
+#             配るだけで prewire していないが、DSN から消えると未配線に
+#             なるので、**子基板だけ**に効かせる（下の PREWIRED_DB）。
 PREWIRED = re.compile(r"GND|SW\d+_D")
+# 子基板だけ、これも自分で引いてある。
+PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3")
 
 
 # Freerouting に上乗せして要求するクリアランス（µm）。
@@ -171,7 +179,7 @@ def _ask_freerouting_for_a_little_more_clearance(dsn):
     dsn.write_text(t)
 
 
-def _strip_prewired(dsn):
+def _strip_prewired(dsn, pattern=PREWIRED):
     """自分で引いたネットを DSN から完全に消す。
 
     残すと Freerouting が「未配線だ」と思って引き直し、二重になる。
@@ -186,14 +194,14 @@ def _strip_prewired(dsn):
     **消してしまうと避けてくれず、上から配線されて短絡する。**
     """
     t = dsn.read_text()
-    names = sorted({n for n in re.findall(r"\(net (\S+)", t) if PREWIRED.fullmatch(n)})
+    names = sorted({n for n in re.findall(r"\(net (\S+)", t) if pattern.fullmatch(n)})
     for n in names:
         e = re.escape(n)
         t = re.sub(rf"\s*\(plane {e} \(polygon [\s\S]*?\)\)", "", t)
         t = re.sub(rf"\s*\(net {e}\s*\n\s*\(pins [^)]*\)\s*\n\s*\)", "", t)
         t = re.sub(rf"(\(class \S+ [^)]*?)\b{e}\b", r"\1", t)
         t = t.replace(f"(net {n})(type route)", "(type protect)")
-    left = [n for n in re.findall(r"\(net (\S+)", t) if PREWIRED.fullmatch(n)]
+    left = [n for n in re.findall(r"\(net (\S+)", t) if pattern.fullmatch(n)]
     if left:
         raise SystemExit(
             f"{dsn.name}: 消しきれていないネットがある: {sorted(set(left))}\n"
@@ -216,7 +224,7 @@ def _route_once(half, seed):
     ses = PCB / f"_{half}.ses"
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
-    _strip_prewired(dsn)
+    _strip_prewired(dsn, PREWIRED_DB if half not in HALVES else PREWIRED)
     _ask_freerouting_for_a_little_more_clearance(dsn)
 
     # Freerouting のログは終わりに「N violations」と出すが、これは
@@ -282,6 +290,14 @@ def _route_once(half, seed):
         n_row = prewire_row_bus(board)
         print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
     else:
+        # **電源も引き直す。**上の行バスと同じ理由——**SES 取り込みは
+        # 既存の配線を全部置き換える**ので、gen_daughterboard で引いた
+        # V3V3 と GND の引き出しは消えている（実測: unrouted に V3V3 6・
+        # GND 7 本あったものが、取り込み後は V3V3 0・GND 4 になっていた。
+        # 2026-08-14）。DSN では protect の障害物として渡してあるので、
+        # Freerouting はここを避けて残りを引いている。
+        from gen_daughterboard import _prewire_power
+        _prewire_power(board)
         # **子基板は配線後にベタを敷く**（2026-08-14・open-gaps #41）。
         # 主基板は gen_pcb が配置段階で敷いてから配線するが、子基板は
         # 手配線をやめて Freerouting に移したので、主基板と同じ
@@ -372,16 +388,23 @@ def run(half):
 def main():
     # **子基板も同じ仕組みで配線する**（2026-08-14・open-gaps #41）。
     # 手書きのルータをやめたので、3 枚とも Freerouting を通る。
-    for half in BOARDS:
+    #
+    # **直した基板だけを指定できる**（2026-08-14・利用者「DB だけの修正に
+    # 左右も再配線する意味ある？」）。無い。Freerouting は毎回わずかに
+    # 違う経路を出すので、**触っていない基板まで sha256 が変わり**、
+    # drc_*.json の差分が汚れて「何を直したか」が読めなくなる。
+    #
+    #     "$KPY" tools/autoroute.py daughterboard
+    targets = sys.argv[1:] or list(BOARDS)
+    unknown = [t for t in targets if t not in BOARDS]
+    if unknown:
+        raise SystemExit(f"知らない基板: {unknown}／選べるもの: {list(BOARDS)}")
+    for half in targets:
         rec = run(half)
         print(f"OK {half:5s} {rec['unrouted']} → {rec['board']}"
               f"  ({rec['freerouting']}, {rec['passes']} パス)")
     print("\n配線した。次: .venv/bin/python3 tools/drc.py")
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
 
 
 def _pour_daughterboard_ground(board):
@@ -444,3 +467,7 @@ def _restore_rule_area_layers(board):
         n += 1
     if n:
         print(f"   ルール領域 {n} 個の層を戻した（SES 往復で消える）")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

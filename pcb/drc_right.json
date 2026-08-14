@@ -1,10 +1,14 @@
 {
   "board": "hhkb_split_right.kicad_pcb",
-  "sha256": "d4a1df991584176197c33e5094ab9f65c8777f7326eedf1527cc6492799109aa",
-  "violations": 2,
-  "unconnected": 0,
-  "details": [
-    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1967 mm)",
-    "クリアランス違反 ( クリアランス 0.2000 mm; 現状 0.1967 mm)"
-  ]
+  "sha256": "cae174dbba4ecf21e2036f628582c49cbc16ea7e72e2b1d38f5e3ae42fa4cb24",
+  "violations": 0,
+  "unconnected": 1,
+  "warnings": 48,
+  "warning_kinds": {
+    "hole_to_hole": 38,
+    "silk_overlap": 6,
+    "silk_over_copper": 3,
+    "via_dangling": 1
+  },
+  "details": []
 }

@@ -75,6 +75,28 @@ def _pad_escape_mm(board):
     """パッドの縁から、逃がすビアの中心までの距離（mm）。"""
     return _via_keepout_mm(board)
 
+
+def _hole_keepout_mm(board):
+    """ビアの**中心**から、相手の**穴の縁**までに要る距離（mm）。
+
+    ⚠️ **銅の規則とは別物。**銅どうしのクリアランス（0.2mm）より
+    `hole_to_hole`（0.5mm）のほうが厳しいので、銅で見ていると通り抜ける。
+
+    **これが無い間、穴は障害物に入っていなかった**（2026-08-14）。
+    `_obstacles` はパッドの**外接箱＝銅**しか見ておらず、
+    NPTH は銅が無いか小さいので**穴の広がりを表せない。**
+    結果、右基板で GND ビアが SW5 / SW18 の穴に **0.479 / 0.488mm**
+    まで寄っていた（設計規則は 0.4995mm）。
+    **`hole_to_hole` は KiCad の既定が `warning` なので、
+    エラーだけ見ていた間は永久に表に出てこなかった。**
+
+    要るのは ビアの穴の半径 + 穴どうしの最小距離 + 余裕。
+    **数値は書かない**（`_clearance_mm` と同じ理由。設計規則が動いたら
+    ここも動く）。
+    """
+    d = board.GetDesignSettings()
+    return VIA_DRILL_MM / 2 + pcbnew.ToMM(d.m_HoleToHoleMin) + SAFETY_MM
+
 # スティッチングビアの格子間隔（mm）。
 #
 # **2.4GHz を基準にする。**分割キーボードは左右で 2.4GHz の無線を動かす。
@@ -335,9 +357,31 @@ def _obstacles(board):
     # 51.99mm² もある大きな離島にすらビアが入らなかった（2026-08-12）。
     #
     # **ビアを実際に妨げるのはパッドと穴。**そちらで見る。
+    #
+    # ⚠️ **穴は銅と別に数える**（2026-08-14 に追加）。
+    # パッドの外接箱は**銅**の広がりでしかなく、NPTH のように銅が無いか
+    # 小さいものは、穴の大きさを表せない。しかも要求される距離が違う
+    # （銅どうし 0.2mm に対し `hole_to_hole` は 0.5mm）。
+    # **銅の箱だけ見ていたので、ビアが穴の 0.479mm まで寄れていた。**
+    #
+    # 判定側（`_room_for_a_via` / `_near_segment`）は箱を
+    # `_via_keepout_mm` ぶん膨らませる。穴に要るのはそれより
+    # `_hole_keepout_mm` との**差だけ大きい**ので、その差を先に足しておけば
+    # 同じ経路で正しく効く。
+    extra = pcbnew.FromMM(max(0.0, _hole_keepout_mm(board)
+                              - _via_keepout_mm(board)))
     for fp in board.GetFootprints():
         for pad in fp.Pads():
             boxes.append(pad.GetBoundingBox())
+            drill = pad.GetDrillSizeX()
+            if drill <= 0:
+                continue                    # SMD。穴は無い
+            p = pad.GetPosition()
+            hx, hy = pad.GetDrillSizeX() // 2, pad.GetDrillSizeY() // 2
+            hole = pcbnew.BOX2I(
+                pcbnew.VECTOR2I(p.x - hx - extra, p.y - hy - extra),
+                pcbnew.VECTOR2I(2 * (hx + extra), 2 * (hy + extra)))
+            boxes.append(hole)
     # **配線はここに入れない。**外接矩形だと斜め線が一帯を塞ぐ。
     # 線分として _segment_obstacles / _near_segment で見る。
     for d in board.GetDrawings():
@@ -408,28 +452,61 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
 # **使わないものを残さない**（CLAUDE.md「置き換えたら古い方を消す」）。
 
 
-def _gnd_anchor_points(board):
-    """GND に確実に繋がっている点（GND のビアとパッドの中心）。"""
-    pts = []
-    for t in board.GetTracks():
-        if t.GetClass() == "PCB_VIA" and t.GetNetname() == "GND":
-            pts.append(t.GetPosition())
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            if pad.GetNetname() == "GND":
-                pts.append(pad.GetPosition())
-    return pts
+# **`_gnd_anchor_points` はここにあった（2026-08-14 に削除）。**
+# 「GND のビアとパッドの中心」を返すだけの関数で、`_islands` が
+# 「区画の中にアンカーがあるか」を見るために使っていた。
+# その判定ごと連結成分に置き換えたので、呼ぶ側が無くなった。
 
 
 def _islands(board):
     """(ゾーン, 層, 区画の多角形, その区画が浮いているか) を返す。
 
-    **「浮いている」＝その区画の中に GND のビアもパッドも 1 つも無い。**
-    区画は配線に切られてできる銅の塊で、KiCad が塗ったあとの
-    filled polygon 1 つがそれにあたる。
+    **「浮いている」＝本土（最大の区画）まで辿り着けない。**
+
+    ⚠️ **かつては「区画の中に GND のビアかパッドがあるか」で見ていた
+    （2026-08-14 に修正）。**それだと**ビアの行き先を見ていない。**
+    ビアが 1 本立っていても、その裏側が B.Cu の**別の孤島**に落ちて
+    いれば本土には繋がらない。実測（右基板）では **23 区画すべてが
+    「浮いていない」と判定されるのに、KiCad の DRC は未配線を
+    1 件出していた。**検査と DRC が同じ銅について逆の結論を出しており、
+    `test_few_pieces_of_ground_copper_are_left_floating` は
+    「DRC はこれを何も言わない」と書いたまま**素通りしていた。**
+
+    なので**繋がりを辿る。**区画を点、区画を繋ぐものを辺として
+    連結成分を作り、本土と同じ成分に入らないものを浮きとする。
+
+    区画を繋ぐのは 3 つ（右基板の実測: ビア 1170 / 配線 8 / パッド 8）。
+
+      ビア    貫通するので**表と裏の区画を繋ぐ**（これが主役）
+      配線    同じ層で、両端が乗る区画どうしを繋ぐ
+      パッド  この基板の GND パッドは全部 SMD なので片面だけ。
+              繋ぐ力は無いが、**本土の判定には要る**ので点として扱う
     """
-    anchors = _gnd_anchor_points(board)
-    out = []
+    return [(z, lay, poly, floating)
+            for kind, z, lay, poly, floating in _gnd_pieces(board)
+            if kind == "zone"]
+
+
+def _gnd_pieces(board):
+    """GND を作る**すべての**要素と、それぞれが浮いているかを返す。
+
+    返すのは (種類, 物, 層, 多角形か None, 浮いているか) の並び。
+    種類は "zone" / "track" / "via"。
+
+    ⚠️ **ベタだけを見ると足りない**（2026-08-14 に実測）。
+    浮いたベタを消したら、**そこにしか繋がっていなかった配線とビアが
+    残って宙に浮いた。**未配線の中身が「ゾーン×2」から
+    「配線＋ビア」に変わっただけで、件数は 1 のまま減らなかった。
+    構造はこうだった。
+
+        消したベタ ──> 配線 1.54mm ──> ビア(150.675, 68.8)
+
+    **1 段だけ見る判定では追えない**（「配線に触れているか」で見て、
+    その配線自身が浮いていることを見落とした）。だから
+    **ベタ・配線・ビアを最初から同じ連結成分に載せる。**
+    """
+    # ---- 要素を集める ----
+    items = []          # (種類, 物, 層, 多角形か None)
     for z in board.Zones():
         if z.GetIsRuleArea() or z.GetNetname() != "GND":
             continue
@@ -440,14 +517,97 @@ def _islands(board):
             for i in range(polys.OutlineCount()):
                 one = pcbnew.SHAPE_POLY_SET()
                 one.AddOutline(polys.Outline(i))
-                # **外接箱で先に振るう。**多角形の内外判定は重く、
-                # 区画 × アンカー（GND のビアとパッド、400 点超）を
-                # 総当たりすると分単位でかかる。箱の外なら中にも無い。
-                box = one.BBox()
-                near = [q for q in anchors if box.Contains(q)]
-                floating = not any(one.Contains(q) for q in near)
-                out.append((z, layer, one, floating))
-    return out
+                items.append(("zone", z, layer, one))
+    tracks = []
+    for t in board.GetTracks():
+        if t.GetNetname() != "GND":
+            continue
+        kind = "via" if t.GetClass() == "PCB_VIA" else "track"
+        items.append((kind, t, t.GetLayer(), None))
+        tracks.append((len(items) - 1, kind, t))
+
+    zone_idx = [i for i, (k, _o, _l, _p) in enumerate(items) if k == "zone"]
+
+    def find_zone(layer, pt):
+        """その層のその点を含むベタの番号。無ければ None。
+
+        **外接箱で先に振るう。**多角形の内外判定は重く、
+        区画 × 点（ビアだけで 1000 超）を総当たりすると分単位でかかる。
+        """
+        for i in zone_idx:
+            _k, _z, lay, poly = items[i]
+            if lay != layer:
+                continue
+            if poly.BBox().Contains(pt) and poly.Contains(pt):
+                return i
+        return None
+
+    # ---- union-find ----
+    parent = list(range(len(items)))
+
+    def root(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = root(a), root(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # 点を共有するものどうしを繋ぐ。**配線とビアも要素なので、
+    # ベタが無くても配線どうし・配線とビアで繋がりが残る。**
+    at = {}
+    cu = list(board.GetEnabledLayers().CuStack())
+    for idx, kind, t in tracks:
+        if kind == "via":
+            for lay in cu:
+                if t.IsOnLayer(lay):
+                    at.setdefault((lay, tuple(t.GetPosition())), []).append(idx)
+                    z = find_zone(lay, t.GetPosition())
+                    if z is not None:
+                        union(idx, z)
+        else:
+            lay = t.GetLayer()
+            for p in (t.GetStart(), t.GetEnd()):
+                at.setdefault((lay, tuple(p)), []).append(idx)
+                z = find_zone(lay, p)
+                if z is not None:
+                    union(idx, z)
+    for group in at.values():
+        for g in group[1:]:
+            union(group[0], g)
+
+    # パッドに乗っているものは本土側とみなす（パッドは必ず GND に繋がる）
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() != "GND":
+                continue
+            for lay in cu:
+                if not pad.IsOnLayer(lay):
+                    continue
+                z = find_zone(lay, pad.GetPosition())
+                if z is not None:
+                    for idx, kind, t in tracks:
+                        if kind == "via" and t.IsOnLayer(lay) \
+                                and pad.HitTest(t.GetPosition()):
+                            union(idx, z)
+                        elif kind == "track" and t.GetLayer() == lay \
+                                and (pad.HitTest(t.GetStart())
+                                     or pad.HitTest(t.GetEnd())):
+                            union(idx, z)
+
+    # ---- 本土を決めて、届かないものを浮きとする ----
+    #
+    # **本土＝面積が最大のベタ**の成分。基板全面に広がるベタが
+    # 必ずいちばん大きい（実測: 右 F.Cu 14257mm² 対 次点 155mm²）。
+    if not zone_idx:
+        return []
+    main = max(zone_idx, key=lambda i: abs(items[i][3].Outline(0).Area()))
+    home = root(main)
+    return [(k, o, lay, poly, root(i) != home)
+            for i, (k, o, lay, poly) in enumerate(items)]
 
 
 def _room_for_a_via(poly, obstacles, r):
@@ -501,6 +661,13 @@ def _room_for_a_via(poly, obstacles, r):
         return None
     c = out.CPoint(0)
     return pcbnew.VECTOR2I(c.x, c.y)
+
+
+# **`_via_has_other_support` はここにあった（2026-08-14 に削除）。**
+# 「ビアが配線かパッドにも繋がっているか」を 1 段だけ見る関数だったが、
+# **その配線自身が浮いていることを見落とす**（実測: ベタ → 配線 →
+# ビアの連鎖で、ビアが 1 本も消えなかった）。判定を `_gnd_pieces` の
+# 連結成分に一本化したので、呼ぶ側が無くなった。
 
 
 def stitch_islands(board, rounds=4):
@@ -569,12 +736,58 @@ def stitch_islands(board, rounds=4):
         if not placed_this_round:
             break                      # これ以上は繋げない
 
-    # 繋げなかったものを数えてから、削除を元に戻す
-    filler.Fill(board.Zones())
-    left = sum(1 for _z, _l, _p, f in _islands(board) if f)
+    # 削除を元に戻して塗り直す（小片はここで消える）
     for z, mode in saved:
         z.SetIslandRemovalMode(mode)
     filler.Fill(board.Zones())
+
+    # ---- それでも浮いている区画を、名指しで消す ----
+    #
+    # **面積の閾値（`MIN_ISLAND_MM2`）では分けられない**（2026-08-14 に実測）。
+    # 3 枚の全区画を並べると、**浮きの最大 3.01mm² が、繋がっている島の
+    # 最小 1.51mm² より大きい。**範囲が重なっているので、どんな値を選んでも
+    # 「浮きが残る」か「正常な島を巻き添えにする」かのどちらかになる。
+    # 実際 3.5mm² にすると、繋がっている右 1.51 と子基板 2.67 まで消えた。
+    #
+    # **面積で代理するのをやめる。**`_islands` が「浮いているか」を
+    # 正確に答えられるのだから、**その区画だけ**を名指しで消せばよい。
+    # 消し方は、その輪郭にベタ禁止のルールエリアを置いて塗らせないこと
+    # （KiCad に「この区画だけ削除」は無い）。
+    #
+    # ⚠️ **抜くのはベタだけ。**配線・ビア・パッドは通す（既定は全部禁止
+    # なので明示的に許可する。`_antenna_keepout` で 14 件出した経緯と同じ）。
+    # **浮いているものを、種類を問わず一括で消す。**
+    #
+    # ベタだけ消すと残骸（配線・ビア）が宙に浮く。`_gnd_pieces` は
+    # 三者を同じ連結成分で見ているので、**1 回で全部を名指しできる。**
+    # 段階的に消して数え直す必要が無い（対症療法の積み重ねを避ける）。
+    dropped = 0
+    for kind, obj, layer, poly, floating in _gnd_pieces(board):
+        if not floating:
+            continue
+        if kind == "zone":
+            # ベタは消せないので、**輪郭にベタ禁止のルールエリアを置く。**
+            # ⚠️ 抜くのはベタだけ。配線・ビア・パッドは通す（既定は
+            # 全部禁止なので明示的に許可する。`_antenna_keepout` で
+            # 14 件出した経緯と同じ）。
+            ka = pcbnew.ZONE(board)
+            ka.SetIsRuleArea(True)
+            ka.SetDoNotAllowZoneFills(True)
+            ka.SetDoNotAllowTracks(False)
+            ka.SetDoNotAllowVias(False)
+            ka.SetDoNotAllowPads(False)
+            lset = pcbnew.LSET()
+            lset.addLayer(layer)
+            ka.SetLayerSet(lset)
+            ka.Outline().AddOutline(poly.Outline(0))
+            board.Add(ka)
+        else:
+            board.Remove(obj)
+        dropped += 1
+    if dropped:
+        filler.Fill(board.Zones())
+
+    left = sum(1 for _z, _l, _p, f in _islands(board) if f)
     return added, left
 
 

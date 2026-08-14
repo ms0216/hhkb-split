@@ -109,23 +109,28 @@
 		/*
 		 * **並びは行 0..4 の順。ピン番号の順ではない**（2026-08-14・#41）。
 		 *
-		 *   行 0 → D2 / 行 1 → D3 / 行 2 → **D6** / 行 3 → D5 / 行 4 → **D4**
+		 *   行 0 → D2 / 行 1 → **D6** / 行 2 → **D3** / 行 3 → **D4** / 行 4 → **D5**
 		 *
-		 * 行 2〜4 が逆順なのは基板の都合。ROW0/1 は FFC コネクタより
-		 * 上へ、ROW2/3/4 は下へ伸びるので、FFC のピンを行番号の昇順に
-		 * 並べると上下 2 群が必ず交差する（実測 3 交差）。群ごとに近い順に
-		 * 並べると 0 交差になり、**そのズレをここで吸収している**
-		 * （利用者の指摘「順序の吸収は配線ではなくファームでやるべき」）。
+		 * ⚠️ **2026-08-14 に組み替えた**（利用者）。XIAO のパッド列の
+		 * **外側の帯に配線が 3 本通せる**ことが実測で分かったため
+		 * （幅 2.03mm・0.42mm 刻み・ビアを使わず B.Cu のまま。DRC 0）。
+		 * その 3 本に外周から ROW2 → ROW3 → ROW4 を載せ、ROW1 は内側へ回した。
+		 *
+		 *   D3 = ROW2（最も外周）/ D4 = ROW3 / D5 = ROW4 / D6 = ROW1（内側）
+		 *
+		 * **FFC の並びは動かしていない。**主基板の行バスの都合で決まって
+		 * いるので、XIAO 側だけ変えれば主基板は無傷（利用者の指摘）。
+		 * 順序のズレは配線でひねらず**ここで吸収する。**
 		 *
 		 * ⚠️ **circuit.py の XIAO のピン割り当てと 1 対 1 で対応する。**
 		 * 片方だけ直すと、押したキーと違う行が読まれる。
 		 */
 		row-gpios
 			= <&xiao_d 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
-			, <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			, <&xiao_d 6 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
-			, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			, <&xiao_d 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+			, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 			;
 	};
 };
