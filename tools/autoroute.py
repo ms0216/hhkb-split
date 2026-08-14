@@ -133,7 +133,7 @@ PREWIRED = re.compile(r"GND|SW\d+_D")
 # 残り、Freerouting が同じネットをもう一度引いて自分自身と交差する。**
 # 2026-08-14 に手配線をやめた原因がまさにこれで、当時 ROW は
 # protect にならないまま引かれていた（交差 5 件のうち 3 件が自己交差）。
-PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3|ROW[234]")
+PREWIRED_DB = re.compile(r"GND|SW\d+_D|V3V3|ROW[01234]")
 
 
 # Freerouting に上乗せして要求するクリアランス（µm）。

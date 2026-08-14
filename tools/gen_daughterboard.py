@@ -838,6 +838,112 @@ def _prewire_rows(board):
                 _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
                 n += 1
     print(f"      列の外へ ROW2/3/4 を {n} 区間")
+    _prewire_inner_rows(board, row_y, clr, pitch)
+
+
+# 列の**内側**（XIAO のパッド列と FFC のあいだ）を通す 2 本。
+# 利用者の指定（2026-08-14）:
+#   D6（ROW1）… 垂直に下ろして、直角に曲げて FFC へ
+#   D2（ROW0）… D5 と同じ長さだけ**逆向き（右）**へ水平に伸ばしてから
+#                垂直に下ろし、直角に曲げて FFC へ
+INNER_LANE_ROWS = ("ROW1", "ROW0")
+
+
+def _prewire_inner_rows(board, row_y, clr, pitch):
+    """**ROW0/ROW1 を列の内側で L 字に引く**（2026-08-14・利用者）。
+
+    Freerouting に任せると盤面を斜めに横断していた（実測 ROW0 は
+    直線 22.4mm に対し 39.1mm）。ROW2/3/4 と同じ理屈で、経路に選択の
+    余地が無いものは自分で引く。
+
+    ⚠️ **横枝の帯は ROW2/3/4 の帯より「上」に取る**（＝ y が小さい側。
+    2026-08-14）。最初 ROW2/3/4 と同じ `lo..hi`（FFC と MP のあいだ）を
+    使ったら **y=110.6/111.0**、つまり外周組の帯（107.4/107.8/108.2）と
+    FFC のパッド（109.15）の**両方より下**に降りた。縦に下りる 2 本が
+    横に走る 3 本を必ず突き抜けるので、**不要な交差が 7 件**出た
+    （利用者の指摘）。
+
+    ROW0/ROW1 は FFC へ**上から**入るだけなので、外周組の帯より下へ
+    行く理由が無い。帯を外周組より上に置けば、縦の 2 本は横の 3 本と
+    出会う前に FFC のパッドへ落ちる。
+
+    ⚠️ **`autoroute.PREWIRED_DB` に `ROW[01]` を入れるのが対。**
+    入れないと DSN に未配線として残り、Freerouting が二重に引く
+    （ROW2/3/4 で実際に起きた）。
+    """
+    pads = {}
+    for fp in board.Footprints():
+        ref = fp.GetReference()
+        if ref not in ("U_MCU", "J_MAIN"):
+            continue
+        for pad in fp.Pads():
+            if pad.GetNetname() in INNER_LANE_ROWS:
+                pads.setdefault(pad.GetNetname(), {})[ref] = pad
+
+    # **D5（ROW4）のパッドから出る水平の枝**と同じ長さ（1.465mm）。
+    # **数字を書かず実物から測る。**
+    #
+    # ⚠️ **「ROW4 の水平区間」で最大を取ってはいけない**（2026-08-14）。
+    # ROW4 には水平区間が 2 つある:
+    #   パッドから出る枝  1.465mm  ← 利用者の言う「D5 と同じ長さ」
+    #   FFC の近くの帯    7.835mm  ← 別物
+    # `max` で拾って 7.835mm を使い、**D2 が BT1_- のパッドの上を
+    # 縦断して短絡した。**MCU のパッドに接している方だけを見る。
+    mcu_y = {p.GetPosition().y for fp in board.Footprints()
+             if fp.GetReference() == "U_MCU" for p in fp.Pads()}
+    run = next(abs(t.GetStart().x - t.GetEnd().x) for t in board.GetTracks()
+               if t.GetNetname() == "ROW4"
+               and t.GetStart().y == t.GetEnd().y
+               and t.GetStart().y in mcu_y)
+
+    # **外周組の帯より上**。いちばん上の帯（ROW2 のもの）からさらに
+    # 1 ピッチずつ上へ積む。
+    #
+    # ⚠️ **横に走る区間なら何でも良いわけではない。**`_prewire_rows` は
+    # MCU のパッドへ入る短い横枝も引いており（ROW2 なら y=92.95）、
+    # 素朴に `min` を取るとそれを掴んで **y=92.55**、つまり MCU の列の
+    # ど真ん中に帯を作ってしまう（2026-08-14 に実際に例外で止まった）。
+    # **FFC 寄り＝ MCU のパッド列より下にある横区間**だけを見る。
+    col_y = max(p.GetPosition().y for fp in board.Footprints()
+                if fp.GetReference() == "U_MCU"
+                for p in fp.Pads() if p.GetNetname() in OUTER_LANE_ROWS)
+    top = min(t.GetStart().y for t in board.GetTracks()
+              if t.GetNetname() in OUTER_LANE_ROWS
+              and t.GetStart().y == t.GetEnd().y
+              and t.GetStart().y > col_y)
+
+    n = 0
+    for i, name in enumerate(INNER_LANE_ROWS):
+        mcu = pads[name]["U_MCU"]
+        ffc = pads[name]["J_MAIN"]
+        band = top - (i + 1) * pcbnew.FromMM(pitch)
+        # ⚠️ **y は下が正。**「帯が MCU パッドより下」は band > mcu.y。
+        # 逆に書いて、正しい帯なのに例外で止めた（2026-08-14）。
+        if band <= mcu.GetPosition().y:
+            raise RuntimeError(
+                f"{name}: 横枝の帯（y={pcbnew.ToMM(band):.2f}）が"
+                f" MCU パッド（y={pcbnew.ToMM(mcu.GetPosition().y):.2f}）"
+                "より上。**黙って詰めないこと**")
+        if name == "ROW1":
+            # 垂直に下ろす → 帯で右へ → FFC の真上で下ろす
+            drop_x = mcu.GetPosition().x
+        else:
+            # **D5 と同じ長さだけ右へ伸ばしてから下ろす**（利用者の指定）。
+            #
+            # ⚠️ **ここで勝手に長さを変えないこと**（2026-08-14）。
+            # 一度 BT1_- に当たると見て 8.42mm へ伸ばしたが、
+            # **「D5 と同じ長さ」という指定そのものを書き換えていた。**
+            # 当たるなら当たると報告して判断を仰ぐ。黙って動かさない。
+            drop_x = mcu.GetPosition().x + run
+        pts = [pcbnew.VECTOR2I(drop_x, mcu.GetPosition().y),
+               pcbnew.VECTOR2I(drop_x, band),
+               pcbnew.VECTOR2I(ffc.GetPosition().x, band),
+               ffc.GetPosition()]
+        for s, e in zip([mcu.GetPosition()] + pts, pts):
+            if s != e:
+                _track(board, s, e, pcbnew.B_Cu, mcu.GetNet())
+                n += 1
+    print(f"      列の内へ ROW0/ROW1 を {n} 区間")
 
 
 def _antenna_keepout(board):
