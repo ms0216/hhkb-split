@@ -101,7 +101,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 ## よく使うコマンド
 
 ```
-.venv/bin/pytest tools -q                      # 全検査（448 件・約 14 分）
+.venv/bin/pytest tools -q                      # 全検査（440 件・約 9 分）
 .venv/bin/python3 tools/gen_case.py            # ケース・上ケース・蓋・脚
 .venv/bin/python3 tools/gen_assembly.py        # 組み立て干渉（0 でなければならない）
 tools/refresh_view.sh                          # ★**CAD を変えたら必ずこれ。**STL を出し直して .blend まで作る（片側だけなら `left`）
@@ -125,16 +125,21 @@ KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/
 
 ## 検査を回す順番（**時間を無駄にしないため**）
 
-**同じ検査を二重に回さない。**`gen_assembly.py`（実形状の干渉・約 20 分）は
-`pytest tools`（約 14 分）の `test_nothing_bites_into_anything_else` と
-**同じことをしている。**両方叩くと 30 分以上を捨てる（2026-08-12 に実際にやった）。
+**実形状の干渉検査は、既定では走らない**（2026-08-15）。`pytest tools` の
+`test_nothing_bites_into_anything_else` は `REQUIRE_KICAD=1` を付けたときだけ
+走る。**手元で見たいときは明示する**（`REQUIRE_KICAD=1 .venv/bin/pytest
+tools/test_assembly.py -k nothing_bites`・片側 5 分以上）。CI は real-shape
+ジョブが形に関わる push のたびに見る。
+
+⚠️ **`gen_assembly.py`（実形状の干渉・約 20 分）と同じことをしている。**
+両方叩くと時間を捨てる（2026-08-12 に実際にやった）。
 
 | 段 | やること | 時間 | 目的 |
 |---|---|---|---|
 | 1 | **箱モードで当たりを見る**（`build_assembly(..., real=False)` を直接叩く） | 数十秒 | 大きな取り違えをその場で潰す |
 | 2 | **`tools/refresh_view.sh`** で STL と .blend | 約 6 分 | **利用者が見られるようにする**／自分も目で見る |
 | 3 | 変更をひととおり終える | — | **1 つ直すたびに 3 を回さない。まとめる** |
-| 4 | **`pytest tools` を 1 回**（実形状の干渉を含む） | 約 14 分 | 本番の検査 |
+| 4 | **`pytest tools` を 1 回** | 約 9 分 | 本番の検査（実形状の干渉は別途） |
 | 5 | コミット | — | |
 
 **基板を触ったときだけ** `gen_pcb → autoroute → drc`（約 5 分）を 4 の前に足す。
