@@ -608,7 +608,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "res_1M"
+		(property "Value" "1M"
 			(at 0 -1.65 0)
 			(layer "B.Fab")
 			(uuid "ade605d9-6af9-46d8-93df-a48024fda26f")
@@ -760,7 +760,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "schottky"
+		(property "Value" "B5819W"
 			(at 0 -2.1 0)
 			(layer "B.Fab")
 			(uuid "54c817a7-842a-46cc-8b11-bb597877579c")
@@ -1193,7 +1193,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "res_1M"
+		(property "Value" "1M"
 			(at 0 -1.65 90)
 			(layer "B.Fab")
 			(uuid "a0866ea3-44aa-4f99-bf37-edb5bc0d152e")

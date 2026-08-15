@@ -403,22 +403,33 @@ def _add_power_netclasses(d, mm):
 # 短絡した）。ソケットの中心ぶん 2.3mm ずらす。
 # 定義は bands.py（BAND_H, BAND_Y）。生成側と検査側で共有する。
 
+# 3 要素目は基板の Value フィールドに書く文字列。
+# **kind（FP_MAP のキー）をそのまま Value に使わないこと。**
+# kind は「フットプリントを引くための内部の名前」であって、部品の
+# 型番でも規格値でもない。JLCPCB の部品マッチはこの Value 欄を見るので、
+# kind のままだと `schottky`/`ffc_12p`/`res_1M` が「該当部品なし」で
+# 赤字（要手動選定）になる。`cap_100u`/`cap_100n` は数字が近いぶん
+# コメント不一致の警告で済むが、それも同じ原因。
+# 値は parts-audit.md に確定記録済みの型番・規格をそのまま使う。
 ELEC_FP = {
     # SOIC-16 はコートヤード 10.49mm で、帯 9.25mm に**入らない**。
     # 位置の微調整で逃がそうとしていたが、どちら側にはみ出すかを
     # 選んでいるだけだった。TSSOP-16 は 5.59mm で 3.66mm 余る。
-    "74LVC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm"),
-    "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric"),
-    "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric"),
-    "res_1M": ("Resistor_SMD", "R_0805_2012Metric"),
-    "schottky": ("Diode_SMD", "D_SOD-123"),
+    "74LVC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm", "74LVC595"),
+    "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric", "100nF"),
+    "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric", "100uF"),
+    "res_1M": ("Resistor_SMD", "R_0805_2012Metric", "1M"),
+    "schottky": ("Diode_SMD", "D_SOD-123", "B5819W"),
     "ffc_12p": ("Connector_FFC-FPC",
-                "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal"),
+                "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal",
+                "FH12-12S-0.5SH(55)"),
     # **電源スイッチは基板に載らない。**背面のパネルに付けて配線で繋ぐ。
     # 基板の後端から背面まで 23.3mm あり、基板上のどこに置いても手が届かない
     # （open-gaps #17）。基板側はランド 2 個で受ける。
-    "wire_pads": ("TestPoint", "TestPoint_Pad_2.0x2.0mm"),
-    "battery_holder": ("TestPoint", "TestPoint_Pad_2.0x2.0mm"),
+    # ランド自体は部品ではないので Value は kind のままでよい
+    # （JLCPCB の BOM には出てこない・footprint 名で区別できれば足りる）。
+    "wire_pads": ("TestPoint", "TestPoint_Pad_2.0x2.0mm", "wire_pads"),
+    "battery_holder": ("TestPoint", "TestPoint_Pad_2.0x2.0mm", "battery_holder"),
 }
 
 
@@ -709,7 +720,7 @@ def _place_electronics(board, half, net, plate_w):
             # 子基板の中心 X がそのまま揃える先になる。
             align_to = x = daughterboard_x_center(half, plate_w)
         kind, pins = decl[ref]
-        lib, name = ELEC_FP[kind]
+        lib, name, value = ELEC_FP[kind]
         # **ケースの中で配線する部品は、基板側をランド 2 個で受ける。**
         # 電池ボックスと電源スイッチがこれ。どちらもリード線が生えていて、
         # 基板の上には載らない（電源スイッチは背面のパネルに付く。
@@ -729,7 +740,7 @@ def _place_electronics(board, half, net, plate_w):
             # 回路図の配置表・board_refs・検査が一斉にずれる。
             wire = kind in WIRE_PAD_KINDS
             fp.SetReference(f"{ref}_{pin_order[k]}" if wire else ref)
-            fp.SetValue(kind)
+            fp.SetValue(value)
             board.Add(fp)
             fp.Flip(fp.GetPosition(), False)
             # **原点ではなくコートヤードを帯の中心に合わせる。**

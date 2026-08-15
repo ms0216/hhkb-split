@@ -24805,7 +24805,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "cap_100n"
+		(property "Value" "100nF"
 			(at 0 -1.68 0)
 			(layer "B.Fab")
 			(uuid "bd2e9971-7e53-41f0-985c-d3660ce02399")
@@ -34432,7 +34432,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "cap_100n"
+		(property "Value" "100nF"
 			(at 0 -1.68 0)
 			(layer "B.Fab")
 			(uuid "b3764e65-7b09-4dde-a899-fabd520e6008")
@@ -34865,7 +34865,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "ffc_12p"
+		(property "Value" "FH12-12S-0.5SH(55)"
 			(at 0 -5.6 0)
 			(layer "B.Fab")
 			(uuid "ef18304b-355b-46c8-a3be-aeb29a426051")

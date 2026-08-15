@@ -354,7 +354,7 @@ def build():
     from gen_pcb import ELEC_FP
     for ref, (x, y) in POWER_PLACE.items():
         kind, pins = parts[ref]
-        lib, name = ELEC_FP[kind]
+        lib, name, value = ELEC_FP[kind]
         # 電池ボックスと電源スイッチは「基板に載らない部品」で、
         # 基板側はランドで受ける。**端子の数だけランドを置く**
         # （主基板の gen_pcb と同じ規則。BT1 は GND だけ・
@@ -366,7 +366,7 @@ def build():
             if ref in POWER_ROT:
                 fp.SetOrientationDegrees(POWER_ROT[ref])
             fp.SetReference(f"{ref}_{pin}" if wire else ref)
-            fp.SetValue(kind)
+            fp.SetValue(value)
             board.Add(fp)
             fp.Flip(fp.GetPosition(), False)
             if wire:

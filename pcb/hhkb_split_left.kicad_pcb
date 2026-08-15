@@ -23918,7 +23918,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "cap_100n"
+		(property "Value" "100nF"
 			(at 0 -1.68 0)
 			(layer "B.Fab")
 			(uuid "052bd8f5-614b-4378-a7fc-d4af58467e70")
@@ -25194,7 +25194,7 @@
 				(justify mirror)
 			)
 		)
-		(property "Value" "ffc_12p"
+		(property "Value" "FH12-12S-0.5SH(55)"
 			(at 0 -5.6 0)
 			(layer "B.Fab")
 			(uuid "f0eaeb32-e557-419d-b607-02e91d3e87a6")
