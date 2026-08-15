@@ -348,10 +348,11 @@ B.Cu が密になったぶん、Freerouting の丸め不足が顕在化した
 
 1. ~~ガーバー・BOM・CPL を出す~~（✅ 済み。`tools/export_fab.py` が出す。
    発注前の門 2 つと `tools/test_export_fab_gate.py` 付き）
-2. **FFC ケーブルを決める。**`FFC_LENGTH` / `FFC_SLACK` は暫定値
-   （[provisional-values](provisional-values.md)）。届くことは
+2. ~~**FFC ケーブルを決める。**~~（✅ **2026-08-16 確定**。uxcell 12 芯
+   0.5mm ピッチ **80mm・A タイプ**。`FFC_LENGTH = 80.0`）。届くことは
    `test_the_ffc_cable_reaches_the_daughterboard` が見ている
-   （左 92.1mm / 右 78.5mm 要る。100mm なら足りる）
+   （**左右とも 29.0mm** ＋ `FFC_SLACK` 25.0 = 54.0mm 要る。80mm で足りる）。
+   **`FFC_SLACK` はまだ暫定**（[provisional-values](provisional-values.md)）
 
 ---
 

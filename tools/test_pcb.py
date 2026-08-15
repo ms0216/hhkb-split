@@ -794,7 +794,12 @@ def test_the_routing_was_made_from_the_current_placement(half):
 def ffc_span(half):
     """J_DB（本体）と J_MAIN（子基板）の平面距離 mm。
 
-    **左右で別の値になる。**子基板の左右位置が半分ごとに違うため。
+    **平面距離だけ。**Z の落差（本体基板は TILT_DEG=7.3° で傾き、子基板は
+    床に水平）も、両端の曲げも見ていない。それらは FFC_SLACK が受け持つ。
+
+    以前ここには「**左右で別の値になる**」と書いてあったが、
+    「FFC コネクタの X を子基板と揃えた」（96e8680）で左右とも 29.0mm に
+    なった。斜めの成分が消えて縦距離だけになったため。
     """
     from gen_case import (BUMP_DEPTH, DB_D, DB_FROM_REAR, WALL,
                           daughterboard_x_center)
