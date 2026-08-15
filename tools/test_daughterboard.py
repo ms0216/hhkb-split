@@ -374,12 +374,37 @@ def test_the_ground_pour_is_actually_absent_under_the_antenna():
     # 要求していたが、それは XIAO の全幅（18.3mm）を使っていた頃の
     # 数字で、**アンテナは 3.5mm 角**。広すぎる禁止域は地板を無駄に
     # 削るだけだったので、`interface.antenna_x_band()` の幅に直した。
-    from interface import ANTENNA_L, ANTENNA_W, antenna_x_band
-    want_w = antenna_x_band()[1] - antenna_x_band()[0]
+    # 2026-08-15 に禁止域を広げた（`antenna_x_keepout` / `antenna_y_keepout`）。
+    # **`antenna_x_band()` はもう禁止域の出所ではない**（あれは _route が
+    # 使う狭い帯）。ここで band を使っていると、禁止域を広げた瞬間に
+    # 落ちる検査になってしまう。
+    from interface import (ANTENNA_CLEAR_KEEPOUT, ANTENNA_CLEAR_MIN,
+                           ANTENNA_L, ANTENNA_W, antenna_x_keepout)
+    want_w = antenna_x_keepout()[1] - antenna_x_keepout()[0]
     assert abs((x_hi - x_lo) - want_w) < 0.1, (
-        f"キープアウトの幅 {x_hi-x_lo:.2f}mm がアンテナの帯 {want_w:.2f}mm と違う")
-    assert (y_hi - y_lo) >= ANTENNA_L - 0.01, (
-        f"キープアウトの高さ {y_hi-y_lo:.2f}mm がアンテナ {ANTENNA_L}mm を覆わない")
+        f"キープアウトの幅 {x_hi-x_lo:.2f}mm が想定 {want_w:.2f}mm と違う")
+
+    # ⚠️ **高さは「アンテナを覆う」だけでは足りない**（2026-08-15）。
+    # 直前まで `>= ANTENNA_L` しか見ておらず、**y の逃げを 0 にしても
+    # 13 件全部が通った**（故意に壊して確かめた）。逃げの分まで見る。
+    want_h = ANTENNA_L + 2 * ANTENNA_CLEAR_KEEPOUT
+    assert abs((y_hi - y_lo) - want_h) < 0.1, (
+        f"キープアウトの高さ {y_hi-y_lo:.2f}mm が想定 {want_h:.2f}mm と違う")
+
+    # **逃げが Seeed 自身の値（1.76mm）を下回らないこと。**
+    # 出所は XIAO の公式 KiCad プロジェクトの実測（interface.py に経緯）。
+    # ここが唯一、**自分の生成物ではない値**と突き合わせている行。
+    assert ANTENNA_CLEAR_KEEPOUT >= ANTENNA_CLEAR_MIN, (
+        f"逃げ {ANTENNA_CLEAR_KEEPOUT}mm が Seeed 自身の "
+        f"{ANTENNA_CLEAR_MIN}mm を下回る")
+
+    # **何を禁止しているかまで見る**（2026-08-15）。
+    # 「設定しただけでは効いていない」——ベタだけ抜いて配線とビアを
+    # 通していた頃があり、その差は形からは見えない。
+    ka_zone = next(z for z in zones if "(keepout" in z)
+    for what in ("tracks", "vias", "copperpour"):
+        assert f"({what} not_allowed)" in ka_zone, (
+            f"禁止域が {what} を禁止していない")
 
     EPS = 0.01      # 境界ちょうどはベタの回り込みの頂点が載るので内側で見る
     n = 0

@@ -209,6 +209,25 @@ def _pad_boxes(board, skip=None):
             if skip is not None and (ref, pad.GetNumber()) == skip:
                 continue
             out.append(pad.GetBoundingBox())
+    # ⚠️ **ルール領域（アンテナの禁止域）もここに入れる**（2026-08-15）。
+    #
+    # 名前は `_pad_boxes` だがパッドだけでは足りない。**`spots()` は
+    # `_obstacles()` を通らない**ので、禁止域を入れ忘れると、パッド直近の
+    # ファンアウトのビアだけが禁止域に入る。実際 1 個入って DRC が
+    # items_not_allowed を出した（中心 y=1.95・境界 1.80・外径ぶん食い込み）。
+    #
+    # `_obstacles` 側だけ直して「直した」と思ったが、**ビアを置く経路が
+    # 2 つある**ことを見ていなかった（`spots` と `stitch`）。
+    # **置き場所を決める経路を全部数えてから直す。**
+    #
+    # 箱はビアの外径ぶん膨らませる。判定側（`_blocked`）が見るのは
+    # **ビアの中心**なので、そのままだと中心が外なら通り、銅は中に入る。
+    via_r = pcbnew.FromMM(_via_keepout_mm(board))
+    for z in board.Zones():
+        if z.GetIsRuleArea():
+            bb = z.GetBoundingBox()
+            bb.Inflate(via_r)
+            out.append(bb)
     return out
 
 
@@ -386,9 +405,23 @@ def _obstacles(board):
     # 線分として _segment_obstacles / _near_segment で見る。
     for d in board.GetDrawings():
         boxes.append(d.GetBoundingBox())
+    # ⚠️ **ルール領域は「ビアの外径ぶん」膨らませる**（2026-08-15）。
+    #
+    # 判定側（`_room_for_a_via`）が見るのは**ビアの中心**なので、箱を
+    # そのまま入れると**中心が外なら通ってしまい、銅は中に入る。**
+    # 実際そうなった: 禁止域の境界 y=1.80 に対しビアの中心 y=1.95、
+    # 外径 0.30 の半分がちょうど食い込んで、**DRC が items_not_allowed を
+    # 1 件出した**（自作の検算スクリプトも中心で見ていたので気づけず、
+    # KiCad の DRC のほうが正しかった）。
+    #
+    # 上のパッドの穴と同じ型（銅の箱だけ見てビアが 0.479mm まで寄れた）。
+    # **距離を要求する側の寸法を、箱のほうに先に足しておく。**
+    via_r = pcbnew.FromMM(_via_keepout_mm(board))
     for z in board.Zones():
         if z.GetIsRuleArea():
-            boxes.append(z.GetBoundingBox())
+            bb = z.GetBoundingBox()
+            bb.Inflate(via_r)
+            boxes.append(bb)
     return boxes
 
 

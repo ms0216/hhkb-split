@@ -1262,9 +1262,9 @@ def _antenna_keepout(board):
     空くのは 1mm 幅だけ」として捨てられていた。**XIAO が奥へ動いた今、
     コネクタはアンテナから 7mm 以上離れており、影の下には何も無い。**
 
-    位置は interface.antenna_y_span（ケース側と同じ式）から取る。
+    位置は interface.antenna_y_keepout（実体 + 逃げ）から取る。
     """
-    from interface import antenna_x_band, antenna_y_span
+    from interface import antenna_x_keepout, antenna_y_keepout
 
     # **アンテナの実体をそのまま使う。切り詰めも水増しもしない**
     # （2026-08-14・利用者の指摘「ぱっと見ズレている」）。
@@ -1283,8 +1283,8 @@ def _antenna_keepout(board):
     #   `margin = 1.0`
     #       手前側を 1mm 広げていた。アンテナの外を広げるだけで、
     #       禁止域が全幅だった頃の名残。
-    lo, hi = antenna_y_span(DB_D / 2)         # 板の中心を原点とした座標
-    x_lo, x_hi = antenna_x_band()
+    lo, hi = antenna_y_keepout(DB_D / 2)      # 板の中心を原点とした座標
+    x_lo, x_hi = antenna_x_keepout()
     # **パッドと本当に重なるなら止める**（黙って縮めない）。
     for fp in board.GetFootprints():
         for pad in fp.Pads():
@@ -1299,19 +1299,23 @@ def _antenna_keepout(board):
                     f"重なる（({px:.2f},{py:.2f})）。**黙って縮めないこと**——"
                     "部品を動かすか、アンテナの位置を見直す")
     zone = pcbnew.ZONE(board)
-    # **抜くのはベタだけ。配線は通す。**
+    # **ベタ・配線・ビアを全部禁止する**（2026-08-15・利用者の指示）。
     #
-    # FFC コネクタ（板の手前）から XIAO のパッドへ行く 12 本は、
-    # **必ずこの帯を横切る**（アンテナが XIAO の先端にあるため）。
-    # 配線まで禁止すると 14 件の違反になり、迂回路も無い（帯が板の全幅）。
+    # **以前は配線とビアを許可していた。**その理由は「FFC から XIAO へ行く
+    # 12 本が必ずこの帯を横切り、禁止すると 14 件の違反になる」だったが、
+    # **これは帯が板の全幅だった頃の記録。**帯を x 4.5mm に絞った
+    # 2026-08-14（#41）以降は当てはまらない。
     #
-    # アンテナに効くのは**面積の大きい地板**で、0.25mm の線 12 本とは
-    # 桁が違う。**「完全な禁止域」ではない。**そう書かないこと。
+    # 実測（2026-08-15・`pcb/hhkb_split_daughterboard.kicad_pcb`）:
+    # **いまの帯に掛かる配線・ビア・パッドは 0 件。**だから配線とビアを
+    # 禁止しても、追加の違反は出ない。**許可を残す理由がもう無い。**
+    #
+    # パッドだけは許可のまま。禁止域とパッドが重なったら、この関数の
+    # 手前にある検査が `RuntimeError` で止める（黙って縮めないため）。
     zone.SetIsRuleArea(True)
     zone.SetDoNotAllowZoneFills(True)
-    # **既定は「全部禁止」。**明示的に許可しないと配線まで止まる（14 件出た）。
-    zone.SetDoNotAllowTracks(False)
-    zone.SetDoNotAllowVias(False)
+    zone.SetDoNotAllowTracks(True)
+    zone.SetDoNotAllowVias(True)
     zone.SetDoNotAllowPads(False)
     layers = pcbnew.LSET()
     for lay in (pcbnew.F_Cu, pcbnew.B_Cu):
@@ -1327,11 +1331,15 @@ def _antenna_keepout(board):
     # 抜きすぎた 41mm²/面 はただの地板の損失で、**2.4GHz の基準電位を
     # いちばん要る基板で削っていた**（この節の目的と逆）。
     #
-    # 正しい範囲は `interface.antenna_x_band()`——アンテナの実寸
-    # 3.5mm に逃げ 0.5mm を両側。**同じ関数を _route も使っている**
-    # （レーンがアンテナの下を通らないようにするため）。出所を 1 つに揃える。
-    from interface import antenna_x_band
-    x_lo, x_hi = antenna_x_band()
+    # 正しい範囲は `interface.antenna_x_keepout()`——アンテナの実寸に
+    # 逃げ `ANTENNA_CLEAR_KEEPOUT` を足したもの（2026-08-15 に広げた）。
+    #
+    # `antenna_x_band()`（_route が使う、狭い対称の帯）とは**別の関数**。
+    # 禁止域は「銅を抜く範囲」で、あるだけ広いほうが良い。帯は「レーンを
+    # 通さない範囲」で、広げるほど引ける線が減る。**用途が逆なので
+    # 同じ値を使わない。**
+    #
+    # 上の `x_lo, x_hi` を再代入せずそのまま使う（同じ関数から取った値）。
     pts = pcbnew.VECTOR_VECTOR2I()
     for dx, dy in ((x_lo, lo), (x_hi, lo), (x_hi, hi), (x_lo, hi)):
         pts.append(to_kicad(dx, dy))
