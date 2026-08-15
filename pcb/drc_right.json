@@ -1,8 +1,8 @@
 {
   "board": "hhkb_split_right.kicad_pcb",
-  "sha256": "e10481082ff1ce20acfa501e3be884aa3c4917166ed4a920c23bab330df1c0ed",
+  "sha256": "bbb0acb30e1f5d4a18d397cf1c4ed74a318bf3b2cc2fdd999390b3199ec2a940",
   "violations": 0,
-  "unconnected": 0,
+  "unconnected": 1,
   "warnings": 45,
   "warning_kinds": {
     "hole_to_hole": 34,

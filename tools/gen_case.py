@@ -65,6 +65,9 @@ from interface import (  # noqa: E402
     M2_PILOT_D,
     PLATE_T,
     boss_positions,
+    battery_x_center,
+    daughterboard_x_center,
+    inner_sign,
 )
 
 # --------------------------------------------------------------------------
@@ -148,6 +151,9 @@ PLATE_TOP_FRONT = round(
 # 3Dプリント（K1 Max / PLA / ノズル 0.4mm）に合わせた値
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
+from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
+assert WALL == _IF_CASE_WALL, (
+    f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
 FLOOR = 2.4              # 底板。0.4mm の 6 倍。
                          # 当初 2.0mm にしていたが、蓋(1.6mm)をレールに落とし込むと
                          # 床の内面より上に出て電池に食い込んだため厚くした。
@@ -173,6 +179,11 @@ AA_D, AA_L = 14.5, 50.5
 BATT_H = BATT_BOX_H              # 占有高さ
 BATT_W = BATT_BOX_W              # 占有奥行
 BATT_X = BATT_BOX_L              # 占有幅（長辺。裸の電池 2 本＋電極と同じ 109mm）
+# interface.py は build123d を読めないので envelopes から取れず、同じ値を
+# 持っている。**黙ってずれないよう、ここで突き合わせる。**
+from interface import BATT_X as _IF_BATT_X  # noqa: E402
+assert BATT_X == _IF_BATT_X, (
+    f"interface.BATT_X({_IF_BATT_X}) が envelopes.BATT_BOX_L({BATT_X}) とずれている")
 BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
 # **コブは要る。実機と同じ理由で。**
 #
@@ -205,9 +216,11 @@ BUMP_DEPTH = _BUMP_BASE
 # **寝かせる。立てない。** XIAO は子基板に平らに載るので、子基板を立てると
 # USB-C コネクタが横を向いてしまい、奥の壁に届かない。
 # --------------------------------------------------------------------------
-DB_W = 21.0              # 子基板の幅（左右）。XIAO は 17.8mm 幅。
-                         # 20.0 では FFC コネクタと取付穴が入らなかった。
-                         # 22.0 でも電池からは 10.2mm 離れ、条件を満たす
+# DB_W の出所は interface.py（基板の生成が読むため）。ここは再輸出。
+# 子基板の幅（左右）。XIAO は 17.8mm 幅。
+# 20.0 では FFC コネクタと取付穴が入らなかった。
+# 22.0 でも電池からは 10.2mm 離れ、条件を満たす
+from interface import DB_W  # noqa: E402,F401
 # **2.4GHz のアンテナから金属を遠ざける距離。**
 #
 # XIAO のアンテナは USB と反対の端にある。単3 電池は金属の塊で、至近距離に
@@ -960,46 +973,9 @@ def battery_center(h_body):
     return y_rear_inner - BATT_MARGIN_REAR - BATT_W / 2
 
 
-def inner_sign(half):
-    """分割の**内縁**（相手側の半分に面する側）が +X か −X か。
-
-    左半分は右端が内縁、右半分は左端が内縁。
-    """
-    return 1.0 if half == "left" else -1.0
-
-
-def battery_x_center(half, w):
-    """電池室の中心 X。**外側へ寄せる。**
-
-    奥の壁ぎわの中央に置くと、子基板の場所が無くなる。外へ寄せれば
-    内縁側に 24mm（左）/ 56mm（右）空き、そこへ子基板が入る。
-    ケースの外形も電池の向きも変えずに済むのが、この寄せ方の利点。
-    """
-    return -inner_sign(half) * ((w / 2 - WALL) - BATT_X / 2 - CLEARANCE)
-
-
-def daughterboard_x_center(half, w):
-    """子基板の中心 X。電池の内側端と、奥のネジボスの間に置く。
-
-    **奥のネジボスに当たらないこと**が効く制約。左半分では使える幅が
-    24.1mm しかなく、子基板 24.0mm でほぼ一杯になる。
-    """
-    s = inner_sign(half)
-    # 電池の**内縁側の端**。中心の絶対値に足すと外縁側の端になる（一度間違えた）。
-    lo = abs(battery_x_center(half, w) + s * BATT_X / 2) + CLEARANCE
-    # **本体のネジボスは制約にならない。** 子基板はコブの中にあり、
-    # ボスは本体側（コブより手前）に立っているため。以前これを制約に
-    # 入れていたせいで、子基板を電池側へ寄せざるをえず、アンテナが
-    # 電池から 1.0mm の位置になっていた。
-    # 壁から 0.8mm 離す。0.2mm では内側の角丸（R0.6）に当たり、組み立て検査が
-    # 68mm^3 の食い込みを出した。1.5mm だと子基板を内側へ寄せきれず、
-    # アンテナと電池の距離が 8.9mm（要 10mm）に落ちた。
-    hi = w / 2 - WALL - 0.8
-    if hi - lo < DB_W:
-        raise RuntimeError(
-            f"{half}: 子基板の場所が {hi - lo:.1f}mm しかない（{DB_W}mm 必要）")
-    # **電池から最も遠い位置（＝内側の壁ぎわ）に寄せる。**アンテナのため。
-    return s * (hi - DB_W / 2)
+# inner_sign / battery_x_center / daughterboard_x_center は **interface.py が出所**。
+# 本体基板の FFC コネクタ（J_DB）が子基板と X を揃えるために読むので、
+# KiCad の Python から読める側へ移した（2026-08-15）。ここは再輸出だけ。
 
 
 def power_switch_x_center(half, w):

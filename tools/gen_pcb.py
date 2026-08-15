@@ -279,11 +279,18 @@ GUIDE_VIAS = {
     # COL8: SW17(214.35,78.41) - SW31(219.12,116.51) 間。
     # ST24 右穴の左側の通路（x=223.2、実測クリアランス 1.0mm 以上）の中間。
     "COL8": (223.2, 91.5),
-    # V3V3: D_PWR(95.65,69.12) - J_DB pad6(72.75,85.38) 間。
-    # J_DB は 0.5mm ピッチの SMD で、隣のパッドとの隙間(0.2mm)にビアは
-    # 物理的に入らない。パッド 6 の長辺の外側、真上ぎりぎりに置く。
-    "V3V3": (72.75, 84.0),
 }
+
+# **J_DB のパッドの真上に置く中継ビア。**座標は書かない。
+#
+# ⚠️ **かつて (72.75, 84.0) と直書きしていた。**J_DB が子基板と X を
+# 揃えるために 1.35mm 動いた瞬間、このビアは V3V3 のパッド(76.10)から
+# 外れ、**ROW_B のパッド(72.60)の上に乗った。**結果 ROW_B が未配線に
+# なった（2026-08-15）。**動くものの座標を写して持たない。**
+#
+# J_DB は 0.5mm ピッチの SMD で、隣のパッドとの隙間(0.2mm)にビアは
+# 物理的に入らない。パッドの長辺の外側、真上ぎりぎりに置く。
+GUIDE_VIAS_ABOVE_JDB_PAD = {"V3V3": 1.375}   # ネット → パッドから上へ何 mm
 
 
 def guide_vias(board, half):
@@ -296,7 +303,17 @@ def guide_vias(board, half):
     """
     if half != "right":
         return
-    for netname, (x, y) in GUIDE_VIAS.items():
+    spots = dict(GUIDE_VIAS)
+    # **J_DB のパッドから座標を取る。**直書きすると、J_DB が動いた日に
+    # 黙って別のパッドの上に乗る（上の注記）。
+    jdb = board.FindFootprintByReference("J_DB")
+    for netname, up in GUIDE_VIAS_ABOVE_JDB_PAD.items():
+        pad = _pad_with_net(jdb, netname)
+        if pad is None:
+            raise SystemExit(f"guide_vias: J_DB に {netname} のパッドが無い")
+        spots[netname] = (pcbnew.ToMM(pad.GetPosition().x),
+                          pcbnew.ToMM(pad.GetPosition().y) - up)
+    for netname, (x, y) in spots.items():
         n = board.FindNet(netname)
         if n is None:
             raise SystemExit(f"guide_vias: ネットが無い: {netname}")
@@ -405,6 +422,12 @@ ELEC_FP = {
 }
 
 
+# PLACE の x に書ける印。**置くときに実際の値へ解決する。**
+# J_DB の x は子基板の J_MAIN と揃える必要があり、それはケースの幅
+# （＝キー配列）から決まるので、モジュールを読む時点では出せない。
+J_DB_X = "align_with_daughterboard"
+
+
 # 参照名 → (帯の番号, 帯の中での x)。
 #
 # **全部を帯 0（奥から 1 本目）に置く。**帯をまたぐと配線が段を縦断して
@@ -472,17 +495,18 @@ PLACE = {
         # 圧縮・分散を数十通り試した）、**帯をまたいで逃がして初めて
         # 未配線が 0〜2 まで減った。**
         #
-        # x は総当たりで実測（45〜65 を 5mm 刻み、当たりの周辺をさらに
-        # 詰めた）。63.0 が最良。子基板コネクタの中心 X は +59.5mm
-        # （gen_case.daughterboard_x_center）で、63.0 はそこから 3.5mm
-        # ——ほぼ真横に来る。
+        # ⚠️ **x は手で書かない。子基板の J_MAIN と揃える**（2026-08-15・
+        # 利用者の指摘「コネクタの X 座標が互いに合っていない」）。
+        # かつて総当たりで 63.0 を選んでいたが、子基板コネクタの中心は
+        # +59.48mm で **3.52mm ずれていた。**両方とも口が手前を向いている
+        # ので、ずれたぶん FFC が横へ折れる。J_DB_X が
+        # interface.daughterboard_x_center から実際の値を取る。
         #
         # ⚠️ **未配線の本数は DSN_CLEARANCE_MARGIN_UM（autoroute.py）と
         # 連動する。**左右で同じマージン値を使う制約（利用者の要望）の下、
-        # 両方の DRC 違反 0 と未配線最小を両立する値が 15µm で、
-        # そのとき左の未配線は 2 本（うち 1 本は COL1 の信号、
-        # もう 1 本は GND ベタの浮島）。マージンを動かすとここも動く。
-        "J_DB": (1, 63.0),
+        # 両方の DRC 違反 0 と未配線最小を両立する値が 15µm。
+        # マージンを動かすとここも動く。
+        "J_DB": (1, J_DB_X),
         # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # C_U1 はここに書かない。**DECOUPLE_BESIDE が U1 から算出する。**
         "U1": (0, 16.5),
@@ -501,8 +525,9 @@ PLACE = {
         # 基板最遠端の列）は gnd_fanout の格子や周辺部品の再配置では
         # 解消しなかった（2026-08-13 に系統的に確認。故意に固定してみて
         # 毎回同じネットが落ちることを確かめた——揺れではなく構造的な残り）。
-        # 子基板コネクタの中心 X は -76.2mm、-77.5 はそこから 1.3mm。
-        "J_DB": (1, -77.5),
+        # ⚠️ **x は手で書かない。**左と同じ理由（上の注記）。かつて -77.5 で、
+        # 子基板コネクタの中心 -76.15 から 1.35mm ずれていた。
+        "J_DB": (1, J_DB_X),
         # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
         "U1": (0, 2.0), "U2": (0, 15.0),
@@ -588,9 +613,84 @@ def _place_beside(board, cap_ref, ic_ref, band):
             cap.SetOrientationDegrees(cap.GetOrientationDegrees() + 180)
 
 
-def _place_electronics(board, half, net):
+def _courtyard_bbox(fp):
+    """フットプリントのコートヤードの外接箱。無ければ None。"""
+    for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
+        shape = fp.GetCourtyard(layer)
+        if not shape.IsEmpty():
+            return shape.BBox()
+    return None
+
+
+def _snap_clear_of_courtyards(board, fp, want_x, step=0.05, reach=16.0):
+    """`want_x` へ寄せる。**当たるなら、当たらない最寄りへ逃がす。**
+
+    子基板の FFC コネクタと X を揃えたいが、**揃えた先に部品が居ることが
+    ある**（2026-08-15 に実測: 左は揃えた位置にダイオード D12 が 0.36mm
+    掛かっていて、0.40mm 逃げると空く）。重なったまま置くと DRC が
+    コートヤード重なりを出す。
+
+    **ここで妥協の量を測って返す。**手で座標を書き直すと、キー配列や
+    ケースの幅が動いたときに黙ってずれる。ずれ量は呼び出し側が印字する
+    （2026-08-15 時点で 左 +0.40mm・右 +0.00mm）。
+    """
+    bb = _courtyard_bbox(fp)
+    if bb is None:
+        raise RuntimeError(f"{fp.GetReference()}: コートヤードが無い")
+    half_w = pcbnew.ToMM(bb.GetWidth()) / 2
+    top, bot = pcbnew.ToMM(bb.GetTop()), pcbnew.ToMM(bb.GetBottom())
+    # **コートヤードの中心は原点とずれる**（FFC コネクタで 0.95mm）。
+    # 「中心をどこへ置きたいか」から原点の移動量を出す。
+    origin_to_center = (pcbnew.ToMM(bb.GetLeft() + bb.GetRight()) / 2
+                        - pcbnew.ToMM(fp.GetPosition().x))
+
+    # **同じ y の帯に居るものだけが邪魔になる。**全部と比べると、遠くの
+    # 段のスイッチまで障害物に数えて逃げ場が無くなる。
+    # **自分を除くのは参照名で。**`is` では外せない（pcbnew は
+    # Footprints() のたびに別のラッパを返すので、自分自身を障害物に
+    # 数えて 12.25mm 逃げた。2026-08-15 に実際に起きた）。
+    # ⚠️ **スイッチは障害物に数えない。**スイッチのコートヤードは帯へ
+    # はみ出すが、実装面が違う（スイッチは表・コネクタは裏の SMD）ので
+    # 重なってよい。移設前の -77.5 も SW10 と重なったうえで DRC 0 だった。
+    # ここを数えると右が 3.95mm 逃げ、**揃える前（1.35mm）より悪くなる。**
+    obstacles = []
+    for other in board.Footprints():
+        if other.GetReference() == fp.GetReference():
+            continue
+        # **接頭辞 `SW` で拾わない**（電源スイッチのランドを巻き込む。
+        # CLAUDE.md にある 3 回起きた失敗）。キースイッチだけを、
+        # 参照名の形（SW + 数字）で見分ける。
+        if re.fullmatch(r"SW\d+", other.GetReference()):
+            continue
+        ob = _courtyard_bbox(other)
+        if ob is None:
+            continue
+        if pcbnew.ToMM(ob.GetBottom()) > top and pcbnew.ToMM(ob.GetTop()) < bot:
+            obstacles.append((pcbnew.ToMM(ob.GetLeft()),
+                              pcbnew.ToMM(ob.GetRight())))
+
+    def clear(cx):
+        lo, hi = cx - half_w, cx + half_w
+        return not any(lo < r and hi > l for l, r in obstacles)
+
+    want_kicad = ORIGIN[0] + want_x
+    # 0 から外へ広げて、最初に空いたところを採る（＝最寄り）。
+    for i in range(int(reach / step) + 1):
+        for cand in ((want_kicad + i * step, want_kicad - i * step)
+                     if i else (want_kicad,)):
+            if clear(cand):
+                pos = fp.GetPosition()
+                fp.SetPosition(pcbnew.VECTOR2I(
+                    pcbnew.FromMM(cand - origin_to_center), pos.y))
+                return cand - want_kicad
+    raise RuntimeError(
+        f"{fp.GetReference()}: x={want_x:.2f} の周り {reach}mm に空きが無い")
+
+
+def _place_electronics(board, half, net, plate_w):
     """回路に宣言された電子部品を、段の間の帯に置いてネットを割り当てる。"""
     from circuit import netlist
+    from interface import daughterboard_x_center
     decl = {ref: (kind, pins) for ref, kind, pins in netlist(half)}
 
     # 置く場所の一覧。**パスコンは PLACE に座標を持たない**（手で書いた
@@ -603,6 +703,11 @@ def _place_electronics(board, half, net):
 
     for ref, spec in spots.items():
         band, x = spec[0], spec[1]
+        align_to = None
+        if x is J_DB_X:
+            # 子基板の FFC コネクタ（J_MAIN）は子基板の中心にあるので、
+            # 子基板の中心 X がそのまま揃える先になる。
+            align_to = x = daughterboard_x_center(half, plate_w)
         kind, pins = decl[ref]
         lib, name = ELEC_FP[kind]
         # **ケースの中で配線する部品は、基板側をランド 2 個で受ける。**
@@ -634,6 +739,10 @@ def _place_electronics(board, half, net):
             # 原点を中心に置くと、部品ごとに違う量だけずれる。
             # ここで揃えておけば、部品ごとの手当て（dy）が要らなくなる。
             _center_courtyard_in_band(fp, band)
+            if align_to is not None:
+                off = _snap_clear_of_courtyards(board, fp, align_to)
+                print(f"   {half}: {ref} を子基板と揃えた"
+                      f"（ずれ {off:+.2f}mm）")
             if wire:
                 # ランド 1 個につき 1 ネット。**数ではなく種類で分ける**
                 # （端子が 1 個になっても経路は同じ）。
@@ -851,7 +960,10 @@ def build(half, keys):
     # 引いた線を `(type protect)` の障害物として渡す（ROW は J_DB へ
     # 戻る 1 本だけ自動配線器に任せるので、ネットは外せない）。
     prewire_row_bus(board)
-    _place_electronics(board, half, net)
+    # 幅は**プレートの幅**を渡す。ケースの造作（daughterboard_x_center）は
+    # plate_positions の w で決まっており、基板もプレートも X=0 中心なので
+    # 値がそのまま移る（PCB_INSET は左右対称に引くだけ）。
+    _place_electronics(board, half, net, plate_w)
     gnd_fanout.place(board)
     guide_vias(board, half)
 

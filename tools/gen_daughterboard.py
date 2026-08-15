@@ -36,8 +36,10 @@ UNROUTED = OUT / "unrouted"
 # 50mm ずれる（レンダリングが空になって気づいた）。
 from gen_pcb import ORIGIN  # noqa: E402
 
-# 外形はケース側の造作と一致させる（tools/gen_case.py の DB_W / DB_D）。
-DB_W, DB_D = 21.0, 32.0
+# 外形はケース側の造作と一致させる。**DB_W の出所は interface.py 1 つ**
+# （ケース・子基板・本体基板の 3 つが読む。前は 21.0 を 2 か所に書いていた）。
+from interface import DB_W  # noqa: E402
+DB_D = 32.0
 DB_BOSS_POS = [(-8.0, -13.5), (8.0, -13.5)]
 
 XIAO_FP = (ROOT / "pcb/lib/hhkb_split.pretty", "XIAO_nRF52840")
