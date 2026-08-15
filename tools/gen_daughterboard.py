@@ -103,7 +103,9 @@ POWER_ROT = {
     # なる。R_LO/R_HI/C_* の ±90 は Flip で符号が入れ替わるだけなので
     # 見かけと一致する。
     "R_LO": -90,
-    "R_HI": 90,
+    # **R_HI は横置き**（2026-08-15・利用者が KiCad で直した基板から読んだ。
+    # 基板上 180° = Flip 前 0）。90°（縦）から変わっている。
+    "R_HI": 0,
     "SW_PWR": 0,      # 基板上では 180°
     "D_PWR": 0,       # 基板上では 180°
 }
@@ -122,16 +124,21 @@ POWER_ROT = {
 #
 # 並び（CAD 座標・x は右が正、y は奥が正、原点は板の中心）:
 #
-#   奥の分圧   y=13.59 … R_LO(-5.40) → R_HI(-3.00)。板端から 0.41mm 下げた
-#   スイッチ           … SW_PWR(-0.50, 12.00)。一列から外して手前へ
+#   奥の分圧   y … R_LO(-5.40, 13.59) → R_HI(-2.00, 14.00)。R_HI は横置き
+#   スイッチ           … SW_PWR(-0.50, 10.00)。一列から外して手前へ
+#
+# ⚠️ **2026-08-15 に利用者が R_HI と SW_PWR を動かした。**
+# R_HI (-3.00, 13.59) 縦 90° → **(-2.00, 14.00) 横 0°**、
+# SW_PWR (-0.50, 12.00) → **(-0.50, 10.00)**（2mm 手前へ）。
+# 出所はいつもどおり `pcb/hhkb_split_daughterboard.kicad_pcb`。
 #   整流               … D_PWR(3.50, 7.50) 横置き。**C_BULK の真下**
 #   3V3 の隣           … C_BULK(3.00, 10.97) → C_DB(5.40, 10.50)
 #
 # V3V3 は D_PWR → C_BULK → C_DB → XIAO の 3V3 と、ほぼ一直線に並ぶ。
 POWER_PLACE = {                 # 参照名 → (x, y)
     "R_LO":     (-5.40, 13.59),   # 分圧の下（SENSE → GND）
-    "R_HI":     (-3.00, 13.59),   # 分圧の上（VBATT_SW → SENSE）
-    "SW_PWR":   (-0.50, 12.00),   # 電池から来る線を受けるランド
+    "R_HI":     (-2.00, 14.00),   # 分圧の上（VBATT_SW → SENSE）。横置き
+    "SW_PWR":   (-0.50, 10.00),   # 電池から来る線を受けるランド
     "D_PWR":    ( 3.50,  7.50),   # VBATT_SW → V3V3。C_BULK の真下
     "BT1":      (-0.50,  3.50),   # 電池の −（GND）。ベタで受ける
 }
@@ -502,10 +509,38 @@ def _prewire_power(board):
     # D_PWR(2.50) の左に入り、板を縦断する線が他のパッドを横切って
     # DRC が 4 件出た（2026-08-14 に実測）。17mm 上がる経路は
     # 「縦に降ろしてから横」の別扱いが要る——下の `_v3_from_ffc` がそれ。
-    v = [(cad(p.GetPosition()), ref, p) for ref, p in pads.get("V3V3", [])
-         if ref != "J_MAIN"]
+    # ⚠️ **一列から外れているものを鎖に挟まないこと**（2026-08-15・利用者
+    # 「C_DB と D_PWR の間で不要に 2 本配線が伸びてる」）。
+    #
+    # 鎖は x 順なので `C_BULK(153.0) → D_PWR(155.15) → C_DB(155.4)` の順に
+    # なるが、**D_PWR だけ y=92.5 と 2mm 下にある。**そのため鎖が
+    # 「C_BULK から下へ降りて D_PWR、また上がって C_DB」と往復し、
+    # C_DB と D_PWR の間に**縦線が 2 本**並んでいた（実測: 155.15 を
+    # 降りる 1.995mm と 155.4 を上がる 2.050mm）。
+    #
+    # **横一列に乗っているものだけで鎖を作り、外れたものは最寄りへ 1 本。**
+    # 一列の y は最頻値で決める（数字を書かない）。
+    v_all = [(cad(p.GetPosition()), ref, p) for ref, p in pads.get("V3V3", [])
+             if ref != "J_MAIN"]
+    ys = [pcbnew.ToMM(p.GetPosition().y) for _c, _r, p in v_all]
+    row = max(set(ys), key=ys.count)        # 一列が居る y（最頻値）
+    tol = TRACK_W + pcbnew.ToMM(                     # 「同じ列」とみなす幅
+        board.GetDesignSettings().m_NetSettings
+        .GetDefaultNetclass().GetClearance())
+    v = [t for t in v_all
+         if abs(pcbnew.ToMM(t[2].GetPosition().y) - row) <= tol]
+    off = [t for t in v_all if t not in v]  # 列から外れたもの（D_PWR）
     v.sort(key=lambda t: t[0][0])           # x の小さい順＝流れの順
     n_v3 = 0
+    for _c, _r, pf in off:
+        # **最寄りの一列パッドへ L 字で 1 本。**往復にならない。
+        near = min(v, key=lambda t: abs(t[2].GetPosition().x
+                                        - pf.GetPosition().x))[2]
+        corner = pcbnew.VECTOR2I(pf.GetPosition().x, near.GetPosition().y)
+        for s, e in ((pf.GetPosition(), corner), (corner, near.GetPosition())):
+            if s != e:
+                _track(board, s, e, pcbnew.B_Cu, pf.GetNet())
+                n_v3 += 1
     for (a, _ra, pa), (b, _rb, pb) in zip(v, v[1:]):
         # **L 字で繋ぐ。**y が完全に一致していれば横 1 本になる
         # （`_track` は同じ点なら引かないので、余分な線は残らない）。
@@ -534,8 +569,56 @@ def _prewire_power(board):
     # 突き当たった**（短絡・クリアランス・マスクブリッジで 3 件。
     # 2026-08-14）。2 端子の部品は、相手の端子と反対を向く。
     fps = {fp.GetReference(): fp for fp in board.Footprints()}
+    # **ビアで受けるパッドには引かない**（2026-08-15・利用者
+    # 「GND は同じベタに 2 つ生えています。両方いるか、という事です」）。
+    #
+    # ここの引き出しと `gnd_fanout.place` のスタブは**どちらも同じパッドから
+    # B.Cu へ出る**ので、両方走ると 1 つのパッドに 2 本生える。実測
+    # （2026-08-15・配線後の子基板）: GND パッド 6 個に対しスタブ **11 本**。
+    # うち 4 組は始点も向きも同じで、**こちらの 1.2mm が、ビアへ向かう
+    # スタブの完全な部分区間**（手前で止まるだけ）だった。
+    #
+    #   R_LO   1.250 → ビア ／ 1.200 ここ
+    #   BT1_-  1.550 → ビア ／ 1.200 ここ
+    #   C_BULK 1.450 → ビア ／ 1.200 ここ
+    #   C_DB   1.275 → ビア ／ 1.200 ここ
+    #   J_MAIN 0.700 → ビア ／ 1.200 ここ（向きは違うが両方ベタに届く）
+    #
+    # **ビアはベタの両面に繋ぐ**ので、ビアが立つパッドではこちらの
+    # 引き出しは電気的に何も足していない。
+    #
+    # ⚠️ **スルーホールのパッドには引かない**（2026-08-15・利用者
+    # 「GND から伸びている配線が治ってない」）。
+    #
+    # **穴そのものが両面のベタを貫いている**ので、ベタへの引き出しは
+    # 要らない。実測: 子基板の GND パッド 6 個のうち **U_MCU だけが PTH**
+    # （穴 1.00mm・F.Cu と B.Cu の両方に乗る）で、残り 5 個は SMD。
+    #
+    # ⚠️ **「最寄りのビアまで 3.22mm あるから残す」と書いたのは誤り。**
+    # あれは**スタブの端**から測った値で、パッドの中心からは 2.13mm。
+    # そして距離の問題ですらなかった——PTH なら距離に関係なく繋がる。
+    #
+    # 残す条件は「ビアが立たない **SMD**」。478-481 行の
+    # 「消したら未配線になった」
+    # はこの状態のこと。
+    #
+    # ⚠️ **`place()` ではなく `spots()` を呼ぶ。**副作用が無く、パッドしか
+    # 見ないので配線の前後で同じ答えを返す（gnd_fanout.py:227-232）。
+    import gnd_fanout
+    by_via = {(r.GetReference(), p.GetNumber())
+              for p, _xy in gnd_fanout.spots(board)
+              for r in (p.GetParentFootprint(),)}
     n_gnd = 0
+    n_skip = 0
     for ref, pad in pads.get("GND", []):
+        # **穴が両面を貫いているものは、それだけでベタに繋がる。**
+        if pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH,
+                                  pcbnew.PAD_ATTRIB_NPTH):
+            n_skip += 1
+            continue
+        if (ref, pad.GetNumber()) in by_via:
+            n_skip += 1
+            continue
         # ⚠️ **FFC は向きを縦に固定する**（2026-08-14）。パッドは 0.5mm
         # ピッチで**横に並ぶ**ので、縦（板の内側）へ伸ばすぶんには隣に
         # 当たらない。部品の中心から見た向きで決めると、端のパッドほど
@@ -592,7 +675,8 @@ def _prewire_power(board):
         e = pcbnew.VECTOR2I(int(p.x + ux * step), int(p.y + uy * step))
         _track(board, p, e, pcbnew.B_Cu, pad.GetNet())
         n_gnd += 1
-    print(f"      電源を自分で配線: V3V3 {n_v3} 区間 / GND 引き出し {n_gnd} 本")
+    print(f"      電源を自分で配線: V3V3 {n_v3} 区間 / GND 引き出し {n_gnd} 本"
+          f"（ビアで受ける {n_skip} 本はビア側に任せた）")
 
 
 # リファレンスの文字高（mm）。**この基板だけ小さくする。**
@@ -628,6 +712,82 @@ def _shrink_silk(board):
             r.SetTextSize(pcbnew.VECTOR2I_MM(SILK_REF_MM, SILK_REF_MM))
             n += 1
     print(f"      シルクの参照名 {n} 個を {SILK_REF_MM}mm へ")
+    _place_silk(board)
+
+
+# **参照名の位置**（部品ローカル mm・文字角度）。
+#
+# ⚠️ **自動で逃がすのはやめた**（2026-08-15）。4 方向を試して空きを探す
+# 実装を書いたが、判定を厳しくするほど「どこも当たる＝動かさない」が
+# 増え、**警告が 13 → 10 → 13 → 15 件と、直すたびに悪化した。**
+# 21x32mm に部品が固まっているので、機械的な 4 方向では解が無い。
+#
+# **利用者が KiCad で並べたものを、そのまま出所にする**
+# （`POWER_PLACE` と同じ方針。総当たりで解けないものは手で解く）。
+# 出所は `pcb/hhkb_split_daughterboard.kicad_pcb`。
+#
+# ⚠️ **この値を推測で動かさないこと。**動かすなら KiCad で直して
+# ここへ読み直す（下の `_read_silk_from` で吸い出せる）。
+SILK_REF = {                  # 参照名 → (dx, dy, 文字角度)
+    "BT1_-":    ( 0.000, -2.406,   0.0),
+    "C_BULK":   ( 2.030, -2.000, 270.0),
+    "C_DB":     ( 3.500, -0.400,   0.0),
+    "D_PWR":    (-0.500, -1.500,   0.0),
+    "H1":       ( 0.000, -3.356,   0.0),
+    "H2":       ( 0.000, -3.356,   0.0),
+    "J_MAIN":   ( 0.000,  3.906,   0.0),
+    "R_HI":     ( 1.000, -2.000,   0.0),
+    "R_LO":     ( 4.590, -0.400, 270.0),
+    "SW_PWR_1": ( 2.500, -3.000,   0.0),
+    "U_MCU":    ( 0.000, 11.656,   0.0),
+}
+
+
+def _place_silk(board):
+    """`SILK_REF` のとおりに参照名を置く。
+
+    **表に無い部品は触らない**（フットプリントの既定のまま）。
+    表にあるのに基板に無い名前は、綴り違いに気づけるよう報告する。
+    """
+    seen = set()
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if ref not in SILK_REF:
+            continue
+        dx, dy, ang = SILK_REF[ref]
+        r = fp.Reference()
+        r.SetFPRelativePosition(pcbnew.VECTOR2I_MM(dx, dy))
+        r.SetTextAngle(pcbnew.EDA_ANGLE(ang, pcbnew.DEGREES_T))
+        seen.add(ref)
+    missing = sorted(set(SILK_REF) - seen)
+    if missing:
+        raise RuntimeError(
+            f"SILK_REF に基板に無い参照名がある: {missing}。"
+            "**綴りを直すか、表から消すこと**")
+    print(f"      参照名 {len(seen)} 個を SILK_REF のとおりに置いた")
+
+
+def _read_silk_from(path):
+    """**基板から `SILK_REF` を吸い出して表示する**（保守用）。
+
+    利用者が KiCad でシルクを並べ直したら、これを実行して
+    上の `SILK_REF` に貼り替える。**手で座標を書き写さない。**
+
+        KPY=/Applications/KiCad/.../python3.9
+        "$KPY" -c "import sys;sys.path.insert(0,'tools');\
+    import gen_daughterboard as g;g._read_silk_from('pcb/hhkb_split_daughterboard.kicad_pcb')"
+    """
+    b = pcbnew.LoadBoard(str(path))
+    print("SILK_REF = {")
+    for fp in sorted(b.GetFootprints(), key=lambda f: f.GetReference()):
+        r = fp.Reference()
+        if not r.IsVisible():
+            continue
+        lp = r.GetFPRelativePosition()
+        print(f'    "{fp.GetReference()}": '
+              f'({pcbnew.ToMM(lp.x):6.3f}, {pcbnew.ToMM(lp.y):6.3f}, '
+              f'{r.GetTextAngle().AsDegrees():5.1f}),')
+    print("}")
 
 
 # 「列の外の帯」を通す 3 本。**外周から内側へ。**
@@ -857,8 +1017,33 @@ def _prewire_rows(board, pad_names=None, side=-1):
         # **利用者が引き出しを列の外側（下）へ向けたので、この制約は消えた。**
         # パッドの端（0.65mm）だけ越えれば横へ抜けられ、そのぶん
         # 降り直しが縮む。
+        # ⚠️ **`i` ではなく `slot` で数える**（2026-08-15・利用者
+        # 「この微妙に高さ違うのを直してほしい」）。`i` は「この列の何本目か」
+        # なので、**本数が違う列では同じ役割の線が違う高さになる。**
+        # 右列は GND をレーンに載せない（2 本）ので、左列（3 本）と
+        # 比べて通路が 1 ピッチぶん浅くなり、肩の高さが左右で揃わなかった。
+        #
+        # `slot` は上の `lane` / `drop` が既に使っている「枠の番号」で、
+        # 本数が足りない側は真ん中の枠を空ける（774 行）。**同じ枠なら
+        # 左右で同じ高さ**になる。
+        #
+        # 交差は増えない（2026-08-15 に実測。右列を 1 ピッチ上げた状態で
+        # 全 11 ネットの線分を総当たりで交差判定して **0 件**）。
+        #
+        # ⚠️ **V3V3 だけは鏡像にならない。これで良い**（2026-08-15・
+        # 利用者「やっぱり V3V3 はこのままでいいです」）。
+        # 揃うのは 4 組（SPARE↔SPARE2 / ROW_A↔SPI_SCK / ROW_B↔CS /
+        # ROW_C↔SPI_MOSI がいずれも同じ y）。V3V3 は 107.80 ではなく
+        # **108.20** に残る。
+        #
+        # 理由: `slot` の詰め方（下の 827 行）が「1 本目を最外・最後を
+        # 最内に固定して真ん中を空ける」なので、外周が 2 本しかない右列は
+        # slot 0 と slot 2 を使い、**空くのは真ん中**。一方 MCU パッドの
+        # y で見た鏡像は ROW_E(87.87)↔GND(87.87) なので、**空くべきなのは
+        # 最外の枠**——ここが食い違う。直すなら `slot` を y の順位から
+        # 出すことになるが、**利用者の判断で現状維持**。
         over = row_y - pcbnew.FromMM(0.65 + TRACK_W / 2 + clr) \
-            - i * pcbnew.FromMM(pitch)
+            - slot * pcbnew.FromMM(pitch)
         # **折れは 3 回だけ。上げてから下げる往復を作らない**
         # （2026-08-14・利用者「まだクネクネ迂回してる。やめてほしい」）。
         #
@@ -1013,6 +1198,12 @@ def _prewire_inner_rows(board, row_y, clr, pitch,
               if t.GetNetname() in outer
               and t.GetStart().y == t.GetEnd().y
               and t.GetStart().y > col_y)
+    # ⚠️ **ここで本数の差を埋め合わせないこと**（2026-08-15）。
+    # `over` を `slot` で数えるようにした時点で、**外周組の帯は既に
+    # 左右で同じ高さ**になっている（実測: ROW_C と SPI_MOSI がどちらも
+    # y=107.40）。ここでさらに `LANES_PER_SIDE - len(outer)` を引くと
+    # **内側 3 本だけが 1 ピッチ余計に上がり、右が 105.80 と
+    # 左（106.20）を追い越した。**`top` をそのまま使えば揃う。
 
     n = 0
     k = 0                      # **垂直でない線の通し番号**（下の drop_x 用）

@@ -346,7 +346,31 @@ def _route_once(half, seed):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
     _strip_prewired(dsn, PREWIRED_DB if half not in HALVES else PREWIRED)
     _ask_freerouting_for_a_little_more_clearance(dsn)
-    _autoroute_settings(dsn)
+    # ⚠️ **子基板には入れない**（2026-08-15・利用者「明らかに配線できそう
+    # ですけどね」）。**`(autoroute_settings)` があるだけで、Freerouting
+    # 2.3.0 が子基板のネットを 1 本も見なくなる。**
+    #
+    # 実測（同じ DSN で、ブロックの有無だけを変えた）:
+    #
+    #   ブロックあり … ログ "started with **0** unrouted nets" / SES 18 行（空）
+    #   ブロックなし … ログ "started with **4** unrouted nets" / SES 98 行
+    #
+    # **中身は関係ない。**`(fanout on)`・`(start_ripup_costs)` だけ・
+    # `layer_rule` だけ、と 4 通り試して**すべて 0**。ブロックの存在が効く。
+    # ネットが 2 本しか残らない（他は PREWIRED_DB で消える）ことが
+    # 引き金だと思われるが、Freerouting 側は何も警告を出さない。
+    #
+    # **これが未配線 4 件の正体だった。**VBATT_SW / VBATT_SENSE の 4 接続は
+    # 直線経路に障害物が無く（実測 2.2〜4.0mm・邪魔なし）、
+    # 「密集して引けない」のではなく**そもそも渡っていなかった**。
+    #
+    # 主基板では正常に働く（左: started_with=60 で両方とも配線される）ので
+    # そちらは残す。ただし**層コストの効果は測ると逆**だった——
+    # 左の F.Cu 比率は **あり 23.3% / なし 19.8%**。3dd43b8 の
+    # 「F.Cu 22-25% → 10-12%」はこのブロック以外の要因で説明する必要がある。
+    # **主基板でも外すべきかは別途（open-gaps 行き）。**
+    if half in HALVES:
+        _autoroute_settings(dsn)
 
     # Freerouting のログは終わりに「N violations」と出すが、これは
     # protect にしたファンアウトどうしの接触を数えているだけ。

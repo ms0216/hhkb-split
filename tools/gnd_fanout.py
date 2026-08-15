@@ -420,6 +420,7 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
     r = pcbnew.FromMM(need)
 
     placed = skipped = 0
+    missed = []                 # 塞がっていた格子点（下で近くへ逃がす）
     y = y0 + margin
     while y <= y1 - margin:
         x = x0 + margin
@@ -427,6 +428,7 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
             p = pcbnew.VECTOR2I_MM(x, y)
             if _blocked(p, obstacles, r) or _near_segment(x, y, segs, need):
                 skipped += 1
+                missed.append((x, y))
             else:
                 # **置いたビアも次からは障害物にする。**そうしないと
                 # 格子が詰まったときにビアどうしが重なる。
@@ -436,6 +438,44 @@ def stitch(board, pitch_mm=STITCH_PITCH_MM):
                 placed += 1
             x += pitch_mm
         y += pitch_mm
+
+    # **格子点が塞がっていたら、その近くで空いている所へ逃がす**
+    # （2026-08-15・利用者「D6, D7 の下の領域、GND とビア打てないの？」）。
+    #
+    # 格子は λ/10 = 6.5mm と粗く、子基板は 21x32mm しか無いので**格子点
+    # そのものが十数個**しかない。1 点が部品や配線に当たるだけで、
+    # その周りが丸ごと空白になる。実測（2026-08-15・D6/D7 の下、
+    # x 145..156・y 96..104 を 0.5mm 刻みで走査）: **打てる点が 168 箇所**
+    # あるのに、格子がそこを外していたので 1 個も立っていなかった。
+    #
+    # **ピッチは動かさない**（λ/10 に根拠がある）。**外れた点だけ**を
+    # 半ピッチ以内で探し直す。見つからなければ従来どおり飛ばす。
+    step = pitch_mm / 8
+    reach = pitch_mm / 2
+    for gx, gy in list(missed):
+        for k in range(1, int(reach / step) + 1):
+            d = k * step
+            found = None
+            # 同心の四角を外へ広げながら、最初に空いた点を採る。
+            for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d),
+                           (d, d), (d, -d), (-d, d), (-d, -d)):
+                x, y = gx + dx, gy + dy
+                if not (x0 + margin <= x <= x1 - margin
+                        and y0 + margin <= y <= y1 - margin):
+                    continue
+                p = pcbnew.VECTOR2I_MM(x, y)
+                if _blocked(p, obstacles, r) or _near_segment(x, y, segs, need):
+                    continue
+                found = (x, y)
+                break
+            if found:
+                v = _add_via(board, gnd, *found)
+                obstacles.append(v.GetBoundingBox())
+                segs.append((found[0], found[1], found[0], found[1],
+                             VIA_DIAMETER_MM / 2))
+                placed += 1
+                skipped -= 1
+                break
     return placed, skipped
 
 
