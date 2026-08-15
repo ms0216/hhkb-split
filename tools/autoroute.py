@@ -37,18 +37,126 @@ HALVES = ("left", "right")             # マトリクスを持つ基板
 BOARDS = HALVES + ("daughterboard",)
 PASSES = 300      # 800 に増やしても未配線は減らなかった（2026-08-13）
 
-# ⚠️ **DSN に `(autoroute_settings ...)` を足さないこと**（2026-08-14 に実測）。
+# **配線は B.Cu を主にして、交差だけ F.Cu の短い橋で越える**
+# （2026-08-15・利用者「B.Cu で引き、交差はビアで最短だけ F.Cu に潜る」）。
 #
-# 利用者の指摘「ROW0 がなぜ表裏を行き来するのか。同じ面で横一直線の方が
-# 自然では」を受けて `(via_costs N)` + `(start_ripup_costs 100)` を
-# structure の末尾に入れてみた。**左が未配線 1 → 66 本に激増した。**
-# via_costs を 200 でも 80 でも同じ 66 本だったので、**効いているのは
-# 値ではなくブロックの存在そのもの**（右は 0 のままだった）。
+# ⚠️ **2026-08-14 の「autoroute_settings を足すな」という注記は誤りだった。**
+# 当時 `(via_costs N)` + `(start_ripup_costs 100)` を「structure の末尾」に
+# 入れたつもりで左が未配線 66 本に激増し、値を変えても同じだったので
+# 「ブロックの存在そのものが悪い」と結論していた。**そうではない。**
+# 2026-08-15 に jar を展開して構文を読み直したところ:
 #
-# 行バスを一直線にしたいなら、この道ではなく **自分で引く**
-# （prewire_switch_diode と同じやり方）。ROW4 は 0 ビア・片面で
-# 通っているので経路は存在する。DIODE_OFFSET の注記にある
-# 「行のバスを y=+3.65 に通せる」が本来の設計意図。
+#   1. **挿入位置が parser スコープの中だった。**`"\n  )\n"` を正規表現で
+#      探すと structure ではなく **parser の閉じ括弧に当たる**（実測）。
+#      未知のスコープは黙って捨てられるので、**値を変えても何も起きない。**
+#      「値ではなくブロックの存在が効く」の正体はこれ。
+#      → **括弧を数えて structure の終わりを求める**（_autoroute_settings）。
+#   2. **層ごとのコストは `(layer_rule <層名> ...)` の中**にある。
+#      当時は global の via_costs しか書いておらず、**層コストは
+#      一度も設定されていなかった。**
+#
+# 構文は Freerouting 2.3.0 の io/specctra/parser/AutorouteSettings.class を
+# 逆アセンブルして確認した（推測ではない）。
+#
+# **効くのは via_costs で、trace の層コストではない**（実測）。
+# 層コスト比を 5 / 20 / 100 と振っても F.Cu は 22.1% で全く動かない。
+# 一方 via_costs を下げると F.Cu が減る——**B.Cu に留まるにはビアを
+# 惜しまず打つ必要がある**ので、ビアが高いと長い F.Cu の迂回を選ぶ。
+#
+#     via_costs   左 F.Cu   右 F.Cu   右ビア
+#        30        22.1%      —         —
+#        15        23.2%      —         —
+#         8        19.5%      —         —
+#         6         —        19.2%      81
+#         5        15.0%     19.5%      90
+#         4         —        20.9%      87
+#         3        16.0%      —         —
+#       **2**    **14.6%** **16.8%**   103   ← いまここ（左右とも最良）
+#         1        16.8%      —         —
+#         0        16.8%     24.8%     119   ← **最悪。元に逆戻り**
+#
+# ⚠️ **0 にしてはいけない**（2026-08-15 に実測。利用者の問い
+# 「ビアコストは 0 とか最小にできないのか」）。**F.Cu が増える。**
+# 右では 24.8% と、何もしない状態（25.1%）へほぼ逆戻りした。
+#
+# **ビアが無料だと「橋を短くする理由」が消えるため。**3 回潜って戻る
+# 経路も 1 回で済む経路も同じ値段なので、ルータは経済性を考えるのを
+# やめてふらつく。ビアは増える（119 個）のに F.Cu も増えるという、
+# 両方損をする状態になる。
+#
+# **「短い F.Cu は歓迎、長い F.Cu は嫌う」を実現しているのは、
+# ビアにわずかな値段が付いていること。**橋が短いほどビア 2 個分の
+# 元が取れるので短い橋が勝ち、長い F.Cu は「そんなに走るなら
+# 潜り直せ」と負ける。0 にするとこの選別が効かなくなる。
+#
+# 値は単調ではない（4 → 5 → 6 が行ったり来たりする）。コストを変えると
+# 探索経路ごと変わるため。**1〜2 ポイントの差で良否を決めない。**
+VIA_COSTS = 2          # 左右とも最良。0 は逆効果（上の表）
+PLANE_VIA_COSTS = 5
+START_RIPUP_COSTS = 100
+# 層コストは効かないが、**意図を DSN に残す意味で B.Cu を安くしておく**。
+LAYER_TRACE_COSTS = {"F.Cu": 100, "B.Cu": 1}
+
+
+def _autoroute_settings(dsn):
+    """B.Cu を主層にするコストを DSN の structure スコープに入れる。
+
+    ⚠️ **正規表現で閉じ括弧を探さないこと。**`"\\n  )\\n"` は parser
+    スコープの閉じに先に当たる。そこへ入れると未知スコープとして
+    黙って捨てられ、**何の効果も無いのに「入れた」と思い込む**
+    （2026-08-14 の誤結論の原因）。**括弧を数える。**
+    """
+    t = dsn.read_text()
+    i = t.index("(structure")
+    depth = 0
+    for j in range(i, len(t)):
+        if t[j] == "(":
+            depth += 1
+        elif t[j] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+    else:
+        raise SystemExit(f"{dsn.name}: structure スコープが閉じていない")
+
+    rules = "".join(
+        f"    (layer_rule {layer}\n"
+        f"      (active on)\n"
+        f"      (preferred_direction horizontal)\n"
+        f"      (preferred_direction_trace_costs {cost})\n"
+        f"      (against_preferred_direction_trace_costs {cost})\n"
+        f"    )\n"
+        for layer, cost in LAYER_TRACE_COSTS.items())
+    block = ("\n  (autoroute_settings\n"
+             "    (fanout off)\n    (autoroute on)\n    (postroute on)\n"
+             "    (vias on)\n"
+             f"    (via_costs {VIA_COSTS})\n"
+             f"    (plane_via_costs {PLANE_VIA_COSTS})\n"
+             f"    (start_ripup_costs {START_RIPUP_COSTS})\n"
+             f"{rules}"
+             "  )\n")
+    dsn.write_text(t[:j] + block + t[j:])
+
+    # **入ったことを確かめる。**「書いたから効いている」と思わないこと。
+    # structure の外に落ちていても Freerouting は黙って捨てるので、
+    # **括弧を数え直して本当に structure の内側かを見る。**
+    t2 = dsn.read_text()
+    if "(layer_rule B.Cu" not in t2:
+        raise SystemExit("layer_rule が入っていない")
+    s = t2.index("(structure")
+    k = t2.index("(autoroute_settings")
+    depth = 0
+    for j2 in range(s, len(t2)):
+        if t2[j2] == "(":
+            depth += 1
+        elif t2[j2] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+    if not s < k < j2:
+        raise SystemExit(
+            "autoroute_settings が structure の外にある（parser の中に"
+            "落ちていないか）。この状態では黙って無視され、効果が無い")
 
 JAR = Path(os.environ.get(
     "FREEROUTING_JAR",
@@ -165,7 +273,7 @@ PREWIRED_DB = re.compile(
 #
 # 左に残る 2 本は ROW3/ROW4 が J_DB へ降りる枝（マージンとは別の話。
 # J_DB の ROW パッドの並びが行バスの y 順と食い違っていて交差する）。
-DSN_CLEARANCE_MARGIN_UM = 20
+DSN_CLEARANCE_MARGIN_UM = 30
 
 
 def _ask_freerouting_for_a_little_more_clearance(dsn):
@@ -238,6 +346,7 @@ def _route_once(half, seed):
         raise SystemExit(f"{half}: DSN の書き出しに失敗した")
     _strip_prewired(dsn, PREWIRED_DB if half not in HALVES else PREWIRED)
     _ask_freerouting_for_a_little_more_clearance(dsn)
+    _autoroute_settings(dsn)
 
     # Freerouting のログは終わりに「N violations」と出すが、これは
     # protect にしたファンアウトどうしの接触を数えているだけ。
