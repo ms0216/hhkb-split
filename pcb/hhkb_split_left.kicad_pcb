@@ -210,7 +210,7 @@
 				)
 			)
 		)
-		(property "Value" "S"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "8fcf5427-5dce-4721-99bf-728fbb6317d8")
@@ -883,7 +883,7 @@
 				)
 			)
 		)
-		(property "Value" "Meta"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "2c367941-0133-4dea-943b-1e90d1fa8fa0")
@@ -1556,7 +1556,7 @@
 				)
 			)
 		)
-		(property "Value" "V"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "efecb5fa-4359-4f17-814a-895f9d901d5c")
@@ -2229,7 +2229,7 @@
 				)
 			)
 		)
-		(property "Value" "Alt"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "8737755e-76bc-4301-b95d-746769227bd8")
@@ -2902,7 +2902,7 @@
 				)
 			)
 		)
-		(property "Value" "B"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "b84de9f3-578e-491b-bb87-9aac2c85625c")
@@ -3575,7 +3575,7 @@
 				)
 			)
 		)
-		(property "Value" "X"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "b3f3c611-1a38-44bc-bd8d-0c3adb51cb5e")
@@ -4248,7 +4248,7 @@
 				)
 			)
 		)
-		(property "Value" "W"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "6fa2cfc3-f50d-49f6-8206-347414e3d966")
@@ -4921,7 +4921,7 @@
 				)
 			)
 		)
-		(property "Value" "Esc"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "7d7d91e3-44fb-4f09-af25-a4e3df6cca52")
@@ -5594,7 +5594,7 @@
 				)
 			)
 		)
-		(property "Value" "3"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "f045792d-fed3-4fc7-bfdb-b53b818e70c1")
@@ -6267,7 +6267,7 @@
 				)
 			)
 		)
-		(property "Value" "D"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "0c9cde2d-5ee8-406a-8958-d95f34b5400c")
@@ -6940,7 +6940,7 @@
 				)
 			)
 		)
-		(property "Value" "Shift"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "6a740cdd-44e9-4c15-bb6f-a320616cfc04")
@@ -7613,7 +7613,7 @@
 				)
 			)
 		)
-		(property "Value" "Ctrl"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "e0966721-9cad-483e-91e9-eb63bf3bad4e")
@@ -8286,7 +8286,7 @@
 				)
 			)
 		)
-		(property "Value" "4"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "afddc744-5025-4666-bd7d-6807780b7f10")
@@ -9065,7 +9065,7 @@
 				)
 			)
 		)
-		(property "Value" "A"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "c96331e2-c32f-4b4d-8e86-359e562ca199")
@@ -9738,7 +9738,7 @@
 				)
 			)
 		)
-		(property "Value" "L-Space"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "87bf982d-a5a4-4728-a8ab-334a3e62b28d")
@@ -10411,7 +10411,7 @@
 				)
 			)
 		)
-		(property "Value" "F"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "3a25bcca-2527-45f6-bb1d-c5cad58e7968")
@@ -11084,7 +11084,7 @@
 				)
 			)
 		)
-		(property "Value" "G"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "a2ab6d3b-4468-4384-822c-9aa216520b32")
@@ -11863,7 +11863,7 @@
 				)
 			)
 		)
-		(property "Value" "R"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "fb4ddc1a-8d42-404b-9285-71c544384d2a")
@@ -12642,7 +12642,7 @@
 				)
 			)
 		)
-		(property "Value" "Z"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "05d00f85-87ee-4d6e-8249-d7b82a14fc9b")
@@ -13315,7 +13315,7 @@
 				)
 			)
 		)
-		(property "Value" "Q"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "90a2e7ce-ba81-4ad5-9b7c-46bd1a5c7d00")
@@ -14094,7 +14094,7 @@
 				)
 			)
 		)
-		(property "Value" "C"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "89524cf7-f743-40b4-a67c-86b56f93228e")
@@ -14767,7 +14767,7 @@
 				)
 			)
 		)
-		(property "Value" "1"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "5fe8db4b-c174-492d-b7eb-20bfa631bd58")
@@ -15440,7 +15440,7 @@
 				)
 			)
 		)
-		(property "Value" "T"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "cd53bb23-0529-411c-bed2-42058530c804")
@@ -16317,7 +16317,7 @@
 				)
 			)
 		)
-		(property "Value" "E"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "c6d2532b-8e6d-419f-a93e-5e5d21516592")
@@ -17096,7 +17096,7 @@
 				)
 			)
 		)
-		(property "Value" "Tab"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "52284300-8ee4-4bf4-91e2-dbddd8a8160b")
@@ -17769,7 +17769,7 @@
 				)
 			)
 		)
-		(property "Value" "5"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "a6348e72-14b1-42f3-96ca-e976c9280955")
@@ -18646,7 +18646,7 @@
 				)
 			)
 		)
-		(property "Value" "2"
+		(property "Value" "CPG151101S11-2"
 			(at 0 8 0)
 			(layer "F.Fab")
 			(uuid "5f7253d3-c4cb-472d-bf8d-2f8fa88decf5")

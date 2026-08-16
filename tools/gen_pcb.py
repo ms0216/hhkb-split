@@ -885,7 +885,14 @@ def build(half, keys):
         fp = _load(KEYSWITCH_LIB, name)
         fp.SetPosition(to_kicad(kx, ky))
         fp.SetReference(f"SW{i}")
-        fp.SetValue(k.label or f"{k.w_u}u")
+        # **JLCPCBのBOM照合に使える値を入れる。**以前はキーのレジェンド
+        # （"[" など）を入れていたが、それではJLCPCBの部品マッチングが
+        # 一致せず、61個のソケットが実装BOMから静かに漏れていた
+        # （fab-checklist.mdの「補正表に無い。確認していない」は、
+        # そもそもBOMの行として認識されていなかったのが真因だった）。
+        # レジェンドを見せる役目は下のB.SilkSテキストが別途担っている
+        # ので、Valueをここで潰しても組み立て時の視認性は落ちない。
+        fp.SetValue("CPG151101S11-2")
         board.Add(fp)
         n_sw += 1
         s = stab_offset_for(k.w_u)
