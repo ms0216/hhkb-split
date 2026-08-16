@@ -408,7 +408,7 @@ def _add_power_netclasses(d, mm):
 # kind は「フットプリントを引くための内部の名前」であって、部品の
 # 型番でも規格値でもない。JLCPCB の部品マッチはこの Value 欄を見るので、
 # kind のままだと `schottky`/`ffc_12p`/`res_1M` が「該当部品なし」で
-# 赤字（要手動選定）になる。`cap_100u`/`cap_100n` は数字が近いぶん
+# 赤字（要手動選定）になる。`cap_100n` は数字が近いぶん
 # コメント不一致の警告で済むが、それも同じ原因。
 # 値は parts-audit.md に確定記録済みの型番・規格をそのまま使う。
 ELEC_FP = {
@@ -417,7 +417,6 @@ ELEC_FP = {
     # 選んでいるだけだった。TSSOP-16 は 5.59mm で 3.66mm 余る。
     "74LVC595": ("Package_SO", "TSSOP-16_4.4x5mm_P0.65mm", "74LVC595"),
     "cap_100n": ("Capacitor_SMD", "C_0805_2012Metric", "100nF"),
-    "cap_100u": ("Capacitor_SMD", "C_1206_3216Metric", "100uF"),
     "res_1M": ("Resistor_SMD", "R_0805_2012Metric", "1M"),
     "schottky": ("Diode_SMD", "D_SOD-123", "B5819W"),
     "ffc_12p": ("Connector_FFC-FPC",

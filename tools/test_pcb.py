@@ -1364,46 +1364,20 @@ def test_few_pieces_of_ground_copper_are_left_floating(facts, half):
         "  どちらかが効かなくなっている。**浮いた銅を残す理由は無い。**")
 
 
-@pytest.mark.parametrize("half", NAMES)
-def test_there_is_exactly_one_bulk_capacitor_shared_by_the_board(half):
-    """**バルクコンデンサは 1 個で、その基板の IC 全部で共用していること**
-    （指摘 7）。
-
-    指摘は「可能な範囲で数を減らし、複数の IC で共用できるように」。
-    調べた結果、**すでに 1 枚あたり 1 個で、これ以上減らせない**。
-    レール（V3V3）に付いているので、その基板の IC は全部これを共用している。
-
-    バルクは「電池の内部抵抗が上がったときに BLE 送信のパルスを支える」
-    ためのもの。パスコン（0.1µF）とは役割が違うので**統合できない**——
-    パスコンは IC ごとに直近へ置くことに意味がある。
-
-    **この検査は「減らせ」ではなく「増えたら気づく」ために置く。**
-    後から不用意にバルクが増えたら落ちる。
-
-    ⚠️ **2026-08-14 にバルクは子基板へ移った**（open-gaps #41）。守る相手が
-    XIAO の µs 級の電流変動なので、FFC を挟まない側に置くのが筋だった。
-    **主基板にバルクは無いのが正しい状態。**この検査は移設のときに
-    追随しておらず、**それから赤のまま残っていた**（2026-08-15 に気づいた）。
-
-    見るものを 2 つにする:
-      - 主基板には**無い**こと（戻ってきたら気づく）
-      - 子基板に**ちょうど 1 個**あり、レールに付いていること
-    """
-    from circuit import daughterboard_netlist, netlist
-
-    on_main = [p for p in netlist(half) if p[1] == "cap_100u"]
-    assert not on_main, (
-        f"{half}: 主基板にバルクがある: {[p[0] for p in on_main]}。"
-        "**バルクは子基板にある**（#41。守る相手は XIAO の電流変動で、"
-        "FFC を挟まない側に置く）")
-
-    bulk = [p for p in daughterboard_netlist() if p[1] == "cap_100u"]
-    assert len(bulk) == 1, (
-        f"子基板のバルクが {len(bulk)} 個ある: "
-        f"{[p[0] for p in bulk]}。1 個で足りるはず"
-        "（レールに付いていて全 IC が共用する）")
-    assert set(bulk[0][2].values()) == {"V3V3", "GND"}, (
-        f"バルクがレール（V3V3-GND）に付いていない: {bulk[0][2]}")
+# ⚠️ **`test_there_is_exactly_one_bulk_capacitor_shared_by_the_board` は
+# 2026-08-16 に削除した**（open-gaps #44）。
+#
+# バルクコンデンサそのものを基板から消したので、「1 個だけあること」を
+# 見る検査は**守る対象を失った**。実測で「守る相手（µs 級の突入電流）が
+# 存在しない」と分かったため（decisions/2026-08-16-remove-bulk-cap.md）。
+#
+# **代わりに `test_circuit.py` の
+# `test_the_transmit_droop_needs_no_bulk_capacitor` が見ている**——
+# 「バルクが復活していないこと」と「容量ゼロでも降下が余裕に収まること」。
+# **後者が本体**で、`BLE_TX_CURRENT` や `BATT_ESR_END` が悪化したら落ちる。
+#
+# ⚠️ **パスコン（cap_100n）は消していない。**役割が別なので、
+# `test_every_ic_has_a_decoupling_capacitor` が引き続き見ている。
 
 
 # ======================================================================

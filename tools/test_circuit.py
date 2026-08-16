@@ -5,7 +5,7 @@
 ここにある規則は、実際に見落とした 3 件をそれぞれ捕まえる。
 
   test_every_ic_has_a_decoupling_capacitor  ← パスコンの欠落
-  test_there_is_a_bulk_capacitor            ← バルクの欠落
+  test_the_transmit_droop_needs_no_bulk_capacitor ← バルク無しで足りるか
   test_the_shift_register_control_pins_are_tied ← MR/OE の浮き
 
 規則を足すときは、**その規則が捕まえるはずの誤りを故意に作って
@@ -64,30 +64,57 @@ def test_every_ic_has_a_decoupling_capacitor(board):
         f"{board}: IC が {n_ic} 個に対して 0.1µF が {n_cap} 個しかない"
 
 
-def test_there_is_a_bulk_capacitor(_board=None):
-    """バルク容量が **XIAO と同じ基板に** ある。
+def test_the_transmit_droop_needs_no_bulk_capacitor(_board=None):
+    """**バルクコンデンサが無くても、送信降下が余裕に収まること**
+    （2026-08-16・open-gaps #44）。
 
-    アルカリ乾電池は消耗すると内部抵抗が上がる。BLE の送信は 10〜15mA の
-    パルスなので、内部抵抗が上がった電池では電圧降下として現れる。
-    バルクが無いと**電池を使い切る前にブラウンアウトする**。
+    ⚠️ **この検査は 2026-08-16 に向きが 180 度変わった。**
+    もとは `test_there_is_a_bulk_capacitor`（＝バルクが在ること）だった。
+    **実測で「守る相手が存在しない」と分かったので、逆を守る検査にした。**
 
-    **どこに在るかまで見る**（2026-08-14・open-gaps #41）。
-    2026-08-14 まで主基板に置いていたが、守る相手は XIAO が µs 級の
-    無線送信で引く電流変動（electrical-design 1-5）で、その XIAO は
-    子基板にいる。主基板に置くと **FFC 80mm のインダクタンスの外側**
-    から供給することになり間に合わない。
-    「どこかに 1 個ある」だけを見ていると、また主基板へ戻っても気づけない。
+    ### なぜバルクを消せるのか
+
+    降下は「電流 × 電池の内部抵抗」で決まり、**コンデンサでは消せない**:
+
+        droop(t) = I·R·(1 − exp(−t/(R·C)))
+        C→0 の上界 = I·R          ← **容量が何であっても、これが上限**
+
+    したがって **I·R が余裕に収まるなら、容量はゼロでよい。**
+
+        10.22mA × 9.2Ω = 94mV   vs 余裕 300mV（安全率 3.2 倍）
+
+    ### 実測（2026-08-16・DS1104Z）
+
+      ピーク 10.22mA   広告とスキャンを同時に動かした状態（＝最大瞬間風速）
+      µs 級の尖り 0 個  1ns 分解能・60 万点を全数走査。逸脱は最大 1.6mA
+
+    **バルクが担当するはずの µs 級の突入電流は、実在しなかった。**
+
+    ### この検査が守るもの
+
+    「バルクが無い」ことを固定するのではなく、**無くてよい条件が
+    成立し続けていること**を見る。`BLE_TX_CURRENT` や `BATT_ESR_END` を
+    悪い側へ動かしたら落ちる。**そのときは、バルクを戻す判断に戻る。**
+
+    ⚠️ **パスコン（cap_100n）はこの検査と無関係。**役割が別
+    （IC の電源ピン直近で ns 級を返す）。
+    `test_every_ic_has_a_decoupling_capacitor` が別に見ている。
     """
-    # **BOARDS 経由で取る。**直接 daughterboard_netlist() を呼ぶと、
-    # test_the_rules_actually_bite が差し替えた壊れ版を素通りして
-    # しまい、「バルクを消す」を検出できない（実際に空振りした）。
+    # 子基板にバルクが無いこと（消したものが復活していないか）
     parts = BOARDS["daughterboard"]()
-    assert any(k == "cap_100u" for _r, k, _p in parts), \
-        "子基板にバルクコンデンサが無い。**XIAO と同じ基板に置くこと**"
-    # 主基板側に戻っていないこと（戻すなら理由ごと open-gaps を書き直す）
-    for board in ("left", "right"):
-        assert not any(p[1] == "cap_100u" for p in BOARDS[board]()), \
-            f"{board}: バルクが主基板に戻っている。FFC を挟むと効かない"
+    assert not any(k == "cap_100u" for _r, k, _p in parts), \
+        ("子基板にバルクが復活している。**2026-08-16 に削除した**"
+         "（open-gaps #44・実測で不要と判明）。戻すなら decisions/"
+         "2026-08-16-remove-bulk-cap.md を読んでから")
+
+    # **本題: 容量ゼロでも余裕に収まること。**
+    droop = BLE_TX_CURRENT * BATT_ESR_END      # C→0 の上界
+    headroom = _RAIL_FLOOR - MCU_V_MIN
+    assert droop <= headroom, (
+        f"バルク無しの送信降下 {droop * 1000:.0f}mV が、余裕 "
+        f"{headroom * 1000:.0f}mV を超えた。**バルクを戻す判断に戻ること。**"
+        f"（送信 {BLE_TX_CURRENT * 1000:.2f}mA × 内部抵抗 "
+        f"{BATT_ESR_END:.1f}Ω。open-gaps #44）")
 
 
 @pytest.mark.parametrize("board", ["left", "right"])
@@ -355,9 +382,12 @@ def test_the_rules_actually_bite():
         ("パスコンを消す",
          lambda ps: [p for p in ps if p[1] != "cap_100n"],
          test_every_ic_has_a_decoupling_capacitor),
-        ("バルクを消す",
-         lambda ps: [p for p in ps if p[1] != "cap_100u"],
-         test_there_is_a_bulk_capacitor),
+        # **向きが逆になった**（2026-08-16・open-gaps #44）。
+        # バルクは削除したので「消す」は壊し方にならない。
+        # **復活させる**ほうが、いまの規則を破る変更。
+        ("バルクを復活させる",
+         lambda ps: ps + [("C_BULK", "cap_100u", {"1": "V3V3", "2": "GND"})],
+         test_the_transmit_droop_needs_no_bulk_capacitor),
         ("MR を浮かせる",
          lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74LVC595" else p)
                      for r, k, p in ps],
