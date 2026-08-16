@@ -100,9 +100,11 @@ GROUPS = [
                                               "schottky", "res_1M")
                                      ),
     ("シフトレジスタ", lambda ref, kind: kind == "74LVC595" or ref.startswith("C_U")),
-    # **C_BULK はここ。**守る相手が XIAO なので子基板にいる（open-gaps #41）。
-    ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840"
-                                     or ref in ("C_DB", "C_BULK")),
+    # ⚠️ **子基板のコンデンサ（C_DB / C_BULK）は 2026-08-16 に両方消えた。**
+    # ここに `ref in ("C_DB", "C_BULK")` を書いていたが、拾う相手がいない。
+    # 復活させるなら decisions/2026-08-16-remove-bulk-cap.md と
+    # decisions/2026-08-16-cdb-has-no-local-load.md を読んでから。
+    ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840"),
     ("ケーブル",   lambda ref, kind: kind == "ffc_12p"),
     ("マトリクス", lambda ref, kind: kind in ("keyswitch", "diode")),
 ]
@@ -469,7 +471,8 @@ def build(parts, project):
             "U1": (0, 0), "U2": (0, 1), "C_U1": (0, 2), "C_U2": (0, 3),
         },
         "マイコン": {
-            "U_MCU": (0, 0), "C_DB": (0, 1), "C_BULK": (0, 2),
+            # ⚠️ C_DB(0,1) / C_BULK(0,2) は 2026-08-16 に部品ごと削除。
+            "U_MCU": (0, 0),
         },
         "ケーブル": {
             "J_DB": (0, 0), "J_MAIN": (0, 0),

@@ -5,6 +5,8 @@
 ここにある規則は、実際に見落とした 3 件をそれぞれ捕まえる。
 
   test_every_ic_has_a_decoupling_capacitor  ← パスコンの欠落
+  test_the_daughterboard_has_no_part_that_needs_local_decoupling
+                                            ← C_DB 削除の前提が崩れていないか
   test_the_transmit_droop_needs_no_bulk_capacitor ← バルク無しで足りるか
   test_the_shift_register_control_pins_are_tied ← MR/OE の浮き
 
@@ -99,6 +101,11 @@ def test_the_transmit_droop_needs_no_bulk_capacitor(_board=None):
     ⚠️ **パスコン（cap_100n）はこの検査と無関係。**役割が別
     （IC の電源ピン直近で ns 級を返す）。
     `test_every_ic_has_a_decoupling_capacitor` が別に見ている。
+
+    ⚠️ **子基板の C_DB も 2026-08-16 に消えたが、それは別の判断。**
+    バルクと違って「電流が実在しない」からではなく、**負荷が 2 つとも
+    板の外にいて、どちらも自分の直近に別のパスコンを持っていた**から
+    （decisions/2026-08-16-cdb-has-no-local-load.md）。混同しないこと。
     """
     # 子基板にバルクが無いこと（消したものが復活していないか）
     parts = BOARDS["daughterboard"]()
@@ -115,6 +122,48 @@ def test_the_transmit_droop_needs_no_bulk_capacitor(_board=None):
         f"{headroom * 1000:.0f}mV を超えた。**バルクを戻す判断に戻ること。**"
         f"（送信 {BLE_TX_CURRENT * 1000:.2f}mA × 内部抵抗 "
         f"{BATT_ESR_END:.1f}Ω。open-gaps #44）")
+
+
+def test_the_daughterboard_has_no_part_that_needs_local_decoupling(_board=None):
+    """**子基板に、自分の直近パスコンを持たない能動部品が現れていないこと**
+    （2026-08-16・decisions/2026-08-16-cdb-has-no-local-load.md）。
+
+    ⚠️ **これは「C_DB が復活していないこと」を見る検査ではない。**
+    数えるべきは負荷の有無ではなく、**その負荷の直近に誰かいるか**。
+
+    ### なぜ C_DB を消せたのか
+
+    3V3 の負荷は**最初から 2 つあり、どちらも子基板の板の外**にいた:
+
+        nRF52840 → **XIAO の内部**。内蔵の 2.2µF ×5 が桁違いに近い
+        595 ×2   → **主基板**。直近の C_U1/C_U2 が 58:1 で取る
+
+    電流は近い順に取られるのではなく、**ループインダクタンスに反比例して
+    全供給元から同時に分流する。**C_DB の取り分が誤差だったというだけで、
+    「相手がいない」わけではない（初版の理由づけはここを誤っていた）。
+
+    足りているところに数 % を足しても改善せず、もし内部が不足していたなら
+    数 % では救えない。**どちらに転んでも出番が無い。**
+
+    ### この検査が守るもの
+
+    後から子基板へ 3V3 で動く IC を足したら、**その IC 自身の隣に**
+    パスコンが要る（C_DB の位置に戻すのではない）。そのとき落ちる。
+    """
+    parts = BOARDS["daughterboard"]()
+
+    # 子基板に外付けパスコンを要求する IC がいないこと。
+    # ⚠️ `xiao_nrf52840` は ICS に**入っていない**（モジュールで内蔵のため）。
+    needy = [r for r, k, _p in parts if k in ICS]
+    assert not needy, (
+        f"子基板に外付けパスコンを要求する IC が現れた: {needy}。"
+        "**その IC 自身の直近に 0.1µF を置くこと**（子基板の隅にあった "
+        "C_DB の位置に戻すのではない）。decisions/"
+        "2026-08-16-cdb-has-no-local-load.md §7")
+
+    # 現状は本当に 0 個であること。**上の assert が空振りしていないか**
+    # を見る（ICS が空集合になっても上は通ってしまう）。
+    assert "74LVC595" in ICS, "ICS が空になっている。上の検査が無意味"
 
 
 @pytest.mark.parametrize("board", ["left", "right"])
@@ -388,6 +437,12 @@ def test_the_rules_actually_bite():
         ("バルクを復活させる",
          lambda ps: ps + [("C_BULK", "cap_100u", {"1": "V3V3", "2": "GND"})],
          test_the_transmit_droop_needs_no_bulk_capacitor),
+        # **子基板に外付けパスコンが要る IC を足す**（2026-08-16）。
+        # C_DB 削除の前提は「板の上に、自分の直近パスコンを持たない
+        # 能動部品がいない」こと。**それが崩れたら落ちなければならない。**
+        ("子基板に 595 を足す",
+         lambda ps: ps + [("U_X", "74LVC595", {"MR": "V3V3", "OE": "GND"})],
+         test_the_daughterboard_has_no_part_that_needs_local_decoupling),
         ("MR を浮かせる",
          lambda ps: [(r, k, {**p, "MR": "NC"} if k == "74LVC595" else p)
                      for r, k, p in ps],
