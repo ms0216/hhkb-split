@@ -7,6 +7,7 @@ XIAO を子基板へ載せると、**ファームウェアが使うピンは全�
 決定の経緯は docs/hardware/decisions/2026-08-07-daughterboard.md。
 """
 
+import math
 import re
 import sys
 from pathlib import Path
@@ -379,7 +380,7 @@ def test_the_ground_pour_is_actually_absent_under_the_antenna():
     # 使う狭い帯）。ここで band を使っていると、禁止域を広げた瞬間に
     # 落ちる検査になってしまう。
     from interface import (ANTENNA_CLEAR_KEEPOUT, ANTENNA_CLEAR_MIN,
-                           ANTENNA_L, ANTENNA_W, antenna_x_keepout)
+                           antenna_x_keepout)
     want_w = antenna_x_keepout()[1] - antenna_x_keepout()[0]
     assert abs((x_hi - x_lo) - want_w) < 0.1, (
         f"キープアウトの幅 {x_hi-x_lo:.2f}mm が想定 {want_w:.2f}mm と違う")
@@ -387,7 +388,16 @@ def test_the_ground_pour_is_actually_absent_under_the_antenna():
     # ⚠️ **高さは「アンテナを覆う」だけでは足りない**（2026-08-15）。
     # 直前まで `>= ANTENNA_L` しか見ておらず、**y の逃げを 0 にしても
     # 13 件全部が通った**（故意に壊して確かめた）。逃げの分まで見る。
-    want_h = ANTENNA_L + 2 * ANTENNA_CLEAR_KEEPOUT
+    #
+    # ⚠️ **定数から組み立て直さず、幅と同じく関数から取る**（2026-08-16）。
+    # 直前まで `ANTENNA_L + 2 * ANTENNA_CLEAR_KEEPOUT` と書いていたが、
+    # **`ANTENNA_KEEPOUT_TRIM` で辺ごとに削るようになった**ので、
+    # この式は実物とずれる（実際に 6.85 対 7.50 で落ちた）。
+    # **禁止域の出どころは `antenna_y_keepout()` ひとつ。**
+    from gen_case import DB_D
+    from interface import antenna_y_keepout
+    lo_, hi_ = antenna_y_keepout(DB_D / 2)
+    want_h = hi_ - lo_
     assert abs((y_hi - y_lo) - want_h) < 0.1, (
         f"キープアウトの高さ {y_hi-y_lo:.2f}mm が想定 {want_h:.2f}mm と違う")
 
@@ -475,6 +485,86 @@ def test_no_copper_on_the_near_layer_under_the_antenna():
     assert not bad, (
         f"アンテナの真下（近いほうの層）に銅がある: {bad[:4]}"
         f"{' ほか' if len(bad) > 4 else ''}")
+
+
+def test_gnd_vias_are_actually_placed_around_the_antenna_keepout():
+    """禁止域のふちに **GND ビアが実際に立っている**こと。
+
+    2026-08-16・利用者の指示「配線との間に GND ビアが置ける隙間は欲しい」
+    → 「今入っていない GND ビアが入るぐらいまでだけ小さくして」
+    → **「小さくはなったけど、GND ビアが置けてません」**
+
+    ⚠️ **「置ける」を測って「置いた」と報告した。**直前の版はこの検査を
+    「ビアが入る隙間があるか」で書いており、**隙間を作った時点で緑に
+    なった。**実際の盤面には 1 個も立っていなかった（`stitch` の格子が
+    6.5mm ピッチで、幅 1mm の帯に格子点が落ちないため）。
+    利用者が絵を見て気づいた。**空きがあることは、置いたことではない。**
+
+    だから**ビアを数える。**禁止域の外側 2mm の枠に、GND のビアが
+    `MIN` 個以上あること。
+
+    x- は数に入れない（板の縁まで 5.70mm の通路に ROW_A..E と SPARE の
+    6 本が並び、1.15mm の空きが無い。`gnd_fanout.ring` も 0 個を返す）。
+    **置けない辺を「置け」と要求する検査にはしない**——代わりに
+    「どこかの辺に偏っていないか」を辺の数で見る。
+    """
+    text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
+
+    ka = next(z for z in re.findall(r"\n\t\(zone[\s\S]*?\n\t\)", text)
+              if "(keepout" in z)
+    pts = [(float(a), float(b)) for a, b in
+           re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", ka)]
+    assert pts, "禁止域の polygon が読めない"
+    x_lo, x_hi = min(p[0] for p in pts), max(p[0] for p in pts)
+    y_lo, y_hi = min(p[1] for p in pts), max(p[1] for p in pts)
+
+    BAND = 2.0          # 禁止域のふちから、この距離までを「ふち」とみなす
+    MIN = 6             # ふちに要るビアの数（実績 10。減ったら気づく）
+
+    found = []
+    for via in re.findall(r"\n\t\(via[\s\S]*?\n\t\)", text):
+        netn = re.search(r'\(net (?:\d+ )?"([^"]*)"\)', via)
+        if not netn or netn.group(1) != "GND":
+            continue
+        at = re.search(r"\(at ([-\d.]+) ([-\d.]+)\)", via)
+        if not at:
+            continue
+        x, y = float(at.group(1)), float(at.group(2))
+        if not (x_lo - BAND <= x <= x_hi + BAND
+                and y_lo - BAND <= y <= y_hi + BAND):
+            continue
+        # 禁止域の中に入っていたら、それは別の問題（#23 の穴が埋まる）
+        assert not (x_lo < x < x_hi and y_lo < y < y_hi), (
+            f"禁止域の中に GND ビアがある ({x:.2f},{y:.2f})。"
+            "アンテナのために抜いた銅が埋まる")
+        if x < x_lo:
+            side = "x-"
+        elif x > x_hi:
+            side = "x+"
+        elif y < y_lo:
+            side = "rear"
+        else:
+            side = "front"
+        found.append((side, x, y))
+
+    assert len(found) >= MIN, (
+        f"禁止域のふち（{BAND}mm 以内）の GND ビアが {len(found)} 個しか"
+        f"無い（{MIN} 個以上要る）。**空きを作っただけでは置かれない**"
+        "——`gnd_fanout.ring` が動いているか見ること")
+
+    # ⚠️ **「2 辺以上」では緩すぎた**（2026-08-16・利用者の指摘
+    # 「全然おけてない」）。元から空いていた右と奥だけで条件を満たし、
+    # **削った左と手前が 0 個でも緑になっていた。**
+    # **4 辺すべてに要求する。**囲むとはそういうこと。
+    per = {}
+    for s, _, _ in found:
+        per[s] = per.get(s, 0) + 1
+    empty = [s for s in ("x-", "x+", "rear", "front") if not per.get(s)]
+    assert not empty, (
+        f"禁止域の {empty} 側に GND ビアが 1 個も無い（内訳 {per}）。"
+        "**4 辺とも囲めていない。**`gnd_fanout.ring` の "
+        "`_first_off` がその辺で None を返していないか見ること"
+        "（空き窓が細いと粗い刻みで踏み越える）")
 
 
 def test_the_row_order_matches_between_firmware_and_circuit():

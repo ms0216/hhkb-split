@@ -380,6 +380,59 @@ ANTENNA_X = -1.9         # [確定] 実測（TX 側の縁から 7.0mm）
 ANTENNA_CLEAR_MIN = 1.49      # [外部実測] Seeed 自身が XIAO 上で確保している逃げ
 ANTENNA_CLEAR_KEEPOUT = 2.0   # [実測] 禁止域。4 方向同時の上限 2.2 から 0.2 引いた
 
+# **詰まっている辺だけを内側へ削る量**（2026-08-16・利用者の指示
+# 「配線との間に GND ビアが置ける隙間は欲しい」→「今入っていない
+# GND ビアが入るぐらいまでだけ小さくして」）。
+#
+# ⚠️ **キー名は CAD 座標（奥が +）。KiCad の画面とは y が逆。**
+# `to_kicad` が y を反転するので、画面の「下」は CAD の手前。
+# 一度これを取り違えて、削ったつもりの値が奥側に効いていた。
+#   front … CAD の lo 側（手前・KiCad の画面では下）
+#   rear  … CAD の hi 側（奥  ・KiCad の画面では上）
+#
+# **4 辺は対称ではない。**右（x+）と奥（rear）は元から 3.5mm・4.6mm
+# 空いていて、GND ビアが問題なく座る。**詰まっていたのは左と手前だけ。**
+#
+# 量は「ビアが座れるようになる最小」。**削るのは銅を抜く範囲を減らす
+# こと＝ #23 と逆方向**なので、それ以上は削らない（利用者の指示も
+# 「ぐらいまでだけ」）。
+#
+#   x-    … ビアが座れる x は「膨らませた禁止域の外」かつ「SPARE の
+#           右端 144.145 + 逃げ 0.550 = 144.695 以上」。**この窓は
+#           0.005mm しか無い。**1.45 まで削って初めて窓が開く
+#           （0.80 では窓が −0.645mm ＝ 存在しない）
+#   front … SPARE の横帯 y=106.20 が `_prewire_rows` の積み上げで
+#           固定されている（禁止域を削っても動かない）。
+#           帯の縁 106.10 − 逃げ 0.55 − 縁からの距離 から逆算して 1.30
+#
+# ⚠️ **窓が 0.005mm しか無いので、粗い刻みでは踏み越える。**
+# `gnd_fanout.ring` の `_first_off` が細かく刻み直しているのが対。
+# 片方だけ直しても 0 個のままになる。
+#
+# ⚠️ **「置ける隙間があるか」で測らないこと。**空きを測る検査は空きを
+# 作れば通る。**実際にビアが立っているかを数える**
+# （`test_daughterboard.test_gnd_vias_are_actually_placed_...`）。
+# ここを間違えて「できた」と 2 回報告した。
+ANTENNA_KEEPOUT_TRIM = {"x-": 1.45, "x+": 0.0, "rear": 0.0, "front": 1.30}
+
+
+def antenna_via_gap():
+    """禁止域の縁と隣の配線のあいだに、**GND ビアが 1 個入る**幅。
+
+    2026-08-16・利用者の指示「配線との間に GND ビアが置ける隙間は欲しい」。
+
+    クリアランス + ビア径 + クリアランス。手で決めた数字ではなく
+    `pcb_rules` から導く（0.2 + 0.6 + 0.2 = 1.0mm）。
+    """
+    from pcb_rules import TRACK_W, VIA_D
+    return TRACK_W + VIA_D + TRACK_W
+
+
+def antenna_via_clearance():
+    """**ビアの中心**から他の銅までに要る距離（ビア半径 + クリアランス）。"""
+    from pcb_rules import TRACK_W, VIA_D
+    return VIA_D / 2 + TRACK_W
+
 # 配線を通してはいけない帯（`_route` が使う）は**別物**。こちらは
 # 「レーンをアンテナの下から外す」判定で、広げるほど引ける線が減る。
 ANTENNA_CLEAR = 0.5
@@ -404,9 +457,15 @@ def antenna_y_span(db_rear_y):
 
 
 def antenna_x_keepout():
-    """**禁止域**の x の範囲。`antenna_x_band`（配線の判定）とは別物。"""
-    return (ANTENNA_X - ANTENNA_W / 2 - ANTENNA_CLEAR_KEEPOUT,
-            ANTENNA_X + ANTENNA_W / 2 + ANTENNA_CLEAR_KEEPOUT)
+    """**禁止域**の x の範囲。`antenna_x_band`（配線の判定）とは別物。
+
+    **詰まっている辺だけ `ANTENNA_KEEPOUT_TRIM` で内側へ削る**
+    （2026-08-16）。x- はレーン束が縦に走っていてビアが入らない。
+    """
+    return (ANTENNA_X - ANTENNA_W / 2 - ANTENNA_CLEAR_KEEPOUT
+            + ANTENNA_KEEPOUT_TRIM["x-"],
+            ANTENNA_X + ANTENNA_W / 2 + ANTENNA_CLEAR_KEEPOUT
+            - ANTENNA_KEEPOUT_TRIM["x+"])
 
 
 def antenna_y_keepout(db_rear_y):
@@ -415,9 +474,13 @@ def antenna_y_keepout(db_rear_y):
     実体と禁止域を別の関数にしてあるのは、**ケース側は実体を使うから**
     （`gen_case.DB_ANTENNA_KEEPOUT` の判定・干渉検査）。`antenna_y_span`
     に逃げを混ぜると、ケースが「アンテナがここにある」と誤認する。
+
+    **詰まっている辺だけ `ANTENNA_KEEPOUT_TRIM` で内側へ削る**
+    （2026-08-16）。y+ はレーンが FFC へ曲がる所でビアが入らない。
     """
     lo, hi = antenna_y_span(db_rear_y)
-    return lo - ANTENNA_CLEAR_KEEPOUT, hi + ANTENNA_CLEAR_KEEPOUT
+    return (lo - ANTENNA_CLEAR_KEEPOUT + ANTENNA_KEEPOUT_TRIM["front"],
+            hi + ANTENNA_CLEAR_KEEPOUT - ANTENNA_KEEPOUT_TRIM["rear"])
 
 
 def xiao_y_offset(db_d):

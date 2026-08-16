@@ -931,6 +931,153 @@ def _as_segments(track):
     return [s] if s else []
 
 
+# 禁止域を取り巻くビアの間隔。**密に打つほど縫い目が細かい**が、
+# 詰めすぎるとベタが穴だらけになるので、ビア外径 0.6 + クリアランス 0.6。
+RING_SPACING_MM = 1.2
+
+
+def ring(board, spacing_mm=RING_SPACING_MM):
+    """**アンテナ禁止域のまわりを GND ビアで囲む**（2026-08-16）。
+
+    なぜ `stitch` の格子では届かないか
+    ------------------------------------
+    格子は **λ/10 = 6.5mm ピッチ**で、この子基板は 21x32mm しかない。
+    x の格子は 140.25 / 146.75 / 153.25 …… と並ぶので、**禁止域の縁の
+    脇にできる幅 1mm 前後の帯には、格子点がそもそも 1 つも落ちない。**
+    `stitch` の「外れた点を半ピッチ以内で逃がす」救済も、逃がす元の点が
+    無いので働かない。
+
+    **だから禁止域の縁に沿って別に打つ。**アンテナの直下は銅を抜いて
+    あるので（#23）、その穴のふちを縫っておかないと、**表裏のベタが
+    禁止域を回り込む形でしか繋がらない。**
+
+    ⚠️ **利用者の指摘で足した**（2026-08-16・「小さくはなったけど、
+    GND ビアが置けてません」）。それまで禁止域を縮めるところで止めて
+    おり、**「置ける」ことは測ったが「置いた」かを見ていなかった。**
+    絵を見れば 1 個も無いことは一目で分かった。
+    **「置ける」と「置いてある」は別。**
+
+    置けない辺は黙って飛ばす（x- はレーンが 6 本並んでいて、板の縁まで
+    5.70mm の通路に 1.15mm の空きが無い）。**何個置いたかを返す**ので、
+    検査と `autoroute` の表示がそれを見る。
+    """
+    gnd = board.FindNet("GND")
+    if gnd is None:
+        return 0
+
+    # **囲むのは「ビアを禁止しているルール領域」だけ**（2026-08-16）。
+    #
+    # ⚠️ 主基板 right には**ベタだけを止める**ルール領域が 2 つある
+    # （x 150.11..156.27 と 147.61..153.93。配線もビアも許可）。
+    # `GetIsRuleArea()` だけで拾うとそれも囲ってしまい、**囲む理由の
+    # 無い所にビアが並ぶ。**この関数の目的は「銅を抜いた穴のふちを
+    # 縫うこと」なので、**銅とビアを止めている領域**に限る。
+    areas = [z for z in board.Zones()
+             if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
+    if not areas:
+        return 0
+
+    obstacles = _obstacles(board)
+    segs = _segment_obstacles(board)
+    need = _via_keepout_mm(board)
+    r = pcbnew.FromMM(need)
+    # **縁からの距離は「判定が通る所」を実際に探して決める。**
+    #
+    # `_obstacles` はルール領域の箱を `_via_keepout_mm` ぶん膨らませ、
+    # `_blocked` はさらに同じ `r` を足して見るので、理屈では `need * 2`
+    # （1.10mm）で足りるはず——**だが実測では 1.10 で 0 個、1.15 で 48 個。**
+    # 箱の膨張が nm 整数で行われるので、境界がちょうど 1.10 の上にある。
+    #
+    # ⚠️ **ここを 3 回間違えた。**0.5（自分で決めた）→ 0 個、
+    # 0.75（need + クリアランス）→ 0 個、1.10（need * 2）→ 0 個。
+    # **式を立て直すたびに、確かめずに「今度は合っている」と思った。**
+    # 計算で当てにいくのをやめ、**判定そのものに聞く。**
+    # ⚠️ **辺ごとに探す。1 つの値を 4 辺で使い回さない**（2026-08-16）。
+    #
+    # 直前まで左右の辺だけで `off` を 1 つ決め、それを上下にも使っていた。
+    # **左右で通った 1.15mm がたまたま採用され、左辺は「箱の膨張ぶん
+    # 足りない」まま**で 0 個になっていた（利用者の指摘「全然おけてない」）。
+    # 辺ごとに空き方が違うのだから、辺ごとに測る。
+    def _at(z, side, o, t):
+        bb = z.GetBoundingBox()
+        x0, x1 = pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+        y0, y1 = pcbnew.ToMM(bb.GetTop()), pcbnew.ToMM(bb.GetBottom())
+        if side == "x-":
+            return (x0 - o, y0 + t * (y1 - y0))
+        if side == "x+":
+            return (x1 + o, y0 + t * (y1 - y0))
+        if side == "y-":
+            return (x0 + t * (x1 - x0), y0 - o)
+        return (x0 + t * (x1 - x0), y1 + o)
+
+    def _any_ok(z, side, o, n=24):
+        for j in range(n + 1):
+            p = _at(z, side, o, j / n)
+            if (not _blocked(pcbnew.VECTOR2I_MM(*p), obstacles, r)
+                    and not _near_segment(p[0], p[1], segs, need)):
+                return True
+        return False
+
+    def _first_off(z, side):
+        """その辺で、ビアが座れる**縁からの距離**を探す。
+
+        ⚠️ **粗い刻みだけで探さない**（2026-08-16・利用者の指摘
+        「全然おけてない」）。左辺の空き窓は **0.005mm 幅**しか無く
+        （禁止域の膨張で x<=144.700・SPARE の逃げで x>=144.695）、
+        **0.05mm 刻みでは踏み越えてしまう。**実際 0 個だった。
+        粗く当たりを付けてから、その区間を細かく刻み直す。
+        """
+        coarse = 0.05
+        for i in range(81):
+            o = need * 2 + i * coarse
+            if _any_ok(z, side, o):
+                return o
+            # 粗い刻みで跨いだ「細い窓」を拾い直す
+            for k in range(1, 10):
+                o2 = o + k * (coarse / 10)
+                if _any_ok(z, side, o2):
+                    return o2
+        return None
+
+    placed = []
+    n = 0
+    for z in areas:
+        bb = z.GetBoundingBox()
+        x0, x1 = pcbnew.ToMM(bb.GetLeft()), pcbnew.ToMM(bb.GetRight())
+        y0, y1 = pcbnew.ToMM(bb.GetTop()), pcbnew.ToMM(bb.GetBottom())
+        step = spacing_mm / 4          # 候補は細かく採り、間引きで間隔を作る
+        offs = {s: _first_off(z, s) for s in ("x-", "x+", "y-", "y+")}
+        cand = []
+        k = int((y1 - y0) / step)
+        for i in range(k + 1):
+            y = y0 + i * step
+            if offs["x-"] is not None:
+                cand.append((x0 - offs["x-"], y))
+            if offs["x+"] is not None:
+                cand.append((x1 + offs["x+"], y))
+        k = int((x1 - x0) / step)
+        for i in range(k + 1):
+            x = x0 + i * step
+            if offs["y-"] is not None:
+                cand.append((x, y0 - offs["y-"]))
+            if offs["y+"] is not None:
+                cand.append((x, y1 + offs["y+"]))
+        for x, y in cand:
+            if any((x - px) ** 2 + (y - py) ** 2 < spacing_mm ** 2
+                   for px, py in placed):
+                continue
+            if _blocked(pcbnew.VECTOR2I_MM(x, y), obstacles, r):
+                continue
+            if _near_segment(x, y, segs, need):
+                continue
+            v = _add_via(board, gnd, x, y)
+            obstacles.append(v.GetBoundingBox())
+            segs.append((x, y, x, y, VIA_DIAMETER_MM / 2))
+            placed.append((x, y))
+            n += 1
+    return n
+
+
 def fence(board, min_len_mm=FENCE_MIN_LEN_MM, step_mm=FENCE_STEP_MM):
     """**長い配線に沿って、GND のビアを一定間隔で並べる**（指摘 5）。
 

@@ -469,9 +469,14 @@ def _route_once(half, seed):
     # どちらも配線が終わってから打つ。配線を障害物として避けたいので、
     # 配線前に打つと置き場所を見誤る。
     n_fe, n_long = gnd_fanout.fence(board)
+    # **禁止域のふちは格子より先に縫う**（2026-08-16）。格子は 6.5mm
+    # ピッチなので、禁止域の脇の幅 1mm の帯には格子点が落ちない。
+    # 先に打っておけば、格子はこれを障害物として避ける。
+    n_ring = gnd_fanout.ring(board)
     n_st, n_skip = gnd_fanout.stitch(board)
     print(f"   {half}: GND ビア ファンアウト {n_fan} 個 / "
           f"長い経路 {n_long} 本の脇に {n_fe} 個 / "
+          f"禁止域のふちに {n_ring} 個 / "
           f"格子で埋めた {n_st} 個（置けなかった格子点 {n_skip}）")
 
     # **配線後に 1 本ずつ太らせる後処理は入れていない**（2026-08-12）。
