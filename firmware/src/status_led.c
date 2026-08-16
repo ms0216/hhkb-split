@@ -122,7 +122,26 @@ enum led_state {
 #define BATT_REPLACE_PCT  5
 
 static bool host_connected;
+
+/*
+ * 「相手と繋がっているか」。左では右手、右では左（セントラル）を指す。
+ *
+ * ⚠️ **初期値は左右で違う。**
+ *   左（セントラル）… 毎 tick に transport の get_status() で読み直すので
+ *                      初期値は事実上使われない。true でよい。
+ *   右（周辺機）  … **イベントでしか更新されない。**
+ *      zmk_split_peripheral_status_changed を raise しているのは
+ *      peripheral.c の connected()/disconnected() コールバックだけで、
+ *      **起動時には飛ばない**（上流を読んで確認）。
+ *      true で始めると、**まだ繋がっていないのに消灯**したまま
+ *      待つことになり、いちばん見せたい状態が出ない。
+ *      なので **false から始める**（繋がった時点でイベントが来て消える）。
+ */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+static bool peripheral_connected; /* = false。起動時は「繋がっていない」 */
+#else
 static bool peripheral_connected = true; /* 分割でなければ「繋がっている」扱い */
+#endif
 static uint8_t battery_pct = 100;
 static bool booting = true;
 static enum zmk_activity_state activity = ZMK_ACTIVITY_ACTIVE;
