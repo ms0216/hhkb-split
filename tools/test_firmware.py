@@ -169,6 +169,38 @@ def test_the_status_led_uses_only_public_zmk_api_for_peripheral_state():
         "central.c の内部 static に触っている（公開 API ではない）"
 
 
+def test_the_peripheral_never_reports_a_host_connection():
+    """**右にホストとの接続は無い。無いものを未接続として警告しない。**
+
+    2026-08-16 に実機で露見。`if (!host_connected)` を役割で囲っておらず、
+    **右でも評価されていた。**host_connected を更新するのはセントラル側の
+    コードだけなので、右では永久に false のまま
+    ＝ **キーが打てているのに青が点滅し続けた。**
+
+    「左右で同じソースを使う」と決めた以上、**片側にしか無い概念は
+    必ず #if で囲う**。囲い忘れは「変数が既定値のまま使われる」という
+    静かな壊れ方をする（ビルドは通る・CI も緑）。
+    """
+    src = (ROOT / "firmware/src/status_led.c").read_text()
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    # host_connected を読み書きする行は、すべて CENTRAL の #if の中にあること。
+    # #if / #endif の入れ子を追い、「いま ROLE_CENTRAL の中か」を持つ。
+    stack = []  # 各 #if が ROLE_CENTRAL を条件に含むか
+    for line in code.splitlines():
+        s = line.strip()
+        if s.startswith("#if"):
+            stack.append("ZMK_SPLIT_ROLE_CENTRAL" in s)
+        elif s.startswith("#endif"):
+            if stack:
+                stack.pop()
+        elif "host_connected" in s:
+            assert any(stack), (
+                f"host_connected が役割の #if の外にある: {s!r}\n"
+                "右でも評価され、永久に false のまま青が点滅し続ける")
+
+
 def test_an_unusable_transport_counts_as_disconnected():
     """**「分からない」を「繋がっている」に倒さないこと。**
 

@@ -126,7 +126,12 @@ enum led_state {
 #define BATT_LOW_PCT     15
 #define BATT_REPLACE_PCT  5
 
+/* **左（セントラル）と、分割でない構成だけが持つ。**
+ * 右にホストとの接続は無いので、変数ごと存在させない
+ * （存在させると「更新されないまま false」で青が点滅し続ける）。 */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) || !IS_ENABLED(CONFIG_ZMK_SPLIT)
 static bool host_connected;
+#endif
 
 /*
  * 「相手と繋がっているか」。左では右手、右では左（セントラル）を指す。
@@ -244,13 +249,25 @@ static enum led_state current_state(void) {
     if (battery_pct <= BATT_LOW_PCT) {
         return STATE_BATT_LOW;
     }
-    /* **右手を先に見る。**キーの半分が死ぬ方が切実。 */
+    /* **相手を先に見る。**キーの半分が死ぬ方が切実。 */
     if (!peripheral_connected) {
         return STATE_PERIPHERAL_LOST;
     }
+
+    /* ⚠️ **ホストの判定はセントラル（左）だけ。**
+     *
+     * 2026-08-16 に実機で露見: この if を役割で囲っていなかったため、
+     * **右でも `!host_connected` が評価されていた。**host_connected を
+     * 更新するのは左だけなので、右では永久に false のまま
+     * ＝ **キーが打てているのに青が点滅し続けた。**
+     *
+     * 右にホストとの接続は無い。「無いもの」を未接続として警告しない。 */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) || !IS_ENABLED(CONFIG_ZMK_SPLIT)
     if (!host_connected) {
         return STATE_HOST_LOST;
     }
+#endif
+
     return STATE_IDLE; /* 接続中は消灯。実機どおり */
 }
 
