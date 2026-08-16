@@ -29,6 +29,35 @@ config HHKB_LOW_BATTERY_SOFT_OFF
 	  打ち止め（devicetree の empty-millivolts）を下回った状態が
 	  HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES 回続いたら soft off に入る。
 
+config HHKB_STATUS_LED
+	bool "XIAO 基板上の LED で状態を知らせる（実機の LED インジケーター相当）"
+	default n
+	depends on GPIO
+	help
+	  **新機能ではなく、欠落していた実機再現。**実機 HHKB Professional
+	  HYBRID には前面に LED インジケーターがある（PFU 取扱説明書
+	  P3PC-6641-05）。この案件はその事実を記録しておらず、
+	  specs には「HHKB に存在しない機能」として RGB と並べて書いていた。
+	  経緯は docs/hardware/decisions/2026-08-16-status-led.md。
+
+	  実機の表をそのまま踏襲する:
+	    消灯          接続中（**実機も接続中は消灯**）
+	    青 1 秒に 2 回  ホストと繋がっていない（ペアリング待機相当）
+	    橙 1 回/30 秒   電池残量が少ない
+	    橙 2 回/15 秒   電池を交換
+	    起動時         青点灯 → 消灯
+
+	  **実機に無い状態を 1 つ足している。**完全分割型なので左手は
+	  「右手と繋がっているか」も持つが、一体型の実機には対応が無い。
+	  右手が落ちるとキーの半分が死ぬので、**緑**を当て、
+	  **ホスト未接続より優先**する。
+
+	  ⚠️ ZMK に「広告中」「スキャン中」の事象は無い（central.c の内部に
+	  閉じている）。**「繋がっていない」を代理に使っている。**
+
+	  ⚠️ led0/led1/led2 のエイリアスがある基板でしか積めない。
+	  無ければ BUILD_ASSERT で落ちる（黙って無効にはしない）。
+
 config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
 	int "何回続けて下回ったら止まるか"
 	default 2

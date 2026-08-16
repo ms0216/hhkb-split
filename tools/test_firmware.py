@@ -108,8 +108,65 @@ def test_this_repository_is_registered_as_a_zmk_module():
     for path in ("firmware/CMakeLists.txt", "firmware/Kconfig",
                  "firmware/drivers/battery_alkaline.c",
                  "firmware/src/low_battery_off.c",
+                 "firmware/src/status_led.c",
                  "firmware/dts/bindings/sensor/hhkb,battery-alkaline.yaml"):
         assert (ROOT / path).exists(), f"{path} が無い"
+
+
+def test_the_status_led_is_actually_compiled_in():
+    """**設定しただけで効いていない、を防ぐ。**
+
+    LED が光るには **3 つが揃わないといけない**:
+      1. firmware/src/status_led.c がある
+      2. CMakeLists.txt が CONFIG_HHKB_STATUS_LED で**それを足している**
+      3. シールドの .conf が =y にしている
+
+    どれが欠けても**ビルドは通り、CI は緑のまま、LED だけ死ぬ**。
+    2 を書き忘れる形は、この案件で battery_alkaline.c でも起きかけた。
+
+    **実際にビルドが通るか**（led0 のエイリアスが実在するか・ヘッダ名・
+    リンク）は手元では見られない。GitHub Actions の ZMK ビルドが唯一の確認。
+    """
+    cmake = (ROOT / "firmware/CMakeLists.txt").read_text()
+    assert "CONFIG_HHKB_STATUS_LED" in cmake, \
+        "CMakeLists.txt が status_led.c を足していない（=y にしても光らない）"
+    assert "src/status_led.c" in cmake
+
+    assert "config HHKB_STATUS_LED" in (ROOT / "firmware/Kconfig").read_text(), \
+        "Kconfig に symbol が無いと、.conf の =y は無言で捨てられる"
+
+    # **本番と、実際に試す治具の両方**で有効になっていること。
+    for shield, names in (
+            ("hhkb_split", ("hhkb_split_left.conf", "hhkb_split_right.conf")),
+            ("proto_split", ("proto_split_left.conf", "proto_split_right.conf")),
+    ):
+        for name in names:
+            conf = ROOT / "config/boards/shields" / shield / name
+            assert "CONFIG_HHKB_STATUS_LED=y" in conf.read_text(), \
+                f"{name} で LED が有効になっていない"
+
+
+def test_the_status_led_uses_only_public_zmk_api_for_peripheral_state():
+    """**左手が右手の接続状態を、公開 API から取っていること。**
+
+    central.c の peripherals[] は static で、zmk/split/central.h にも
+    接続状態を返す関数は無い。使えるのは transport 層の
+    get_status() だけで、これは STRUCT_SECTION_ITERABLE_NAMED 経由で
+    列挙できる（2026-08-16 に上流を読んで確定）。
+
+    **内部実装に手を伸ばすと、ZMK の更新で無言で壊れる。**
+    ここが変わったら、決定記録を読み直すこと。
+    """
+    src = (ROOT / "firmware/src/status_led.c").read_text()
+    assert "STRUCT_SECTION_FOREACH(zmk_split_transport_central" in src, \
+        "左手が右手の接続状態を取る経路が変わっている"
+
+    # **コメントを外してから見る。**この方針は文章でも説明しているので、
+    # 素朴に grep すると自分の解説文に当たって落ちる（実際に落ちた）。
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+    assert "peripherals[" not in code, \
+        "central.c の内部 static に触っている（公開 API ではない）"
 
 
 def test_the_zmk_config_validator_passes():
