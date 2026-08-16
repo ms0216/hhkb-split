@@ -15,10 +15,13 @@
 # zmk/app** になる（コンパイル行の -fmacro-prefix-map で確認した）。
 zephyr_include_directories(${CMAKE_SOURCE_DIR}/include)
 
-if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF)
+if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
+   OR CONFIG_HHKB_STATUS_LED)
   zephyr_library()
   zephyr_library_sources_ifdef(CONFIG_HHKB_BATTERY_ALKALINE
                                drivers/battery_alkaline.c)
   zephyr_library_sources_ifdef(CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
                                src/low_battery_off.c)
+  zephyr_library_sources_ifdef(CONFIG_HHKB_STATUS_LED
+                               src/status_led.c)
 endif()
