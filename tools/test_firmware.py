@@ -169,6 +169,30 @@ def test_the_status_led_uses_only_public_zmk_api_for_peripheral_state():
         "central.c の内部 static に触っている（公開 API ではない）"
 
 
+def test_the_warning_survives_idle():
+    """**未接続の警告が、30 秒の無操作で勝手に消えないこと。**
+
+    2026-08-16 に利用者の指摘で直した。「点滅が消えるのが早すぎて
+    気づけない」。当初 `activity != ZMK_ACTIVITY_ACTIVE` で一律に消して
+    いたが、ZMK の idle は **30 秒無操作**（CONFIG_ZMK_IDLE_TIMEOUT の既定）。
+    **放っておくといちばん見せたい警告が消える**という、警告灯として
+    逆の挙動だった。
+
+    sleep で消すのは正当（GPIO は状態を保持するので点けたまま寝ると
+    垂れ流す）。**idle と sleep を区別すること。**
+    """
+    src = (ROOT / "firmware/src/status_led.c").read_text()
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    assert "!= ZMK_ACTIVITY_ACTIVE" not in code, (
+        "activity != ACTIVE で消している。**idle（30 秒）でも消えてしまう。**"
+        "消すのは ZMK_ACTIVITY_SLEEP のときだけ")
+    assert code.count("== ZMK_ACTIVITY_SLEEP") >= 2, (
+        "sleep の判定が足りない。リスナ側と current_state 側の両方に要る"
+        "（片方だけだと、もう片方が idle で消す）")
+
+
 def test_the_peripheral_never_reports_a_host_connection():
     """**右にホストとの接続は無い。無いものを未接続として警告しない。**
 

@@ -105,6 +105,7 @@ enum led_color {
  */
 enum led_state {
     STATE_BOOT,             /* 起動直後: 青点灯 → 消灯 */
+    STATE_RECOVERED,        /* **復帰の合図**: 青を 1 秒点灯 → 消灯 */
     STATE_BATT_REPLACE,     /* 橙 2 回点滅 / 15 秒 */
     STATE_BATT_LOW,         /* 橙 1 回点滅 / 30 秒 */
     STATE_PERIPHERAL_LOST,  /* **緑 1 秒に 2 回。分割型固有** */
@@ -114,6 +115,7 @@ enum led_state {
 
 /* --- 実機の表から来る時定数 ------------------------------------------- */
 #define BOOT_ON_MS       3000  /* 「青色に点灯したあと、消灯」 */
+#define RECOVERED_ON_MS  1000  /* 復帰の合図。実機も機器切替で「青が点灯 → 消灯」 */
 #define FAST_BLINK_MS     250  /* 1 秒に 2 回 = 250ms on / 250ms off */
 #define PULSE_MS          120  /* 橙の 1 回ぶんの点灯 */
 #define PULSE_GAP_MS      280  /* 橙 2 回点滅の間隔 */
@@ -154,6 +156,17 @@ static bool peripheral_connected = true; /* 分割でなければ「繋がって
 #endif
 static uint8_t battery_pct = 100;
 static bool booting = true;
+
+/*
+ * **復帰の合図を出すためのもの。**
+ *
+ * 接続中は消灯（実機どおり）なので、**繋がった瞬間に消えるだけ**だと
+ * 見ていない限り気づけない（2026-08-16 に利用者の指摘）。
+ * 直前まで警告を出していたなら、消える前に青を 1 秒点灯して知らせる。
+ * 実機も機器切替時に「青色に点灯したあと、消灯」とするので踏襲になる。
+ */
+static bool was_warning;
+static bool announce_recovery;
 static enum zmk_activity_state activity = ZMK_ACTIVITY_ACTIVE;
 
 static void set_color(enum led_color c) {
@@ -237,7 +250,10 @@ static bool peripherals_all_connected(void) {
 #endif
 
 static enum led_state current_state(void) {
-    if (activity != ZMK_ACTIVITY_ACTIVE) {
+    /* **sleep のときだけ消す。idle では消さない。**
+     * idle は 30 秒無操作で入るので、ここで消すと未接続の警告が
+     * 30 秒で勝手に消える（2026-08-16 に利用者の指摘で直した）。 */
+    if (activity == ZMK_ACTIVITY_SLEEP) {
         return STATE_IDLE;
     }
     if (booting) {
@@ -302,6 +318,20 @@ static void blink_work_cb(struct k_work *work) {
 #endif
 
     enum led_state st = current_state();
+
+    /* **警告 → 正常に変わった瞬間に、復帰の合図を差し込む。**
+     * 消灯に落ちてからでは「直前が警告だったか」が分からないので、
+     * ここで捕まえて STATE_RECOVERED に差し替える。 */
+    bool warning = (st == STATE_PERIPHERAL_LOST || st == STATE_HOST_LOST);
+    if (was_warning && st == STATE_IDLE) {
+        announce_recovery = true;
+    }
+    was_warning = warning;
+
+    if (announce_recovery && st == STATE_IDLE) {
+        st = STATE_RECOVERED;
+    }
+
     if (st != shown) {
         shown = st;
         step = 0;
@@ -322,6 +352,14 @@ static void blink_work_cb(struct k_work *work) {
             booting = false;
             next_ms = 0; /* 次の tick で本来の状態を描く */
         }
+        break;
+
+    case STATE_RECOVERED:
+        /* **復帰の合図。**青を 1 秒点けてから消灯に落ちる。
+         * 実機も機器切替で「青色に点灯したあと、消灯」とする。 */
+        set_color(COLOR_BLUE);
+        announce_recovery = false;
+        next_ms = RECOVERED_ON_MS;
         break;
 
     case STATE_IDLE:
@@ -403,9 +441,18 @@ SYS_INIT(status_led_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
 static int status_led_listener(const zmk_event_t *eh) {
     if (as_zmk_activity_state_changed(eh) != NULL) {
         activity = zmk_activity_get_state();
-        if (activity != ZMK_ACTIVITY_ACTIVE) {
-            /* **点いたまま寝ると GPIO はその状態を保つ。**
-             * 30 分ぶん垂れ流すので、寝る前に必ず消す。 */
+
+        /* ⚠️ **idle では消さない。sleep でだけ消す。**
+         *
+         * 2026-08-16 に利用者の指摘で直した。当初は
+         * `!= ZMK_ACTIVITY_ACTIVE` で一律に消していたが、
+         * ZMK の idle は **30 秒無操作**（CONFIG_ZMK_IDLE_TIMEOUT の既定）。
+         * **未接続の警告が 30 秒で勝手に消えていた。**
+         * 放っておくと消えるのでは、いちばん見せたいものが見られない。
+         *
+         * sleep で消すのは正当（GPIO は状態を保持するので、点けたまま
+         * 寝ると 30 分ぶん垂れ流す）。**idle で消す理由は無い。** */
+        if (activity == ZMK_ACTIVITY_SLEEP) {
             k_work_cancel_delayable(&blink_work);
             set_color(COLOR_OFF);
         } else {
