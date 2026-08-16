@@ -24,6 +24,12 @@ include:
   - board: xiao_ble//zmk
     shield: settings_reset
 
+  # **測定専用**（Task C4・open-gaps #44）。BLE 送信バーストの高さと長さ。
+  # LED を明示的に消し、分割・キー・ADC・ログを全部外してある。
+  # **本番の設定ではない。**
+  - board: xiao_ble//zmk
+    shield: c4_txburst
+
   - board: xiao_ble//zmk
     shield: hhkb_split_left
   - board: xiao_ble//zmk

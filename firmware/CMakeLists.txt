@@ -16,7 +16,7 @@
 zephyr_include_directories(${CMAKE_SOURCE_DIR}/include)
 
 if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
-   OR CONFIG_HHKB_STATUS_LED)
+   OR CONFIG_HHKB_STATUS_LED OR CONFIG_HHKB_LED_FORCE_OFF)
   zephyr_library()
   zephyr_library_sources_ifdef(CONFIG_HHKB_BATTERY_ALKALINE
                                drivers/battery_alkaline.c)
@@ -24,4 +24,7 @@ if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
                                src/low_battery_off.c)
   zephyr_library_sources_ifdef(CONFIG_HHKB_STATUS_LED
                                src/status_led.c)
+  # **測定用**（open-gaps #44 / Task C4）。HHKB_STATUS_LED とは排他。
+  zephyr_library_sources_ifdef(CONFIG_HHKB_LED_FORCE_OFF
+                               src/led_force_off.c)
 endif()

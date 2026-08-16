@@ -1,0 +1,16 @@
+/*
+ * **物理的なスイッチは付けないが、ZMK は keymap を要求する。**
+ * kscan-mock の 1 行 1 列に対応する 1 個だけ。
+ * `events = <0>` なので、これが押されることは無い。
+ */
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/keys.h>
+
+/ {
+	keymap {
+		compatible = "zmk,keymap";
+		default_layer {
+			bindings = <&none>;
+		};
+	};
+};

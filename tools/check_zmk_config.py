@@ -74,6 +74,11 @@ def implied_positions(files):
     matrix なら 行 × 列、direct なら input-gpios の本数。
     ここを検査しないと、治具シールドのバインディング数の取り違えを
     見逃す（実際に proto 系で起きうる）。
+
+    **kscan-mock も読む**（2026-08-16）。GPIO を 1 本も使わない代わりに
+    `rows`/`columns` を数値で書くので、上の 2 つでは 0 になり
+    「判定できなかった」で落ちていた。**測定専用の治具（c4_txburst）が
+    走査電流をゼロにするために使っている。**
     """
     text = "\n".join(f.read_text(encoding="utf-8") for f in files)
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
@@ -81,7 +86,16 @@ def implied_positions(files):
     cols = _count_gpio_entries(text, "col-gpios")
     if rows and cols:
         return rows * cols
-    return _count_gpio_entries(text, "input-gpios")
+    n_direct = _count_gpio_entries(text, "input-gpios")
+    if n_direct:
+        return n_direct
+    # kscan-mock: GPIO ではなく数値の rows/columns で大きさが決まる。
+    if "zmk,kscan-mock" in text:
+        m_rows = re.search(r"\brows\s*=\s*<\s*(\d+)\s*>", text)
+        m_cols = re.search(r"\bcolumns\s*=\s*<\s*(\d+)\s*>", text)
+        if m_rows and m_cols:
+            return int(m_rows.group(1)) * int(m_cols.group(1))
+    return 0
 
 
 def count_bindings(keymap):

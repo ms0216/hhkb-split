@@ -58,6 +58,29 @@ config HHKB_STATUS_LED
 	  ⚠️ led0/led1/led2 のエイリアスがある基板でしか積めない。
 	  無ければ BUILD_ASSERT で落ちる（黙って無効にはしない）。
 
+config HHKB_LED_FORCE_OFF
+	bool "RGB LED を起動直後に消灯へ固定する（**電流測定用**）"
+	default n
+	depends on GPIO && !HHKB_STATUS_LED
+	help
+	  **測定用。本番では使わない。**
+
+	  Task C4 で BLE 送信バーストの電流を測るとき、XIAO の 3V3 パッドに
+	  シャントを直列に入れる。**RGB LED は共通アノードで 3V3 に直結**
+	  （回路図 RGB1）なので、点灯するとその電流もシャントを通る。
+	  1 色 1〜2mA で、**測りたい TX バースト 15mA と同じ桁**。
+
+	  ⚠️ **HHKB_STATUS_LED=n にするだけでは足りない。**それは
+	  status_led.c をビルドしないだけで、ピンを消灯側へ駆動しない。
+	  未初期化の GPIO は入力ハイインピーダンスなので消えている「はず」
+	  だが、**それは推測**（CLAUDE.md 5「設定しただけでは効いていない」）。
+
+	  これを y にすると、起動直後に 3 本とも明示的に消灯へ駆動し、
+	  以後どこからも触らない。**そのうえでオシロのベースラインを読んで、
+	  実際に消えたことを確認すること。**
+
+	  HHKB_STATUS_LED とは同時に積めない（depends on で排他）。
+
 config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
 	int "何回続けて下回ったら止まるか"
 	default 2
