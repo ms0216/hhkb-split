@@ -169,6 +169,35 @@ def test_the_status_led_uses_only_public_zmk_api_for_peripheral_state():
         "central.c の内部 static に触っている（公開 API ではない）"
 
 
+def test_the_recovery_flash_uses_the_colour_of_the_link_that_recovered():
+    """**色に意味を持たせた以上、復帰の合図も同じ色でなければ意味が壊れる。**
+
+    2026-08-16 に利用者の指摘:
+    「左右間の接続に関するものが緑なのであれば、**左右接続の瞬間は
+    緑点灯**であるべきでは？」
+
+    当初は復帰の合図を一律 COLOR_BLUE にしていた。**分割リンクが復帰した
+    のに青**では、自分で決めた「青＝ホスト／緑＝左右間」を自分で破っている。
+
+    決定表: docs/hardware/decisions/2026-08-16-led-state-table.md
+    """
+    src = (ROOT / "firmware/src/status_led.c").read_text()
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    # 合図は「復帰した系統の色」を変数で持つこと。決め打ちの色は使わない。
+    m = re.search(r"case STATE_RECOVERED:(.*?)break;", code, re.S)
+    assert m, "STATE_RECOVERED の描画が無い"
+    body = m.group(1)
+    assert "set_color(announce_color)" in body, (
+        "復帰の合図が『復帰した系統の色』になっていない。"
+        "COLOR_BLUE などの決め打ちは、緑＝左右間という取り決めを壊す")
+
+    # 分割の復帰は緑、ホストの復帰は青を積むこと
+    assert "announce_color = COLOR_GREEN" in code, "分割の復帰に緑を積んでいない"
+    assert "announce_color = COLOR_BLUE" in code, "ホストの復帰に青を積んでいない"
+
+
 def test_the_warning_survives_idle():
     """**未接続の警告が、30 秒の無操作で勝手に消えないこと。**
 
@@ -242,8 +271,10 @@ def test_an_unusable_transport_counts_as_disconnected():
     code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
     code = re.sub(r"//[^\n]*", "", code)
 
-    # 左右とも、この判定を持っていること（片方だけ直すのを防ぐ）
-    guards = re.findall(r"if\s*\(!st\.available\s*\|\|\s*!st\.enabled\)\s*\{([^}]*)\}", code)
+    # 左右とも、この判定を持っていること（片方だけ直すのを防ぐ）。
+    # `if (!st.available || !st.enabled ...) { ... }` の中身を取る。
+    guards = re.findall(
+        r"if\s*\(!st\.available\s*\|\|\s*!st\.enabled[^)]*\)\s*\{([^}]*)\}", code)
     assert len(guards) == 2, (
         f"available/enabled の判定が {len(guards)} 箇所しかない。"
         "左（central）と右（peripheral）の両方に要る")
@@ -254,7 +285,9 @@ def test_an_unusable_transport_counts_as_disconnected():
         assert "continue" not in body, (
             f"{i + 1} 箇所目が continue。これは 2026-08-16 のバグそのもので、"
             "『判定材料なし』が『繋がっている』になる")
-        assert "return false" in body, (
+        # 未接続側に倒していること（LINK_DISCONNECTED か、ループを抜けて
+        # connected=false を確定させる break のどちらか）
+        assert ("LINK_DISCONNECTED" in body or "break" in body), (
             f"{i + 1} 箇所目が未接続へ倒していない")
 
 

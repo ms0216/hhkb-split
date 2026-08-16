@@ -67,6 +67,7 @@
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#include <zmk/split/bluetooth/peripheral.h>
 #include <zmk/split/transport/peripheral.h>
 #endif
 
@@ -105,18 +106,32 @@ enum led_color {
  */
 enum led_state {
     STATE_BOOT,             /* 起動直後: 青点灯 → 消灯 */
-    STATE_RECOVERED,        /* **復帰の合図**: 青を 1 秒点灯 → 消灯 */
+    STATE_RECOVERED,        /* **復帰の合図**: 1 秒点灯 → 消灯。色は復帰した系統 */
     STATE_BATT_REPLACE,     /* 橙 2 回点滅 / 15 秒 */
     STATE_BATT_LOW,         /* 橙 1 回点滅 / 30 秒 */
-    STATE_PERIPHERAL_LOST,  /* **緑 1 秒に 2 回。分割型固有** */
-    STATE_HOST_LOST,        /* 青 1 秒に 2 回（実機のペアリング待機相当） */
+    STATE_LINK_LOST,        /* 分割・ホストの未接続。**交互に出す**（下記） */
     STATE_IDLE,             /* 消灯 */
+};
+
+/*
+ * **1 つのリンクの状態。**分割（左右間）とホストで独立に持つ。
+ *
+ * 決定表: docs/hardware/decisions/2026-08-16-led-state-table.md
+ *   未ボンド        … 相手を知らない＝ペアリング待ち。**速い点滅（1 秒に 4 回）**
+ *   ボンド済み未接続 … 相手は知っていて探している。**遅い点滅（1 秒に 2 回）**
+ *   接続済み        … 消灯
+ */
+enum link_state {
+    LINK_UNBONDED,
+    LINK_DISCONNECTED,
+    LINK_CONNECTED,
 };
 
 /* --- 実機の表から来る時定数 ------------------------------------------- */
 #define BOOT_ON_MS       3000  /* 「青色に点灯したあと、消灯」 */
-#define RECOVERED_ON_MS  1000  /* 復帰の合図。実機も機器切替で「青が点灯 → 消灯」 */
-#define FAST_BLINK_MS     250  /* 1 秒に 2 回 = 250ms on / 250ms off */
+#define RECOVERED_ON_MS  1000  /* 復帰の合図。実機も機器切替で「点灯 → 消灯」 */
+#define SLOW_BLINK_MS     250  /* **1 秒に 2 回** = 250ms on/off。ボンド済み・未接続 */
+#define FAST_BLINK_MS     125  /* **1 秒に 4 回** = 125ms on/off。未ボンド */
 #define PULSE_MS          120  /* 橙の 1 回ぶんの点灯 */
 #define PULSE_GAP_MS      280  /* 橙 2 回点滅の間隔 */
 #define BATT_LOW_MS     30000  /* 橙 1 回点滅を 30 秒間隔 */
@@ -130,9 +145,20 @@ enum led_state {
 
 /* **左（セントラル）と、分割でない構成だけが持つ。**
  * 右にホストとの接続は無いので、変数ごと存在させない
- * （存在させると「更新されないまま false」で青が点滅し続ける）。 */
+ * （存在させると「更新されないまま既定値」で青が点滅し続ける）。 */
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) || !IS_ENABLED(CONFIG_ZMK_SPLIT)
-static bool host_connected;
+#define HAS_HOST_LINK 1
+static enum link_state host_link = LINK_DISCONNECTED;
+#else
+#define HAS_HOST_LINK 0
+#endif
+
+/* 分割リンク。分割でなければ「繋がっている」扱いで、表示に出さない。 */
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+#define HAS_SPLIT_LINK 1
+static enum link_state split_link = LINK_DISCONNECTED;
+#else
+#define HAS_SPLIT_LINK 0
 #endif
 
 /*
@@ -141,19 +167,7 @@ static bool host_connected;
  * ⚠️ **初期値は左右で違う。**
  *   左（セントラル）… 毎 tick に transport の get_status() で読み直すので
  *                      初期値は事実上使われない。true でよい。
- *   右（周辺機）  … **イベントでしか更新されない。**
- *      zmk_split_peripheral_status_changed を raise しているのは
- *      peripheral.c の connected()/disconnected() コールバックだけで、
- *      **起動時には飛ばない**（上流を読んで確認）。
- *      true で始めると、**まだ繋がっていないのに消灯**したまま
- *      待つことになり、いちばん見せたい状態が出ない。
- *      なので **false から始める**（繋がった時点でイベントが来て消える）。
  */
-#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-static bool peripheral_connected; /* = false。起動時は「繋がっていない」 */
-#else
-static bool peripheral_connected = true; /* 分割でなければ「繋がっている」扱い */
-#endif
 static uint8_t battery_pct = 100;
 static bool booting = true;
 
@@ -162,11 +176,14 @@ static bool booting = true;
  *
  * 接続中は消灯（実機どおり）なので、**繋がった瞬間に消えるだけ**だと
  * 見ていない限り気づけない（2026-08-16 に利用者の指摘）。
- * 直前まで警告を出していたなら、消える前に青を 1 秒点灯して知らせる。
- * 実機も機器切替時に「青色に点灯したあと、消灯」とするので踏襲になる。
+ * 直前まで未接続だったなら、消える前に 1 秒点灯して知らせる。
+ *
+ * ⚠️ **色は「復帰した系統」の色。**分割が繋がったなら緑、ホストなら青。
+ * 青で一律にしていたのを利用者に指摘されて直した:
+ * 「左右間の接続に関するものが緑なのであれば、左右接続の瞬間は緑点灯
+ * であるべきでは？」——**色に意味を持たせると決めた以上、合図も同じ色。**
  */
-static bool was_warning;
-static bool announce_recovery;
+static enum led_color announce_color; /* COLOR_OFF なら合図なし */
 static enum zmk_activity_state activity = ZMK_ACTIVITY_ACTIVE;
 
 static void set_color(enum led_color c) {
@@ -189,7 +206,9 @@ static void set_color(enum led_color c) {
  * zmk_split_bt_peripheral_is_connected() そのもの。**左と同じように
  * 毎 tick 読み直す。**事象は「すぐ反応させる」ためだけに使う。
  */
-static bool peripheral_link_is_up(void) {
+static enum link_state read_split_link(void) {
+    bool connected = true;
+
     STRUCT_SECTION_FOREACH(zmk_split_transport_peripheral, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
             continue;
@@ -198,14 +217,19 @@ static bool peripheral_link_is_up(void) {
 
         /* 左と同じ理由で、available / enabled が偽なら「未接続」に倒す。
          * 黙って continue して true を返さない。 */
-        if (!st.available || !st.enabled) {
-            return false;
-        }
-        if (st.connections != ZMK_SPLIT_TRANSPORT_CONNECTIONS_STATUS_ALL_CONNECTED) {
-            return false;
+        if (!st.available || !st.enabled ||
+            st.connections != ZMK_SPLIT_TRANSPORT_CONNECTIONS_STATUS_ALL_CONNECTED) {
+            connected = false;
+            break;
         }
     }
-    return true;
+
+    if (connected) {
+        return LINK_CONNECTED;
+    }
+    /* **右はボンドの有無が分かる**（peripheral.h の公開 API）。
+     * 未ボンド＝相手を知らない＝ペアリング待ち → 速い点滅。 */
+    return zmk_split_bt_peripheral_is_bonded() ? LINK_DISCONNECTED : LINK_UNBONDED;
 }
 #endif
 
@@ -219,7 +243,7 @@ static bool peripheral_link_is_up(void) {
  * STRUCT_SECTION_ITERABLE_NAMED で登録されているので、
  * **列挙して api->get_status() を呼べる。内部 static には触らない。**
  */
-static bool peripherals_all_connected(void) {
+static enum link_state read_split_link(void) {
     STRUCT_SECTION_FOREACH(zmk_split_transport_central, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
             continue;
@@ -238,14 +262,21 @@ static bool peripherals_all_connected(void) {
          * **どちらも「まだ使えない／止めている」という意味であって、
          * 「繋がっている」ではない。**警告灯の既定は安全側＝未接続にする。 */
         if (!st.available || !st.enabled) {
-            return false;
+            return LINK_DISCONNECTED;
         }
         if (st.connections != ZMK_SPLIT_TRANSPORT_CONNECTIONS_STATUS_ALL_CONNECTED) {
-            return false;
+            /* ⚠️ **左は「分割相手とボンド済みか」を知る公開 API が無い。**
+             * 右には zmk_split_bt_peripheral_is_bonded() があるが、
+             * central.c に対応物は無く peripherals[] は static。
+             * bt_foreach_bond() で数える手はあるが、ホストのボンドと
+             * 混ざるので peer の照合が要る。**今回はそこまでやらない。**
+             * 左は一律「ボンド済み・未接続」＝遅い点滅に寄せる。
+             * → decisions/2026-08-16-led-state-table.md の非対称の項 */
+            return LINK_DISCONNECTED;
         }
     }
 
-    return true;
+    return LINK_CONNECTED;
 }
 #endif
 
@@ -265,22 +296,20 @@ static enum led_state current_state(void) {
     if (battery_pct <= BATT_LOW_PCT) {
         return STATE_BATT_LOW;
     }
-    /* **相手を先に見る。**キーの半分が死ぬ方が切実。 */
-    if (!peripheral_connected) {
-        return STATE_PERIPHERAL_LOST;
+    /* 分割・ホストのどちらかが繋がっていなければ知らせる。
+     * **どちらを出すかは blink_work_cb 側で交互に決める**
+     * （両方未接続のとき、片方だけ出すともう片方の異常が見えない）。
+     *
+     * ⚠️ ホストの判定はセントラル（左）だけ。右にホストとの接続は無い。
+     * 2026-08-16 に、この囲いを忘れて**右で青が点滅し続けた。** */
+#if HAS_SPLIT_LINK
+    if (split_link != LINK_CONNECTED) {
+        return STATE_LINK_LOST;
     }
-
-    /* ⚠️ **ホストの判定はセントラル（左）だけ。**
-     *
-     * 2026-08-16 に実機で露見: この if を役割で囲っていなかったため、
-     * **右でも `!host_connected` が評価されていた。**host_connected を
-     * 更新するのは左だけなので、右では永久に false のまま
-     * ＝ **キーが打てているのに青が点滅し続けた。**
-     *
-     * 右にホストとの接続は無い。「無いもの」を未接続として警告しない。 */
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) || !IS_ENABLED(CONFIG_ZMK_SPLIT)
-    if (!host_connected) {
-        return STATE_HOST_LOST;
+#endif
+#if HAS_HOST_LINK
+    if (host_link != LINK_CONNECTED) {
+        return STATE_LINK_LOST;
     }
 #endif
 
@@ -298,38 +327,39 @@ static void blink_work_cb(struct k_work *work) {
     static enum led_state shown = STATE_IDLE;
     static uint8_t step;
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     /* **状態を決める前に読む。**後で読むと表示が 1 tick 遅れる。
-     *
-     * イベントが飛ばない経路があるので、ついでに毎回確かめる
-     * （専用のタイマーは増やさない）。
-     *
-     * ⚠️ **host_connected も毎回読み直す。**
-     * zmk_ble_active_profile_changed が「プロファイルの切り替え」でしか
-     * 飛ばない可能性があり（上流で未確認）、事象だけに頼ると
-     * **繋がっているのに青が点滅し続ける**。実際の状態を見るのが確実。 */
-    peripheral_connected = peripherals_all_connected();
-    host_connected = zmk_ble_active_profile_is_connected();
+     * イベントが飛ばない経路があるので毎回確かめる
+     * （専用のタイマーは増やさない）。 */
+#if HAS_SPLIT_LINK
+    enum link_state prev_split = split_link;
+    split_link = read_split_link();
+    if (prev_split != LINK_CONNECTED && split_link == LINK_CONNECTED && !booting) {
+        announce_color = COLOR_GREEN; /* **分割が繋がった → 緑で知らせる** */
+    }
 #endif
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    /* 右も同じく毎 tick 読み直す。**事象の取りこぼしで固まらないように。** */
-    peripheral_connected = peripheral_link_is_up();
+#if HAS_HOST_LINK
+    /* ⚠️ **ホストも毎回読み直す。**
+     * zmk_ble_active_profile_changed が「プロファイルの切り替え」でしか
+     * 飛ばない可能性があり、事象だけに頼ると
+     * **繋がっているのに青が点滅し続ける**。実際の状態を見るのが確実。 */
+    enum link_state prev_host = host_link;
+    host_link = zmk_ble_active_profile_is_connected() ? LINK_CONNECTED
+                : zmk_ble_active_profile_is_open()    ? LINK_UNBONDED
+                                                      : LINK_DISCONNECTED;
+    if (prev_host != LINK_CONNECTED && host_link == LINK_CONNECTED && !booting) {
+        announce_color = COLOR_BLUE; /* **ホストが繋がった → 青で知らせる** */
+    }
 #endif
 
     enum led_state st = current_state();
 
-    /* **警告 → 正常に変わった瞬間に、復帰の合図を差し込む。**
-     * 消灯に落ちてからでは「直前が警告だったか」が分からないので、
-     * ここで捕まえて STATE_RECOVERED に差し替える。 */
-    bool warning = (st == STATE_PERIPHERAL_LOST || st == STATE_HOST_LOST);
-    if (was_warning && st == STATE_IDLE) {
-        announce_recovery = true;
-    }
-    was_warning = warning;
-
-    if (announce_recovery && st == STATE_IDLE) {
+    /* 合図は「全部繋がって消灯に落ちる」ときだけ出す。
+     * まだ他が未接続なら、そちらの点滅を優先する。 */
+    if (announce_color != COLOR_OFF && st == STATE_IDLE) {
         st = STATE_RECOVERED;
+    } else if (st != STATE_IDLE && st != STATE_RECOVERED) {
+        announce_color = COLOR_OFF; /* 出しそびれたら捨てる */
     }
 
     if (st != shown) {
@@ -355,10 +385,11 @@ static void blink_work_cb(struct k_work *work) {
         break;
 
     case STATE_RECOVERED:
-        /* **復帰の合図。**青を 1 秒点けてから消灯に落ちる。
-         * 実機も機器切替で「青色に点灯したあと、消灯」とする。 */
-        set_color(COLOR_BLUE);
-        announce_recovery = false;
+        /* **復帰の合図。**1 秒点けてから消灯に落ちる。
+         * **色は復帰した系統**（分割＝緑・ホスト＝青）。
+         * 実機も機器切替で「点灯したあと、消灯」とする。 */
+        set_color(announce_color);
+        announce_color = COLOR_OFF;
         next_ms = RECOVERED_ON_MS;
         break;
 
@@ -368,12 +399,40 @@ static void blink_work_cb(struct k_work *work) {
         next_ms = FAST_BLINK_MS * 4;
         break;
 
-    case STATE_PERIPHERAL_LOST:
-    case STATE_HOST_LOST: {
-        enum led_color c = (st == STATE_PERIPHERAL_LOST) ? COLOR_GREEN : COLOR_BLUE;
-        step ^= 1;
-        set_color(step ? c : COLOR_OFF);
-        next_ms = FAST_BLINK_MS;
+    case STATE_LINK_LOST: {
+        /*
+         * 未接続のリンクを知らせる。**両方未接続なら交互に出す**
+         * （利用者の判断。片方だけ出すと、もう片方の異常が見えない）。
+         *
+         *   色     … 緑＝左右間 / 青＝ホスト
+         *   速さ   … 4 回/秒＝未ボンド（ペアリング待ち）
+         *            2 回/秒＝ボンド済み・未接続（探している）
+         *
+         * step の下位ビットで点灯／消灯、上位で「いまどちらの系統か」。
+         */
+        enum led_color c = COLOR_OFF;
+        enum link_state ls = LINK_CONNECTED;
+
+#if HAS_SPLIT_LINK && HAS_HOST_LINK
+        bool split_bad = (split_link != LINK_CONNECTED);
+        bool host_bad = (host_link != LINK_CONNECTED);
+        /* 1 周（点灯＋消灯）ごとに系統を入れ替える。 */
+        bool show_split = split_bad && (!host_bad || ((step >> 1) & 1) == 0);
+        c = show_split ? COLOR_GREEN : COLOR_BLUE;
+        ls = show_split ? split_link : host_link;
+#elif HAS_SPLIT_LINK
+        c = COLOR_GREEN;
+        ls = split_link;
+#elif HAS_HOST_LINK
+        c = COLOR_BLUE;
+        ls = host_link;
+#endif
+
+        bool on = (step & 1) == 0;
+        set_color(on ? c : COLOR_OFF);
+        next_ms = (ls == LINK_UNBONDED) ? FAST_BLINK_MS : SLOW_BLINK_MS;
+
+        step = (step + 1) & 3; /* 0..3 で 2 周ぶん。上位ビットが系統の切替 */
         break;
     }
 
@@ -468,13 +527,11 @@ static int status_led_listener(const zmk_event_t *eh) {
         return ZMK_EV_EVENT_BUBBLE;
     }
 
+    /* 以下の事象は「すぐ描き直す」ためだけに使う。
+     * **状態そのものは毎 tick に読み直している**ので、ここで値を
+     * 持ち回らない（事象の取りこぼしで表示が固まるのを防ぐ）。 */
 #if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    /* **右手（周辺機）側。**この事象は peripheral.c が出すので、
-     * 自分がセントラルと繋がっているかがそのまま分かる。 */
-    const struct zmk_split_peripheral_status_changed *sp =
-        as_zmk_split_peripheral_status_changed(eh);
-    if (sp != NULL) {
-        peripheral_connected = sp->connected;
+    if (as_zmk_split_peripheral_status_changed(eh) != NULL) {
         refresh();
         return ZMK_EV_EVENT_BUBBLE;
     }
@@ -482,7 +539,6 @@ static int status_led_listener(const zmk_event_t *eh) {
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     if (as_zmk_ble_active_profile_changed(eh) != NULL) {
-        host_connected = zmk_ble_active_profile_is_connected();
         refresh();
         return ZMK_EV_EVENT_BUBBLE;
     }
