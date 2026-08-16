@@ -63,6 +63,11 @@
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT)
 #include <zmk/events/split_peripheral_status_changed.h>
+#include <zmk/split/transport/types.h>
+#endif
+
+#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#include <zmk/split/transport/peripheral.h>
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
@@ -152,6 +157,40 @@ static void set_color(enum led_color c) {
     gpio_pin_set_dt(&led_b, c == COLOR_BLUE);
 }
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+/*
+ * **右手が「セントラルと繋がっているか」を読む。**
+ *
+ * 2026-08-16 に実機で露見した: 事象
+ * （zmk_split_peripheral_status_changed）だけに頼っていたため、
+ * **繋がっているのに点滅したままになった。**事象は connected()/
+ * disconnected() でしか飛ばず、起動直後の 3 秒（青の点灯中）に
+ * 繋がるとその 1 回を取り逃す。
+ *
+ * peripheral.c も get_status を公開していて、中身は
+ * zmk_split_bt_peripheral_is_connected() そのもの。**左と同じように
+ * 毎 tick 読み直す。**事象は「すぐ反応させる」ためだけに使う。
+ */
+static bool peripheral_link_is_up(void) {
+    STRUCT_SECTION_FOREACH(zmk_split_transport_peripheral, t) {
+        if (t->api == NULL || t->api->get_status == NULL) {
+            continue;
+        }
+        struct zmk_split_transport_status st = t->api->get_status();
+
+        /* 左と同じ理由で、available / enabled が偽なら「未接続」に倒す。
+         * 黙って continue して true を返さない。 */
+        if (!st.available || !st.enabled) {
+            return false;
+        }
+        if (st.connections != ZMK_SPLIT_TRANSPORT_CONNECTIONS_STATUS_ALL_CONNECTED) {
+            return false;
+        }
+    }
+    return true;
+}
+#endif
+
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 /*
  * **左手が「右手と繋がっているか」を知る唯一の公開 API。**
@@ -168,16 +207,26 @@ static bool peripherals_all_connected(void) {
             continue;
         }
         struct zmk_split_transport_status st = t->api->get_status();
+
+        /* ⚠️ **available / enabled で continue しないこと。**
+         *
+         * 2026-08-16 に実機で露見したバグ。ここを continue にしていたため、
+         * 「見るべき transport が 1 つも無い」→ 最後の return true に落ち、
+         * **繋がっていないのに『繋がっている』と報告していた。**
+         * だから右の電源を切っても左の緑が出なかった。
+         *
+         * available は `!CLEAR_BONDS_ON_START && settings_loaded`、
+         * enabled は set_enabled() の結果（central.c）。
+         * **どちらも「まだ使えない／止めている」という意味であって、
+         * 「繋がっている」ではない。**警告灯の既定は安全側＝未接続にする。 */
         if (!st.available || !st.enabled) {
-            continue;
+            return false;
         }
         if (st.connections != ZMK_SPLIT_TRANSPORT_CONNECTIONS_STATUS_ALL_CONNECTED) {
             return false;
         }
     }
 
-    /* 使える transport が 1 つも無いときは、判定材料が無いということ。
-     * **誤って緑を出さない**（起動直後はまだ登録前でここに来る）。 */
     return true;
 }
 #endif
@@ -228,6 +277,11 @@ static void blink_work_cb(struct k_work *work) {
      * **繋がっているのに青が点滅し続ける**。実際の状態を見るのが確実。 */
     peripheral_connected = peripherals_all_connected();
     host_connected = zmk_ble_active_profile_is_connected();
+#endif
+
+#if IS_ENABLED(CONFIG_ZMK_SPLIT) && !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    /* 右も同じく毎 tick 読み直す。**事象の取りこぼしで固まらないように。** */
+    peripheral_connected = peripheral_link_is_up();
 #endif
 
     enum led_state st = current_state();
@@ -302,6 +356,9 @@ static void blink_work_cb(struct k_work *work) {
 /* 状態が変わったので、待たずに描き直す。
  * **起動時の点灯中は割り込まない**（3 秒を切ってしまう）。 */
 static void refresh(void) {
+    /* **起動時の点灯中は割り込まない**（3 秒を切ってしまう）。
+     * 取りこぼしにはならない: 状態は毎 tick に読み直しているので、
+     * 点灯が終わった次の tick で正しい表示に落ち着く。 */
     if (booting) {
         return;
     }

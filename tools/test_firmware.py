@@ -169,6 +169,39 @@ def test_the_status_led_uses_only_public_zmk_api_for_peripheral_state():
         "central.c の内部 static に触っている（公開 API ではない）"
 
 
+def test_an_unusable_transport_counts_as_disconnected():
+    """**「分からない」を「繋がっている」に倒さないこと。**
+
+    2026-08-16 に実機で出たバグ。get_status() の available / enabled が
+    偽のときに `continue` していたため、見るべき transport が 1 つも
+    残らず、関数末尾の `return true`（＝全部繋がっている）に落ちていた。
+    **右の電源を切っても左の緑が出ない**という形で露見した。
+
+    available は「まだ settings が読めていない」、enabled は「止めている」で、
+    **どちらも『繋がっている』ではない。**警告灯は安全側（未接続）に倒す。
+
+    ここは「実機で 1 回踏んだ」ものなので、形で固定しておく。
+    """
+    src = (ROOT / "firmware/src/status_led.c").read_text()
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    # 左右とも、この判定を持っていること（片方だけ直すのを防ぐ）
+    guards = re.findall(r"if\s*\(!st\.available\s*\|\|\s*!st\.enabled\)\s*\{([^}]*)\}", code)
+    assert len(guards) == 2, (
+        f"available/enabled の判定が {len(guards)} 箇所しかない。"
+        "左（central）と右（peripheral）の両方に要る")
+
+    # **1 箇所でも continue に戻したら落ちること**（この検査自体を
+    # 故意に壊して確かめた。全件を個別に見ないと片側の退行を見逃す）
+    for i, body in enumerate(guards):
+        assert "continue" not in body, (
+            f"{i + 1} 箇所目が continue。これは 2026-08-16 のバグそのもので、"
+            "『判定材料なし』が『繋がっている』になる")
+        assert "return false" in body, (
+            f"{i + 1} 箇所目が未接続へ倒していない")
+
+
 def test_the_zmk_config_validator_passes():
     """ZMK 設定の静的検査（check_zmk_config.py）が通ること。
 
