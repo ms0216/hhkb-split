@@ -56,8 +56,17 @@ def count_map_entries(path):
     左右で 1 つの transform を共有する書き方（ZMK 分割の標準）では、
     map は .dtsi 側にある。overlay だけを見ると 0 件になり、検査が
     素通りしてしまうので、呼び出し側で .dtsi も渡すこと。
+
+    ⚠️ **コメントを落としてから数える。**map の中に説明のコメントを
+    書き、そこに `RC(` の字が入っていると、その分だけ多く数える
+    （2026-08-17 に実際に起きた。最下段の割り当てを直したとき、
+    経緯を書いたコメントに旧値を引用していて **+3 になり、
+    「バインディングが 3 個足りない」と嘘の赤が出た**）。
+    `implied_positions` は最初からコメントを落としている——**同じ
+    ファイルを読む 2 つの関数で扱いが違っていた。**
     """
     text = path.read_text(encoding="utf-8")
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
     m = re.search(r"map\s*=\s*<(.*?)>\s*;", text, re.S)
     return len(re.findall(r"RC\s*\(", m.group(1))) if m else 0
 
