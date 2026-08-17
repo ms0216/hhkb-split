@@ -409,6 +409,33 @@ def prewire_col_bus(board):
                             (ax, lane_d, cx, lane_d + abs(cx - ax), pcbnew.B_Cu),
                             (cx, lane_d + abs(cx - ax), cx, cy, pcbnew.B_Cu),
                         ]) if lane_d + abs(cx - ax) <= cy else None
+                # F: **跨いだあと、曲がる高さを選べるようにする。**
+                #
+                # C も D も曲がる y が 1 つに決まっている（C は cy-run、
+                # D はレーン）。**その 1 点がスタビの穴の真横だと詰む**
+                # （右 COL6 SW16→SW24。ST24 の φ3.05 が x=202.356 に
+                # あり、どちらの形も 0.289mm しか空かなかった。
+                # 2026-08-17・利用者「SW16-24 は工夫して」）。
+                #
+                # 曲がる高さを振り、足りない横移動は横の区間で詰める。
+                # 45° を保ったまま**穴の左を抜ける**経路が見つかる
+                # （実測で余裕 1.030mm ＝ 他の列と同じ値）。
+                ky3 = ry + BRIDGE_DY + 0.2
+                while ky3 < cy:
+                    hy3 = ky3 + 0.25
+                    while hy3 <= cy:
+                        mx3 = ax + (hy3 - ky3) * (1 if cx > ax else -1)
+                        if (cx - mx3) * (1 if cx > ax else -1) >= -0.001:
+                            shapes.append([           # F
+                                (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                                (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                                (ax, ry + BRIDGE_DY, ax, ky3, pcbnew.B_Cu),
+                                (ax, ky3, mx3, hy3, pcbnew.B_Cu),
+                                (mx3, hy3, cx, hy3, pcbnew.B_Cu),
+                                (cx, hy3, cx, cy, pcbnew.B_Cu),
+                            ])
+                        hy3 += 1.0
+                    ky3 += 0.5
                 if dy_left < run:
                     # **横が縦より長い。**45° を 1 回では届かないので、
                     # 行の下で横に走ってから 45° で降りる。
@@ -443,7 +470,12 @@ def prewire_col_bus(board):
             def _len(cand):
                 return sum(math.dist((x1, y1), (x2, y2))
                            for (x1, y1, x2, y2, _l) in cand)
+            # **通る形のうち、余裕が一番大きいものを採る。**
+            # 「最初に通ったもの」だと、規格は満たすが穴すれすれの経路が
+            # 残る（右 COL6 が ST24 まで 0.289mm だった。2026-08-17）。
+            # 同じ余裕なら短い方（_len）を選ぶ。
             path = None
+            _ok = []
             for cand in sorted(shapes, key=_len):
                 # ⚠️ **引数の順を間違えない。**seg の末尾は層なので、
                 # `_clear(*seg, name)` だと層と net が入れ替わり、
@@ -458,8 +490,12 @@ def prewire_col_bus(board):
                        for vy in (ry - BRIDGE_DY, ry + BRIDGE_DY)
                        for ry2 in row_y if ry2 != ry):
                     continue
-                path = cand
-                break
+                _ok.append(cand)
+            if _ok:
+                best_m = max(_margin(c, name) for c in _ok)
+                # 余裕が最大のものたちの中で、一番短いもの（_ok は長さ順）
+                path = next(c for c in _ok
+                            if _margin(c, name) >= best_m - 0.001)
             if path is None:
                 skipped += 1
                 _why.append((name, '障害物'))
@@ -516,6 +552,15 @@ def build(half):
     # 古い形のまま。塗り直さないと自分のビアと重なって、DRC が
     # クリアランス違反を 204 件出す（実測 2026-08-17）。
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    # **離島になった GND を繋ぎ戻す。**2 層では配線がベタを割るので、
+    # どこにも触れない銅の区画ができる。電位が決まらず、2.4GHz では
+    # 寸法次第でアンテナになる（gnd_fanout.stitch_islands の説明）。
+    # 本番の autoroute.py は最後にこれを呼ぶ。**こちらでも呼ぶ**——
+    # 呼ばないと DRC が「GND ゾーンが繋がっていない」を出す（実測 2 件）。
+    import gnd_fanout
+    n_is, left_over = gnd_fanout.stitch_islands(board)
+    if n_is or left_over:
+        print(f"      離島に打ったビア {n_is} 個 / 繋げ切れなかった区画 {left_over}")
     OUT.mkdir(exist_ok=True)
     dst = OUT / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(dst))
