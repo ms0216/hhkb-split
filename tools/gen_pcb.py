@@ -1575,9 +1575,6 @@ def build(half, keys):
     # ROW の配線から「行が x 方向にどこからどこまであるか」を読む。
     # 先に呼ぶと行が 1 本も見えず、**跨いでいないと誤判定して橋を
     # 架けなくなる**（列と行が同じ B.Cu なので短絡になる）。
-    n_col, n_via, n_skip = prewire_col_bus(board)
-    print(f"      {half}: 列のバスを裏面で {n_col} 区間 / 橋のビア {n_via} 個"
-          + (f"（引けなかったホップ {n_skip}）" if n_skip else "（全ホップ）"))
     # 幅は**プレートの幅**を渡す。ケースの造作（daughterboard_x_center）は
     # plate_positions の w で決まっており、基板もプレートも X=0 中心なので
     # 値がそのまま移る（PCB_INSET は左右対称に引くだけ）。
@@ -1602,6 +1599,19 @@ def build(half, keys):
         h.SetPosition(to_kicad(mx, my))
         h.SetReference(f"H{i}")
         board.Add(h)
+
+    # ⚠️ **列のバスは電子部品を置いたあとに引く。**
+    #
+    # 先に引くと、**J_DB / U1 / U2 がまだ板の上に無い**ので、
+    # 衝突検査がそれらを 1 つも見られない。実際にそうなっていて、
+    # 右の COL0 が J_DB の V3V3 パッドまで **0.140mm**（要 1.017mm）の
+    # ところを通り、DRC が短絡を出した（2026-08-18・利用者
+    # 「COL0 の配線が J_DB と U1 と干渉するように変わっている」）。
+    # **凍結した時点から入っていた欠陥**で、私は「全ホップ・最小
+    # 1.030mm」と報告していたが、その数字は穴とスイッチしか見ていなかった。
+    n_col, n_via, n_skip = prewire_col_bus(board)
+    print(f"      {half}: 列のバスを裏面で {n_col} 区間 / 橋のビア {n_via} 個"
+          + (f"（引けなかったホップ {n_skip}）" if n_skip else "（全ホップ）"))
 
     # シルクの線幅を製造能力まで太らせる。
     #
