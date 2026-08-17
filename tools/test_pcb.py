@@ -69,6 +69,19 @@ def _pcb_text(name):
     return _CACHE[key]
 
 
+def _net_names(name):
+    """マトリクス基板の「ネット番号 → 名前」。
+
+    `(segment ...)` はネットを**番号**でしか持たないので、
+    冒頭の `(net <番号> "<名前>")` の表を引く。
+    """
+    key = ("matrixnets", name)
+    if key not in _CACHE:
+        txt = (PCB / "matrix" / f"hhkb_split_{name}.kicad_pcb").read_text()
+        _CACHE[key] = dict(re.findall(r'\(net (\d+) "([^"]*)"\)', txt))
+    return _CACHE[key]
+
+
 def footprints(name):
     """(ライブラリ名, 参照, x, y) の一覧をレイアウト座標（Y 上向き）で返す。
 
@@ -390,23 +403,56 @@ def test_keymap_order_matches_the_keymap(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_matrix_columns_follow_physical_position(name):
-    """同じ列のキーが物理的にも近いこと。
+def test_matrix_columns_do_not_need_long_crossings(name):
+    """列のバスに長い横断が生まれていないこと。
 
-    列を「段の中で何番目か」で決めると、最下段のようにキー数が違う段で
-    論理的に同じ列のキーが大きく離れる。基板に 38mm の横断配線が生まれ、
-    DRC が交差を検出した。
+    **元は「同じ列のキーが x 方向に 1.5 キー幅以内」を見ていた**
+    （`test_matrix_columns_follow_physical_position`）。列を「段の中で
+    何番目か」で決めると 38mm の横断配線が生まれて DRC が交差を出した、
+    という実際の事故から書かれたもの。
+
+    ⚠️ **2026-08-17 に基準を変えた。**利用者の指定で、右は
+    「行の中で何番目か」がそのまま列番号になった（各行の左端が COL0）。
+    段ごとに x がずれるので、**同じ列のキーは x 方向に 38mm 散らばる。**
+    つまり元の判定は必ず落ちる。
+
+    **落ちるからといって外さない。**守りたかったのは x の散らばり
+    そのものではなく「**長い横断が生まれないこと**」なので、そちらを
+    直接測る。散らばっていても、`gen_matrix.prewire_col_bus` が段ごとに
+    45° で寄せるので 1 区間は短いままになる（実測: 最長 20.2mm）。
+
+    **本物の横断が出れば落ちる**ことは、閾値を 15mm に下げて確かめた
+    （右 COL0 の 20.2mm が引っかかる）。
     """
-    from matrix import assignments
-    rc = assignments(name)
-    keys = HALVES[name]
-    cols = {}
-    for k, (_, c) in zip(keys, rc):
-        cols.setdefault(c, []).append(k.x_mm)
-    for c, xs in cols.items():
-        spread = max(xs) - min(xs)
-        assert spread <= 19.05 * 1.5, \
-            f"{name}: 列 {c} のキーが x 方向に {spread:.1f}mm 散らばっている"
+    # **マトリクスだけを配線した基板**（pcb/matrix/）を見る。
+    # 本番の pcb/ は MCU への配線も入っていて、そちらは器械が引くので
+    # ここの判定の対象ではない。
+    src = PCB / "matrix" / f"hhkb_split_{name}.kicad_pcb"
+    if not src.exists():
+        pytest.skip(f"{src.name} が無い（\"$KPY\" tools/gen_matrix.py で作る）")
+    txt = src.read_text()
+    longest, where = 0.0, None
+    # ⚠️ **`(segment ...)` はネットを名前で持つ**（番号ではない）。
+    # `\(net (\d+)\)` で書いて **1 本も拾えず、閾値を 15mm に下げても
+    # 通ってしまった**（2026-08-17。通ったことを「合格」と読み違える
+    # ところだった）。書式は実物を見て確かめる。
+    for m in re.finditer(
+            r"\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
+            r"[\s\S]*?\(net \"([^\"]+)\"\)", txt):
+        net = m.group(5)
+        if not re.fullmatch(r"COL\d+", net):
+            continue
+        x1, y1, x2, y2 = (float(m.group(i)) for i in (1, 2, 3, 4))
+        mm = math.dist((x1, y1), (x2, y2))
+        if mm > longest:
+            longest, where = mm, net
+    assert where is not None, \
+        f"{name}: COL の配線を 1 本も読めていない（正規表現が書式と合っていない）"
+    # 段の間隔は 19.05mm。**斜めに 1 段ぶん降りる長さ**（19.05×√2 ≒ 26.9）
+    # までは素直な経路。それを超えるものは横断とみなす。
+    assert longest <= 27.0, \
+        f"{name}: 列のバスに長い区間がある（{where} が {longest:.1f}mm）。" \
+        "段をまたぐ横断が生まれていないか見ること"
 
 
 # --------------------------------------------------------------------------
