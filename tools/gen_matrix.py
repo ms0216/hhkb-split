@@ -148,12 +148,26 @@ def prewire_col_bus(board):
             return True                      # 表は行もパッドも居ない
         if any(d(sx, sy) < clr + half for sx, sy, n, half in smd if n != net):
             return False
-        # 行のバス（横一直線）との距離。跨いだら当然アウト
+        # 行のバス（横一直線）との距離。跨いだら当然アウト。
+        #
+        # ⚠️ **跨ぐ「その点の x」で見る。**端点の x で見てはいけない。
+        # 斜めの区間は端点のどちらとも違う x で行を横切る（COL0 の
+        # SW19→SW25 は 45° の途中 x=99.099 で y=122.7 を通り、ROW_B の
+        # 左端 109.675 より左＝**当たらない**）。端点で見ると、行の
+        # 無い場所に橋を架けたり、引けるはずのホップを弾いたりする。
         lo, hi = min(ay, by), max(ay, by)
-        # **その x に行が実在するときだけ「跨いだ」と見る。**
-        return not any(lo - clr < ry < hi + clr
-                       and (_row_blocks(ry, ax) or _row_blocks(ry, bx))
-                       for ry in row_y)
+        for ry in row_y:
+            if not (lo - clr < ry < hi + clr):
+                continue
+            if by == ay:                     # 横の区間は範囲全体で見る
+                if _row_blocks(ry, ax) or _row_blocks(ry, bx):
+                    return False
+                continue
+            t = (ry - ay) / (by - ay)        # 交わる点を内挿する
+            t = max(0.0, min(1.0, t))
+            if _row_blocks(ry, ax + t * (bx - ax)):
+                return False
+        return True
 
     cols = {}
     for fp in board.GetFootprints():
@@ -178,8 +192,21 @@ def prewire_col_bus(board):
             # 形 A / B は自分の条件で弾くので、ここでの門は要らない。
             # **本当に跨ぐ行だけ数える。**y が間にあっても、その行が
             # x 方向に届いていなければ障害物ではない（COL0 がこれ）。
-            crossed = [ry for ry in row_y if ay < ry < cy
-                       and (_row_blocks(ry, ax) or _row_blocks(ry, cx))]
+            # ⚠️ **降りる場所の x で見る。**`or _row_blocks(ry, cx)` と
+            # 書いて、**行き先の x に行があるだけで橋を架けていた**
+            # （2026-08-17・利用者「どう見てもいらないんだけど」）。
+            # COL0 の SW19→SW25 は x=95.290 で y=122.7 を通るのに、
+            # ROW_B は x=109.675 からで 14.4mm 右。**そこに行は無い。**
+            # 横へ寄るのは行を過ぎたあとなので、cx は関係ない。
+            # 素直な形（縦 → 45°）が行を跨ぐかは、**その 45° が行と
+            # 交わる点の x** で決まる。縦の区間で跨ぐなら x=ax。
+            knee_c = abs(cy - ay) - abs(cx - ax)
+            def _crosses(ry):
+                if ry <= ay + max(knee_c, 0):     # 縦の区間で跨ぐ
+                    return _row_blocks(ry, ax)
+                t = ry - (ay + max(knee_c, 0))    # 45° に入ってからの距離
+                return _row_blocks(ry, ax + t * (1 if cx > ax else -1))
+            crossed = [ry for ry in row_y if ay < ry < cy and _crosses(ry)]
 
             if not crossed:
                 # **跨ぐ行が無い。潜る必要が無いので裏だけで引く。**
