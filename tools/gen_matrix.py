@@ -169,6 +169,31 @@ def prewire_col_bus(board):
                 return False
         return True
 
+    def _margin(path, net):
+        """経路の、穴・他ネットのパッドまでの最小の余裕（mm）。
+
+        **「通るか」だけでなく「どれだけ余裕があるか」も見る。**
+        規格ぎりぎり（0.25mm）で通る経路と、1.0mm 空いている経路の
+        どちらも「合格」になってしまうため（2026-08-17）。
+        """
+        m = 9.0
+        for (x1, y1, x2, y2, layer) in path:
+            dx, dy = x2 - x1, y2 - y1
+            ll = dx * dx + dy * dy
+
+            def d(px, py):
+                t = 0 if ll == 0 else max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / ll))
+                return math.dist((x1 + t * dx, y1 + t * dy), (px, py))
+            for hx, hy, r in holes:
+                m = min(m, d(hx, hy) - r - TRACK_W / 2)
+            if layer != pcbnew.B_Cu:
+                continue
+            for sx, sy, nn, half in smd:
+                if nn == net:
+                    continue
+                m = min(m, d(sx, sy) - half - TRACK_W / 2)
+        return m
+
     cols = {}
     for fp in board.GetFootprints():
         # **接頭辞で走査しない。**`SW` は電源スイッチ（SW_PWR）を巻き込む。
@@ -236,9 +261,42 @@ def prewire_col_bus(board):
                             (ax, ky, cx, ky + abs(cx - ax), pcbnew.B_Cu),
                             (cx, ky + abs(cx - ax), cx, cy, pcbnew.B_Cu)])
                         ky += step
-                plain = next((c for c in cands
-                              if all(_clear(x1, y1, x2, y2, name, la)
-                                     for (x1, y1, x2, y2, la) in c)), None)
+                    # **縦 → 45° → 横 → 縦。**上の形は 45° をパッドの近くで
+                    # 始めるので、**スイッチ自身の胴の角をかすめる**
+                    # （左 COL0 SW19→SW25 で、SW19 の φ1.75 位置決めポスト
+                    # まで 0.330mm しか無かった。規格 0.25mm は満たすが、
+                    # 他の列は 1.030mm ある。2026-08-17・利用者
+                    # 「配線が穴にかなりギリギリです」）。
+                    # **胴を過ぎるまで真下に降りてから曲がる**と 1.030mm
+                    # 取れる。横の区間で高さを合わせる。
+                    ky = ay + 0.25
+                    while ky < cy:
+                        hy = ky + abs(cx - ax)
+                        if hy <= cy:
+                            cands.append([
+                                (ax, ay, ax, ky, pcbnew.B_Cu),
+                                (ax, ky, ax + (cx - ax), hy, pcbnew.B_Cu),
+                                (cx, hy, cx, cy, pcbnew.B_Cu)])
+                        # 45° を短く切り上げて、残りを横で詰める形も試す
+                        for hy2 in (ky + 1.0, ky + 2.0, ky + 4.0, ky + 8.0):
+                            if hy2 > cy:
+                                continue
+                            mx = ax + (hy2 - ky) * (1 if cx > ax else -1)
+                            if (cx - mx) * (1 if cx > ax else -1) < 0:
+                                continue
+                            cands.append([
+                                (ax, ay, ax, ky, pcbnew.B_Cu),
+                                (ax, ky, mx, hy2, pcbnew.B_Cu),
+                                (mx, hy2, cx, hy2, pcbnew.B_Cu),
+                                (cx, hy2, cx, cy, pcbnew.B_Cu)])
+                        ky += 0.25
+                # **通る形のうち、一番余裕のあるものを採る。**
+                # 「最初に通ったもの」で決めると、規格は満たすが余裕が
+                # 無い経路が残る（COL0 が 0.330mm、他の列は 1.030mm）。
+                ok = [c for c in cands
+                      if all(_clear(x1, y1, x2, y2, name, la)
+                             for (x1, y1, x2, y2, la) in c)]
+                plain = max(ok, key=lambda c: _margin(c, name), default=None)
                 if plain:
                     for (x1, y1, x2, y2, la) in plain:
                         if (x1, y1) == (x2, y2):
