@@ -17,7 +17,12 @@ import re
 FP = re.compile(r'\n\t\(footprint "([^"]+)"')
 AT = re.compile(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)")
 REF = re.compile(r'\(property "Reference" "([^"]+)"')
-PAD = re.compile(r'\(pad "([^"]*)"[\s\S]{0,400}?\(net \d+ "([^"]*)"\)')
+# KiCad 10（version 20260206）は `(net "GND")` と書く。9.0 までの
+# `(net 3 "GND")` と違って**番号が無い**ので、番号を必須にすると 1 つも
+# 当たらない。実際に当たらなくなっていた: 6 ファイル・全 39 パッドで 0 件、
+# それでも指紋は座標と外形から作られるので**検査は通り続けた**
+# （結線を繋ぎ替えても指紋が変わらない状態だった・2026-08-16 に発見）。
+PAD = re.compile(r'\(pad "([^"]*)"[\s\S]{0,400}?\(net (?:\d+ )?"([^"]*)"\)')
 EDGE = re.compile(r'\(gr_(line|arc)\b([\s\S]{0,300}?)\(layer "Edge\.Cuts"\)')
 XY = re.compile(r"\((?:start|mid|end) ([-\d.]+) ([-\d.]+)\)")
 
