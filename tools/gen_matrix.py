@@ -187,6 +187,29 @@ def prewire_col_bus(board):
                     (cx, ry - BRIDGE_DY, cx, ry + BRIDGE_DY, pcbnew.F_Cu),
                     (cx, ry + BRIDGE_DY, cx, cy, pcbnew.B_Cu),
                 ])
+            # E: **下のキーの x で降ろし、横移動は上のキーの側でやる。**
+            #
+            # 最下段は幅広キー（Alt / Meta 1.5u / L-Space 3.0u）なので、
+            # **キーの中心が自分の列から大きく外れている**（左 COL5 の
+            # L-Space は 24mm ずれ）。上のキーから真下に降ろすと、
+            # 下のキーまで長い横断になる（実測: 最下段 3 本で 164.44mm）。
+            #
+            # ⚠️ **これは配線ではなく割り当ての問題**（open-gaps #46）。
+            # dtsi が「キーの真上を通らない列」を選んでいる。ファームを
+            # 直せば消えるが、それは後日なので**配線側で短くしておく**
+            # （2026-08-17・利用者「とりあえず配線を」）。
+            #
+            # 上のキーの側（行の上）で横に寄せてから、下のキーの x で
+            # まっすぐ降ろす。横移動が行の上に収まるので、下は素直な縦。
+            up_lane = ry - PAD_LANE_DY - lane_i * LANE_PITCH
+            if ay + BRIDGE_DY < up_lane and up_lane > ay:
+                shapes.append([                       # E
+                    (ax, ay, ax, up_lane, pcbnew.B_Cu),
+                    (ax, up_lane, cx, up_lane, pcbnew.B_Cu),
+                    (cx, up_lane, cx, ry - BRIDGE_DY, pcbnew.B_Cu),
+                    (cx, ry - BRIDGE_DY, cx, ry + BRIDGE_DY, pcbnew.F_Cu),
+                    (cx, ry + BRIDGE_DY, cx, cy, pcbnew.B_Cu),
+                ])
             # C: **その場で真下に降りて跨ぎ、横移動は行の下でやる。**
             #
             # 最下段の 3 本（左 COL1/COL3/COL5）はこれでないと引けない。
@@ -239,7 +262,12 @@ def prewire_col_bus(board):
                     # パッドの列でもある**——線を避けても、パッドを擦る
                     # （左 COL1/COL3/COL5 が全部これで落ちていた）。
                     lane = ry + PAD_LANE_DY + lane_i * LANE_PITCH
-                    kx = cx + (abs(cx - ax) - (cy - lane)) * (1 if cx > ax else -1)
+                    # ⚠️ **符号に注意。**横に走るのを「行き過ぎて戻る」形に
+                    # しないこと。45° で降りる分（cy - lane）だけ **cx の
+                    # 手前で止める**。逆向きに取ると目標を追い越してから
+                    # 戻ってくる（左 COL3 が x=117.1 まで行って 135.8 へ
+                    # 戻り、18.7mm 無駄にしていた。2026-08-17）。
+                    kx = cx - (cy - lane) * (1 if cx > ax else -1)
                     shapes.append([                   # C'
                         (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
                         (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
@@ -252,8 +280,13 @@ def prewire_col_bus(board):
                 _why.append((name, '跨ぎが斜めに掛かる'))
                 continue
 
+            # **短い順に試す。**定義順に試すと、たまたま先に書いた形が
+            # 勝って長い経路が残る（最下段で C が E に勝っていた）。
+            def _len(cand):
+                return sum(math.dist((x1, y1), (x2, y2))
+                           for (x1, y1, x2, y2, _l) in cand)
             path = None
-            for cand in shapes:
+            for cand in sorted(shapes, key=_len):
                 # ⚠️ **引数の順を間違えない。**seg の末尾は層なので、
                 # `_clear(*seg, name)` だと層と net が入れ替わり、
                 # 「表なので検査不要」の枝に落ちて**パッドを一切見なくなる**
@@ -262,7 +295,7 @@ def prewire_col_bus(board):
                            for (x1, y1, x2, y2, layer) in cand):
                     continue
                 # 橋のビアは、跨ぐ行以外の行からも離れていること
-                vx = cand[1][0]
+                vx = next(x1 for (x1, _a, _b, _c, l) in cand if l == pcbnew.F_Cu)
                 if any(abs(ry2 - vy) < VIA_D / 2 + 0.25 + TRACK_W / 2
                        for vy in (ry - BRIDGE_DY, ry + BRIDGE_DY)
                        for ry2 in row_y if ry2 != ry):
@@ -273,7 +306,10 @@ def prewire_col_bus(board):
                 skipped += 1
                 _why.append((name, '障害物'))
                 continue
-            vx = path[1][0]
+            # **橋の x は F.Cu の区間から取る。**`path[1]` 決め打ちだと
+            # 橋が 2 番目に無い形（E）でビアが別の場所に落ちる。
+            vx = next(x1 for (x1, _y1, _x2, _y2, layer) in path
+                      if layer == pcbnew.F_Cu)
             for (x1, y1, x2, y2, layer) in path:
                 if (x1, y1) == (x2, y2):
                     continue
