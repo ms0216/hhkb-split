@@ -112,9 +112,27 @@ def prewire_col_bus(board):
            if p.GetDrillSizeX() == 0 and pcbnew.B_Cu in p.GetLayerSet().CuStack()]
     # **行のバスの y。これを検査に入れ忘れて DRC を 32 件赤にした。**
     # 既に引かれている B.Cu の線から取る（定数を別に持たない）。
-    row_y = sorted({t.GetStart().y / 1e6 for t in board.GetTracks()
-                    if t.GetClass() == "PCB_TRACK"
-                    and t.GetNetname().startswith("ROW_")})
+    #
+    # ⚠️ **行は無限に長い線ではない。x の範囲も持つ。**y だけで
+    # 「跨ぐ」と判定すると、行が届いていない場所にまで橋を架ける
+    # （2026-08-17・利用者「COL0 は全て B.Cu 側でよく、F.Cu 側に
+    # ビアでもぐる必要はないはず」）。実測すると **COL0 は一番左の列で、
+    # どの行も COL0 より右から始まっていた**（例: ROW_C は x 97.769 から
+    # なのに COL0 は x=83.384）。**4 本とも跨いでいなかった。**
+    row_span = {}
+    for t in board.GetTracks():
+        if t.GetClass() != "PCB_TRACK" or not t.GetNetname().startswith("ROW_"):
+            continue
+        y = round(t.GetStart().y / 1e6, 3)
+        xs = (t.GetStart().x / 1e6, t.GetEnd().x / 1e6)
+        lo, hi = row_span.get(y, (min(xs), max(xs)))
+        row_span[y] = (min(lo, *xs), max(hi, *xs))
+    row_y = sorted(row_span)
+
+    def _row_blocks(ry, x):
+        """行 ry が x のところに実在するか（端は余裕を見て広めに取る）。"""
+        lo, hi = row_span[ry]
+        return lo - clr - 1.0 <= x <= hi + clr + 1.0
 
     def _clear(ax, ay, bx, by, net, layer):
         """穴・他ネットの裏パッド・行のバスに当たらないか。"""
@@ -132,7 +150,10 @@ def prewire_col_bus(board):
             return False
         # 行のバス（横一直線）との距離。跨いだら当然アウト
         lo, hi = min(ay, by), max(ay, by)
-        return not any(lo - clr < ry < hi + clr for ry in row_y)
+        # **その x に行が実在するときだけ「跨いだ」と見る。**
+        return not any(lo - clr < ry < hi + clr
+                       and (_row_blocks(ry, ax) or _row_blocks(ry, bx))
+                       for ry in row_y)
 
     cols = {}
     for fp in board.GetFootprints():
@@ -155,7 +176,59 @@ def prewire_col_bus(board):
             # 長い場合のために書いてあるのに、その手前で return していて
             # **一度も呼ばれていなかった**（左 COL3/COL5。2026-08-17）。
             # 形 A / B は自分の条件で弾くので、ここでの門は要らない。
-            crossed = [ry for ry in row_y if ay < ry < cy]
+            # **本当に跨ぐ行だけ数える。**y が間にあっても、その行が
+            # x 方向に届いていなければ障害物ではない（COL0 がこれ）。
+            crossed = [ry for ry in row_y if ay < ry < cy
+                       and (_row_blocks(ry, ax) or _row_blocks(ry, cx))]
+
+            if not crossed:
+                # **跨ぐ行が無い。潜る必要が無いので裏だけで引く。**
+                # 縦 → 45° → 縦。ビアは 1 個も要らない。
+                knee0 = abs(cy - ay) - abs(cx - ax)
+                cands = []
+                if knee0 >= 0:
+                    # 縦 → 45°（素直な形）
+                    cands.append([(ax, ay, ax, ay + knee0, pcbnew.B_Cu),
+                                  (ax, ay + knee0, cx, cy, pcbnew.B_Cu)])
+                    # **先に 45° で寄ってから降りる。**縦の区間が元の x に
+                    # 長く残る形だと、スタビの穴を抜けられないことがある
+                    # （左 COL0 SW13→SW19 が ST19 に当たる）。
+                    cands.append([(ax, ay, cx, ay + abs(cx - ax), pcbnew.B_Cu),
+                                  (cx, ay + abs(cx - ax), cx, cy, pcbnew.B_Cu)])
+                    # **途中で寄る（縦 → 45° → 縦）。**上の 2 つは
+                    # 「元の x」か「行き先の x」のどちらかに長く留まる
+                    # ので、その真上にスタビの穴があると詰む
+                    # （左 COL0 SW13→SW19。ST19 が x=90.437 で列は 90.528、
+                    # 一方 45° を先にやると SW13 自身の胴に当たる）。
+                    # **寄る高さを選べるようにすれば抜けられる。**
+                    step = 0.5
+                    ky = ay + step
+                    while ky < cy - abs(cx - ax):
+                        cands.append([
+                            (ax, ay, ax, ky, pcbnew.B_Cu),
+                            (ax, ky, cx, ky + abs(cx - ax), pcbnew.B_Cu),
+                            (cx, ky + abs(cx - ax), cx, cy, pcbnew.B_Cu)])
+                        ky += step
+                plain = next((c for c in cands
+                              if all(_clear(x1, y1, x2, y2, name, la)
+                                     for (x1, y1, x2, y2, la) in c)), None)
+                if plain:
+                    for (x1, y1, x2, y2, la) in plain:
+                        if (x1, y1) == (x2, y2):
+                            continue
+                        t = pcbnew.PCB_TRACK(board)
+                        t.SetStart(pcbnew.VECTOR2I_MM(x1, y1))
+                        t.SetEnd(pcbnew.VECTOR2I_MM(x2, y2))
+                        t.SetWidth(pcbnew.FromMM(TRACK_W))
+                        t.SetLayer(la)
+                        t.SetNet(a.GetNet())
+                        board.Add(t)
+                        n += 1
+                    continue
+                skipped += 1
+                _why.append((name, '跨ぐ行が無いが裏だけで引けない'))
+                continue
+
             if len(crossed) != 1:             # 想定は 1 本ちょうど
                 skipped += 1
                 _why.append((name, f'跨ぐ行 {len(crossed)} 本'))
