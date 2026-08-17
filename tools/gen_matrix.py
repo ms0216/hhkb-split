@@ -41,6 +41,22 @@ NOT_A_KEY = re.compile(r"U\d+|J_DB|SW_PWR|BT\d+|D_PWR|C\d+|R\d+|H\d+|ST\d+|MP\d+
 # ように少しだけ足す**（Freerouting ではなく自分で引くので固定値でよい）。
 BRIDGE_DY = VIA_D / 2 + 0.25 + TRACK_W / 2
 
+# **行のバスの「パッドの列」から下へ逃げる距離（mm）。**
+#
+# 行のバスは線 1 本ではなく、ダイオードの K 側パッド（SOD-123・
+# 半対角 0.75mm）が並んだ列でもある。線だけ避けてパッドを擦ると
+# DRC が落ちる。0.75 + クリアランス 0.25 + 線幅の半分 0.1 = 1.10。
+# 余裕を見て 1.30。
+PAD_LANE_DY = 1.30
+
+# **横に走るレーンの間隔（mm）。**
+#
+# ⚠️ **列ごとに別の y を使う。**全部を同じ y に流すと、最下段で
+# 隣の列と正面衝突する（左 COL1/COL3/COL5 が y=124.000 に重なって
+# tracks_crossing 2 件。2026-08-17）。**自分の障害物だけ見て、
+# 自分どうしを見ていなかった。**
+LANE_PITCH = 0.55
+
 
 def prewire_col_bus(board):
     """**列のバスを裏面で引き、行を跨ぐ瞬間だけ表へ潜る。**（2026-08-17）
@@ -129,16 +145,16 @@ def prewire_col_bus(board):
 
     n = vias = skipped = 0
     _why = []
-    for name, pads in sorted(cols.items()):
+    for lane_i, (name, pads) in enumerate(sorted(cols.items())):
         pads.sort(key=lambda p: p.GetPosition().y)
         for a, b_ in zip(pads, pads[1:]):
             ax, ay = a.GetPosition().x / 1e6, a.GetPosition().y / 1e6
             cx, cy = b_.GetPosition().x / 1e6, b_.GetPosition().y / 1e6
             knee = abs(cy - ay) - abs(cx - ax)
-            if knee < 0:                      # 横に長すぎて 45° に収まらない
-                skipped += 1
-                _why.append((name, '横に長すぎ'))
-                continue
+            # ⚠️ **ここで `knee < 0` を弾かないこと。**形 C' は横が縦より
+            # 長い場合のために書いてあるのに、その手前で return していて
+            # **一度も呼ばれていなかった**（左 COL3/COL5。2026-08-17）。
+            # 形 A / B は自分の条件で弾くので、ここでの門は要らない。
             crossed = [ry for ry in row_y if ay < ry < cy]
             if len(crossed) != 1:             # 想定は 1 本ちょうど
                 skipped += 1
@@ -171,6 +187,66 @@ def prewire_col_bus(board):
                     (cx, ry - BRIDGE_DY, cx, ry + BRIDGE_DY, pcbnew.F_Cu),
                     (cx, ry + BRIDGE_DY, cx, cy, pcbnew.B_Cu),
                 ])
+            # C: **その場で真下に降りて跨ぎ、横移動は行の下でやる。**
+            #
+            # 最下段の 3 本（左 COL1/COL3/COL5）はこれでないと引けない。
+            # 行 122.7 が 2 つのキーのちょうど間にあり、45° の斜めが
+            # 行を跨いでしまうため（形 A も B も橋が斜めに乗る）。
+            # さらに COL3/COL5 は横移動（28.575 / 23.812mm）が縦
+            # （19.05mm）より大きく、**45° 1 回では届かない**。
+            #
+            # 降りる → 橋 → 45° で寄る → 縦、の順にすると、横移動が
+            # どれだけ長くても行の下側だけで処理できる。
+            if ay + BRIDGE_DY < ry < cy - BRIDGE_DY:
+                dy_left = cy - (ry + BRIDGE_DY)       # 行の下に残る縦の余裕
+                run = abs(cx - ax)
+                if dy_left >= run:                    # 45° が収まる
+                    ky = cy - run                     # 斜めを始める y
+                    # 斜めの開始が行のパッド列に近すぎないこと
+                    if ky >= ry + PAD_LANE_DY + lane_i * LANE_PITCH:
+                        shapes.append([               # C
+                            (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                            (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                            (ax, ry + BRIDGE_DY, ax, ky, pcbnew.B_Cu),
+                            (ax, ky, cx, cy, pcbnew.B_Cu),
+                        ])
+                if True:
+                    # D: **跨いだ直後にレーンで横へ寄り、そのあと降りる。**
+                    #
+                    # C は「斜めを cy - run から始める」ので、**縦の区間が
+                    # 元の列の x に長く残る**。そこにスタビの穴があると
+                    # 通れない（左 COL0 SW13→SW19。ST19 の穴が x=90.437 と
+                    # 列の x=90.528 のほぼ真上にある）。
+                    # 先に横へ逃げてから降りれば、その x を離れられる。
+                    lane_d = ry + PAD_LANE_DY + lane_i * LANE_PITCH
+                    if lane_d < cy - abs(cx - ax):
+                        ky2 = cy - abs(cx - ax)
+                        shapes.append([               # D
+                            (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                            (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                            (ax, ry + BRIDGE_DY, ax, lane_d, pcbnew.B_Cu),
+                            (ax, lane_d, cx, lane_d + abs(cx - ax), pcbnew.B_Cu),
+                            (cx, lane_d + abs(cx - ax), cx, cy, pcbnew.B_Cu),
+                        ]) if lane_d + abs(cx - ax) <= cy else None
+                if dy_left < run:
+                    # **横が縦より長い。**45° を 1 回では届かないので、
+                    # 行の下で横に走ってから 45° で降りる。
+                    #
+                    # ⚠️ **横に走る y は、行のダイオードの下まで下げる。**
+                    # `ry + BRIDGE_DY`（＝123.35）で走ると、行の K 側
+                    # パッド（y=122.7・半対角 0.75）まで 0.65mm しか無く、
+                    # 必要な 1.10mm を満たさない。**行のバスは線だけでなく
+                    # パッドの列でもある**——線を避けても、パッドを擦る
+                    # （左 COL1/COL3/COL5 が全部これで落ちていた）。
+                    lane = ry + PAD_LANE_DY + lane_i * LANE_PITCH
+                    kx = cx + (abs(cx - ax) - (cy - lane)) * (1 if cx > ax else -1)
+                    shapes.append([                   # C'
+                        (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                        (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                        (ax, ry + BRIDGE_DY, ax, lane, pcbnew.B_Cu),
+                        (ax, lane, kx, lane, pcbnew.B_Cu),
+                        (kx, lane, cx, cy, pcbnew.B_Cu),
+                    ])
             if not shapes:
                 skipped += 1
                 _why.append((name, '跨ぎが斜めに掛かる'))
