@@ -25,7 +25,7 @@ import pcbnew
 
 import boardhash
 import gnd_fanout
-from gen_pcb import prewire_row_bus, prewire_switch_diode
+from gen_pcb import replay_matrix
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
@@ -233,6 +233,15 @@ def _check_jar():
 #             配るだけで prewire していないが、DSN から消えると未配線に
 #             なるので、**子基板だけ**に効かせる（下の PREWIRED_DB）。
 PREWIRED = re.compile(r"GND|SW\d+_D")
+
+# **消さないが、引いた線は動かさせないネット。**
+#
+# キーマトリクス（行と列）は `gen_pcb` が決定的に引く。**凍結する**
+# （2026-08-17・利用者「基本的にはこの配線は変更せず、自動配線の前に
+# 機械的に配線しておく形に」）。ネットごと消せないのは、最後の 1 本
+# （ROW は J_DB へ、COL は U1 へ）が直線では届かず、そこだけは
+# Freerouting に引かせるため。
+FROZEN = re.compile(r"ROW_[A-E]|COL\d+")
 # 子基板だけ、これも自分で引いてある。
 #
 # ⚠️ **レーンを通る ROW を入れるのが対**（2026-08-14・利用者「D3〜D5 を XIAO
@@ -321,6 +330,20 @@ def _strip_prewired(dsn, pattern=PREWIRED):
         t = re.sub(rf"\s*\(net {e}\s*\n\s*\(pins [^)]*\)\s*\n\s*\)", "", t)
         t = re.sub(rf"(\(class \S+ [^)]*?)\b{e}\b", r"\1", t)
         t = t.replace(f"(net {n})(type route)", "(type protect)")
+    # **消さずに残すが、動かしてほしくないネット**（2026-08-17・
+    # 利用者「このキーマトリクスの配線を凍結させてください」）。
+    #
+    # ROW と COL は**ネットごと消せない**——最後の 1 本（ROW は J_DB、
+    # COL は U1）は Freerouting に引かせる必要があるため。しかし
+    # `(type route)` のままだと**引いた線ごと作り直される**。
+    #
+    # ⚠️ **注記は「protect で渡してある」と書いていたが、実際には
+    # なっていなかった**（2026-08-17 に実測。ROW も COL も route）。
+    # 上の置換は「消したネット」にしか掛からないので、消さない
+    # ROW/COL には効いていなかった。**ここで明示的に protect にする。**
+    for n in sorted({n for n in re.findall(r"\(net (\S+)", t) if FROZEN.fullmatch(n)}):
+        t = t.replace(f"(net {n})(type route)", f"(net {n})(type protect)")
+
     left = [n for n in re.findall(r"\(net (\S+)", t) if pattern.fullmatch(n)]
     if left:
         raise SystemExit(
@@ -427,13 +450,15 @@ def _route_once(half, seed):
     # Freerouting はそこを避けて配線済みなので衝突しない。
     # **マトリクスがある基板だけ。**子基板にはスイッチも行も無い。
     if half in HALVES:
-        prewire_switch_diode(board)
-        # **行のバスも引き直す。**SES 取り込みで消えているので、
-        # gen_pcb で引いたのと同じ直線をここで復活させる。
-        # DSN では `(type protect)` の障害物として渡してあるので、
-        # Freerouting はこれを避けて J_DB への 1 本だけを引いている。
-        n_row = prewire_row_bus(board)
-        print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
+        # **マトリクスは未配線の板から「写す」。引き直さない。**
+        # （2026-08-17・利用者「このキーマトリクスの配線を凍結させて」）
+        #
+        # ⚠️ **引き直すと同じ答えにならない。**経路は板の上の物から
+        # 決まるが、SES 取り込み後はビアが 38 → 1217 個に増えている。
+        # 実測で 13 ホップが「障害物」で落ちた。**凍結とは同じ手順を
+        # 回すことではなく、同じ結果を置き直すこと。**
+        n_mx, n_mv = replay_matrix(board, pcbnew.LoadBoard(str(src)))
+        print(f"   {half}: マトリクスを写した {n_mx} 区間 / ビア {n_mv} 個")
     else:
         # **電源も引き直す。**上の行バスと同じ理由——**SES 取り込みは
         # 既存の配線を全部置き換える**ので、gen_daughterboard で引いた

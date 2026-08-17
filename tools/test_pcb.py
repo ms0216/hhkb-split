@@ -77,7 +77,7 @@ def _net_names(name):
     """
     key = ("matrixnets", name)
     if key not in _CACHE:
-        txt = (PCB / "matrix" / f"hhkb_split_{name}.kicad_pcb").read_text()
+        txt = (PCB / "unrouted" / f"hhkb_split_{name}.kicad_pcb").read_text()
         _CACHE[key] = dict(re.findall(r'\(net (\d+) "([^"]*)"\)', txt))
     return _CACHE[key]
 
@@ -418,18 +418,21 @@ def test_matrix_columns_do_not_need_long_crossings(name):
 
     **落ちるからといって外さない。**守りたかったのは x の散らばり
     そのものではなく「**長い横断が生まれないこと**」なので、そちらを
-    直接測る。散らばっていても、`gen_matrix.prewire_col_bus` が段ごとに
+    直接測る。散らばっていても、`gen_pcb.prewire_col_bus` が段ごとに
     45° で寄せるので 1 区間は短いままになる（実測: 最長 20.2mm）。
 
     **本物の横断が出れば落ちる**ことは、閾値を 15mm に下げて確かめた
     （右 COL0 の 20.2mm が引っかかる）。
     """
-    # **マトリクスだけを配線した基板**（pcb/matrix/）を見る。
-    # 本番の pcb/ は MCU への配線も入っていて、そちらは器械が引くので
-    # ここの判定の対象ではない。
-    src = PCB / "matrix" / f"hhkb_split_{name}.kicad_pcb"
+    # **未配線の基板**（pcb/unrouted/）を見る。
+    #
+    # マトリクスは `gen_pcb.prewire_col_bus` がここに引き、`autoroute` は
+    # `replay_matrix` でそれを写すだけ（2026-08-17 に凍結）。つまり
+    # **形が決まるのはここ**で、本番の pcb/ はその写し。器械が引く
+    # MCU への配線は判定の対象ではないので、こちらを見る方が素直。
+    src = PCB / "unrouted" / f"hhkb_split_{name}.kicad_pcb"
     if not src.exists():
-        pytest.skip(f"{src.name} が無い（\"$KPY\" tools/gen_matrix.py で作る）")
+        pytest.skip(f"{src.name} が無い（\"$KPY\" tools/gen_pcb.py で作る）")
     txt = src.read_text()
     longest, where = 0.0, None
     # ⚠️ **`(segment ...)` はネットを名前で持つ**（番号ではない）。
