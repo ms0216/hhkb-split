@@ -37,7 +37,8 @@ import pinmap                                                       # noqa: E402
 # 設計規則の数値は **pcbnew を要らない側**（pcb_rules）に置いてある。
 # 検査は母艦の venv（pcbnew 無し）から同じ値を読む。
 from pcb_rules import (                                            # noqa: E402
-    BESIDE_GAP, DECOUPLE_BESIDE, JLC, MIN_ISLAND_MM2, POWER_CLASSES,
+    BESIDE_GAP, DECOUPLE_BESIDE, DECOUPLE_OFFSET, JLC, MIN_ISLAND_MM2,
+    POWER_CLASSES,
     POWER_NETS, TRACK_W, VIA_D, VIA_DRILL)
 
 # **銅の層。ここが唯一の出どころ。**層数を変えるときはここだけ直す。
@@ -519,7 +520,15 @@ PLACE = {
         "J_DB": (1, J_DB_X),
         # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # C_U1 はここに書かない。**DECOUPLE_BESIDE が U1 から算出する。**
-        "U1": (0, 16.5),
+        #
+        # ⚠️ **U1 は帯 1（J_DB と同じ帯）。**2026-08-17 に帯 0 から移した
+        # （利用者が基板上で直接動かし、その配置で配線し直した）。
+        # 帯 0 は SPI の唯一の通り道で、その途中に U1 が居ると
+        # SCK/MOSI/CS が U1 の際で押し出されていた。J_DB(帯 1・x=63.3)
+        # の手前へ寄せると、FFC から来た 3 本がそのまま U1 に入る。
+        # 3 つ目は裏面での向き。利用者は 180° ではなく 0° で置いた
+        # （FFC から来る SPI がそのままピンに入る向き）。
+        "U1": (1, 45.1375, 0, 0.55),
     },
     "right": {
         # 電池の + は基板を通らない（スイッチへ直結・open-gaps #41）。
@@ -546,8 +555,13 @@ PLACE = {
 
 
 
-def _center_courtyard_in_band(fp, band):
-    """コートヤードの中心が帯の中心へ来るよう、フットプリントを縦にずらす。"""
+def _center_courtyard_in_band(fp, band, dy_mm=0.0):
+    """コートヤードの中心が帯の中心へ来るよう、フットプリントを縦にずらす。
+
+    `dy_mm` は帯の中心からの意図的なずらし（KiCad の Y は下向き）。
+    **既定は 0。**使うのは、利用者が基板上で直接置いた位置を再現する
+    ときや、中心では通らないと実測で分かったときだけ（U1 の +0.55mm）。
+    """
     for layer in (pcbnew.F_CrtYd, pcbnew.B_CrtYd):
         shape = fp.GetCourtyard(layer)
         if not shape.IsEmpty():
@@ -556,7 +570,7 @@ def _center_courtyard_in_band(fp, band):
         raise RuntimeError(f"{fp.GetReference()}: コートヤードが無い")
     bb = shape.BBox()
     mid = (bb.GetTop() + bb.GetBottom()) / 2
-    want = pcbnew.FromMM(ORIGIN[1] - BAND_Y[band])
+    want = pcbnew.FromMM(ORIGIN[1] - BAND_Y[band] + dy_mm)
     pos = fp.GetPosition()
     fp.SetPosition(pcbnew.VECTOR2I(pos.x, int(pos.y + want - mid)))
 
@@ -580,7 +594,7 @@ def _pad_with_net(fp, netname):
     return None
 
 
-def _place_beside(board, cap_ref, ic_ref, band):
+def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0)):
     """パスコンを IC の**電源ピンがある側**へ、触れない最短距離で寄せる。
 
     どちら側に置くかを手で書かない。**IC の V3V3 パッドが中心のどちら側に
@@ -608,9 +622,11 @@ def _place_beside(board, cap_ref, ic_ref, band):
     else:
         want_right = ic_l - BESIDE_GAP
         dx = want_right - cap_r
-    cap.SetPosition(pcbnew.VECTOR2I_MM(cx + dx,
+    cap.SetPosition(pcbnew.VECTOR2I_MM(cx + dx + off[0],
                                        pcbnew.ToMM(cap.GetPosition().y)))
-    _center_courtyard_in_band(cap, band)
+    # **IC と同じずらしを使う。**中心へ戻すと、寄せた相手だけが
+    # 帯の中心から外れていて、往復ループが余計に伸びる。
+    _center_courtyard_in_band(cap, band, dy_mm + off[1])
 
     # **コンデンサの V3V3 側のパッドが IC を向いているか。**
     # 逆を向いていると、わざわざ寄せた意味が半分になる（電流が部品を
@@ -713,6 +729,10 @@ def _place_electronics(board, half, net, plate_w):
 
     for ref, spec in spots.items():
         band, x = spec[0], spec[1]
+        # 3 つ目があれば裏面での向き（度）。無ければ Flip のまま（180°）。
+        turn = spec[2] if len(spec) > 2 else None
+        # 4 つ目があれば帯の中心からのずらし（mm・Y 下向き）。
+        dy = spec[3] if len(spec) > 3 else 0.0
         align_to = None
         if x is J_DB_X:
             # 子基板の FFC コネクタ（J_MAIN）は子基板の中心にあるので、
@@ -742,13 +762,18 @@ def _place_electronics(board, half, net, plate_w):
             fp.SetValue(value)
             board.Add(fp)
             fp.Flip(fp.GetPosition(), False)
+            # **向きの指定は Flip のあと・帯合わせの前。**Flip は 180° を
+            # 与えるので、上書きするならここ。コートヤードの中心は
+            # 向きで変わるので、_center_courtyard_in_band より先に回す。
+            if turn is not None:
+                fp.SetOrientationDegrees(turn)
             # **原点ではなくコートヤードを帯の中心に合わせる。**
             #
             # フットプリントのコートヤードは原点に対して対称とは限らない
             # （FFC コネクタは 0.95mm ずれていて、帯から 0.275mm はみ出していた）。
             # 原点を中心に置くと、部品ごとに違う量だけずれる。
             # ここで揃えておけば、部品ごとの手当て（dy）が要らなくなる。
-            _center_courtyard_in_band(fp, band)
+            _center_courtyard_in_band(fp, band, dy)
             if align_to is not None:
                 off = _snap_clear_of_courtyards(board, fp, align_to)
                 print(f"   {half}: {ref} を子基板と揃えた"
@@ -789,7 +814,10 @@ def _place_electronics(board, half, net, plate_w):
     # ネットが付いていないと決められない。
     for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
         if cap_ref in decl and ic_ref in PLACE[half]:
-            _place_beside(board, cap_ref, ic_ref, PLACE[half][ic_ref][0])
+            _spec = PLACE[half][ic_ref]
+            _place_beside(board, cap_ref, ic_ref, _spec[0],
+                          _spec[3] if len(_spec) > 3 else 0.0,
+                          DECOUPLE_OFFSET[half].get(cap_ref, (0.0, 0.0)))
 
 
 def _pour(board, netitem, layers, w, h):
