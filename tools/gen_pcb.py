@@ -387,6 +387,41 @@ def prewire_col_bus(board):
                 return False
         return True
 
+    def _same_path(a, b):
+        """2 つの経路が同じか（0.001mm まで）。"""
+        if len(a) != len(b):
+            return False
+        for (p1, p2) in zip(a, b):
+            if p1[4] != p2[4]:
+                return False
+            if any(abs(u - v) > 0.001 for u, v in zip(p1[:4], p2[:4])):
+                return False
+        return True
+
+    def _is_standard(path, ax, ay, cx, cy, ry):
+        """**標準形か。**縦 → 橋 → 縦 → 45° → 縦 だけで出来ていること。
+
+        「横に走る区間」を持たないもの、かつ 45° が 1 回だけのものを
+        標準とする。同じ dx のホップなら、この条件を満たす経路は
+        （曲がる高さが違っても）見た目が揃う。
+
+        ⚠️ **横の区間を許すと形が崩れる。**実測で、同じ dx=+9.525 の
+        3 本が「45° 一本」「45° のあと横に 6.275mm」「45° のあと横に
+        0.275mm」とばらばらになっていた（2026-08-18）。
+        """
+        diag = flat = 0
+        for (x1, y1, x2, y2, _l) in path:
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dx < 1e-6:                 # 縦
+                continue
+            if dy < 1e-6:                 # 横に走っている
+                flat += 1
+            elif abs(dx - dy) < 1e-6:     # 45°
+                diag += 1
+            else:
+                return False              # 45° でない斜め
+        return flat == 0 and diag <= 1
+
     def _margin(path, net):
         """経路の、穴・他ネットのパッドまでの最小の余裕（mm）。
 
@@ -710,10 +745,34 @@ def prewire_col_bus(board):
                     continue
                 _ok.append(cand)
             if _ok:
-                best_m = max(_margin(c, name) for c in _ok)
-                # 余裕が最大のものたちの中で、一番短いもの（_ok は長さ順）
-                path = next(c for c in _ok
-                            if _margin(c, name) >= best_m - 0.001)
+                # **標準形を先に採る**（2026-08-18・利用者「col のラインが、
+                # 似ているが微妙に不規則です。なぜですか？」）。
+                #
+                # ⚠️ **「余裕が最大のもの」で選ぶと形が揃わない。**候補には
+                # 曲がる高さを 0.25〜0.5mm 刻みで振ったものが何十通りも
+                # 入っていて、**周りの障害物はキーごとに少しずつ違う**ので
+                # 勝つ候補が列ごとに変わる。実測で、同じ dx=+9.525 の
+                # ホップが 3 本とも違う形になっていた（曲がる y が
+                # 67.400 / 66.400 / 66.400、45° の使い方もばらばら）。
+                #
+                # **同じ dx なら同じ形になる**ように、標準形（A → C の
+                # 素直な順）が通るならそれを採り、通らないときだけ
+                # 余裕の大きいものへ落とす。
+                # **形 A ちょうどのものを探す**（縦 → 橋 → 縦 → 45° → 縦）。
+                # 「横に走らない」だけでは、45° を始める高さが自由に
+                # 選べてしまい**同じ dx でも形が変わる**（実測で
+                # dx=+9.525 が 3 種類）。**A の座標そのもの**を標準とする。
+                canon = [(ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                         (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                         (ax, ry + BRIDGE_DY, ax, ay + knee, pcbnew.B_Cu),
+                         (ax, ay + knee, cx, cy, pcbnew.B_Cu)]
+                std = next((c for c in _ok if _same_path(c, canon)), None)
+                if std is not None:
+                    path = std
+                else:
+                    best_m = max(_margin(c, name) for c in _ok)
+                    path = next(c for c in _ok
+                                if _margin(c, name) >= best_m - 0.001)
             if path is None:
                 skipped += 1
                 _why.append((name, '障害物'))
