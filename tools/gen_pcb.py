@@ -770,9 +770,41 @@ def replay_matrix(board, src):
     ROW / COL / SW*_D の配線とビアを写す。既にあるものは消してから。
     """
     keep = re.compile(r"ROW_[A-E]|COL\d+|SW\d+_D")
+
+    # **写す線の座標をあらかじめ集める。**
+    #
+    # ⚠️ **「そのネットの線を全部消す」をしないこと**（2026-08-18）。
+    # ROW/COL は最後の 1 本（U1 へ / J_DB へ）だけ Freerouting に
+    # 引かせる約束なのに、全部消すと**その 1 本も道連れになる。**
+    # 実測で COL→U1 が 8 本・ROW→J_DB が 5 本まるごと未配線になり、
+    # 「Freerouting が引けていない」と誤診した。**引けていたものを、
+    # 私が消していた。**
+    #
+    # 消してよいのは**これから同じ場所へ置き直す線だけ**。
+    def _key(x1, y1, x2, y2, layer):
+        return (layer, tuple(sorted([(round(x1, 3), round(y1, 3)),
+                                     (round(x2, 3), round(y2, 3))])))
+    mine = set()
+    for t in src.GetTracks():
+        if not keep.fullmatch(t.GetNetname()):
+            continue
+        if t.GetClass() == "PCB_VIA":
+            mine.add(("V", round(t.GetPosition().x / 1e6, 3),
+                      round(t.GetPosition().y / 1e6, 3)))
+        else:
+            mine.add(_key(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                          t.GetEnd().x / 1e6, t.GetEnd().y / 1e6, t.GetLayer()))
+
     for t in list(board.GetTracks()):
-        if keep.fullmatch(t.GetNetname()):
-            board.Delete(t)
+        if not keep.fullmatch(t.GetNetname()):
+            continue
+        if t.GetClass() == "PCB_VIA":
+            k = ("V", round(t.GetPosition().x / 1e6, 3), round(t.GetPosition().y / 1e6, 3))
+        else:
+            k = _key(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                     t.GetEnd().x / 1e6, t.GetEnd().y / 1e6, t.GetLayer())
+        if k in mine:
+            board.Delete(t)          # これから置き直すので消す
     n = vias = 0
     for t in src.GetTracks():
         name = t.GetNetname()
@@ -1099,19 +1131,24 @@ PLACE = {
         "J_DB": (1, J_DB_X),
         # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
-        # ⚠️ **U2 は利用者が基板上で動かした位置**（2026-08-17・
-        # 「SW6 から SW15 は U2 をずらしたので、それで試してください」）。
-        # 元は帯 0 の x=+15.0 で、**U1 の隣に並んで列の通り道を塞いでいた。**
-        # COL5 の SW6→SW15 がそこを通れず、跨ぐ行が 2 本になっていた。
-        # 帯 1 の左端へ退避すると、x=165 付近が空いて素直に降りられる。
-        # dy=+0.725 は利用者の位置（109.338, 88.900）を再現する値。
-        # ⚠️ **U1 も利用者が動かした**（2026-08-17・「コンデンサとか
-        # 避けておいたので」）。元は帯 0 の x=+2.0 で、**COL4 の
-        # 通り道（x≈146〜152）に U1 と C_U1 が並んでいた。**そのため
-        # SW5 だけが 3.7mm 余計に降りてから曲がる形になり、
-        # 同じ段の他のキー（SW3/4/6/7 は 0.2mm）と揃わなかった。
-        # 帯 3 の左端へ退避すると、その帯が空いて素直に降りられる。
-        "U1": (3, -75.938, None, -0.025), "U2": (1, -40.662, None, 0.725),
+        # **U1 / U2 とパスコンは利用者が置いた位置**（2026-08-18・
+        # 「試しに matrix の右手 U1, U2 パスこんの位置を考えてみた」）。
+        #
+        # **J_DB の真下に縦一列**に並べてある（実測）:
+        #
+        #   J_DB  x=73.850  y= 87.225
+        #   U1    x=73.832  y= 96.455   C_U1 x=68.070（V3V3 まで 2.76mm）
+        #   U2    x=73.830  y=102.995   C_U2 x=68.070（V3V3 まで 2.74mm）
+        #
+        # **パスコンはそれぞれ自分の IC の真横。**U1↔U2 は 6.54mm。
+        # ⚠️ **COL0 の縦線（x=76.240）を避けて下へ 0.91mm ずらしてある**
+        # （2026-08-18・利用者「B ずらしました」）。列は部品より先に
+        # 引かれるので、重ねて置いても止まらない。**U1 のパッド 1 が
+        # COL0 に 0.781mm 食い込んでいた。**
+        # FFC・595・パスコンが 1 本の列にまとまるので、**列のバスが
+        # 通る帯を塞がない。**以前は U1/U2 が別々の帯に散っていて、
+        # COL4・COL5 の通り道と重なっていた。
+        "U1": (1, -76.168, None, 8.280), "U2": (2, -76.170, None, -4.230),
     },
 }
 
@@ -1612,6 +1649,8 @@ def build(half, keys):
     n_col, n_via, n_skip = prewire_col_bus(board)
     print(f"      {half}: 列のバスを裏面で {n_col} 区間 / 橋のビア {n_via} 個"
           + (f"（引けなかったホップ {n_skip}）" if n_skip else "（全ホップ）"))
+    # 列を MCU へ戻すレーン（表面）。**列のバスのあとに呼ぶ**——
+    # バスの端点をレーンへの降り口として使うため。
 
     # シルクの線幅を製造能力まで太らせる。
     #

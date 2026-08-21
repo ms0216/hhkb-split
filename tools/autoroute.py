@@ -234,14 +234,6 @@ def _check_jar():
 #             なるので、**子基板だけ**に効かせる（下の PREWIRED_DB）。
 PREWIRED = re.compile(r"GND|SW\d+_D")
 
-# **消さないが、引いた線は動かさせないネット。**
-#
-# キーマトリクス（行と列）は `gen_pcb` が決定的に引く。**凍結する**
-# （2026-08-17・利用者「基本的にはこの配線は変更せず、自動配線の前に
-# 機械的に配線しておく形に」）。ネットごと消せないのは、最後の 1 本
-# （ROW は J_DB へ、COL は U1 へ）が直線では届かず、そこだけは
-# Freerouting に引かせるため。
-FROZEN = re.compile(r"ROW_[A-E]|COL\d+")
 # 子基板だけ、これも自分で引いてある。
 #
 # ⚠️ **レーンを通る ROW を入れるのが対**（2026-08-14・利用者「D3〜D5 を XIAO
@@ -341,8 +333,18 @@ def _strip_prewired(dsn, pattern=PREWIRED):
     # なっていなかった**（2026-08-17 に実測。ROW も COL も route）。
     # 上の置換は「消したネット」にしか掛からないので、消さない
     # ROW/COL には効いていなかった。**ここで明示的に protect にする。**
-    for n in sorted({n for n in re.findall(r"\(net (\S+)", t) if FROZEN.fullmatch(n)}):
-        t = t.replace(f"(net {n})(type route)", f"(net {n})(type protect)")
+    # ⚠️ **protect にしない**（2026-08-18・実測）。
+    #
+    # 2026-08-17 にここで ROW/COL を protect にしたが、**protect は
+    # 「動かすな」ではなく「触るな」**なので、Freerouting は**その線に
+    # 繋ぎ込むこともできなくなる。**結果、COL→U1 が 6 本・ROW→J_DB が
+    # 5 本、まるごと未配線として残った（左 11 件・右 15 件）。
+    # 「最後の 1 本だけは Freerouting に引かせる」という目的と、
+    # protect という手段が矛盾していた。
+    #
+    # **凍結は `replay_matrix` が担保する**——SES 取り込みのあとに
+    # 未配線の板から写し直すので、Freerouting が途中でどう動かしても
+    # 最終的な形は gen_pcb が引いたものになる。
 
     left = [n for n in re.findall(r"\(net (\S+)", t) if pattern.fullmatch(n)]
     if left:
@@ -351,6 +353,21 @@ def _strip_prewired(dsn, pattern=PREWIRED):
             "DSN の書式が変わった可能性がある。残すと Freerouting が"
             "二重配線するか NPE で落ちる")
     dsn.write_text(t)
+
+
+# **書き出し先。**既定は本番の pcb/。
+#
+# ⚠️ **試しの配線を本番に書かないこと**（2026-08-18・利用者「本番
+# ファイルではなく別フォルダを作るべき」）。私は「違反があってもいいので
+# 配線して」を本番を回すことだと解釈し、**U1/U2 が決まるまで本番は
+# 触らないという合意を破って 3 枚を上書きした。**
+#
+#     "$KPY" tools/autoroute.py right --out pcb/try
+OUT_DIR = None          # None なら PCB（本番）
+
+
+def _out_dir():
+    return OUT_DIR or PCB
 
 
 def _route_once(half, seed):
@@ -525,7 +542,7 @@ def _route_once(half, seed):
     n_is, left = gnd_fanout.stitch_islands(board)
     print(f"   {half}: 離島に打ったビア {n_is} 個 / 繋げ切れなかった区画 {left}")
 
-    out = PCB / f"hhkb_split_{half}.kicad_pcb"
+    out = _out_dir() / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(out))
     dsn.unlink()
     ses.unlink()
@@ -547,7 +564,7 @@ def _route_once(half, seed):
         "attempt": seed,
         "unconnected": left_over,
     }
-    (PCB / f"route_{half}.json").write_text(
+    (_out_dir() / f"route_{half}.json").write_text(
         json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return rec
 
@@ -578,7 +595,15 @@ def main():
     # drc_*.json の差分が汚れて「何を直したか」が読めなくなる。
     #
     #     "$KPY" tools/autoroute.py daughterboard
-    targets = sys.argv[1:] or list(BOARDS)
+    global OUT_DIR
+    args = sys.argv[1:]
+    if "--out" in args:
+        i = args.index("--out")
+        OUT_DIR = ROOT / args[i + 1]
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        del args[i:i + 2]
+        print(f"書き出し先: {OUT_DIR}（本番の pcb/ は触らない）")
+    targets = args or list(BOARDS)
     unknown = [t for t in targets if t not in BOARDS]
     if unknown:
         raise SystemExit(f"知らない基板: {unknown}／選べるもの: {list(BOARDS)}")
