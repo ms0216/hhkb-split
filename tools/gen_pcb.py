@@ -892,6 +892,42 @@ def _drop_stitch_vias(board, tol=0.001):
     return dropped
 
 
+
+def _hole_label_boxes(board):
+    """キーのシルクの枠を集める（名札の逃がし先を決めるため）。"""
+    boxes = []
+    for f in board.GetFootprints():
+        if not f.GetReference().startswith("SW"):
+            continue
+        for g in f.GraphicalItems():
+            if g.GetLayerName() == "F.Silkscreen":
+                bb = g.GetBoundingBox()
+                boxes.append((bb.GetLeft() / 1e6, bb.GetTop() / 1e6,
+                              bb.GetRight() / 1e6, bb.GetBottom() / 1e6))
+    return boxes
+
+
+def _place_hole_label(board, fp, off=3.15, clr=0.15):
+    """取付穴の名札を、キーのシルクの枠に当たらない向きへ回す。
+
+    **当たらない向きが無ければ既定のまま置く。**動かせないことを
+    DRC に出させる。名札を消して黙らせない（消すと基板上で穴が
+    識別できなくなり、組む人が困る）。
+    """
+    boxes = _hole_label_boxes(board)
+    t = fp.Reference()
+    px, py = fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6
+    bb = t.GetBoundingBox()
+    hw = (bb.GetRight() - bb.GetLeft()) / 2e6
+    hh = (bb.GetBottom() - bb.GetTop()) / 2e6
+    for dx, dy in ((0, -off), (0, off), (-off, 0), (off, 0)):
+        cx, cy = px + dx, py + dy
+        x0, y0, x1, y1 = cx - hw - clr, cy - hh - clr, cx + hw + clr, cy + hh + clr
+        if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1 for b in boxes):
+            t.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
+            return True
+    return False
+
 def apply_matrix_routing(board, half):
     """**利用者が引いた配線（pcb/matrix_routing.json）を載せる。**
 
@@ -1843,6 +1879,18 @@ def build(half, keys):
         h.SetPosition(to_kicad(mx, my))
         h.SetReference(f"H{i}")
         board.Add(h)
+        # **名札をキーの枠から逃がす**（2026-08-22）。
+        #
+        # フットプリントの既定は穴の 3.15mm 手前（KiCad の Y は下向きなので
+        # -Y）で、そこはたいてい**すぐ手前のキーのシルクの枠の中**。
+        # DRC が `silk_overlap` を右で 5 件出していた（H0/H1/H3/H6/H7）。
+        # **H0 を動かして 5 件目が増えたので気づいた**——残りの 4 件は
+        # 前から出ていて、silk は警告なので誰も見ていなかった。
+        #
+        # **枠に当たらない側へ回す。**手前・奥・左・右の 4 方向を実際に
+        # 試し、どのキーのシルクにも当たらない最初の向きを採る。
+        # 全部当たるなら既定のまま（**黙って隠さない**——DRC に出させる）。
+        _place_hole_label(board, h)
 
     # ⚠️ **列のバスは電子部品を置いたあとに引く。**
     #
