@@ -843,6 +843,55 @@ def _drop_gnd_vias_hitting(board, clearance=0.25):
     return dropped
 
 
+def _drop_stitch_vias(board, tol=0.001):
+    """**どこにも繋がっていない GND のビアを外す。**
+
+    （2026-08-22・利用者「どこにもつながってない GND ビアを一旦入れない
+    ようにしてほしい。それは最後にやる工程なはずなので」）
+
+    `gnd_fanout.stitch_islands` が打つ離島の縫い止めは、**ベタ以外の何にも
+    触れていない。**パッドにも配線にも繋がらないので、配線が動けば要らなく
+    なる／別の場所に要る。**配線が固まるまでは打たない。**
+
+    ここでは「GND のパッドにも GND の配線にも触れていないビア」を落とす。
+    `gnd_fanout.place` のファンアウト（パッドの真横）は残る。
+    """
+    import math
+    keep = []
+    for f in board.GetFootprints():
+        for pad in f.Pads():
+            if pad.GetNetname() == "GND":
+                keep.append((pad.GetPosition().x / 1e6, pad.GetPosition().y / 1e6,
+                             max(pcbnew.ToMM(pad.GetSize().x),
+                                 pcbnew.ToMM(pad.GetSize().y)) / 2))
+    lines = []
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK" and t.GetNetname() == "GND":
+            lines.append((t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                          t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                          pcbnew.ToMM(t.GetWidth()) / 2))
+    dropped = 0
+    for v in list(board.GetTracks()):
+        if v.GetClass() != "PCB_VIA" or v.GetNetname() != "GND":
+            continue
+        vx, vy = v.GetPosition().x / 1e6, v.GetPosition().y / 1e6
+        r = pcbnew.ToMM(v.GetWidth()) / 2
+        touches = any(math.dist((px, py), (vx, vy)) - r - pr <= tol
+                      for (px, py, pr) in keep)
+        if not touches:
+            for (x1, y1, x2, y2, hw) in lines:
+                dx, dy = x2 - x1, y2 - y1
+                ll = dx * dx + dy * dy
+                u = 0 if ll == 0 else max(0, min(1, ((vx - x1) * dx + (vy - y1) * dy) / ll))
+                if math.dist((x1 + u * dx, y1 + u * dy), (vx, vy)) - r - hw <= tol:
+                    touches = True
+                    break
+        if not touches:
+            board.Delete(v)
+            dropped += 1
+    return dropped
+
+
 def apply_matrix_routing(board, half):
     """**利用者が引いた配線（pcb/matrix_routing.json）を載せる。**
 
@@ -1864,10 +1913,25 @@ def build(half, keys):
     # DRC が `isolated_copper` を大量に出す（実測 左 36 / 右 60 件）。
     # 利用者「GND ベタ塗りとか、私が直せてないところは直してほしい」。
     pcbnew.ZONE_FILLER(board).Fill(board.Zones())
-    n_is, n_left = gnd_fanout.stitch_islands(board)
-    if n_is or n_left:
-        print(f"      {half}: ベタを塗り直し / 離島に打ったビア {n_is} 個"
-              f" / 繋げ切れなかった区画 {n_left}")
+
+    # **離島を繋ぐビアは、既定では打たない**（2026-08-22・利用者「どこにも
+    # つながってない GND ビアを一旦入れないようにしてほしい。それは最後に
+    # やる工程なはずなので」）。
+    #
+    # 打つと**ベタの形が変わる**ので、配線がまだ動く段階でやっても
+    # 次の変更で無駄になる。**しかも浮いたビアは配線の邪魔をする。**
+    # 配線が固まってから `GND_STITCH=1` を付けて 1 回だけ打つ。
+    # 打つまでは DRC に `isolated_copper` が出るが、**それが正しい状態**。
+    if os.environ.get("GND_STITCH") == "1":
+        n_is, n_left = gnd_fanout.stitch_islands(board)
+        if n_is or n_left:
+            print(f"      {half}: ベタを塗り直し / 離島に打ったビア {n_is} 個"
+                  f" / 繋げ切れなかった区画 {n_left}")
+    else:
+        n_is = _drop_stitch_vias(board)
+        if n_is:
+            print(f"      {half}: 浮いた GND ビアを外した {n_is} 個"
+                  f"（打ち直すには GND_STITCH=1）")
 
     # **未配線のまま pcb/unrouted/ に出す。**
     # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。
