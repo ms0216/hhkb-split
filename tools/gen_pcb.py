@@ -37,7 +37,7 @@ import pinmap                                                       # noqa: E402
 # 設計規則の数値は **pcbnew を要らない側**（pcb_rules）に置いてある。
 # 検査は母艦の venv（pcbnew 無し）から同じ値を読む。
 from pcb_rules import (                                            # noqa: E402
-    BESIDE_GAP, DECOUPLE_BESIDE, DECOUPLE_OFFSET, JLC, MIN_ISLAND_MM2,
+    BESIDE_GAP, DECOUPLE_ANGLE, DECOUPLE_BESIDE, DECOUPLE_OFFSET, JLC, MIN_ISLAND_MM2,
     POWER_CLASSES,
     POWER_NETS, TRACK_W, VIA_D, VIA_DRILL)
 
@@ -811,6 +811,95 @@ def prewire_col_bus(board):
     return n, vias, skipped
 
 
+def _drop_gnd_vias_hitting(board, clearance=0.25):
+    """**あとから載せた配線に当たる GND のビアを外す。**
+
+    `gnd_fanout.place` は配線より先に走るので、利用者が引いた線を
+    知らない。銅の端どうしが `clearance` を割るビアだけ落とす
+    （ベタの塗り直しと離島の繋ぎ直しは呼び出し側でやる）。
+    """
+    import math
+    lines = []
+    for t in board.GetTracks():
+        if t.GetClass() != "PCB_TRACK" or t.GetNetname() in ("GND", ""):
+            continue
+        lines.append((t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                      t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                      pcbnew.ToMM(t.GetWidth()) / 2))
+    dropped = 0
+    for v in list(board.GetTracks()):
+        if v.GetClass() != "PCB_VIA" or v.GetNetname() != "GND":
+            continue
+        vx, vy = v.GetPosition().x / 1e6, v.GetPosition().y / 1e6
+        r = pcbnew.ToMM(v.GetWidth()) / 2
+        for (x1, y1, x2, y2, hw) in lines:
+            dx, dy = x2 - x1, y2 - y1
+            ll = dx * dx + dy * dy
+            s = 0 if ll == 0 else max(0, min(1, ((vx - x1) * dx + (vy - y1) * dy) / ll))
+            if math.dist((x1 + s * dx, y1 + s * dy), (vx, vy)) - r - hw < clearance:
+                board.Delete(v)
+                dropped += 1
+                break
+    return dropped
+
+
+def apply_matrix_routing(board, half):
+    """**利用者が引いた配線（pcb/matrix_routing.json）を載せる。**
+
+    （2026-08-22・利用者「**今の** matrix_only からスクリプト化すれば？」）
+
+    `tools/export_matrix_routing.py` が `pcb/matrix_only/` から書き出した
+    座標をそのまま置く。**規則を推測して引き直さない**——私は 3 回失敗して
+    いる（着地で U1 の他のパッドを横切る／レーンを縦に伸ばして交差する／
+    跨がない行に橋を架ける）。**利用者が引いた座標そのものが仕様。**
+
+    ⚠️ **GND は入っていない。**ベタとファンアウトで別に配り直すため
+    （書き出しに含めると古い塗りが固定される）。
+
+    ここが載る分は `prewire_*` が引いたものと重なるので、**同じネットの
+    既存の配線は一度消してから置く。**
+    """
+    import json
+    f = ROOT / "pcb" / "matrix_routing.json"
+    if not f.exists():
+        return 0, 0
+    data = json.loads(f.read_text()).get(half)
+    if not data:
+        return 0, 0
+
+    nets = {d["net"] for d in data["tracks"]} | {d["net"] for d in data["vias"]}
+    for t in list(board.GetTracks()):
+        if t.GetNetname() in nets:
+            board.Delete(t)
+
+    n = v = 0
+    for d in data["tracks"]:
+        net = board.FindNet(d["net"])
+        if net is None:
+            continue
+        w = pcbnew.PCB_TRACK(board)
+        w.SetStart(pcbnew.VECTOR2I_MM(d["x1"], d["y1"]))
+        w.SetEnd(pcbnew.VECTOR2I_MM(d["x2"], d["y2"]))
+        w.SetWidth(pcbnew.FromMM(d["w"]))
+        w.SetLayer(board.GetLayerID(d["layer"]))
+        w.SetNet(net)
+        board.Add(w)
+        n += 1
+    for d in data["vias"]:
+        net = board.FindNet(d["net"])
+        if net is None:
+            continue
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(pcbnew.VECTOR2I_MM(d["x"], d["y"]))
+        via.SetWidth(pcbnew.FromMM(d["d"]))
+        via.SetDrill(pcbnew.FromMM(d["drill"]))
+        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        via.SetNet(net)
+        board.Add(via)
+        v += 1
+    return n, v
+
+
 def replay_matrix(board, src):
     """**未配線の板に引いてあるマトリクスの配線を、そのまま写す。**
 
@@ -828,7 +917,11 @@ def replay_matrix(board, src):
 
     ROW / COL / SW*_D の配線とビアを写す。既にあるものは消してから。
     """
-    keep = re.compile(r"ROW_[A-E]|COL\d+|SW\d+_D")
+    # ⚠️ **V3V3 も写す**（2026-08-22）。正本（pcb/matrix_only/）には
+    # 利用者が引いた V3V3（U1↔C_U1↔J_DB）が入っている。ここに入れないと
+    # 写されず、Freerouting が別の経路を引いてパスコンのループが伸びる。
+    # **GND は写さない**——ベタとファンアウトで別に配り直すため。
+    keep = re.compile(r"ROW_[A-E]|COL\d+|SW\d+_D|V3V3")
 
     # **写す線の座標をあらかじめ集める。**
     #
@@ -1207,7 +1300,7 @@ PLACE = {
         # FFC・595・パスコンが 1 本の列にまとまるので、**列のバスが
         # 通る帯を塞がない。**以前は U1/U2 が別々の帯に散っていて、
         # COL4・COL5 の通り道と重なっていた。
-        "U1": (1, -76.168, None, 8.280), "U2": (2, -76.170, None, -4.230),
+        "U1": (1, -62.787, None, 1.375), "U2": (1, -76.170, 90, 8.038),
     },
 }
 
@@ -1252,7 +1345,8 @@ def _pad_with_net(fp, netname):
     return None
 
 
-def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0)):
+def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0),
+                  angle=None):
     """パスコンを IC の**電源ピンがある側**へ、触れない最短距離で寄せる。
 
     どちら側に置くかを手で書かない。**IC の V3V3 パッドが中心のどちら側に
@@ -1289,6 +1383,10 @@ def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0)):
     # **コンデンサの V3V3 側のパッドが IC を向いているか。**
     # 逆を向いていると、わざわざ寄せた意味が半分になる（電流が部品を
     # 回り込む）。向いていなければ 180 度回す。
+    # **向きが指定されていればそれに従う**（利用者が IC を回した場合）。
+    if angle is not None:
+        cap.SetOrientationDegrees(angle)
+        return
     p_v3 = _pad_with_net(cap, "V3V3")
     p_gnd = _pad_with_net(cap, "GND")
     if p_v3 is not None and p_gnd is not None:
@@ -1475,7 +1573,8 @@ def _place_electronics(board, half, net, plate_w):
             _spec = PLACE[half][ic_ref]
             _place_beside(board, cap_ref, ic_ref, _spec[0],
                           _spec[3] if len(_spec) > 3 else 0.0,
-                          DECOUPLE_OFFSET[half].get(cap_ref, (0.0, 0.0)))
+                          DECOUPLE_OFFSET[half].get(cap_ref, (0.0, 0.0)),
+                          DECOUPLE_ANGLE[half].get(cap_ref))
 
 
 def _pour(board, netitem, layers, w, h):
@@ -1708,6 +1807,19 @@ def build(half, keys):
     n_col, n_via, n_skip = prewire_col_bus(board)
     print(f"      {half}: 列のバスを裏面で {n_col} 区間 / 橋のビア {n_via} 個"
           + (f"（引けなかったホップ {n_skip}）" if n_skip else "（全ホップ）"))
+    # **利用者が引いた配線を載せる**（2026-08-22）。列のバスのあとに呼ぶ
+    # ——同じネットの既存の配線を消してから置くので、順番が逆だと
+    # せっかく載せたものを prewire が上書きしてしまう。
+    n_ur, n_uv = apply_matrix_routing(board, half)
+    if n_ur:
+        print(f"      {half}: 利用者の配線を載せた {n_ur} 区間 / ビア {n_uv} 個")
+        # ⚠️ **利用者の配線と当たる GND のビアを打ち直す**（2026-08-22）。
+        # `gnd_fanout.place` は**この配線より前**に呼ばれるので、
+        # あとから載る線を知らない。実測で GND のビアが COL8 のレーンに
+        # 乗り、DRC が短絡 1・クリアランス 1 を出した。
+        n_rm = _drop_gnd_vias_hitting(board)
+        if n_rm:
+            print(f"      {half}: 利用者の配線に当たる GND ビアを {n_rm} 個 外した")
     # 列を MCU へ戻すレーン（表面）。**列のバスのあとに呼ぶ**——
     # バスの端点をレーンへの降り口として使うため。
 
@@ -1744,6 +1856,18 @@ def build(half, keys):
     # 基準電位が連続していることの価値が大きい。**
     # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
     _pour(board, net("GND"), GND_POUR_LAYERS, pcb_w, pcb_h)
+
+    # **ベタを塗り直し、離島を繋ぎ直す**（2026-08-22）。
+    #
+    # ⚠️ **配線を載せたあとにやる。**`_pour` はこの関数の途中で走るので、
+    # そのあとに載る「利用者の配線」を知らない。塗りが古いままだと
+    # DRC が `isolated_copper` を大量に出す（実測 左 36 / 右 60 件）。
+    # 利用者「GND ベタ塗りとか、私が直せてないところは直してほしい」。
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    n_is, n_left = gnd_fanout.stitch_islands(board)
+    if n_is or n_left:
+        print(f"      {half}: ベタを塗り直し / 離島に打ったビア {n_is} 個"
+              f" / 繋げ切れなかった区画 {n_left}")
 
     # **未配線のまま pcb/unrouted/ に出す。**
     # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。

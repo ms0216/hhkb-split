@@ -379,7 +379,14 @@ def _route_once(half, seed):
             f"未配線の基板が無い: {src}\n"
             'KiCad の Python で "tools/gen_pcb.py --no-route" を実行すること')
 
-    board = pcbnew.LoadBoard(str(src))
+    # **DSN の元も正本にする**（2026-08-22）。
+    #
+    # ⚠️ **`pcb/unrouted/` から DSN を作ると、利用者が引いたレーンが
+    # 入らない。**Freerouting はそこを空いていると思って線を引き、
+    # 実測で **短絡 7 件**（COL8 のレーンの上に COL2/COL5/COL6 が乗った）。
+    # レーンは「既にある配線」として渡す必要がある。
+    golden0 = ROOT / "pcb" / "matrix_only" / f"hhkb_split_{half}.kicad_pcb"
+    board = pcbnew.LoadBoard(str(golden0 if golden0.exists() else src))
     dsn = PCB / f"_{half}.dsn"
     ses = PCB / f"_{half}.ses"
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
@@ -474,8 +481,21 @@ def _route_once(half, seed):
         # 決まるが、SES 取り込み後はビアが 38 → 1217 個に増えている。
         # 実測で 13 ホップが「障害物」で落ちた。**凍結とは同じ手順を
         # 回すことではなく、同じ結果を置き直すこと。**
-        n_mx, n_mv = replay_matrix(board, pcbnew.LoadBoard(str(src)))
-        print(f"   {half}: マトリクスを写した {n_mx} 区間 / ビア {n_mv} 個")
+        # **正本は `pcb/matrix_only/`**（2026-08-22・利用者の指示 A）。
+        #
+        # ここには利用者が KiCad で引いた分が入っている——列を MCU へ
+        # 戻す表面のレーン 7 本、COL0→U1、V3V3、COL8 のバス。
+        # **規則として書き下すのではなく、現物を正本にする。**
+        # 私が規則を書こうとして 3 回失敗している（着地で U1 の他の
+        # パッドを横切る／レーンを縦に伸ばして他のレーンと交差する／
+        # 跨がない行に橋を架ける）。
+        #
+        # 無ければ `pcb/unrouted/`（gen_pcb が引いた分だけ）に落ちる。
+        golden = ROOT / "pcb" / "matrix_only" / f"hhkb_split_{half}.kicad_pcb"
+        ref = golden if golden.exists() else src
+        n_mx, n_mv = replay_matrix(board, pcbnew.LoadBoard(str(ref)))
+        print(f"   {half}: マトリクスを写した {n_mx} 区間 / ビア {n_mv} 個"
+              f"（正本 {ref.parent.name}/）")
     else:
         # **電源も引き直す。**上の行バスと同じ理由——**SES 取り込みは
         # 既存の配線を全部置き換える**ので、gen_daughterboard で引いた
