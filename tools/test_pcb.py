@@ -601,7 +601,10 @@ def test_the_board_says_which_half_it_is(half):
     2 種類が届いて見分けがつかないと、組み立ても修理も取り違える。
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
-    assert f"HHKB Split  {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"
+    assert f"SSKB {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"
+    assert "HHKB" not in txt, (
+        f"{half}: 基板に 'HHKB' が刷られている。**他社の商標を物に載せない**"
+        "（2026-08-23・利用者の指示で SSKB にした）")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])

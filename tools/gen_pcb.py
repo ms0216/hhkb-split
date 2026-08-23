@@ -923,6 +923,46 @@ def _drop_stitch_vias(board, tol=0.001):
 
 
 
+# レジストの開口はドリルより一回り大きい。シルクはその外へ逃がす。
+SILK_MASK_MARGIN_MM = 0.20
+# シルクを基板の縁からどれだけ内側に留めるか。
+SILK_EDGE_MM = 0.30
+
+
+def _silk_obstacles(board, skip_ref=None):
+    """シルクが避けるべきもの——**穴**と**他のシルク**を集める。
+
+    （2026-08-23。それまで `_hole_label_boxes` はキーの枠しか見て
+    いなかったので、`ST*` の名札が**キーの中央穴の縁**に立ったまま
+    残っていた。DRC が `silk_over_copper` を左 3・右 4 出していた。）
+
+    **穴はレジストが開くので、シルクが乗ると印字が切り取られる**
+    （KiCad の `Silkscreen clipped by solder mask`）。読めない名札は
+    組む人を迷わせるので、線が無いのと同じ。
+
+    **穴には余白を足す。**レジストの開口はドリルより一回り大きい。
+    """
+    boxes = []
+    for f in board.GetFootprints():
+        if f.GetReference() == skip_ref:
+            continue
+        for pad in f.Pads():
+            r = max(pcbnew.ToMM(pad.GetSize().x), pcbnew.ToMM(pad.GetSize().y),
+                    pcbnew.ToMM(pad.GetDrillSize().x),
+                    pcbnew.ToMM(pad.GetDrillSize().y)) / 2
+            if r <= 0:
+                continue
+            r += SILK_MASK_MARGIN_MM
+            x, y = pad.GetPosition().x / 1e6, pad.GetPosition().y / 1e6
+            boxes.append((x - r, y - r, x + r, y + r))
+        for g in f.GraphicalItems():
+            if g.GetLayerName() in ("F.Silkscreen", "B.Silkscreen"):
+                bb = g.GetBoundingBox()
+                boxes.append((bb.GetLeft() / 1e6, bb.GetTop() / 1e6,
+                              bb.GetRight() / 1e6, bb.GetBottom() / 1e6))
+    return boxes
+
+
 def _hole_label_boxes(board):
     """キーのシルクの枠を集める（名札の逃がし先を決めるため）。"""
     boxes = []
@@ -944,19 +984,86 @@ def _place_hole_label(board, fp, off=3.15, clr=0.15):
     DRC に出させる。名札を消して黙らせない（消すと基板上で穴が
     識別できなくなり、組む人が困る）。
     """
-    boxes = _hole_label_boxes(board)
-    t = fp.Reference()
-    px, py = fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6
+    return _nudge_text(board, fp.Reference(),
+                       fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6,
+                       _hole_label_boxes(board), off, clr)
+
+
+def _nudge_text(board, t, px, py, boxes, off, clr=0.15, rings=1):
+    """文字を、当たらない向きへ動かす。**当たらない先が無ければ動かさない。**
+
+    `boxes` は避ける矩形の一覧。`off` は 1 段目の逃がし量で、
+    `rings` を増やすと 2 倍・3 倍と外へ広げて探す。
+
+    ⚠️ **基板の外へ出さない。**避けることしか見ずに逃がしたら、
+    板名が下端から **1.54mm はみ出した**（2026-08-23。DRC が
+    `silk_edge_clearance` を出して気づいた）。**逃げ場を探すときは、
+    枠の内側かどうかも同時に見る。**
+    """
+    edge = board.GetBoardEdgesBoundingBox()
+    ex0, ey0 = edge.GetLeft() / 1e6 + SILK_EDGE_MM, edge.GetTop() / 1e6 + SILK_EDGE_MM
+    ex1, ey1 = edge.GetRight() / 1e6 - SILK_EDGE_MM, edge.GetBottom() / 1e6 - SILK_EDGE_MM
     bb = t.GetBoundingBox()
     hw = (bb.GetRight() - bb.GetLeft()) / 2e6
     hh = (bb.GetBottom() - bb.GetTop()) / 2e6
-    for dx, dy in ((0, -off), (0, off), (-off, 0), (off, 0)):
-        cx, cy = px + dx, py + dy
-        x0, y0, x1, y1 = cx - hw - clr, cy - hh - clr, cx + hw + clr, cy + hh + clr
-        if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1 for b in boxes):
-            t.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
-            return True
+    for k in range(1, rings + 1):
+        d = off * k
+        for dx, dy in ((0, -d), (0, d), (-d, 0), (d, 0),
+                       (-d, -d), (d, -d), (-d, d), (d, d)):
+            cx, cy = px + dx, py + dy
+            x0, y0 = cx - hw - clr, cy - hh - clr
+            x1, y1 = cx + hw + clr, cy + hh + clr
+            if x0 < ex0 or y0 < ey0 or x1 > ex1 or y1 > ey1:
+                continue                      # 基板の外へ出る
+            if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1
+                       for b in boxes):
+                t.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
+                return True
     return False
+
+
+def _fix_silk_clashes(board):
+    """**シルクが穴や他のシルクに乗っているものを逃がす**（2026-08-23）。
+
+    対象は 3 つ:
+      * `ST*`（スタビ）の名札 — 既定位置が**キーの中央穴（φ4）の縁**
+      * キー名のシルク — `ky + 8.2` が穴や U1 の輪郭に当たることがある
+      * 板名 — 端のスタビの穴に届いていた
+
+    ⚠️ **キー名は 61 個ある。**一律に動かすと、いま合っている 59 個の
+    見え方まで変わる。**当たったものだけ逃がす。**
+
+    戻り値は (逃がした数, 逃がせなかった数)。
+    """
+    moved = stuck = 0
+    for f in board.GetFootprints():
+        if not f.GetReference().startswith("ST"):
+            continue
+        boxes = _silk_obstacles(board, skip_ref=f.GetReference())
+        if _nudge_text(board, f.Reference(),
+                       f.GetPosition().x / 1e6, f.GetPosition().y / 1e6,
+                       boxes, off=2.6, rings=3):
+            moved += 1
+        else:
+            stuck += 1
+    boxes = _silk_obstacles(board)
+    for d in board.GetDrawings():
+        if d.GetClass() != "PCB_TEXT":
+            continue
+        if d.GetLayer() not in (pcbnew.F_SilkS, pcbnew.B_SilkS):
+            continue
+        bb = d.GetBoundingBox()
+        x0, y0 = bb.GetLeft() / 1e6, bb.GetTop() / 1e6
+        x1, y1 = bb.GetRight() / 1e6, bb.GetBottom() / 1e6
+        if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1
+                   for b in boxes):
+            continue
+        px, py = d.GetPosition().x / 1e6, d.GetPosition().y / 1e6
+        if _nudge_text(board, d, px, py, boxes, off=1.3, rings=4):
+            moved += 1
+        else:
+            stuck += 1
+    return moved, stuck
 
 
 
@@ -2041,8 +2148,13 @@ def build(half, keys):
                                          pcbnew.FromMM(JLC["silk_width"])))
 
     # 左右の識別。**2 種類が届いて見分けがつかないと、組み立ても修理も誤る。**
+    #
+    # ⚠️ **板名は "SSKB"。**2026-08-23 に "HHKB Split" から変えた
+    # （利用者「HHKB は商標があってまずそう」）。**基板に刷る文字は
+    # 物として世に出る**ので、他社の商標をそのまま載せない。
+    # この案件が HHKB の再現であることは記録（docs/）に書けば足りる。
     label = pcbnew.PCB_TEXT(board)
-    label.SetText(f"HHKB Split  {half.upper()}")
+    label.SetText(f"SSKB {half.upper()}")
     label.SetPosition(pcbnew.VECTOR2I_MM(ORIGIN[0], ORIGIN[1] + pcb_h / 2 - 3.0))
     label.SetLayer(pcbnew.B_SilkS)
     label.SetMirrored(True)
@@ -2050,6 +2162,14 @@ def build(half, keys):
     label.SetTextThickness(pcbnew.FromMM(0.3))
     board.Add(label)
 
+    # **シルクが穴や他のシルクに乗っているものを逃がす**（2026-08-23）。
+    #
+    # ⚠️ **線幅を太らせたあと・板名を置いたあとに呼ぶ。**当たり判定は
+    # 文字の外接矩形で見るので、太さと文字が揃っていないと実物と合わない。
+    n_mv, n_st = _fix_silk_clashes(board)
+    if n_mv or n_st:
+        print(f"      {half}: シルクを逃がした {n_mv} 個"
+              + (f" / 逃がせなかった {n_st} 個" if n_st else ""))
 
     # GND ベタ（内層 1）。**分割の左右で 2.4GHz を至近距離で動かすので、
     # 基準電位が連続していることの価値が大きい。**
