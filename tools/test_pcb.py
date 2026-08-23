@@ -856,6 +856,80 @@ def test_every_ground_pad_reaches_the_plane(half):
 
 
 @pytest.mark.parametrize("half", NAMES)
+def test_every_ground_pad_has_a_stub_to_a_via_on_its_own_layer(half):
+    """電子部品の GND パッドに、**同層のスタブが触れ、その先が GND ビア**であること。
+
+    上の test_every_ground_pad_reaches_the_plane は「3mm 以内にビアがある」
+    しか見ない。open-gaps #42 の正体は「近くにビアはあるがスタブが別層で、
+    繋いでいたのはベタだった」なので、その距離判定では捕まらない。
+    ここでは B.Cu（部品面）のスタブがパッド中心から出て、線分を辿って
+    GND ビアの中で終わることまで見る（2026-08-24。利用者の手配線が
+    この形になっていることを実測で確認済み。11 パッド全部）。
+    """
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    vias = [(float(x), float(y)) for x, y in
+            re.findall(r'\(via\s*\(at ([-\d.]+) ([-\d.]+)\)'
+                       r'[\s\S]{0,200}?\(net (?:\d+ )?"GND"\)', txt)]
+    segs = [(float(a), float(b), float(c), float(d)) for a, b, c, d in
+            re.findall(r'\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*'
+                       r'\(end ([-\d.]+) ([-\d.]+)\)[\s\S]{0,120}?'
+                       r'\(layer "B\.Cu"\)[\s\S]{0,120}?\(net (?:\d+ )?"GND"\)',
+                       txt)]
+    pads = []
+    for ref, blk in _footprint_blocks(txt):
+        if not ELEC_REF.fullmatch(ref):
+            continue
+        at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
+        ox, oy = float(at.group(1)), float(at.group(2))
+        rot = math.radians(float(at.group(3) or 0))
+        # ⚠️ **裏面（B.Cu）の部品は回転の向きが逆に効く**（鏡像だから。
+        # mirror-confuses-part-orientation-checks の型）。90° 回った
+        # C_U2 / U2 で実測 1.9〜2.6mm ずれた。180° の部品は差が出ないので
+        # 左だけ見ていると気づけない。
+        if re.search(r'\(layer "B\.Cu"\)', blk[:400]):
+            rot = -rot
+        cos, sin = math.cos(rot), math.sin(rot)
+        # ⚠️ 上の検査の `[\s\S]{0,400}?` は**隣のパッドの net まで滑る**
+        # （実測: U1 の pad7 を pad8 の GND で拾い、中心が 0.65mm ずれる。
+        # 3mm 許容だと偶然通る）。パッドの境界を跨がないように区切る。
+        for m in re.finditer(r'\(pad "[^"]*"((?:(?!\(pad ")[\s\S]){0,800}?)'
+                             r'\(net (?:\d+ )?"GND"\)', blk):
+            a = re.search(r"\(at ([-\d.]+) ([-\d.]+)", m.group(1))
+            px, py = float(a.group(1)), float(a.group(2))
+            pads.append((ref, ox + px * cos - py * sin, oy + px * sin + py * cos))
+    assert pads and segs and vias, f"{half}: 走査が壊れている"
+
+    def near(a, b, tol):
+        return abs(a[0] - b[0]) < tol and abs(a[1] - b[1]) < tol
+
+    bad = []
+    for ref, x, y in pads:
+        # パッド中心 0.3mm 以内から出るスタブを起点に、端点共有で辿る
+        front = [(sx2, sy2) for sx, sy, sx2, sy2 in segs if near((sx, sy), (x, y), 0.3)] \
+              + [(sx, sy) for sx, sy, sx2, sy2 in segs if near((sx2, sy2), (x, y), 0.3)]
+        seen = set()
+        hit = False
+        while front and not hit:
+            p = front.pop()
+            if p in seen:
+                continue
+            seen.add(p)
+            if any(near(p, v, 0.4) for v in vias):
+                hit = True
+                break
+            for sx, sy, sx2, sy2 in segs:
+                if near((sx, sy), p, 1e-3):
+                    front.append((sx2, sy2))
+                elif near((sx2, sy2), p, 1e-3):
+                    front.append((sx, sy))
+        if not hit:
+            bad.append((ref, x, y))
+    assert not bad, (
+        f"{half}: 同層スタブで GND ビアに届いていないパッド\n" +
+        "\n".join(f"  {r} ({x:.2f}, {y:.2f})" for r, x, y in bad))
+
+
+@pytest.mark.parametrize("half", NAMES)
 def test_the_routing_was_made_from_the_current_placement(half):
     """配線が、いまの未配線基板から作られたものであること。
 
