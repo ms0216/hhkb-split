@@ -2208,10 +2208,53 @@ def build(half, keys):
     (OUT / "unrouted").mkdir(parents=True, exist_ok=True)
     path = OUT / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(path))
+    _sync_project_rules(path)
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
             (n_sw, n_stab, len(pcb_mount_positions(half)), rows, cols, len(nets)))
 
+
+
+def _sync_project_rules(pcb_path):
+    """**`.kicad_pro` の設計規則を `pcb_rules.JLC` に合わせる**（2026-08-23）。
+
+    ⚠️ **`kicad-cli` の DRC は板ではなく、隣のプロジェクトファイルから
+    規則を読む。**`gen_pcb` は `BOARD_DESIGN_SETTINGS` に値を入れていたが、
+    **`.kicad_pro` は一度も書いていなかった。**そのため
+    `JLC["hole_to_hole"]` を 0.50 → 0.45 に直しても DRC は 0.4995 のまま
+    判定し続けた（同日に実際に起きた）。
+
+    **プロジェクトが正本になってしまっている以上、そこも揃える。**
+    手で同期している限り、また同じことが起きる。
+
+    ⚠️ **規則以外は触らない。**利用者が KiCad で設定した表示や重大度を
+    上書きしない（DRC の severity はここに入っている）。
+    """
+    import json
+    pro = Path(str(pcb_path)[:-len(".kicad_pcb")] + ".kicad_pro")
+    if not pro.exists():
+        return
+    doc = json.loads(pro.read_text())
+    r = doc.get("board", {}).get("design_settings", {}).get("rules")
+    if r is None:
+        return
+    want = {
+        "min_track_width": JLC["track_min"],
+        "min_clearance": JLC["clearance_min"],
+        "min_via_diameter": JLC["via_dia_min"],
+        "min_through_hole_diameter": JLC["hole_min"],
+        "min_hole_to_hole": JLC["hole_to_hole"],
+        "min_copper_edge_clearance": JLC["edge_clearance"],
+        "min_silk_clearance": JLC["silk_width"],
+        "min_via_annular_width": JLC["annular_ring"],
+    }
+    changed = {k: (r.get(k), v) for k, v in want.items() if r.get(k) != v}
+    if not changed:
+        return
+    r.update(want)
+    pro.write_text(json.dumps(doc, indent=2) + "\n")
+    for k, (was, now) in sorted(changed.items()):
+        print(f"      {pro.name}: {k} {was} → {now}")
 
 def main():
     keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
