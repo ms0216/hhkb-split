@@ -441,11 +441,23 @@ def test_matrix_columns_do_not_need_long_crossings(name):
     # ところだった）。書式は実物を見て確かめる。
     for m in re.finditer(
             r"\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
-            r"[\s\S]*?\(net \"([^\"]+)\"\)", txt):
-        net = m.group(5)
+            r"[\s\S]*?\(layer \"([^\"]+)\"\)[\s\S]*?\(net \"([^\"]+)\"\)", txt):
+        net = m.group(6)
         if not re.fullmatch(r"COL\d+", net):
             continue
         x1, y1, x2, y2 = (float(m.group(i)) for i in (1, 2, 3, 4))
+        # ⚠️ **COL を MCU へ戻すレーンは除く**（2026-08-23）。
+        #
+        # 2026-08-19 に、U1/U2 を J_DB の真下へ移した代わりに
+        # **列を表面（F.Cu）の水平レーンで戻す**ことにした（#48）。
+        # これは**意図した横断**で、右 COL8 は 136.8mm ある。
+        # この検査が見たいのは「**意図しない**横断が生まれていないか」。
+        #
+        # **層と向きで区別できる。**マトリクスの列のバスは裏面（B.Cu）を
+        # 縦に走り、レーンは表面（F.Cu）を水平に走る。**両方を満たす
+        # ものだけ除く**——B.Cu の長い水平線が現れたら、それは落ちる。
+        if m.group(5) == "F.Cu" and abs(y1 - y2) < 0.01:
+            continue
         mm = math.dist((x1, y1), (x2, y2))
         if mm > longest:
             longest, where = mm, net
@@ -524,13 +536,22 @@ def test_the_board_declares_the_manufacturer_rules(half):
     """
     # **設計規則は .kicad_pcb ではなく .kicad_pro に入る。**
     # 最初 .kicad_pcb を見ていて「書かれていない」と誤検出した。
+    #
+    # ⚠️ **期待値を手で書かない**（2026-08-23）。以前ここには 0.5 などの
+    # 数字が直接書いてあり、`pcb_rules.JLC` を 0.50 → 0.45 に直したときに
+    # **検査だけが古い値を要求して赤になった。**正本は `pcb_rules.JLC` 一つ。
     import json
+
+    from pcb_rules import JLC
     pro = json.loads((ROOT / f"pcb/hhkb_split_{half}.kicad_pro").read_text())
     rules = pro["board"]["design_settings"]["rules"]
-    for key, mm in (("min_track_width", 0.127), ("min_clearance", 0.127),
-                    ("min_via_diameter", 0.45), ("min_through_hole_diameter", 0.2),
-                    ("min_hole_to_hole", 0.5), ("min_copper_edge_clearance", 0.3),
-                    ("min_via_annular_width", 0.13)):
+    for key, mm in (("min_track_width", JLC["track_min"]),
+                    ("min_clearance", JLC["clearance_min"]),
+                    ("min_via_diameter", JLC["via_dia_min"]),
+                    ("min_through_hole_diameter", JLC["hole_min"]),
+                    ("min_hole_to_hole", JLC["hole_to_hole"]),
+                    ("min_copper_edge_clearance", JLC["edge_clearance"]),
+                    ("min_via_annular_width", JLC["annular_ring"])):
         assert key in rules, f"{half}: 設計規則 {key} が無い"
         assert rules[key] == pytest.approx(mm, abs=1e-6), \
             f"{half}: {key} が {rules[key]}（期待 {mm}）"
@@ -731,37 +752,59 @@ def _expected_electronics(half):
 
 
 @pytest.mark.parametrize("half", NAMES)
-def test_the_electronics_fit_inside_their_band(half):
-    """電子部品のコートヤードが帯 9.25mm の内側にあること。
+def test_the_electronics_do_not_bite_the_key_sockets(half):
+    """電子部品が、キーのソケットにぶつかっていないこと。
 
-    はみ出していると、行のバスやソケットに当たる。**位置の微調整では
-    直らない**（部品そのものが大きい）ので、フットプリントを選び直す
-    必要がある。それを人の目に頼らない。
+    ⚠️ **以前は「帯 9.25mm の内側にいるか」を見ていた**（2026-08-23 に
+    変えた）。帯は**ソケットに当たらない場所**として決めた目安で、
+    **守りたかったのは「当たらないこと」**のほう。
+
+    利用者が U2 を帯の外へ移した（SPI を 89mm → 19mm に縮めるため）
+    ときに、**何にも当たっていないのに赤が出た。**手段を守らせて
+    目的を見失っていた。
+
+    > 「気になるのは、他にもそういう、古いルールや、具体的すぎて
+    >  本来あるべき姿から逸脱している検査はないか」（利用者）
+
+    **いまは実際の重なりを測る。**帯の外でも当たっていなければ通り、
+    帯の中でも当たれば落ちる。
+
+    ⚠️ **走査対象は回路の宣言から導く**（`_expected_electronics`）。
+    **検査対象に入っていない部品は、検査していないのと同じ。**
     """
-    from bands import BAND_H, band_bounds_kicad
+    from bands import SOCK_LO, SOCK_HI, SOCK_X_LO, SOCK_X_HI
+    from layout import load_layout, split_halves
+    from interface import plate_positions
+
     txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
-    bad = []
-    seen = set()
+    keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
+    keys = keys_l if half == "left" else keys_r
+    kpos, _ = plate_positions(keys)
+    # ソケットがキーの周りに占める範囲（KiCad 座標・Y 下向き）。
+    # レイアウトは Y 上向きなので上下が入れ替わる。
+    ox, oy = 150.0, 100.0
+    socks = [(ox + kx + SOCK_X_LO, oy - ky - SOCK_HI,
+              ox + kx + SOCK_X_HI, oy - ky - SOCK_LO) for kx, ky in kpos]
+
+    bad, seen = [], set()
     for ref, blk in _footprint_blocks(txt):
         if not ELEC_REF.fullmatch(ref):
             continue
         bb = _courtyard_bbox(blk)
         assert bb is not None, f"{half}: {ref} にコートヤードが無い"
         seen.add(ref)
-        # どの帯に属するかは、部品の中心がいちばん近い帯で決める。
-        mid = (bb[1] + bb[3]) / 2
-        i = min(range(4), key=lambda k: abs(sum(band_bounds_kicad(k)) / 2 - mid))
-        lo, hi = band_bounds_kicad(i)
-        if bb[1] < lo - 1e-6 or bb[3] > hi + 1e-6:
-            bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} "
-                       f"(高さ {bb[3] - bb[1]:.3f}) が帯 {i} "
-                       f"{lo:.3f}..{hi:.3f} からはみ出す")
+        for (sx0, sy0, sx1, sy1) in socks:
+            if bb[0] < sx1 and sx0 < bb[2] and bb[1] < sy1 and sy0 < bb[3]:
+                bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} が "
+                           f"ソケットの占有範囲 ({sx0:.2f},{sy0:.2f})-"
+                           f"({sx1:.2f},{sy1:.2f}) と重なる")
+                break
     want = _expected_electronics(half)
     assert seen == want, (
         f"{half}: 走査できた部品が回路の宣言と一致しない。\n"
         f"  拾えなかった: {sorted(want - seen)}\n"
         f"  余計に拾った: {sorted(seen - want)}")
-    assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
+    assert not bad, f"{half}: キーのソケットに当たる部品\n" + "\n".join(bad)
 
 
 # `test_the_ground_stays_one_island_after_routing` は削除した（2026-08-12）。

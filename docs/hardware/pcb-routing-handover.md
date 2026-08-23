@@ -212,7 +212,7 @@ DRC を回すと既定値で走り、`hole_to_hole` 34 件が消えて
 | `test_every_ground_pad_reaches_the_plane` | GND パッドの脇にビア。外すと未配線が左 6・右 7 件 |
 | `test_there_are_enough_ground_vias_to_tie_the_two_planes` | GND ビアが下限（`MIN_GND_VIAS`）以上あること（指摘 4） |
 | `test_few_pieces_of_ground_copper_are_left_floating` | 浮いた GND の区画が増えていないこと（指摘 5 の番人。必達は 0 個） |
-| `test_the_electronics_fit_inside_their_band` | 帯 9.25mm からのはみ出し。走査の正解は `circuit.py` の宣言から導く |
+| `test_the_electronics_do_not_bite_the_key_sockets` | **電子部品がキーのソケットに当たっていないこと。**走査の正解は `circuit.py` の宣言から導く。⚠️ **2026-08-23 に「帯 9.25mm の内側か」から変えた**——帯は手段で、目的は「当たらないこと」。利用者が U2 を帯の外へ移したら、**何にも当たっていないのに赤が出た** |
 | `test_the_board_declares_the_netclass_used_for_routing` | **自動配線器はネットクラスしか見ない。**既定値頼みにしない |
 | `test_the_routing_was_made_from_the_current_placement` | 配置を変えたのに配線し直していない状態 |
 | `test_the_ffc_cable_reaches_the_daughterboard` | FFC が子基板まで届くこと。**部品を動かすと黙って届かなくなる** |
