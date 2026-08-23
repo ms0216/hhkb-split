@@ -14,7 +14,7 @@
 | 7 | 「まだ決めていない判断」の期限切れ 3 行を締めた（#23 の案選び・#23 の前提・#41）。DRC 記録と ★ 表で裏取り | 2026-08-23 の決着群が一覧に未反映だった | drc_left.json（違反 0・未配線 0）ほか | 22577bc | |
 | 8 | D_PWR の実装向きを #52 へ改番（**#42 が 2 件重複**していた）。fab-checklist の 3（FFC）・4（アンテナ）も決着内容へ更新 | 番号衝突は参照の混線源。発注直前資料が「未確定」のまま古かった | test_invariants 23 件緑（門の見出しは不変） | 6ce8d06 | |
 | 9 | 実形状の組み立て干渉検査（gen_assembly・約20分）を夜間に 1 周——**左右とも干渉 0** を再確認（変更なし・検証のみ） | 今夜の変更後の全体裏取り | gen_assembly OK 左右 22 部品 | — | 記録のみ |
-| 10 | 配線の入口文書（pcb-routing-handover.md）の手順を手配線凍結後の現行フローに更新。Freerouting 記述は経緯として残置 | 入口文書が旧手順（Freerouting）を案内していた | 現行フローは finalize_pcb.py の docstring・CLAUDE.md と一致 | （handover 更新のコミット） | |
+| 10 | 配線の入口文書（pcb-routing-handover.md）の手順を手配線凍結後の現行フローに更新。Freerouting 記述は経緯として残置 | 入口文書が旧手順（Freerouting）を案内していた | 現行フローは finalize_pcb.py の docstring・CLAUDE.md と一致 | cbecaa0 | |
 | 11 | slice の出力を build/slice/<プリンタ>/<部品>/ に分離し、旧ディレクトリを一掃（battery_lid の gcode 残骸も消えた）。fab-checklist 2 番の在庫を実データで確認・日付入りで記録（全 7 品番在庫あり・最薄 FFC 2,408） | 他方プリンタの古い gcode が成功判定を騙す。在庫記録は発注前の要件 | k1max 1 部品で再スライス成功・新レイアウト確認 | c23b9e2 | |
 
 ## 方針
