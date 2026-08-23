@@ -15,7 +15,15 @@
                           K1 Max ＋ 実際のフィラメントで 1 枚刷り、
                           どの逃げが「入るが緩くない」かを見る。
 
+  5. rf_spacer_*.stl   — **アンテナの実測（open-gaps #23・手 0）で、
+                          アルミ箔や電池をアンテナから決まった距離に
+                          置くための台。**紙を数えるより正確で、
+                          C と F で同じものを使い回せる。
+
 いずれも数分で刷れる大きさ。材料はどれでもよい。
+
+⚠️ **rf_spacer だけは材料に条件がある**——**金属を混ぜたフィラメントは
+使わない**（カーボン入り・金属入りは導電性がある）。PLA・PETG でよい。
 """
 
 import sys
@@ -30,6 +38,7 @@ from build123d import (
     BuildPart,
     BuildSketch,
     Cylinder,
+    Location,
     Locations,
     Mode,
     Plane,
@@ -115,6 +124,70 @@ COUPON_T = 4.0            # 板厚
 COUPON_PITCH = 14.0
 
 
+# アンテナの実測（open-gaps #23・task-c3-ble-split §6-6b）で使う台の厚み。
+#
+# **数字は設計の実測から来ている。**手で決めた値ではない:
+#
+#   5.0mm  アンテナ → 本体基板の最短距離 **5.24mm**
+#          （`test_the_antenna_keeps_its_distance_from_the_main_board`
+#            が守っている値。C の測定で使う）
+#   4.0mm  **作り直す前の姿**（アンテナの真上に地板があった頃）。
+#          F の測定で使う。現在の幾何とは一致しなくてよい
+#
+# ⚠️ **17mm（D の電池）は刷らない。**§6-6b に「**定規で測って置くだけ
+# （スペーサー不要）**」と書いてある。**電池は横に置くだけ**なので、
+# 浮かせる台は要らない。刷ると層が 85 になり、**3 個ぶんの印刷時間の
+# 半分以上をここが占める**（2026-08-23・利用者「とにかく高速に」）。
+#
+# ⚠️ **薄いほうが厳しい側**なので、刷り上がりが少し薄くても安全側に外れる。
+# **測って記録すれば読める**（§6-6b「ぴったりでなくてよい」）。
+RF_SPACER_MM = (4.0, 5.0)
+
+# **小さい柱を 3 本。**（2026-08-23・利用者「あくまで実験用なので、
+# とにかく高速に印刷できるものがいい」）
+#
+# ⚠️ **測定に要るのは「厚み」だけで、面積は要らない。**
+# 最初は 40×40mm の枠にしたが、**載せるのはアルミ箔か電池**なので
+# 支える点が 3 つあれば足りる。**体積が 1/10 以下になる。**
+#
+# **3 本なのは、3 点で面が決まるから。**4 本だとガタつく。
+RF_PILLAR_D = 8.0          # 柱の直径
+RF_PILLAR_SPREAD = 30.0    # 3 本を置く円の直径
+RF_SPACER_LABEL_H = 0.6    # 厚みを表す刻みの深さ
+
+
+def build_rf_spacer(h):
+    """アンテナの実測で使う台。**厚みが分かっていることだけが大事。**
+
+    **柱 3 本と、それを繋ぐ細い桟。**載せるのはアルミ箔か電池なので
+    強度は要らない。**速く刷ることを優先する。**
+
+    ⚠️ **金属入りフィラメントで刷らないこと。**導電性があると
+    測っているもの（導体を近づけた影響）に混ざる。
+    """
+    import math
+    r = RF_PILLAR_SPREAD / 2
+    pts = [(r * math.cos(math.radians(a)), r * math.sin(math.radians(a)))
+           for a in (90, 210, 330)]
+    with BuildPart() as sp:
+        # 柱 3 本
+        for x, y in pts:
+            with Locations((x, y, 0)):
+                Cylinder(RF_PILLAR_D / 2, h,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 桟。**柱どうしを細い角材で繋ぐだけ**（バラけないように）。
+        # 薄いので刷る時間はほとんど増えない。
+        base = min(h, 1.2)
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:] + pts[:1]):
+            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+            L = math.dist((x1, y1), (x2, y2))
+            ang = math.degrees(math.atan2(y2 - y1, x2 - x1))
+            with Locations(Location((mx, my, 0), (0, 0, ang))):
+                Box(L, RF_PILLAR_D * 0.5, base,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return sp.part
+
+
 def build_clearance_coupon():
     """逃げ違いの穴を並べた板。丸穴と角穴の両方を見る。
 
@@ -174,6 +247,17 @@ def main():
         print(f"  {n:8s} 段の高さ {z:5.1f}mm")
     bb = part.bounding_box().size
     print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
+
+    print("\nアンテナ実測用のスペーサー（open-gaps #23 の手 0 / §6-6b）")
+    print("  ⚠️ **金属入りフィラメントで刷らないこと**（導電性がある）")
+    for h in RF_SPACER_MM:
+        part = build_rf_spacer(h)
+        name = f"rf_spacer_{str(h).replace('.', 'p')}mm"
+        mesh, stl = to_mesh(part, name)
+        assert_watertight(mesh, stl.name)
+        use = {4.0: "F: ホイルを真上 4mm（作り直す前の姿）",
+               5.0: "C: ホイルを斜め上 5mm（本体基板）"}[h]
+        print(f"  {h:5.1f}mm  {use}  -> {stl.name}")
     return 0
 
 
