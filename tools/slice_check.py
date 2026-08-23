@@ -91,10 +91,13 @@ def find_profiles(printer="k1max"):
     return m, f, pr
 
 
-def slice_one(binary, stl, machine, filament, process):
+def slice_one(binary, stl, machine, filament, process, printer="k1max"):
     # 出力名は入力名によらず plate_N.gcode になるので、部品ごとに別の
     # ディレクトリへ出す（同じ場所に出すと上書きされて区別できない）。
-    outdir = OUT / stl.stem
+    # **プリンタごとにも分ける**——分けないと a1mini の失敗ディレクトリに
+    # k1max の古い gcode が残り、「gcode がある＝成功」の判定を騙す
+    # （2026-08-23 に実際に紛らわしかった）。
+    outdir = OUT / printer / stl.stem
     outdir.mkdir(parents=True, exist_ok=True)
     cmd = [
         str(binary),
@@ -175,7 +178,7 @@ def main(names=None, printer="k1max"):
 
     failed = []
     for stl in stls:
-        r, outdir = slice_one(binary, stl, machine, filament, process)
+        r, outdir = slice_one(binary, stl, machine, filament, process, printer)
         out = (r.stdout or "") + (r.stderr or "")
         warns = sorted(set(
             line.strip() for line in out.splitlines()
