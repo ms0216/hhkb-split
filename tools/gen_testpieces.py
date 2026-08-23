@@ -172,8 +172,8 @@ def build_rf_spacer_pair():
     ⚠️ **使うときは折らない。**そのまま 2 つの高さの台として使える
     （C では 5mm 側に、F では 4mm 側にアルミ箔を載せる）。
     """
-    a = build_rf_spacer(4.0)
-    b = build_rf_spacer(5.0)
+    a = build_rf_spacer(RF_SPACER_MM[0])
+    b = build_rf_spacer(RF_SPACER_MM[1])
     gap = RF_PILLAR_SPREAD + RF_PILLAR_D + 6.0
     with BuildPart() as pair:
         add(a.moved(Location((-gap / 2, 0, 0))))
