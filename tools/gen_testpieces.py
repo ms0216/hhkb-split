@@ -241,6 +241,25 @@ def build_clearance_coupon():
     return coupon.part
 
 
+# A1 mini のベッド端の実効幅を測る試し板（open-gaps #51）。
+#
+# 右ケースの分割面を 2.1mm 詰めると 177.6mm になる（外側の縁は実機再現
+# なので触れない）。**この幅が A1 mini（公称 180×180）で実際に刷れるかは
+# 位置決め誤差と初層の潰れ次第で、機械では決められない**ので現物で測る。
+#
+# 使い方: スライサーで**回転させず**、ベッドの手前端いっぱいに手で置いて
+# 刷る。端が欠ける・剥がれる・置けないなら、その幅は使えない。
+A1_STRIP_MM = (177.6, 10.0, 1.0)
+
+
+def build_bed_edge_strip():
+    """幅 177.6mm の細長い板。数分・数円で「置けるか」だけを見る。"""
+    w, d, h = A1_STRIP_MM
+    with BuildPart() as strip:
+        Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return strip.part
+
+
 def main():
     BUILD.mkdir(exist_ok=True)
 
@@ -287,6 +306,14 @@ def main():
     print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
     print("     **低いほう** 4.0mm  F: ホイルを真上 4mm（作り直す前の姿）")
     print("     **高いほう** 5.0mm  C: ホイルを斜め上 5mm（本体基板）")
+
+    print("\nA1 mini ベッド端の試し板（open-gaps #51・分割面 2.1mm 詰め案の可否）")
+    print("  ⚠️ スライサーで**回転させず**、ベッド端いっぱいに手で置くこと")
+    part = build_bed_edge_strip()
+    mesh, stl = to_mesh(part, "bed_edge_strip")
+    assert_watertight(mesh, stl.name)
+    bb = part.bounding_box().size
+    print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
     return 0
 
 
