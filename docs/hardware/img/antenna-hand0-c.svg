@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="1240" viewBox="0 0 1020 1240">
+<defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L6,2.5 z" fill="#c0392b"/></marker></defs>
+<rect width="1020" height="1240" fill="#fdfdfb"/>
+<text x="30" y="40" font-size="25" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C の測り方（直した版）— 板は XIAO の「外側」に立てる</text>
+<rect x="30" y="70" width="960" height="96" fill="#fff0f0" stroke="#b03a3a" stroke-width="2" rx="6"/>
+<text x="50" y="98" font-size="17" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 前の図は間違っていた</text>
+<text x="50" y="124" font-size="15" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">板を XIAO の途中に立てていた。XIAO は 21mm あるので、そこには置けない。</text>
+<text x="50" y="148" font-size="15" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナは XIAO の端にある。板はその外側、アンテナに向き合う位置に立てる。</text>
+<text x="30" y="200" font-size="19" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">正しい置き方（横から見る）</text>
+<line x1="60" y1="330" x2="900" y2="330" stroke="#aaa" stroke-width="2.5"/>
+<text x="906" y="335" font-size="13" text-anchor="start" font-weight="normal" fill="#888" font-family="Hiragino Sans, Noto Sans JP, sans-serif">机</text>
+<rect x="300" y="314" width="210" height="16" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="300" y="314" width="35" height="16" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="420" y="326" font-size="14" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO（21mm）</text>
+<text x="317" y="354" font-size="12" text-anchor="middle" font-weight="normal" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナ</text>
+<text x="317" y="372" font-size="11" text-anchor="middle" font-weight="normal" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">（端にある）</text>
+<rect x="240" y="210" width="14" height="120" fill="#e8dcc8" stroke="#8a7a4a" stroke-width="2" rx="2"/>
+<rect x="242" y="214" width="10" height="112" fill="#d0d0d0" stroke="#666" stroke-width="1.5" rx="1"/>
+<text x="100" y="234" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミ箔を</text>
+<text x="100" y="254" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">貼った板</text>
+<text x="100" y="274" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">（垂直）</text>
+<line x1="180" y1="260" x2="236" y2="270" stroke="#8a7a4a" stroke-width="1.5"/>
+<line x1="256" y1="290" x2="300" y2="290" stroke="#c0392b" stroke-width="1.8" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="278.0" y="278" font-size="15" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">この隙間</text>
+<text x="560" y="240" font-size="15" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">板は XIAO の外。アンテナと向き合わせる。</text>
+<text x="560" y="266" font-size="14" text-anchor="start" font-weight="normal" fill="#666" font-family="Hiragino Sans, Noto Sans JP, sans-serif">立て方は自由（本に立てかける・手で持つ）。</text>
+<rect x="30" y="440" width="960" height="120" fill="#f0f7ff" stroke="#2c6fad" stroke-width="2" rx="6"/>
+<text x="50" y="470" font-size="18" text-anchor="start" font-weight="bold" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 「5mm」に確信が持てないので、距離を変えて 4 点測る</text>
+<text x="50" y="498" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">記録には 5.24mm とあるが、その計算元が見つからない。根拠として挙がっている検査も存在しない。</text>
+<text x="50" y="522" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">距離を振って測れば、あとで正しい距離が判明しても読める。「距離と減衰の関係」が残る。</text>
+<text x="50" y="546" font-size="16" text-anchor="start" font-weight="bold" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-1: 3mm ／ C-2: 5mm ／ C-3: 10mm ／ C-4: 20mm</text>
+<text x="30" y="590" font-size="19" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-1 〜 C-4（板を近づけていく）</text>
+<line x1="70" y1="720" x2="450" y2="720" stroke="#aaa" stroke-width="2"/>
+<rect x="220" y="708" width="84" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="220" y="708" width="14" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="270" y="718" font-size="11" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="198" y="668" width="10" height="52" fill="#e8dcc8" stroke="#8a7a4a" stroke-width="2" rx="2"/>
+<line x1="208" y1="690" x2="220" y2="690" stroke="#c0392b" stroke-width="1.8" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="214.0" y="680" font-size="15" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">3mm</text>
+<text x="70" y="658" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-1</text>
+<line x1="540" y1="720" x2="920" y2="720" stroke="#aaa" stroke-width="2"/>
+<rect x="690" y="708" width="84" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="690" y="708" width="14" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="740" y="718" font-size="11" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="660" y="668" width="10" height="52" fill="#e8dcc8" stroke="#8a7a4a" stroke-width="2" rx="2"/>
+<line x1="670" y1="690" x2="690" y2="690" stroke="#c0392b" stroke-width="1.8" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="680.0" y="680" font-size="15" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">5mm</text>
+<text x="540" y="658" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-2</text>
+<line x1="70" y1="870" x2="450" y2="870" stroke="#aaa" stroke-width="2"/>
+<rect x="220" y="858" width="84" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="220" y="858" width="14" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="270" y="868" font-size="11" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="170" y="818" width="10" height="52" fill="#e8dcc8" stroke="#8a7a4a" stroke-width="2" rx="2"/>
+<line x1="180" y1="840" x2="220" y2="840" stroke="#c0392b" stroke-width="1.8" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="200.0" y="830" font-size="15" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">10mm</text>
+<text x="70" y="808" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-3</text>
+<line x1="540" y1="870" x2="920" y2="870" stroke="#aaa" stroke-width="2"/>
+<rect x="690" y="858" width="84" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="690" y="858" width="14" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="740" y="868" font-size="11" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="600" y="818" width="10" height="52" fill="#e8dcc8" stroke="#8a7a4a" stroke-width="2" rx="2"/>
+<line x1="610" y1="840" x2="690" y2="840" stroke="#c0392b" stroke-width="1.8" marker-start="url(#a)" marker-end="url(#a)"/>
+<text x="650.0" y="830" font-size="15" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">20mm</text>
+<text x="540" y="808" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C-4</text>
+<text x="70" y="970" font-size="14" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 3mm は「板と XIAO が触れない」ぎりぎり。触れたら少し離して、実際の値を記録する。</text>
+<text x="30" y="1010" font-size="19" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">そのあと E と F</text>
+<text x="30" y="1038" font-size="15" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">E：C-2（5mm）の状態のまま、リード線 80mm を GND へ挿し、電池を横 17mm に置く。これが最終判定。</text>
+<text x="30" y="1064" font-size="15" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">F：板を外し、刷ったジグの低いほう（4mm）を XIAO の両脇に置いて、板を真上に水平に渡す。</text>
+<text x="30" y="1090" font-size="14" text-anchor="start" font-weight="normal" fill="#666" font-family="Hiragino Sans, Noto Sans JP, sans-serif">（F は「作り直す前の姿」の再現。参考値）</text>
+<rect x="30" y="1120" width="960" height="96" fill="#fffdf5" stroke="#d9a441" stroke-width="2" rx="6"/>
+<text x="50" y="1146" font-size="16" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">メモすること</text>
+<text x="50" y="1170" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">箔の大きさ ___ cm 角 ／ C-1〜C-4 それぞれ「実際の距離」と「最強・最弱 dBm」</text>
+<text x="50" y="1194" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">E と F も同じく最強・最弱。⚠ XIAO・スマホ・USB は動かさない。</text>
+</svg>

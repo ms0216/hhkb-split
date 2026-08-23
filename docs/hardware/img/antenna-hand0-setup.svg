@@ -34,23 +34,23 @@
 <text x="84" y="430" font-size="12" text-anchor="start" font-weight="normal" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナの</text>
 <text x="84" y="446" font-size="12" text-anchor="start" font-weight="normal" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">脇を通す</text>
 <text x="60" y="566.0" font-size="13" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 繋がっていないと「共振していない」という都合のよい答えが出る。測る前後で接触を確かめること。</text>
-<text x="30" y="630" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C  ＋ アルミホイルを「斜め上 5mm」（本体基板を模擬）</text>
-<text x="30" y="652" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">真横でも真上でもない。本体基板はアンテナのやや前方・やや上にある。最短で 5mm になるよう斜めに構える。</text>
+<text x="30" y="630" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C  ＋ アルミ箔を貼った板を「垂直に立てて」アンテナへ近づける</text>
+<text x="30" y="652" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナは XIAO の端にある。板はその外側に、アンテナと向き合わせて立てる（XIAO の途中には置けない）。</text>
 <text x="90" y="682" font-size="14" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">【横から見た図】</text>
 <line x1="70" y1="786" x2="510" y2="786" stroke="#aaa" stroke-width="2"/>
 <text x="514" y="790" font-size="13" text-anchor="start" font-weight="normal" fill="#888" font-family="Hiragino Sans, Noto Sans JP, sans-serif">机</text>
-<rect x="150" y="774" width="120" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
-<rect x="150" y="774" width="26" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
-<text x="210" y="768" font-size="13" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
-<rect x="290" y="756" width="14" height="30" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
-<rect x="410" y="756" width="14" height="30" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
-<text x="357" y="778" font-size="12" text-anchor="middle" font-weight="normal" fill="#6a8a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">スペーサー 5mm 側</text>
-<path d="M 240 720 L 450 756" stroke="#666" stroke-width="7" stroke-linecap="round" fill="none"/>
-<text x="390" y="716" font-size="13" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミホイル（10cm 角）</text>
-<line x1="166" y1="772" x2="240" y2="724" stroke="#c0392b" stroke-width="1.6" marker-start="url(#ar2)" marker-end="url(#ar2)"/>
-<text x="203.0" y="742.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">最短 5mm</text>
-<text x="90" y="816" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミ箔の「いちばん近い角」が、アンテナから 5mm。ずれてよい。測って記録すれば読める。</text>
-<text x="90" y="836" font-size="13" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 箔が垂れると 5mm より近くなる。縁を 5mm ほど折り返して腰を持たせる。</text>
+<rect x="210" y="774" width="180" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="210" y="774" width="30" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="315" y="768" font-size="13" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO（21mm）</text>
+<text x="225" y="806" font-size="12" text-anchor="middle" font-weight="normal" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナ</text>
+<text x="225" y="822" font-size="11" text-anchor="middle" font-weight="normal" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">（端にある）</text>
+<rect x="170" y="706" width="12" height="80" fill="#d9d9d9" stroke="#666" stroke-width="2" rx="2"/>
+<text x="190" y="696" font-size="13" text-anchor="middle" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミ箔を貼った板（垂直）</text>
+<line x1="182" y1="750" x2="210" y2="750" stroke="#c0392b" stroke-width="1.6" marker-start="url(#ar2)" marker-end="url(#ar2)"/>
+<text x="196.0" y="744.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif"></text>
+<text x="196" y="738" font-size="13" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">この隙間</text>
+<text x="90" y="846" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">板は XIAO の外側。立て方は自由（本に立てかける・手で持つ）。</text>
+<text x="90" y="866" font-size="13" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 距離は振って測る（C-近＝数 mm ／ C-遠＝約 2cm）。実測値を記録すれば後から読める。</text>
 <text x="30" y="890" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">D  ＋ 単3 電池 2 本を「横 17mm」</text>
 <text x="30" y="912" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">定規で測って横に置くだけ。スペーサーは要らない。</text>
 <rect x="90" y="934" width="105.0" height="90.0" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="3"/>
