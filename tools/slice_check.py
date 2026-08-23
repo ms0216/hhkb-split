@@ -32,10 +32,26 @@ PROFILES = APP / "Contents/Resources/profiles"
 
 # プロファイル名の表記はバンドル内で揺れている（machine は "K1 Max"、
 # process は "K1Max" と空白の有無が違う）。ヒントは実際の綴りに合わせる。
-PRINTER_HINTS = ["K1 Max (0.4 nozzle)", "K1 Max", "K1"]
-FILAMENT_HINTS = ["Creality Generic PLA @K1-all", "Generic PLA @K1", "Generic PLA"]
-PROCESS_HINTS = ["0.20mm Standard @Creality K1Max (0.4 nozzle)",
-                 "0.20mm Standard @Creality K1", "0.20mm Standard"]
+#
+# **A1 mini はプリンタが変わる可能性が高いので併記**（2026-08-23・利用者）。
+# `--printer a1mini` で切り替える。ベッドは 180×180（K1 Max は 300×300）で、
+# case_right / topcase_right（幅 179.7mm）が入るかが焦点。
+PRINTERS = {
+    "k1max": dict(
+        vendor="Creality", key="K1",
+        machine=["K1 Max (0.4 nozzle)", "K1 Max", "K1"],
+        filament=["Creality Generic PLA @K1-all", "Generic PLA @K1",
+                  "Generic PLA"],
+        process=["0.20mm Standard @Creality K1Max (0.4 nozzle)",
+                 "0.20mm Standard @Creality K1", "0.20mm Standard"],
+    ),
+    "a1mini": dict(
+        vendor="BBL", key="A1 mini",
+        machine=["Bambu Lab A1 mini 0.4 nozzle", "Bambu Lab A1 mini"],
+        filament=["Generic PLA @BBL A1M", "Generic PLA"],
+        process=["0.20mm Standard @BBL A1M", "0.20mm Standard"],
+    ),
+}
 
 
 def find_binary():
@@ -57,19 +73,21 @@ def pick(paths, hints, label):
     raise SystemExit(f"{label} のプロファイルが見つからない")
 
 
-def find_profiles(vendor="Creality"):
-    base = PROFILES / vendor
+def find_profiles(printer="k1max"):
+    cfg = PRINTERS[printer]
+    base = PROFILES / cfg["vendor"]
     if not base.exists():
         raise SystemExit(f"{base} が無い。導入されている vendor: "
                          f"{[p.name for p in PROFILES.iterdir()][:10]}")
     machines = sorted((base / "machine").glob("*.json"))
     filaments = sorted((base / "filament").glob("*.json"))
     processes = sorted((base / "process").glob("*.json"))
-    m = pick([p for p in machines if "K1" in p.stem], PRINTER_HINTS, "プリンタ") \
-        if any("K1" in p.stem for p in machines) else pick(machines, PRINTER_HINTS, "プリンタ")
-    f = pick(filaments, FILAMENT_HINTS, "フィラメント")
-    pr = pick([p for p in processes if "K1" in p.stem] or processes,
-              PROCESS_HINTS, "プロセス")
+    key = cfg["key"]
+    m = pick([p for p in machines if key in p.stem] or machines,
+             cfg["machine"], "プリンタ")
+    f = pick(filaments, cfg["filament"], "フィラメント")
+    pr = pick([p for p in processes if key in p.stem or "A1M" in p.stem]
+              or processes, cfg["process"], "プロセス")
     return m, f, pr
 
 
@@ -118,9 +136,9 @@ def summarize_gcode(gcode):
     return info
 
 
-def main(names=None):
+def main(names=None, printer="k1max"):
     binary = find_binary()
-    machine, filament, process = find_profiles()
+    machine, filament, process = find_profiles(printer)
     print(f"プリンタ     {machine.stem}")
     print(f"フィラメント {filament.stem}")
     print(f"プロセス     {process.stem}\n")
@@ -134,11 +152,16 @@ def main(names=None):
     # 残り、ここが拾って合格を出していた。**存在しない部品を刷らせる。**
     # 調査中に出した残骸（lid.stl / c.stl）も同じように拾っていた。
     # 生成器側でも片付けるようにしたが、警告だけでは誰も読まず、
-    # 廃止済みの tilt_foot_3.stl / tilt_foot_6.stl（改名前の残骸）を
+    # 廃止済みの tilt_foot_3.stl / tilt_foot_6.stl（改名前の残骸。
+    # **正体は test_case.py が pytest のたびに同名で書き戻していたこと。**
+    # 2026-08-23 に `_` 始まりへ変えて根を断った）を
     # 8 か月「刷れます」と言い続けた（2026-08-13）。
     # **古い STL はスライスせず、検査を赤にする。**
+    # slice_check.py 自身は形状を作らないので比較から外す
+    # （外さないと、この検査を編集しただけで全 STL が「古い」になる）。
     newest = max((q.stat().st_mtime for q in TOOLS.glob("*.py")
-                  if not q.name.startswith("test_")), default=0.0)
+                  if not q.name.startswith("test_")
+                  and q.name != "slice_check.py"), default=0.0)
     stale = [p for p in stls if p.stat().st_mtime < newest]
     if stale:
         print("!! tools/*.py より古い STL がある。作り直すか、消すこと"
@@ -185,4 +208,12 @@ def main(names=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:] or None))
+    args = sys.argv[1:]
+    printer = "k1max"
+    if "--printer" in args:
+        i = args.index("--printer")
+        printer = args[i + 1]
+        del args[i:i + 2]
+    if printer not in PRINTERS:
+        raise SystemExit(f"--printer は {sorted(PRINTERS)} のどれか")
+    sys.exit(main(args or None, printer))
