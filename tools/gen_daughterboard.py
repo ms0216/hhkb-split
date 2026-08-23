@@ -34,7 +34,7 @@ UNROUTED = OUT / "unrouted"
 # **gen_pcb と同じ原点を使う。**外形を描く _rounded_rect_outline が
 # gen_pcb.ORIGIN を参照しているので、ここだけ別の値にすると外形と部品が
 # 50mm ずれる（レンダリングが空になって気づいた）。
-from gen_pcb import ORIGIN  # noqa: E402
+from gen_pcb import ORIGIN, _sync_project_rules  # noqa: E402
 
 # 外形はケース側の造作と一致させる。**DB_W の出所は interface.py 1 つ**
 # （ケース・子基板・本体基板の 3 つが読む。前は 21.0 を 2 か所に書いていた）。
@@ -457,6 +457,13 @@ def build():
     UNROUTED.mkdir(parents=True, exist_ok=True)
     path = UNROUTED / "hhkb_split_daughterboard.kicad_pcb"
     board.Save(str(path))
+    # **プロジェクトファイルの規則も揃える**（2026-08-23）。
+    # ⚠️ **kicad-cli の DRC は板ではなく隣の `.kicad_pro` から規則を読む。**
+    # ここが抜けていたため、子基板だけ `min_hole_to_hole` が 0.50 のまま
+    # 判定されていた（左右は 0.45。#50 で「根拠なく厳しい」と決着した値）。
+    # 実害は出ていなかった（0.45〜0.50 に入る穴が無く warnings 0）が、
+    # **3 枚のうち 1 枚だけ違う規則で見ている**状態だった。
+    _sync_project_rules(path)
     return path, len(nets)
 
 
