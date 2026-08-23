@@ -249,14 +249,19 @@ def build_clearance_coupon():
 #
 # 使い方: スライサーで**回転させず**、ベッドの手前端いっぱいに手で置いて
 # 刷る。端が欠ける・剥がれる・置けないなら、その幅は使えない。
-A1_STRIP_MM = (177.6, 10.0, 1.0)
+#
+# 幅は 2 種類:
+#   177.6  分割面+外側とも最大に詰めた案（✅ 2026-08-24 実測で刷れた）
+#   178.5  推奨案（隙間0.9 + ベゼル壁1.2 + ケース側壁2.0・基板無傷）の幅
+A1_STRIP_WIDTHS = (177.6, 178.5)
+A1_STRIP_D, A1_STRIP_H = 10.0, 1.0
 
 
-def build_bed_edge_strip():
-    """幅 177.6mm の細長い板。数分・数円で「置けるか」だけを見る。"""
-    w, d, h = A1_STRIP_MM
+def build_bed_edge_strip(w):
+    """幅 w の細長い板。数分・数円で「置けるか」だけを見る。"""
     with BuildPart() as strip:
-        Box(w, d, h, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        Box(w, A1_STRIP_D, A1_STRIP_H,
+            align=(Align.CENTER, Align.CENTER, Align.MIN))
     return strip.part
 
 
@@ -307,13 +312,15 @@ def main():
     print("     **低いほう** 4.0mm  F: ホイルを真上 4mm（作り直す前の姿）")
     print("     **高いほう** 5.0mm  C: ホイルを斜め上 5mm（本体基板）")
 
-    print("\nA1 mini ベッド端の試し板（open-gaps #51・分割面 2.1mm 詰め案の可否）")
+    print("\nA1 mini ベッド端の試し板（open-gaps #51・幅詰め案の可否）")
     print("  ⚠️ スライサーで**回転させず**、ベッド端いっぱいに手で置くこと")
-    part = build_bed_edge_strip()
-    mesh, stl = to_mesh(part, "bed_edge_strip")
-    assert_watertight(mesh, stl.name)
-    bb = part.bounding_box().size
-    print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
+    for w in A1_STRIP_WIDTHS:
+        part = build_bed_edge_strip(w)
+        name = f"bed_edge_strip_{w:.1f}".replace(".", "p")
+        mesh, stl = to_mesh(part, name)
+        assert_watertight(mesh, stl.name)
+        bb = part.bounding_box().size
+        print(f"  {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
     return 0
 
 
