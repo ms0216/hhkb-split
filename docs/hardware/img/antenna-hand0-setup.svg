@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1670" viewBox="0 0 1000 1670">
+<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#333"/></marker><marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="2.5" orient="auto"><path d="M0,0 L0,5 L6,2.5 z" fill="#c0392b"/></marker></defs>
+<rect width="1000" height="1670" fill="#fdfdfb"/>
+<text x="30" y="40" font-size="26" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">#23 アンテナの実測（手 0）— 置き方</text>
+<text x="30" y="66" font-size="15" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO を 2 個使い、A→F の順に RSSI を測る。同じ日・同じ場所・同じ置き方で。</text>
+<rect x="30" y="92" width="46" height="16" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<text x="84" y="105" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO（基板）</text>
+<rect x="210" y="92" width="46" height="16" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="264" y="105" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナ（基板の端）</text>
+<rect x="420" y="95" width="40" height="10" fill="#d9d9d9" stroke="#666" stroke-width="2" rx="2"/>
+<text x="468" y="105" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミホイル</text>
+<rect x="590" y="92" width="34" height="16" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
+<text x="632" y="105" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">刷ったスペーサー</text>
+<line x1="790" y1="100" x2="850" y2="100" stroke="#e07b39" stroke-width="3"/>
+<text x="858" y="105" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">リード線</text>
+<text x="30" y="150" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">A  XIAO だけ（原点）</text>
+<text x="30" y="172" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">まず A を 2 分見て、値がどれだけ揺れるか（ふらつきの幅）を測る。これが判定の物差し。</text>
+<rect x="60" y="186" width="105.0" height="90.0" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="3"/>
+<rect x="60" y="186" width="22.0" height="90.0" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="3"/>
+<text x="71.0" y="235.0" font-size="13" text-anchor="middle" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">ア</text>
+<text x="122.5" y="236.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<line x1="185.0" y1="231.0" x2="315.0" y2="231.0" stroke="#888" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+<text x="325.0" y="236.0" font-size="14" text-anchor="start" font-weight="normal" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">スマホ（30cm）</text>
+<text x="60" y="298.0" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">給電は USB でよい。ケーブルの向きは A〜F で変えないこと。</text>
+<text x="30" y="350" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">B  ＋ リード線（★ いちばん大事）</text>
+<text x="30" y="372" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">GND ピンにジャンパで繋ぎ、アンテナの脇を通して伸ばす。160 → 80 → 40mm と切り詰めながら 3 回測る。</text>
+<rect x="140" y="400" width="105.0" height="90.0" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="3"/>
+<rect x="140" y="400" width="22.0" height="90.0" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="3"/>
+<text x="151.0" y="449.0" font-size="13" text-anchor="middle" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">ア</text>
+<text x="202.5" y="450.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<path d="M 210 490.0 L 210 520.0 L 80 520.0 L 80 376 L 620 376" fill="none" stroke="#e07b39" stroke-width="3.5"/>
+<text x="420" y="406" font-size="14" text-anchor="start" font-weight="bold" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">リード線（160 / 80 / 40mm と切り詰める）</text>
+<text x="216" y="538.0" font-size="13" text-anchor="start" font-weight="normal" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">GND ピンへ（ジャンパで挿す）</text>
+<text x="84" y="430" font-size="12" text-anchor="start" font-weight="normal" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナの</text>
+<text x="84" y="446" font-size="12" text-anchor="start" font-weight="normal" fill="#e07b39" font-family="Hiragino Sans, Noto Sans JP, sans-serif">脇を通す</text>
+<text x="60" y="566.0" font-size="13" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 繋がっていないと「共振していない」という都合のよい答えが出る。測る前後で接触を確かめること。</text>
+<text x="30" y="630" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">C  ＋ アルミホイルを「斜め上 5mm」（本体基板を模擬）</text>
+<text x="30" y="652" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">真横でも真上でもない。本体基板はアンテナのやや前方・やや上にある。最短で 5mm になるよう斜めに構える。</text>
+<text x="90" y="682" font-size="14" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">【横から見た図】</text>
+<line x1="70" y1="786" x2="510" y2="786" stroke="#aaa" stroke-width="2"/>
+<text x="514" y="790" font-size="13" text-anchor="start" font-weight="normal" fill="#888" font-family="Hiragino Sans, Noto Sans JP, sans-serif">机</text>
+<rect x="150" y="774" width="120" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="150" y="774" width="26" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="210" y="768" font-size="13" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="290" y="756" width="14" height="30" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
+<rect x="410" y="756" width="14" height="30" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
+<text x="357" y="778" font-size="12" text-anchor="middle" font-weight="normal" fill="#6a8a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">スペーサー 5mm 側</text>
+<path d="M 240 720 L 450 756" stroke="#666" stroke-width="7" stroke-linecap="round" fill="none"/>
+<text x="390" y="716" font-size="13" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミホイル（10cm 角）</text>
+<line x1="166" y1="772" x2="240" y2="724" stroke="#c0392b" stroke-width="1.6" marker-start="url(#ar2)" marker-end="url(#ar2)"/>
+<text x="203.0" y="742.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">最短 5mm</text>
+<text x="90" y="816" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミ箔の「いちばん近い角」が、アンテナから 5mm。ずれてよい。測って記録すれば読める。</text>
+<text x="90" y="836" font-size="13" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">⚠ 箔が垂れると 5mm より近くなる。縁を 5mm ほど折り返して腰を持たせる。</text>
+<text x="30" y="890" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">D  ＋ 単3 電池 2 本を「横 17mm」</text>
+<text x="30" y="912" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">定規で測って横に置くだけ。スペーサーは要らない。</text>
+<rect x="90" y="934" width="105.0" height="90.0" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="3"/>
+<rect x="90" y="934" width="22.0" height="90.0" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="3"/>
+<text x="101.0" y="983.0" font-size="13" text-anchor="middle" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">ア</text>
+<text x="152.5" y="984.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<text x="90" y="926" font-size="14" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">【上から見た図】</text>
+<rect x="295.0" y="940" width="150" height="26" fill="#efe6cf" stroke="#8a7a3a" stroke-width="2" rx="6"/>
+<rect x="295.0" y="978" width="150" height="26" fill="#efe6cf" stroke="#8a7a3a" stroke-width="2" rx="6"/>
+<text x="370.0" y="958" font-size="13" text-anchor="middle" font-weight="normal" fill="#8a7a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">単3</text>
+<text x="370.0" y="996" font-size="13" text-anchor="middle" font-weight="normal" fill="#8a7a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">単3</text>
+<line x1="112" y1="1048.0" x2="295.0" y2="1048.0" stroke="#c0392b" stroke-width="1.6" marker-start="url(#ar2)" marker-end="url(#ar2)"/>
+<text x="203.5" y="1042.0" font-size="14" text-anchor="middle" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">17mm（アンテナの端から）</text>
+<text x="90" y="1080.0" font-size="13" text-anchor="start" font-weight="normal" fill="#777" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アンテナは XIAO の端（赤い部分）。そこから電池までを 17mm。</text>
+<text x="30" y="1120" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">E  B ＋ C ＋ D を全部いっぺんに（実機に近い状態）</text>
+<text x="30" y="1142" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">リード線・アルミ箔・電池を全部置いた状態で測る。ここが本番に近い。</text>
+<text x="30" y="1180" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">F  参考: アルミホイルを「真上 4mm」に水平に置く</text>
+<text x="30" y="1202" font-size="14" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">作り直す前の姿（アンテナの真上に地板があった頃）。今回の変更が何 dB 買ったかを見るためだけ。</text>
+<line x1="70" y1="1330" x2="510" y2="1330" stroke="#aaa" stroke-width="2"/>
+<rect x="150" y="1318" width="120" height="12" fill="#cfe3f7" stroke="#2c6fad" stroke-width="2" rx="2"/>
+<rect x="150" y="1318" width="26" height="12" fill="#f7d9d9" stroke="#b03a3a" stroke-width="2" rx="2"/>
+<text x="210" y="1312" font-size="13" text-anchor="middle" font-weight="normal" fill="#2c6fad" font-family="Hiragino Sans, Noto Sans JP, sans-serif">XIAO</text>
+<rect x="130" y="1294" width="14" height="24" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
+<rect x="280" y="1294" width="14" height="24" fill="#e8f0d9" stroke="#6a8a3a" stroke-width="2" rx="2"/>
+<text x="110" y="1350" font-size="12" text-anchor="start" font-weight="normal" fill="#6a8a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">スペーサー 4mm 側（低いほう）</text>
+<path d="M 100 1290 L 340 1290" stroke="#666" stroke-width="7" stroke-linecap="round"/>
+<text x="348" y="1294" font-size="13" text-anchor="start" font-weight="normal" fill="#555" font-family="Hiragino Sans, Noto Sans JP, sans-serif">アルミホイル（水平）</text>
+<line x1="163" y1="1318" x2="163" y2="1290" stroke="#c0392b" stroke-width="1.6"/>
+<text x="170" y="1280" font-size="14" text-anchor="start" font-weight="bold" fill="#c0392b" font-family="Hiragino Sans, Noto Sans JP, sans-serif">4mm</text>
+<rect x="30" y="1430" width="940" height="200" fill="#fff8f0" stroke="#d9a441" stroke-width="2" rx="6"/>
+<text x="50" y="1458" font-size="18" text-anchor="start" font-weight="bold" fill="#222" font-family="Hiragino Sans, Noto Sans JP, sans-serif">測ったあとの判定</text>
+<text x="50" y="1490" font-size="15" text-anchor="start" font-weight="bold" fill="#2c7a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">・B が 3 本ともふらつきの幅以内</text>
+<text x="470" y="1490" font-size="14" text-anchor="start" font-weight="normal" fill="#444" font-family="Hiragino Sans, Noto Sans JP, sans-serif">→ 共振していない。いちばん大きな未知が消える</text>
+<text x="50" y="1522" font-size="15" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">・B が長さによって大きく変わる</text>
+<text x="470" y="1522" font-size="14" text-anchor="start" font-weight="normal" fill="#444" font-family="Hiragino Sans, Noto Sans JP, sans-serif">→ 共振している。FFC の長さを設計で決め打ちにできない</text>
+<text x="50" y="1554" font-size="15" text-anchor="start" font-weight="bold" fill="#b06a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">・B が 3 本とも同じくらい悪い（10dB 以上）</text>
+<text x="470" y="1554" font-size="14" text-anchor="start" font-weight="normal" fill="#444" font-family="Hiragino Sans, Noto Sans JP, sans-serif">→ 導体が近いこと自体が効いている。引き回しで離す</text>
+<text x="50" y="1586" font-size="15" text-anchor="start" font-weight="bold" fill="#b03a3a" font-family="Hiragino Sans, Noto Sans JP, sans-serif">・E の差が 20dB 以上</text>
+<text x="470" y="1586" font-size="14" text-anchor="start" font-weight="normal" fill="#444" font-family="Hiragino Sans, Noto Sans JP, sans-serif">→ 発注しない。案 A（USB 内部延長）か案 B（モジュール変更）へ</text>
+</svg>
