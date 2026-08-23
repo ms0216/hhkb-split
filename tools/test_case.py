@@ -107,8 +107,11 @@ def test_tilt_foot_height_gives_the_intended_angle(deg):
     lever = h - RUBBER_INSET * 2
     assert math.degrees(math.atan((z - FOOT_BASE_H) / lever)) == pytest.approx(deg, abs=1e-9)
     foot, fz = build_tilt_foot(deg, h)
-    mesh, _ = to_mesh(foot, f"tilt_foot_{int(deg)}")
-    assert_watertight(mesh, f"tilt_foot_{int(deg)}")
+    # `_` 始まりの名前で出す——slice_check が刷る対象に拾わないように。
+    # 以前は tilt_foot_{deg}（改名前の本番と同じ名前）で出していて、
+    # **「残骸を消しても pytest のたびに復活する」**の正体だった（2026-08-23）。
+    mesh, _ = to_mesh(foot, f"_tilt_foot_{int(deg)}")
+    assert_watertight(mesh, f"_tilt_foot_{int(deg)}")
     assert fz == pytest.approx(z)
 
 
