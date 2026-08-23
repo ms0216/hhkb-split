@@ -98,6 +98,20 @@ def main():
     halves = [a for a in sys.argv[1:] if a in ("left", "right")] or ["left", "right"]
     for half in halves:
         finalize(half)
+    # ⚠️ **板を出したら、板から作られる記録も古くなる。**
+    #
+    # `pcb_parts.json` と `pcb_product_groups.json` は本番の板から
+    # STEP を出して作る。**ここを忘れると `test_the_recorded_*` が
+    # 赤になる**（2026-08-23 に実際に踏んだ）。
+    #
+    # **この場で呼べない。**`pcb_parts.py` は build123d を使うので
+    # `.venv` の Python が要り、この道具は KiCad の Python 3.9 で動く。
+    # → **出力に書いて、人に起こさせる。**
+    print()
+    print("  ⚠️ **板から作られる記録も古くなった。**続けて次を実行すること:")
+    print("       .venv/bin/python3 tools/pcb_parts.py --write")
+    print("       .venv/bin/python3 tools/pcb_parts.py --write-groups   （数分）")
+    print("       .venv/bin/python3 tools/drc.py")
     return 0
 
 

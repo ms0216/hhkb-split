@@ -75,36 +75,35 @@ def test_columns_would_not_fit_without_the_shift_register():
 # 面積
 # --------------------------------------------------------------------------
 
-# 基板に載せる必要がある部品と、その実装に要する面積（フットプリントの外形）。
-# **ここに書き漏らした部品は、置き場所が無くても誰も気づかない。**
+# **部品ごとの面積の表は 2026-08-23 に削除した。**
 #
-# **実際の形が変わったら、ここも直すこと。**595 を SOIC-16 から TSSOP-16 へ
-# 変えたときと、電源スイッチを基板から外したとき、どちらもこの表が古いまま
-# 残っていた（2026-08-08 に両方修正）。生成物そのものを見る
-# test_the_electronics_fit_inside_their_band のほうが強い検査なので、
-# ここは「置き場所の見積もり」として読む。
-COMPONENTS = {
-    "left": [
-        ("595 SN74LVC595A (TSSOP-16)", 7.79, 5.59, 1),
-        ("パスコン 0805", 2.0, 1.25, 1),
-        ("バルク 100uF", 6.6, 6.6, 1),
-        ("ショットキー SOD-123", 3.7, 1.9, 1),
-        ("分圧 1MΩ 0805", 2.0, 1.25, 2),
-        ("電源スイッチのランド", 4.0, 4.0, 2),
-        ("電池線ランド", 4.0, 4.0, 2),
-        ("FFC 12P", 15.0, 8.0, 1),
-    ],
-    "right": [
-        ("595 SN74LVC595A (TSSOP-16)", 7.79, 5.59, 2),
-        ("パスコン 0805", 2.0, 1.25, 2),
-        ("バルク 100uF", 6.6, 6.6, 1),
-        ("ショットキー SOD-123", 3.7, 1.9, 1),
-        ("分圧 1MΩ 0805", 2.0, 1.25, 2),
-        ("電源スイッチのランド", 4.0, 4.0, 2),
-        ("電池線ランド", 4.0, 4.0, 2),
-        ("FFC 12P", 15.0, 8.0, 1),
-    ],
-}
+# `COMPONENTS` という辞書に「595 / パスコン / バルク 100uF / ショットキー /
+# 分圧 1MΩ / 電源スイッチのランド / 電池線ランド / FFC」と面積を手で書き、
+# 「置き場所があるか」「詰まりすぎていないか」を見ていた。
+#
+# ⚠️ **実基板と突き合わせたら、8 項目のうち 5 項目が実在しなかった。**
+#
+#     バルク 100uF        → 2026-08-16 に削除（open-gaps #44）
+#     ショットキー         → 子基板にある
+#     分圧 1MΩ            → 子基板にある
+#     電源スイッチのランド → 基板に載せない設計に変わった
+#     電池線ランド         → 同上
+#
+# **実在しない部品の面積で埋まっていたので、本当に足りなくなっても
+# 気づけない。**しかも余分に見積もるぶん、赤は出ない——**黙って嘘を
+# 言い続ける検査**だった。
+#
+# **同じ観点は、より強い検査が現物で見ている:**
+#
+#     test_pcb.test_the_electronics_do_not_bite_the_key_sockets
+#         実基板の部品が、実際にキーのソケットに当たっていないか。
+#         **走査対象は circuit.py の宣言から導く**（_expected_electronics）
+#         ので、部品が増えれば自動で追従する。
+#     DRC の courtyards_overlap
+#         部品どうしの重なり。
+#
+# 利用者「気になるのは、他にもそういう、古いルールや、具体的すぎて
+# 本来あるべき姿から逸脱している検査はないか」（2026-08-23）。
 
 
 def _board_and_obstacles(half):
@@ -148,40 +147,6 @@ def _fits(rect_w, rect_h, board, obs, margin=0.5):
             x += 1.0
         y += 1.0
     return None
-
-
-@pytest.mark.parametrize("half", ["left", "right"])
-def test_every_component_has_somewhere_to_go(half):
-    """必要な部品が 1 つ残らず基板に載る場所があること。
-
-    **XIAO の置き場所が無いと分かったのは、基板を配線し終えたあとだった。**
-    同じことを繰り返さないため、部品表の側から場所の有無を数える。
-    """
-    board, obs = _board_and_obstacles(half)
-    missing = []
-    for name, w, h, n in COMPONENTS[half]:
-        if _fits(min(w, h), max(w, h), board, obs) is None:
-            missing.append(f"{name} ({w}x{h}mm x{n})")
-    assert not missing, \
-        f"{half}: 置き場所が無い部品:\n  " + "\n  ".join(missing)
-
-
-@pytest.mark.parametrize("half", ["left", "right"])
-def test_the_total_component_area_leaves_room_to_route(half):
-    """部品の合計面積が、空き面積に対して詰まりすぎていないこと。
-
-    ぎりぎり置けても、配線の通り道が無ければ意味がない。
-    経験的に、空きの半分を超えると引き回せなくなる。
-    """
-    board, obs = _board_and_obstacles(half)
-    X0, Y0, X1, Y1 = board
-    total = (X1 - X0) * (Y1 - Y0)
-    used = sum((c - a) * (d - b) for a, b, c, d in obs)
-    free = total - used
-    need = sum(w * h * n for _, w, h, n in COMPONENTS[half])
-    assert need < free * 0.5, (
-        f"{half}: 部品 {need:.0f}mm^2 に対して空き {free:.0f}mm^2。"
-        f"詰まりすぎていて配線が通らない")
 
 
 def test_the_mcu_is_not_expected_to_fit_on_the_main_board():

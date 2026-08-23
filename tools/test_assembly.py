@@ -482,11 +482,25 @@ def test_step_component_counts_match_the_circuit():
     # 74LVC595 は左右合計 3 個
     total_ic = sum(data[h]["counts"]["ic_tssop16"] for h in ("left", "right"))
     assert total_ic == 3, f"74LVC595 が合計 {total_ic} 個（回路は 3 個）"
-    # 子基板: 裏面に C 1 個 + FFC コネクタ（3 立体）、板の上に XIAO の
-    # 公式モデル（Seeed 配布・84 立体をまとめて xiao_asm）。
+    # 子基板: 板の上に XIAO の公式モデル（Seeed 配布・84 立体をまとめて
+    # xiao_asm）、裏面に FFC コネクタと受動部品。
     # xiao_asm が消えたら、モデル未設置の環境で --write した。
+    #
+    # ⚠️ **期待値を手で書かない**（2026-08-23）。ここには
+    # `dbc["cap_0805"] == 1` と書いてあったが、**その C_DB は
+    # 2026-08-16 に削除されていた**（open-gaps #45・「負荷の直近に
+    # いないパスコンだった」）。**検査だけが取り残されて赤になった。**
+    # → **回路の宣言から導く。**部品が増減すれば自動で追従する。
     dbc = data["db"]["counts"]
-    assert dbc["cap_0805"] == 1 and dbc["ffc_conn"] == 3, f"子基板の裏面が変わった: {dbc}"
+    from circuit import board_refs, daughterboard_netlist
+    want_db = set()
+    for ref, kind, pins in daughterboard_netlist():
+        want_db |= set(board_refs(ref, kind, pins))
+    n_cap = sum(1 for r in want_db if r.startswith("C"))
+    assert dbc.get("cap_0805", 0) == n_cap, (
+        f"子基板のコンデンサの立体が {dbc.get('cap_0805', 0)} 個"
+        f"（回路の宣言は {n_cap} 個）: {dbc}")
+    assert dbc["ffc_conn"] == 3, f"子基板の FFC コネクタが変わった: {dbc}"
     assert dbc.get("xiao_asm", 0) >= 50, (
         f"XIAO のモデルが STEP に出ていない（xiao_asm={dbc.get('xiao_asm', 0)}）。"
         "pcb/lib/hhkb_split.3dshapes/XIAO_nRF52840.step を確認")
