@@ -101,7 +101,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 ## よく使うコマンド
 
 ```
-.venv/bin/pytest tools -q                      # 全検査（440 件・約 9 分）
+.venv/bin/pytest tools -q                      # 全検査（454 件・約 11 分）
 .venv/bin/python3 tools/gen_case.py            # ケース・上ケース・蓋・脚
 .venv/bin/python3 tools/gen_assembly.py        # 組み立て干渉（0 でなければならない）
 tools/refresh_view.sh                          # ★**CAD を変えたら必ずこれ。**STL を出し直して .blend まで作る（片側だけなら `left`）
@@ -118,7 +118,12 @@ tools/blend_assembly.sh                        # 上の後半だけ。色とカ�
 # 基板の生成は KiCad の Python で
 KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3.9
 "$KPY" tools/gen_pcb.py          # 未配線の基板を pcb/unrouted/ に出す
-"$KPY" tools/autoroute.py        # Freerouting で配線して pcb/ に出す（数分）
+"$KPY" tools/finalize_pcb.py     # ★**確定した板を本番 pcb/ へ。GND ビアも打つ**
+                                 #   （2026-08-23〜。配線は凍結済みなので
+                                 #    Freerouting は通さない。**そのあと
+                                 #    pcb_parts.py --write / --write-groups /
+                                 #    drc.py も回す**——板から作る記録が古くなる）
+"$KPY" tools/autoroute.py        # Freerouting で配線（**いまは使わない**）
 "$KPY" tools/gen_daughterboard.py
 "$KPY" tools/export_fab.py       # ガーバー・BOM・CPL（2 つの門を通る）
 ```
