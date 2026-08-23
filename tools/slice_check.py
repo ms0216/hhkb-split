@@ -62,7 +62,17 @@ def find_binary():
 
 
 def pick(paths, hints, label):
-    """ヒントに合うプロファイルを 1 つ選ぶ。優先順位はヒントの並び順。"""
+    """ヒントに合うプロファイルを 1 つ選ぶ。優先順位はヒントの並び順。
+
+    **完全一致を部分一致より先に見る。**部分一致だけだと
+    "Generic PLA @BBL A1M" が辞書順で先に並ぶ
+    "Generic PLA @BBL A1M 0.2 nozzle" に吸われ、0.2mm ノズル用の
+    吐出上限（≈2mm³/s）で全部品の推定時間が 4〜5 倍に化けた（2026-08-24）。
+    """
+    for hint in hints:
+        for p in paths:
+            if hint.lower() == p.stem.lower():
+                return p
     for hint in hints:
         for p in paths:
             if hint.lower() in p.stem.lower():
