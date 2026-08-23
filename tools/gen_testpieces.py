@@ -153,7 +153,36 @@ RF_SPACER_MM = (4.0, 5.0)
 # **3 本なのは、3 点で面が決まるから。**4 本だとガタつく。
 RF_PILLAR_D = 8.0          # 柱の直径
 RF_PILLAR_SPREAD = 30.0    # 3 本を置く円の直径
-RF_SPACER_LABEL_H = 0.6    # 厚みを表す刻みの深さ
+
+
+def build_rf_spacer_pair():
+    """**4mm と 5mm を 1 部品にした台**（2026-08-23）。
+
+    利用者「同時に両方印刷した方が早いと思うので、並べられないでしょうか？」
+
+    ⚠️ **2 個を並べるより、1 部品にするほうが速い。**別々に置くと
+    **層ごとに 2 個を行き来する**ので、その移動が全層ぶん積み上がる。
+    繋げてしまえば移動は 1 回で済む。
+
+    **形**: 柱 3 本の台を 2 つ、桟で繋いだもの。**低いほうが 4mm・高いほうが 5mm。**
+    ⚠️ **目印は要らない。**溝を彫ろうとしたが、柱は円周上の 3 点で
+    中央には何も無いので**彫る相手がいなかった**（実測で確認）。
+    **高さが 4mm と 5mm なので、並べれば目で分かる。**
+
+    ⚠️ **使うときは折らない。**そのまま 2 つの高さの台として使える
+    （C では 5mm 側に、F では 4mm 側にアルミ箔を載せる）。
+    """
+    a = build_rf_spacer(4.0)
+    b = build_rf_spacer(5.0)
+    gap = RF_PILLAR_SPREAD + RF_PILLAR_D + 6.0
+    with BuildPart() as pair:
+        add(a.moved(Location((-gap / 2, 0, 0))))
+        add(b.moved(Location((gap / 2, 0, 0))))
+        # 2 つを繋ぐ桟（薄い板）。**折らずにそのまま使う**ので、
+        # 강度は要らない。バラけないためだけ。
+        Box(gap, RF_PILLAR_D * 0.5, 1.2,
+            align=(Align.CENTER, Align.CENTER, Align.MIN))
+    return pair.part
 
 
 def build_rf_spacer(h):
@@ -250,14 +279,14 @@ def main():
 
     print("\nアンテナ実測用のスペーサー（open-gaps #23 の手 0 / §6-6b）")
     print("  ⚠️ **金属入りフィラメントで刷らないこと**（導電性がある）")
-    for h in RF_SPACER_MM:
-        part = build_rf_spacer(h)
-        name = f"rf_spacer_{str(h).replace('.', 'p')}mm"
-        mesh, stl = to_mesh(part, name)
-        assert_watertight(mesh, stl.name)
-        use = {4.0: "F: ホイルを真上 4mm（作り直す前の姿）",
-               5.0: "C: ホイルを斜め上 5mm（本体基板）"}[h]
-        print(f"  {h:5.1f}mm  {use}  -> {stl.name}")
+    print("  **4mm と 5mm を 1 部品にした**（別々に置くより速い）")
+    part = build_rf_spacer_pair()
+    mesh, stl = to_mesh(part, "rf_spacer_pair")
+    assert_watertight(mesh, stl.name)
+    bb = part.bounding_box().size
+    print(f"  全体 {bb.X:.1f} x {bb.Y:.1f} x {bb.Z:.1f}mm  -> {stl.name}")
+    print("     **低いほう** 4.0mm  F: ホイルを真上 4mm（作り直す前の姿）")
+    print("     **高いほう** 5.0mm  C: ホイルを斜め上 5mm（本体基板）")
     return 0
 
 
