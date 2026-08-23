@@ -815,10 +815,31 @@ def _drop_gnd_vias_hitting(board, clearance=0.25):
     """**あとから載せた配線に当たる GND のビアを外す。**
 
     `gnd_fanout.place` は配線より先に走るので、利用者が引いた線を
-    知らない。銅の端どうしが `clearance` を割るビアだけ落とす
+    知らない。銅の端どうしが `clearance` を割るものを落とす
     （ベタの塗り直しと離島の繋ぎ直しは呼び出し側でやる）。
+
+    ⚠️ **ビアだけでなく、そのスタブの線も落とす。**ファンアウトは
+    「パッド → 短い線 → ビア」の組で、ビアだけ消すと線が残る。
+    2026-08-23 に実際に出た: COL8 を引き直したら、残った GND の
+    スタブと `tracks_crossing` になった（ビアは既に外れていた）。
     """
     import math
+
+    def near(ax, ay, bx, by, hw2):
+        """区間 (ax,ay)-(bx,by) が、どれかの線と clearance を割るか。"""
+        for (x1, y1, x2, y2, hw) in lines:
+            # 端点 × 相手区間 の 4 通りで測る（区間どうしの最短距離の近似）
+            def pt(px, py, x1_, y1_, x2_, y2_):
+                dx, dy = x2_ - x1_, y2_ - y1_
+                ll = dx * dx + dy * dy
+                u = 0 if ll == 0 else max(0, min(1, ((px - x1_) * dx + (py - y1_) * dy) / ll))
+                return math.dist((x1_ + u * dx, y1_ + u * dy), (px, py))
+            d = min(pt(ax, ay, x1, y1, x2, y2), pt(bx, by, x1, y1, x2, y2),
+                    pt(x1, y1, ax, ay, bx, by), pt(x2, y2, ax, ay, bx, by))
+            if d - hw - hw2 < clearance:
+                return True
+        return False
+
     lines = []
     for t in board.GetTracks():
         if t.GetClass() != "PCB_TRACK" or t.GetNetname() in ("GND", ""):
@@ -840,6 +861,15 @@ def _drop_gnd_vias_hitting(board, clearance=0.25):
                 board.Delete(v)
                 dropped += 1
                 break
+    # **スタブの線も同じ基準で落とす。**残すと交差の相手になる。
+    for t in list(board.GetTracks()):
+        if t.GetClass() != "PCB_TRACK" or t.GetNetname() != "GND":
+            continue
+        if near(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                pcbnew.ToMM(t.GetWidth()) / 2):
+            board.Delete(t)
+            dropped += 1
     return dropped
 
 
@@ -928,6 +958,8 @@ def _place_hole_label(board, fp, off=3.15, clr=0.15):
             return True
     return False
 
+
+
 def apply_matrix_routing(board, half):
     """**利用者が引いた配線（pcb/matrix_routing.json）を載せる。**
 
@@ -982,7 +1014,59 @@ def apply_matrix_routing(board, half):
         via.SetNet(net)
         board.Add(via)
         v += 1
-    return n, v
+
+    # **GND のビアも、利用者が置いた位置へ置き直す**（2026-08-23）。
+    #
+    # 利用者「GND ビアの位置を変えています。3V3 の近くにあるのは
+    # 危ないのかなと」。実測すると U1/U2 の GND ビアが V3V3 まで
+    # **0.302 / 0.312mm** しか無く、利用者はそれを **1.26〜1.86mm** へ
+    # 離していた。DRC の規定 0.25mm は通るが、**通るのと余裕があるのは別。**
+    # 相手が電源と GND なので、短絡すれば信号線どうしより結果が重い。
+    #
+    # `gnd_fanout.place` はパッドの形だけから機械的に決めるので、
+    # **手で寄せた位置は次の生成で消える。**だから写して置き直す。
+    #
+    # ⚠️ **「電源から N mm 離す」という規則にしようとして失敗した**
+    # （同日）。候補を弾くと逆に V3V3 の**配線**側へ押し出され、
+    # `_drop_gnd_vias_hitting` が 7 個中 4 個を落として U1/U2 の GND
+    # パッドがベタに繋がらなくなった。**パッドしか見ない探索に、
+    # 配線の都合は表現できない。**現物の座標を写すのが正しい。
+    #
+    # **スタブの線は写さない。**ここで置き直したビアへ引き直す。
+    g = data.get("gnd_vias") or []
+    gv = 0
+    if g:
+        gnd = board.FindNet("GND")
+        for t in list(board.GetTracks()):
+            if t.GetNetname() == "GND" and t.GetClass() == "PCB_VIA":
+                board.Delete(t)
+        for d in g:
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pcbnew.VECTOR2I_MM(d["x"], d["y"]))
+            via.SetWidth(pcbnew.FromMM(gnd_fanout.VIA_DIAMETER_MM))
+            via.SetDrill(pcbnew.FromMM(gnd_fanout.VIA_DRILL_MM))
+            via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            via.SetNet(gnd)
+            board.Add(via)
+            gv += 1
+        # **スタブも写す。**引き直そうとして層を取り違え、F.Cu に引いて
+        # ROW_D / ROW_E と交差した（同日）。利用者の板では B.Cu。
+        # `gnd_fanout.place` が引いた古いスタブは先に全部消す。
+        import math
+        for t in list(board.GetTracks()):
+            if t.GetNetname() == "GND" and t.GetClass() == "PCB_TRACK" \
+                    and math.dist((t.GetStart().x / 1e6, t.GetStart().y / 1e6),
+                                  (t.GetEnd().x / 1e6, t.GetEnd().y / 1e6)) < 8.0:
+                board.Delete(t)
+        for d in data.get("gnd_stubs") or []:
+            w = pcbnew.PCB_TRACK(board)
+            w.SetStart(pcbnew.VECTOR2I_MM(d["x1"], d["y1"]))
+            w.SetEnd(pcbnew.VECTOR2I_MM(d["x2"], d["y2"]))
+            w.SetWidth(pcbnew.FromMM(d["w"]))
+            w.SetLayer(board.GetLayerID(d["layer"]))
+            w.SetNet(gnd)
+            board.Add(w)
+    return n, v, gv
 
 
 def replay_matrix(board, src):
@@ -1907,16 +1991,22 @@ def build(half, keys):
     # **利用者が引いた配線を載せる**（2026-08-22）。列のバスのあとに呼ぶ
     # ——同じネットの既存の配線を消してから置くので、順番が逆だと
     # せっかく載せたものを prewire が上書きしてしまう。
-    n_ur, n_uv = apply_matrix_routing(board, half)
+    n_ur, n_uv, n_gv = apply_matrix_routing(board, half)
     if n_ur:
-        print(f"      {half}: 利用者の配線を載せた {n_ur} 区間 / ビア {n_uv} 個")
-        # ⚠️ **利用者の配線と当たる GND のビアを打ち直す**（2026-08-22）。
-        # `gnd_fanout.place` は**この配線より前**に呼ばれるので、
-        # あとから載る線を知らない。実測で GND のビアが COL8 のレーンに
-        # 乗り、DRC が短絡 1・クリアランス 1 を出した。
-        n_rm = _drop_gnd_vias_hitting(board)
-        if n_rm:
-            print(f"      {half}: 利用者の配線に当たる GND ビアを {n_rm} 個 外した")
+        print(f"      {half}: 利用者の配線を載せた {n_ur} 区間 / ビア {n_uv} 個"
+              + (f" / GND ビア {n_gv} 個" if n_gv else ""))
+        if n_gv:
+            # **GND のビアも写したので、当たり判定で外す必要は無い。**
+            # 利用者が自分で避けた位置に置いてある。
+            pass
+        else:
+            # ⚠️ **利用者の配線と当たる GND のビアを打ち直す**（2026-08-22）。
+            # `gnd_fanout.place` は**この配線より前**に呼ばれるので、
+            # あとから載る線を知らない。実測で GND のビアが COL8 のレーンに
+            # 乗り、DRC が短絡 1・クリアランス 1 を出した。
+            n_rm = _drop_gnd_vias_hitting(board)
+            if n_rm:
+                print(f"      {half}: 利用者の配線に当たる GND ビアを {n_rm} 個 外した")
     # 列を MCU へ戻すレーン（表面）。**列のバスのあとに呼ぶ**——
     # バスの端点をレーンへの降り口として使うため。
 
