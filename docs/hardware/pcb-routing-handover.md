@@ -35,21 +35,37 @@
 `tools/test_pcb.py` の `WIP_BOARDS` は空。DRC の検査が skip ではなく
 PASS で通っている。
 
+> ⚠️ **2026-08-23 から配線は凍結され、Freerouting は使わない。**
+> 利用者が `pcb/matrix_only/` を直接編集し、道具は**写すだけ**
+> （利用者「私が PCB を編集するので、それに追従してください」）。
+> 現行の手順は CLAUDE.md のコマンド表と同じ:
+
 ```
 KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3.9
-"$KPY" tools/gen_pcb.py          # 未配線の基板を pcb/unrouted/ に出す
-"$KPY" tools/autoroute.py        # Freerouting で配線（数分）
-.venv/bin/python3 tools/drc.py   # 確かめる
-.venv/bin/pytest tools -q        # 402 件（約 14 分）
+"$KPY" tools/export_matrix_routing.py  # 利用者の板 → pcb/matrix_routing.json に写す
+"$KPY" tools/gen_pcb.py                # 記録から板を再現できることを確かめる
+"$KPY" tools/finalize_pcb.py           # matrix_only ＋ GND ビア → 本番 pcb/
+.venv/bin/python3 tools/drc.py         # 確かめる（記録も更新）
+.venv/bin/pytest tools -q              # 全検査
 ```
 
-Java（`brew install openjdk`）と Freerouting v2.3.0 の jar
-（`~/.local/share/freerouting/`。`FREEROUTING_JAR` で変更可）が要る。
-**CI では走らせない。**DRC と同じく手元専用で、CI は記録の鮮度だけ見る。
+（以下の Freerouting の記述と `autoroute.py` は**経緯の記録**。
+Java と jar の準備もいまは不要。）
 
 ---
 
-## 役割分担
+## 役割分担（2026-08-23 以降）
+
+```
+pcb/matrix_only/                  利用者が直接編集する、配線確定済みの板
+      ↓  tools/export_matrix_routing.py（写す）
+pcb/matrix_routing.json           配線の記録（gen_pcb が再現に使う）
+      ↓  tools/finalize_pcb.py（GND ビア fence→ring→stitch→islands を追加）
+pcb/hhkb_split_{half}.kicad_pcb   本番。続けて pcb_parts.py --write /
+                                  --write-groups / drc.py で記録を更新
+```
+
+### 役割分担（旧・Freerouting 期の記録）
 
 ```
 tools/gen_pcb.py     配置・ネット・ゾーン・設計規則（配線は持たない）
