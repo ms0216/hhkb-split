@@ -2721,7 +2721,7 @@ RSSI が良くても実使用で落ちることがある。
 
 ### 置き方の図（2026-08-23）
 
-![手 0 の置き方](img/antenna-hand0-setup.svg)
+<img src="img/antenna-hand0-setup.svg" alt="手 0 の置き方。A は XIAO 単体でスマホから 30cm。B は GND ピンにジャンパでリード線を繋ぎ、アンテナの脇を通して 160/80/40mm と切り詰めながら 3 回測る。C はアルミホイルをアンテナの斜め上 5mm に斜めに構える（真横でも真上でもない）。D は単3 電池 2 本をアンテナの端から横 17mm に置く。E は B+C+D 全部。F は参考でホイルを真上 4mm に水平に置く" width="100%">
 
 **出し直すには** `.venv/bin/python3 tools/gen_antenna_setup_svg.py`
 
