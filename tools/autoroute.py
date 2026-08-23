@@ -25,7 +25,7 @@ import pcbnew
 
 import boardhash
 import gnd_fanout
-from gen_pcb import prewire_row_bus, prewire_switch_diode
+from gen_pcb import replay_matrix
 
 ROOT = Path(__file__).resolve().parent.parent
 PCB = ROOT / "pcb"
@@ -233,6 +233,7 @@ def _check_jar():
 #             配るだけで prewire していないが、DSN から消えると未配線に
 #             なるので、**子基板だけ**に効かせる（下の PREWIRED_DB）。
 PREWIRED = re.compile(r"GND|SW\d+_D")
+
 # 子基板だけ、これも自分で引いてある。
 #
 # ⚠️ **レーンを通る ROW を入れるのが対**（2026-08-14・利用者「D3〜D5 を XIAO
@@ -321,6 +322,30 @@ def _strip_prewired(dsn, pattern=PREWIRED):
         t = re.sub(rf"\s*\(net {e}\s*\n\s*\(pins [^)]*\)\s*\n\s*\)", "", t)
         t = re.sub(rf"(\(class \S+ [^)]*?)\b{e}\b", r"\1", t)
         t = t.replace(f"(net {n})(type route)", "(type protect)")
+    # **消さずに残すが、動かしてほしくないネット**（2026-08-17・
+    # 利用者「このキーマトリクスの配線を凍結させてください」）。
+    #
+    # ROW と COL は**ネットごと消せない**——最後の 1 本（ROW は J_DB、
+    # COL は U1）は Freerouting に引かせる必要があるため。しかし
+    # `(type route)` のままだと**引いた線ごと作り直される**。
+    #
+    # ⚠️ **注記は「protect で渡してある」と書いていたが、実際には
+    # なっていなかった**（2026-08-17 に実測。ROW も COL も route）。
+    # 上の置換は「消したネット」にしか掛からないので、消さない
+    # ROW/COL には効いていなかった。**ここで明示的に protect にする。**
+    # ⚠️ **protect にしない**（2026-08-18・実測）。
+    #
+    # 2026-08-17 にここで ROW/COL を protect にしたが、**protect は
+    # 「動かすな」ではなく「触るな」**なので、Freerouting は**その線に
+    # 繋ぎ込むこともできなくなる。**結果、COL→U1 が 6 本・ROW→J_DB が
+    # 5 本、まるごと未配線として残った（左 11 件・右 15 件）。
+    # 「最後の 1 本だけは Freerouting に引かせる」という目的と、
+    # protect という手段が矛盾していた。
+    #
+    # **凍結は `replay_matrix` が担保する**——SES 取り込みのあとに
+    # 未配線の板から写し直すので、Freerouting が途中でどう動かしても
+    # 最終的な形は gen_pcb が引いたものになる。
+
     left = [n for n in re.findall(r"\(net (\S+)", t) if pattern.fullmatch(n)]
     if left:
         raise SystemExit(
@@ -328,6 +353,21 @@ def _strip_prewired(dsn, pattern=PREWIRED):
             "DSN の書式が変わった可能性がある。残すと Freerouting が"
             "二重配線するか NPE で落ちる")
     dsn.write_text(t)
+
+
+# **書き出し先。**既定は本番の pcb/。
+#
+# ⚠️ **試しの配線を本番に書かないこと**（2026-08-18・利用者「本番
+# ファイルではなく別フォルダを作るべき」）。私は「違反があってもいいので
+# 配線して」を本番を回すことだと解釈し、**U1/U2 が決まるまで本番は
+# 触らないという合意を破って 3 枚を上書きした。**
+#
+#     "$KPY" tools/autoroute.py right --out pcb/try
+OUT_DIR = None          # None なら PCB（本番）
+
+
+def _out_dir():
+    return OUT_DIR or PCB
 
 
 def _route_once(half, seed):
@@ -339,7 +379,14 @@ def _route_once(half, seed):
             f"未配線の基板が無い: {src}\n"
             'KiCad の Python で "tools/gen_pcb.py --no-route" を実行すること')
 
-    board = pcbnew.LoadBoard(str(src))
+    # **DSN の元も正本にする**（2026-08-22）。
+    #
+    # ⚠️ **`pcb/unrouted/` から DSN を作ると、利用者が引いたレーンが
+    # 入らない。**Freerouting はそこを空いていると思って線を引き、
+    # 実測で **短絡 7 件**（COL8 のレーンの上に COL2/COL5/COL6 が乗った）。
+    # レーンは「既にある配線」として渡す必要がある。
+    golden0 = ROOT / "pcb" / "matrix_only" / f"hhkb_split_{half}.kicad_pcb"
+    board = pcbnew.LoadBoard(str(golden0 if golden0.exists() else src))
     dsn = PCB / f"_{half}.dsn"
     ses = PCB / f"_{half}.ses"
     if not pcbnew.ExportSpecctraDSN(board, str(dsn)):
@@ -427,13 +474,28 @@ def _route_once(half, seed):
     # Freerouting はそこを避けて配線済みなので衝突しない。
     # **マトリクスがある基板だけ。**子基板にはスイッチも行も無い。
     if half in HALVES:
-        prewire_switch_diode(board)
-        # **行のバスも引き直す。**SES 取り込みで消えているので、
-        # gen_pcb で引いたのと同じ直線をここで復活させる。
-        # DSN では `(type protect)` の障害物として渡してあるので、
-        # Freerouting はこれを避けて J_DB への 1 本だけを引いている。
-        n_row = prewire_row_bus(board)
-        print(f"   {half}: 行のバスを裏面の直線で {n_row} 区間")
+        # **マトリクスは未配線の板から「写す」。引き直さない。**
+        # （2026-08-17・利用者「このキーマトリクスの配線を凍結させて」）
+        #
+        # ⚠️ **引き直すと同じ答えにならない。**経路は板の上の物から
+        # 決まるが、SES 取り込み後はビアが 38 → 1217 個に増えている。
+        # 実測で 13 ホップが「障害物」で落ちた。**凍結とは同じ手順を
+        # 回すことではなく、同じ結果を置き直すこと。**
+        # **正本は `pcb/matrix_only/`**（2026-08-22・利用者の指示 A）。
+        #
+        # ここには利用者が KiCad で引いた分が入っている——列を MCU へ
+        # 戻す表面のレーン 7 本、COL0→U1、V3V3、COL8 のバス。
+        # **規則として書き下すのではなく、現物を正本にする。**
+        # 私が規則を書こうとして 3 回失敗している（着地で U1 の他の
+        # パッドを横切る／レーンを縦に伸ばして他のレーンと交差する／
+        # 跨がない行に橋を架ける）。
+        #
+        # 無ければ `pcb/unrouted/`（gen_pcb が引いた分だけ）に落ちる。
+        golden = ROOT / "pcb" / "matrix_only" / f"hhkb_split_{half}.kicad_pcb"
+        ref = golden if golden.exists() else src
+        n_mx, n_mv = replay_matrix(board, pcbnew.LoadBoard(str(ref)))
+        print(f"   {half}: マトリクスを写した {n_mx} 区間 / ビア {n_mv} 個"
+              f"（正本 {ref.parent.name}/）")
     else:
         # **電源も引き直す。**上の行バスと同じ理由——**SES 取り込みは
         # 既存の配線を全部置き換える**ので、gen_daughterboard で引いた
@@ -500,7 +562,7 @@ def _route_once(half, seed):
     n_is, left = gnd_fanout.stitch_islands(board)
     print(f"   {half}: 離島に打ったビア {n_is} 個 / 繋げ切れなかった区画 {left}")
 
-    out = PCB / f"hhkb_split_{half}.kicad_pcb"
+    out = _out_dir() / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(out))
     dsn.unlink()
     ses.unlink()
@@ -522,7 +584,7 @@ def _route_once(half, seed):
         "attempt": seed,
         "unconnected": left_over,
     }
-    (PCB / f"route_{half}.json").write_text(
+    (_out_dir() / f"route_{half}.json").write_text(
         json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return rec
 
@@ -553,7 +615,15 @@ def main():
     # drc_*.json の差分が汚れて「何を直したか」が読めなくなる。
     #
     #     "$KPY" tools/autoroute.py daughterboard
-    targets = sys.argv[1:] or list(BOARDS)
+    global OUT_DIR
+    args = sys.argv[1:]
+    if "--out" in args:
+        i = args.index("--out")
+        OUT_DIR = ROOT / args[i + 1]
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        del args[i:i + 2]
+        print(f"書き出し先: {OUT_DIR}（本番の pcb/ は触らない）")
+    targets = args or list(BOARDS)
     unknown = [t for t in targets if t not in BOARDS]
     if unknown:
         raise SystemExit(f"知らない基板: {unknown}／選べるもの: {list(BOARDS)}")

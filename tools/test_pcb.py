@@ -69,6 +69,19 @@ def _pcb_text(name):
     return _CACHE[key]
 
 
+def _net_names(name):
+    """マトリクス基板の「ネット番号 → 名前」。
+
+    `(segment ...)` はネットを**番号**でしか持たないので、
+    冒頭の `(net <番号> "<名前>")` の表を引く。
+    """
+    key = ("matrixnets", name)
+    if key not in _CACHE:
+        txt = (PCB / "unrouted" / f"hhkb_split_{name}.kicad_pcb").read_text()
+        _CACHE[key] = dict(re.findall(r'\(net (\d+) "([^"]*)"\)', txt))
+    return _CACHE[key]
+
+
 def footprints(name):
     """(ライブラリ名, 参照, x, y) の一覧をレイアウト座標（Y 上向き）で返す。
 
@@ -390,23 +403,71 @@ def test_keymap_order_matches_the_keymap(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_matrix_columns_follow_physical_position(name):
-    """同じ列のキーが物理的にも近いこと。
+def test_matrix_columns_do_not_need_long_crossings(name):
+    """列のバスに長い横断が生まれていないこと。
 
-    列を「段の中で何番目か」で決めると、最下段のようにキー数が違う段で
-    論理的に同じ列のキーが大きく離れる。基板に 38mm の横断配線が生まれ、
-    DRC が交差を検出した。
+    **元は「同じ列のキーが x 方向に 1.5 キー幅以内」を見ていた**
+    （`test_matrix_columns_follow_physical_position`）。列を「段の中で
+    何番目か」で決めると 38mm の横断配線が生まれて DRC が交差を出した、
+    という実際の事故から書かれたもの。
+
+    ⚠️ **2026-08-17 に基準を変えた。**利用者の指定で、右は
+    「行の中で何番目か」がそのまま列番号になった（各行の左端が COL0）。
+    段ごとに x がずれるので、**同じ列のキーは x 方向に 38mm 散らばる。**
+    つまり元の判定は必ず落ちる。
+
+    **落ちるからといって外さない。**守りたかったのは x の散らばり
+    そのものではなく「**長い横断が生まれないこと**」なので、そちらを
+    直接測る。散らばっていても、`gen_pcb.prewire_col_bus` が段ごとに
+    45° で寄せるので 1 区間は短いままになる（実測: 最長 20.2mm）。
+
+    **本物の横断が出れば落ちる**ことは、閾値を 15mm に下げて確かめた
+    （右 COL0 の 20.2mm が引っかかる）。
     """
-    from matrix import assignments
-    rc = assignments(name)
-    keys = HALVES[name]
-    cols = {}
-    for k, (_, c) in zip(keys, rc):
-        cols.setdefault(c, []).append(k.x_mm)
-    for c, xs in cols.items():
-        spread = max(xs) - min(xs)
-        assert spread <= 19.05 * 1.5, \
-            f"{name}: 列 {c} のキーが x 方向に {spread:.1f}mm 散らばっている"
+    # **未配線の基板**（pcb/unrouted/）を見る。
+    #
+    # マトリクスは `gen_pcb.prewire_col_bus` がここに引き、`autoroute` は
+    # `replay_matrix` でそれを写すだけ（2026-08-17 に凍結）。つまり
+    # **形が決まるのはここ**で、本番の pcb/ はその写し。器械が引く
+    # MCU への配線は判定の対象ではないので、こちらを見る方が素直。
+    src = PCB / "unrouted" / f"hhkb_split_{name}.kicad_pcb"
+    if not src.exists():
+        pytest.skip(f"{src.name} が無い（\"$KPY\" tools/gen_pcb.py で作る）")
+    txt = src.read_text()
+    longest, where = 0.0, None
+    # ⚠️ **`(segment ...)` はネットを名前で持つ**（番号ではない）。
+    # `\(net (\d+)\)` で書いて **1 本も拾えず、閾値を 15mm に下げても
+    # 通ってしまった**（2026-08-17。通ったことを「合格」と読み違える
+    # ところだった）。書式は実物を見て確かめる。
+    for m in re.finditer(
+            r"\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
+            r"[\s\S]*?\(layer \"([^\"]+)\"\)[\s\S]*?\(net \"([^\"]+)\"\)", txt):
+        net = m.group(6)
+        if not re.fullmatch(r"COL\d+", net):
+            continue
+        x1, y1, x2, y2 = (float(m.group(i)) for i in (1, 2, 3, 4))
+        # ⚠️ **COL を MCU へ戻すレーンは除く**（2026-08-23）。
+        #
+        # 2026-08-19 に、U1/U2 を J_DB の真下へ移した代わりに
+        # **列を表面（F.Cu）の水平レーンで戻す**ことにした（#48）。
+        # これは**意図した横断**で、右 COL8 は 136.8mm ある。
+        # この検査が見たいのは「**意図しない**横断が生まれていないか」。
+        #
+        # **層と向きで区別できる。**マトリクスの列のバスは裏面（B.Cu）を
+        # 縦に走り、レーンは表面（F.Cu）を水平に走る。**両方を満たす
+        # ものだけ除く**——B.Cu の長い水平線が現れたら、それは落ちる。
+        if m.group(5) == "F.Cu" and abs(y1 - y2) < 0.01:
+            continue
+        mm = math.dist((x1, y1), (x2, y2))
+        if mm > longest:
+            longest, where = mm, net
+    assert where is not None, \
+        f"{name}: COL の配線を 1 本も読めていない（正規表現が書式と合っていない）"
+    # 段の間隔は 19.05mm。**斜めに 1 段ぶん降りる長さ**（19.05×√2 ≒ 26.9）
+    # までは素直な経路。それを超えるものは横断とみなす。
+    assert longest <= 27.0, \
+        f"{name}: 列のバスに長い区間がある（{where} が {longest:.1f}mm）。" \
+        "段をまたぐ横断が生まれていないか見ること"
 
 
 # --------------------------------------------------------------------------
@@ -475,13 +536,22 @@ def test_the_board_declares_the_manufacturer_rules(half):
     """
     # **設計規則は .kicad_pcb ではなく .kicad_pro に入る。**
     # 最初 .kicad_pcb を見ていて「書かれていない」と誤検出した。
+    #
+    # ⚠️ **期待値を手で書かない**（2026-08-23）。以前ここには 0.5 などの
+    # 数字が直接書いてあり、`pcb_rules.JLC` を 0.50 → 0.45 に直したときに
+    # **検査だけが古い値を要求して赤になった。**正本は `pcb_rules.JLC` 一つ。
     import json
+
+    from pcb_rules import JLC
     pro = json.loads((ROOT / f"pcb/hhkb_split_{half}.kicad_pro").read_text())
     rules = pro["board"]["design_settings"]["rules"]
-    for key, mm in (("min_track_width", 0.127), ("min_clearance", 0.127),
-                    ("min_via_diameter", 0.45), ("min_through_hole_diameter", 0.2),
-                    ("min_hole_to_hole", 0.5), ("min_copper_edge_clearance", 0.3),
-                    ("min_via_annular_width", 0.13)):
+    for key, mm in (("min_track_width", JLC["track_min"]),
+                    ("min_clearance", JLC["clearance_min"]),
+                    ("min_via_diameter", JLC["via_dia_min"]),
+                    ("min_through_hole_diameter", JLC["hole_min"]),
+                    ("min_hole_to_hole", JLC["hole_to_hole"]),
+                    ("min_copper_edge_clearance", JLC["edge_clearance"]),
+                    ("min_via_annular_width", JLC["annular_ring"])):
         assert key in rules, f"{half}: 設計規則 {key} が無い"
         assert rules[key] == pytest.approx(mm, abs=1e-6), \
             f"{half}: {key} が {rules[key]}（期待 {mm}）"
@@ -552,7 +622,10 @@ def test_the_board_says_which_half_it_is(half):
     2 種類が届いて見分けがつかないと、組み立ても修理も取り違える。
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
-    assert f"HHKB Split  {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"
+    assert f"SSKB {half.upper()}" in txt, f"{half}: 左右の識別表示が無い"
+    assert "HHKB" not in txt, (
+        f"{half}: 基板に 'HHKB' が刷られている。**他社の商標を物に載せない**"
+        "（2026-08-23・利用者の指示で SSKB にした）")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -679,37 +752,59 @@ def _expected_electronics(half):
 
 
 @pytest.mark.parametrize("half", NAMES)
-def test_the_electronics_fit_inside_their_band(half):
-    """電子部品のコートヤードが帯 9.25mm の内側にあること。
+def test_the_electronics_do_not_bite_the_key_sockets(half):
+    """電子部品が、キーのソケットにぶつかっていないこと。
 
-    はみ出していると、行のバスやソケットに当たる。**位置の微調整では
-    直らない**（部品そのものが大きい）ので、フットプリントを選び直す
-    必要がある。それを人の目に頼らない。
+    ⚠️ **以前は「帯 9.25mm の内側にいるか」を見ていた**（2026-08-23 に
+    変えた）。帯は**ソケットに当たらない場所**として決めた目安で、
+    **守りたかったのは「当たらないこと」**のほう。
+
+    利用者が U2 を帯の外へ移した（SPI を 89mm → 19mm に縮めるため）
+    ときに、**何にも当たっていないのに赤が出た。**手段を守らせて
+    目的を見失っていた。
+
+    > 「気になるのは、他にもそういう、古いルールや、具体的すぎて
+    >  本来あるべき姿から逸脱している検査はないか」（利用者）
+
+    **いまは実際の重なりを測る。**帯の外でも当たっていなければ通り、
+    帯の中でも当たれば落ちる。
+
+    ⚠️ **走査対象は回路の宣言から導く**（`_expected_electronics`）。
+    **検査対象に入っていない部品は、検査していないのと同じ。**
     """
-    from bands import BAND_H, band_bounds_kicad
+    from bands import SOCK_LO, SOCK_HI, SOCK_X_LO, SOCK_X_HI
+    from layout import load_layout, split_halves
+    from interface import plate_positions
+
     txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
-    bad = []
-    seen = set()
+    keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))
+    keys = keys_l if half == "left" else keys_r
+    kpos, _ = plate_positions(keys)
+    # ソケットがキーの周りに占める範囲（KiCad 座標・Y 下向き）。
+    # レイアウトは Y 上向きなので上下が入れ替わる。
+    ox, oy = 150.0, 100.0
+    socks = [(ox + kx + SOCK_X_LO, oy - ky - SOCK_HI,
+              ox + kx + SOCK_X_HI, oy - ky - SOCK_LO) for kx, ky in kpos]
+
+    bad, seen = [], set()
     for ref, blk in _footprint_blocks(txt):
         if not ELEC_REF.fullmatch(ref):
             continue
         bb = _courtyard_bbox(blk)
         assert bb is not None, f"{half}: {ref} にコートヤードが無い"
         seen.add(ref)
-        # どの帯に属するかは、部品の中心がいちばん近い帯で決める。
-        mid = (bb[1] + bb[3]) / 2
-        i = min(range(4), key=lambda k: abs(sum(band_bounds_kicad(k)) / 2 - mid))
-        lo, hi = band_bounds_kicad(i)
-        if bb[1] < lo - 1e-6 or bb[3] > hi + 1e-6:
-            bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} "
-                       f"(高さ {bb[3] - bb[1]:.3f}) が帯 {i} "
-                       f"{lo:.3f}..{hi:.3f} からはみ出す")
+        for (sx0, sy0, sx1, sy1) in socks:
+            if bb[0] < sx1 and sx0 < bb[2] and bb[1] < sy1 and sy0 < bb[3]:
+                bad.append(f"{ref}: y {bb[1]:.3f}..{bb[3]:.3f} が "
+                           f"ソケットの占有範囲 ({sx0:.2f},{sy0:.2f})-"
+                           f"({sx1:.2f},{sy1:.2f}) と重なる")
+                break
     want = _expected_electronics(half)
     assert seen == want, (
         f"{half}: 走査できた部品が回路の宣言と一致しない。\n"
         f"  拾えなかった: {sorted(want - seen)}\n"
         f"  余計に拾った: {sorted(seen - want)}")
-    assert not bad, f"{half}: 帯 {BAND_H}mm に収まっていない部品\n" + "\n".join(bad)
+    assert not bad, f"{half}: キーのソケットに当たる部品\n" + "\n".join(bad)
 
 
 # `test_the_ground_stays_one_island_after_routing` は削除した（2026-08-12）。

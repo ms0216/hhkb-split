@@ -37,7 +37,7 @@ import pinmap                                                       # noqa: E402
 # 設計規則の数値は **pcbnew を要らない側**（pcb_rules）に置いてある。
 # 検査は母艦の venv（pcbnew 無し）から同じ値を読む。
 from pcb_rules import (                                            # noqa: E402
-    BESIDE_GAP, DECOUPLE_BESIDE, DECOUPLE_OFFSET, JLC, MIN_ISLAND_MM2,
+    BESIDE_GAP, DECOUPLE_ANGLE, DECOUPLE_BESIDE, DECOUPLE_OFFSET, JLC, MIN_ISLAND_MM2,
     POWER_CLASSES,
     POWER_NETS, TRACK_W, VIA_D, VIA_DRILL)
 
@@ -250,6 +250,1028 @@ def prewire_row_bus(board):
             board.Add(t)
             n += 1
     return n
+
+
+# **行を跨ぐ橋の、行の線からの逃げ（mm）。**
+#
+# ビアの端（VIA_D/2）と行の線の端（TRACK_W/2）が、クリアランス 0.2mm を
+# 空けて並ぶのに要る距離。0.6/2 + 0.2 + 0.2/2 = 0.6。**丸めで下回らない
+# ように少しだけ足す**（Freerouting ではなく自分で引くので固定値でよい）。
+BRIDGE_DY = VIA_D / 2 + 0.25 + TRACK_W / 2
+
+# **行のバスの「パッドの列」から下へ逃げる距離（mm）。**
+#
+# 行のバスは線 1 本ではなく、ダイオードの K 側パッド（SOD-123・
+# 半対角 0.75mm）が並んだ列でもある。線だけ避けてパッドを擦ると
+# DRC が落ちる。0.75 + クリアランス 0.25 + 線幅の半分 0.1 = 1.10。
+# 余裕を見て 1.30。
+PAD_LANE_DY = 1.30
+
+# **横に走るレーンの間隔（mm）。**
+#
+# ⚠️ **列ごとに別の y を使う。**全部を同じ y に流すと、最下段で
+# 隣の列と正面衝突する（左 COL1/COL3/COL5 が y=124.000 に重なって
+# tracks_crossing 2 件。2026-08-17）。**自分の障害物だけ見て、
+# 自分どうしを見ていなかった。**
+LANE_PITCH = 0.55
+
+
+def prewire_col_bus(board):
+    """**列のバスを裏面で引き、行を跨ぐ瞬間だけ表へ潜る。**（2026-08-17）
+
+    利用者の指摘 2 つから出来ている:
+
+      「SW5, 11 のような列の経路を他のキーにも展開してほしい」
+      「SW5, 11 も完璧ではない。F.Cu に潜る時間はもっと短くできるはず」
+
+    **段のずれは完全に規則的**なので、全部を同じ形にできる（実測: 隣の
+    段との dx は +9.525 / +4.763 / +9.525 の繰り返し、dy は常に +19.05）。
+    SW5/SW11 が綺麗なのは幾何が特別だからではなく、器械がたまたま
+    そこを素直に引いただけ。**だから展開できる。**
+
+    ⚠️ **潜り自体は省けない。**一度「潜る必要が無い」と判断して DRC を
+    32 件赤にした（2026-08-17）。**衝突検査に行のバスを入れていなかった**
+    ため。行は B.Cu の横一直線を占めており、列も B.Cu なので、
+    **全 21 ホップが例外なく行を 1 本ずつ跨ぐ**（実測）。2 層である以上
+    どこかで表へ逃げるしかない。**検査対象に入っていない部品は、
+    検査していないのと同じ。**
+
+    省けるのは**潜っている長さ**の方。跨ぐ y は行のバスの 5 本しかなく
+    既知なので、**跨ぐ直前で潜り、跨いだ直後に戻る**。潜りは行の線を
+    挟んだ上下 BRIDGE_DY だけで、残りは全部裏を通る。
+
+    形は「真下 → （行の手前でビア）→ 表を真下 → （行の先でビア）→
+    真下 → 45° で横へ寄る → 真下」。横に寄る分は 45° に閉じ込めるので
+    縦の通り道から外へはみ出さない。
+
+    **引けないホップは引かない。**本物の障害物（スタビの穴・取付穴・
+    U2 のパッド）に当たるものは Freerouting に残す——**黙って別の形に
+    すると、揃っていないことに気づけなくなる。**
+
+    **autoroute.py も SES 取り込みのあとに呼ぶ**（取り込みが既存の配線を
+    作り直すため）。DSN では `(type protect)` の障害物として渡る。
+    """
+    import math
+
+    clr = 0.25 + TRACK_W / 2
+    holes = [(p.GetPosition().x / 1e6, p.GetPosition().y / 1e6,
+              pcbnew.ToMM(p.GetDrillSizeX()) / 2)
+             for fp in board.GetFootprints() for p in fp.Pads()
+             if p.GetDrillSizeX() > 0]
+    # **パッドの大きさは 1 つずつ持つ。**一律 1.25mm と決め打ちして
+    # U2（半対角 0.764mm）の上を通し、DRC に短絡を 2 件出した（2026-08-17）。
+    #
+    # ⚠️ **ネット名が空のパッドを「無視してよい」と思わないこと。**
+    # U2 の 1〜7 番は空だが**本物のパッド**で、跨げば短絡する。
+    # 除外してよいのは**自分と同じネット**だけ。
+    smd = [(p.GetPosition().x / 1e6, p.GetPosition().y / 1e6, p.GetNetname(),
+            math.hypot(pcbnew.ToMM(p.GetSizeX()), pcbnew.ToMM(p.GetSizeY())) / 2)
+           for fp in board.GetFootprints() for p in fp.Pads()
+           if p.GetDrillSizeX() == 0 and pcbnew.B_Cu in p.GetLayerSet().CuStack()]
+    # **行のバスの y。これを検査に入れ忘れて DRC を 32 件赤にした。**
+    # 既に引かれている B.Cu の線から取る（定数を別に持たない）。
+    #
+    # ⚠️ **行は無限に長い線ではない。x の範囲も持つ。**y だけで
+    # 「跨ぐ」と判定すると、行が届いていない場所にまで橋を架ける
+    # （2026-08-17・利用者「COL0 は全て B.Cu 側でよく、F.Cu 側に
+    # ビアでもぐる必要はないはず」）。実測すると **COL0 は一番左の列で、
+    # どの行も COL0 より右から始まっていた**（例: ROW_C は x 97.769 から
+    # なのに COL0 は x=83.384）。**4 本とも跨いでいなかった。**
+    row_span = {}
+    for t in board.GetTracks():
+        if t.GetClass() != "PCB_TRACK" or not t.GetNetname().startswith("ROW_"):
+            continue
+        y = round(t.GetStart().y / 1e6, 3)
+        xs = (t.GetStart().x / 1e6, t.GetEnd().x / 1e6)
+        lo, hi = row_span.get(y, (min(xs), max(xs)))
+        row_span[y] = (min(lo, *xs), max(hi, *xs))
+    row_y = sorted(row_span)
+
+    def _row_blocks(ry, x):
+        """行 ry が x のところに実在するか（端は余裕を見て広めに取る）。"""
+        lo, hi = row_span[ry]
+        return lo - clr - 1.0 <= x <= hi + clr + 1.0
+
+    def _clear(ax, ay, bx, by, net, layer):
+        """穴・他ネットの裏パッド・行のバスに当たらないか。"""
+        dx, dy = bx - ax, by - ay
+        ll = dx * dx + dy * dy
+
+        def d(px, py):
+            t = 0 if ll == 0 else max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / ll))
+            return math.dist((ax + t * dx, ay + t * dy), (px, py))
+        if any(d(hx, hy) < r + clr for hx, hy, r in holes):
+            return False
+        if layer != pcbnew.B_Cu:
+            return True                      # 表は行もパッドも居ない
+        if any(d(sx, sy) < clr + half for sx, sy, n, half in smd if n != net):
+            return False
+        # 行のバス（横一直線）との距離。跨いだら当然アウト。
+        #
+        # ⚠️ **跨ぐ「その点の x」で見る。**端点の x で見てはいけない。
+        # 斜めの区間は端点のどちらとも違う x で行を横切る（COL0 の
+        # SW19→SW25 は 45° の途中 x=99.099 で y=122.7 を通り、ROW_B の
+        # 左端 109.675 より左＝**当たらない**）。端点で見ると、行の
+        # 無い場所に橋を架けたり、引けるはずのホップを弾いたりする。
+        lo, hi = min(ay, by), max(ay, by)
+        for ry in row_y:
+            if not (lo - clr < ry < hi + clr):
+                continue
+            if by == ay:                     # 横の区間は範囲全体で見る
+                if _row_blocks(ry, ax) or _row_blocks(ry, bx):
+                    return False
+                continue
+            t = (ry - ay) / (by - ay)        # 交わる点を内挿する
+            t = max(0.0, min(1.0, t))
+            if _row_blocks(ry, ax + t * (bx - ax)):
+                return False
+        return True
+
+    def _same_path(a, b):
+        """2 つの経路が同じか（0.001mm まで）。"""
+        if len(a) != len(b):
+            return False
+        for (p1, p2) in zip(a, b):
+            if p1[4] != p2[4]:
+                return False
+            if any(abs(u - v) > 0.001 for u, v in zip(p1[:4], p2[:4])):
+                return False
+        return True
+
+    def _is_standard(path, ax, ay, cx, cy, ry):
+        """**標準形か。**縦 → 橋 → 縦 → 45° → 縦 だけで出来ていること。
+
+        「横に走る区間」を持たないもの、かつ 45° が 1 回だけのものを
+        標準とする。同じ dx のホップなら、この条件を満たす経路は
+        （曲がる高さが違っても）見た目が揃う。
+
+        ⚠️ **横の区間を許すと形が崩れる。**実測で、同じ dx=+9.525 の
+        3 本が「45° 一本」「45° のあと横に 6.275mm」「45° のあと横に
+        0.275mm」とばらばらになっていた（2026-08-18）。
+        """
+        diag = flat = 0
+        for (x1, y1, x2, y2, _l) in path:
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dx < 1e-6:                 # 縦
+                continue
+            if dy < 1e-6:                 # 横に走っている
+                flat += 1
+            elif abs(dx - dy) < 1e-6:     # 45°
+                diag += 1
+            else:
+                return False              # 45° でない斜め
+        return flat == 0 and diag <= 1
+
+    def _margin(path, net):
+        """経路の、穴・他ネットのパッドまでの最小の余裕（mm）。
+
+        **「通るか」だけでなく「どれだけ余裕があるか」も見る。**
+        規格ぎりぎり（0.25mm）で通る経路と、1.0mm 空いている経路の
+        どちらも「合格」になってしまうため（2026-08-17）。
+        """
+        m = 9.0
+        for (x1, y1, x2, y2, layer) in path:
+            dx, dy = x2 - x1, y2 - y1
+            ll = dx * dx + dy * dy
+
+            def d(px, py):
+                t = 0 if ll == 0 else max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / ll))
+                return math.dist((x1 + t * dx, y1 + t * dy), (px, py))
+            for hx, hy, r in holes:
+                m = min(m, d(hx, hy) - r - TRACK_W / 2)
+            if layer != pcbnew.B_Cu:
+                continue
+            for sx, sy, nn, half in smd:
+                if nn == net:
+                    continue
+                m = min(m, d(sx, sy) - half - TRACK_W / 2)
+        return m
+
+    cols = {}
+    for fp in board.GetFootprints():
+        # **接頭辞で走査しない。**`SW` は電源スイッチ（SW_PWR）を巻き込む。
+        if not re.fullmatch(r"SW\d+", fp.GetReference()):
+            continue
+        pad = fp.FindPadByNumber("1")
+        if pad.GetNetname().startswith("COL"):
+            cols.setdefault(pad.GetNetname(), []).append(pad)
+
+    n = vias = skipped = 0
+    _why = []
+    for lane_i, (name, pads) in enumerate(sorted(cols.items())):
+        pads.sort(key=lambda p: p.GetPosition().y)
+        for a, b_ in zip(pads, pads[1:]):
+            ax, ay = a.GetPosition().x / 1e6, a.GetPosition().y / 1e6
+            cx, cy = b_.GetPosition().x / 1e6, b_.GetPosition().y / 1e6
+            knee = abs(cy - ay) - abs(cx - ax)
+            # ⚠️ **ここで `knee < 0` を弾かないこと。**形 C' は横が縦より
+            # 長い場合のために書いてあるのに、その手前で return していて
+            # **一度も呼ばれていなかった**（左 COL3/COL5。2026-08-17）。
+            # 形 A / B は自分の条件で弾くので、ここでの門は要らない。
+            # **本当に跨ぐ行だけ数える。**y が間にあっても、その行が
+            # x 方向に届いていなければ障害物ではない（COL0 がこれ）。
+            # ⚠️ **降りる場所の x で見る。**`or _row_blocks(ry, cx)` と
+            # 書いて、**行き先の x に行があるだけで橋を架けていた**
+            # （2026-08-17・利用者「どう見てもいらないんだけど」）。
+            # COL0 の SW19→SW25 は x=95.290 で y=122.7 を通るのに、
+            # ROW_B は x=109.675 からで 14.4mm 右。**そこに行は無い。**
+            # 横へ寄るのは行を過ぎたあとなので、cx は関係ない。
+            # 素直な形（縦 → 45°）が行を跨ぐかは、**その 45° が行と
+            # 交わる点の x** で決まる。縦の区間で跨ぐなら x=ax。
+            knee_c = abs(cy - ay) - abs(cx - ax)
+            def _crosses(ry):
+                if ry <= ay + max(knee_c, 0):     # 縦の区間で跨ぐ
+                    return _row_blocks(ry, ax)
+                t = ry - (ay + max(knee_c, 0))    # 45° に入ってからの距離
+                return _row_blocks(ry, ax + t * (1 if cx > ax else -1))
+            crossed = [ry for ry in row_y if ay < ry < cy and _crosses(ry)]
+
+            if not crossed:
+                # **跨ぐ行が無い。潜る必要が無いので裏だけで引く。**
+                # 縦 → 45° → 縦。ビアは 1 個も要らない。
+                knee0 = abs(cy - ay) - abs(cx - ax)
+                cands = []
+                if knee0 >= 0:
+                    # 縦 → 45°（素直な形）
+                    cands.append([(ax, ay, ax, ay + knee0, pcbnew.B_Cu),
+                                  (ax, ay + knee0, cx, cy, pcbnew.B_Cu)])
+                    # **先に 45° で寄ってから降りる。**縦の区間が元の x に
+                    # 長く残る形だと、スタビの穴を抜けられないことがある
+                    # （左 COL0 SW13→SW19 が ST19 に当たる）。
+                    cands.append([(ax, ay, cx, ay + abs(cx - ax), pcbnew.B_Cu),
+                                  (cx, ay + abs(cx - ax), cx, cy, pcbnew.B_Cu)])
+                    # **途中で寄る（縦 → 45° → 縦）。**上の 2 つは
+                    # 「元の x」か「行き先の x」のどちらかに長く留まる
+                    # ので、その真上にスタビの穴があると詰む
+                    # （左 COL0 SW13→SW19。ST19 が x=90.437 で列は 90.528、
+                    # 一方 45° を先にやると SW13 自身の胴に当たる）。
+                    # **寄る高さを選べるようにすれば抜けられる。**
+                    step = 0.5
+                    ky = ay + step
+                    while ky < cy - abs(cx - ax):
+                        cands.append([
+                            (ax, ay, ax, ky, pcbnew.B_Cu),
+                            (ax, ky, cx, ky + abs(cx - ax), pcbnew.B_Cu),
+                            (cx, ky + abs(cx - ax), cx, cy, pcbnew.B_Cu)])
+                        ky += step
+                    # **縦 → 45° → 横 → 縦。**上の形は 45° をパッドの近くで
+                    # 始めるので、**スイッチ自身の胴の角をかすめる**
+                    # （左 COL0 SW19→SW25 で、SW19 の φ1.75 位置決めポスト
+                    # まで 0.330mm しか無かった。規格 0.25mm は満たすが、
+                    # 他の列は 1.030mm ある。2026-08-17・利用者
+                    # 「配線が穴にかなりギリギリです」）。
+                    # **胴を過ぎるまで真下に降りてから曲がる**と 1.030mm
+                    # 取れる。横の区間で高さを合わせる。
+                    ky = ay + 0.25
+                    while ky < cy:
+                        hy = ky + abs(cx - ax)
+                        if hy <= cy:
+                            cands.append([
+                                (ax, ay, ax, ky, pcbnew.B_Cu),
+                                (ax, ky, ax + (cx - ax), hy, pcbnew.B_Cu),
+                                (cx, hy, cx, cy, pcbnew.B_Cu)])
+                        # 45° を短く切り上げて、残りを横で詰める形も試す
+                        for hy2 in (ky + 1.0, ky + 2.0, ky + 4.0, ky + 8.0):
+                            if hy2 > cy:
+                                continue
+                            mx = ax + (hy2 - ky) * (1 if cx > ax else -1)
+                            if (cx - mx) * (1 if cx > ax else -1) < 0:
+                                continue
+                            cands.append([
+                                (ax, ay, ax, ky, pcbnew.B_Cu),
+                                (ax, ky, mx, hy2, pcbnew.B_Cu),
+                                (mx, hy2, cx, hy2, pcbnew.B_Cu),
+                                (cx, hy2, cx, cy, pcbnew.B_Cu)])
+                        ky += 0.25
+                # **通る形のうち、一番余裕のあるものを採る。**
+                # 「最初に通ったもの」で決めると、規格は満たすが余裕が
+                # 無い経路が残る（COL0 が 0.330mm、他の列は 1.030mm）。
+                ok = [c for c in cands
+                      if all(_clear(x1, y1, x2, y2, name, la)
+                             for (x1, y1, x2, y2, la) in c)]
+                plain = max(ok, key=lambda c: _margin(c, name), default=None)
+                if plain:
+                    for (x1, y1, x2, y2, la) in plain:
+                        if (x1, y1) == (x2, y2):
+                            continue
+                        t = pcbnew.PCB_TRACK(board)
+                        t.SetStart(pcbnew.VECTOR2I_MM(x1, y1))
+                        t.SetEnd(pcbnew.VECTOR2I_MM(x2, y2))
+                        t.SetWidth(pcbnew.FromMM(TRACK_W))
+                        t.SetLayer(la)
+                        t.SetNet(a.GetNet())
+                        board.Add(t)
+                        n += 1
+                    continue
+                skipped += 1
+                _why.append((name, '跨ぐ行が無いが裏だけで引けない'))
+                continue
+
+            if len(crossed) != 1:             # 想定は 1 本ちょうど
+                skipped += 1
+                _why.append((name, f'跨ぐ行 {len(crossed)} 本'))
+                continue
+            ry = crossed[0]
+
+            # **形は 2 通り試す。**橋は必ず「縦に降りている区間」に置く
+            # （斜めの上に置くと橋まで斜めになり、揃わない）。
+            #
+            #   A: 縦に降りる → 45° で寄る → 縦        跨ぎが上寄りのとき
+            #   B: 45° で寄る → 縦に降りる            跨ぎが下寄りのとき
+            #
+            # 片方しか試さないと、跨ぎが斜めに掛かるホップを取りこぼす
+            # （左 COL1 SW20→SW25 が実際にそうだった。2026-08-17）。
+            shapes = []
+            if ay + BRIDGE_DY < ry < ay + knee - BRIDGE_DY:
+                shapes.append([                       # A
+                    (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                    (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                    (ax, ry + BRIDGE_DY, ax, ay + knee, pcbnew.B_Cu),
+                    (ax, ay + knee, cx, cy, pcbnew.B_Cu),
+                ])
+            # B は先に 45° で cx まで寄ってから、cx の縦線で跨ぐ
+            by = ay + abs(cx - ax)                    # 斜めを終えた y
+            if by + BRIDGE_DY < ry < cy - BRIDGE_DY:
+                shapes.append([                       # B
+                    (ax, ay, cx, by, pcbnew.B_Cu),
+                    (cx, by, cx, ry - BRIDGE_DY, pcbnew.B_Cu),
+                    (cx, ry - BRIDGE_DY, cx, ry + BRIDGE_DY, pcbnew.F_Cu),
+                    (cx, ry + BRIDGE_DY, cx, cy, pcbnew.B_Cu),
+                ])
+            # E: **下のキーの x で降ろし、横移動は上のキーの側でやる。**
+            #
+            # 最下段は幅広キー（Alt / Meta 1.5u / L-Space 3.0u）なので、
+            # **キーの中心が自分の列から大きく外れている**（左 COL5 の
+            # L-Space は 24mm ずれ）。上のキーから真下に降ろすと、
+            # 下のキーまで長い横断になる（実測: 最下段 3 本で 164.44mm）。
+            #
+            # ⚠️ **これは配線ではなく割り当ての問題**（open-gaps #46）。
+            # dtsi が「キーの真上を通らない列」を選んでいる。ファームを
+            # 直せば消えるが、それは後日なので**配線側で短くしておく**
+            # （2026-08-17・利用者「とりあえず配線を」）。
+            #
+            # 上のキーの側（行の上）で横に寄せてから、下のキーの x で
+            # まっすぐ降ろす。横移動が行の上に収まるので、下は素直な縦。
+            up_lane = ry - PAD_LANE_DY - lane_i * LANE_PITCH
+            if ay + BRIDGE_DY < up_lane and up_lane > ay:
+                shapes.append([                       # E
+                    (ax, ay, ax, up_lane, pcbnew.B_Cu),
+                    (ax, up_lane, cx, up_lane, pcbnew.B_Cu),
+                    (cx, up_lane, cx, ry - BRIDGE_DY, pcbnew.B_Cu),
+                    (cx, ry - BRIDGE_DY, cx, ry + BRIDGE_DY, pcbnew.F_Cu),
+                    (cx, ry + BRIDGE_DY, cx, cy, pcbnew.B_Cu),
+                ])
+            # C: **その場で真下に降りて跨ぎ、横移動は行の下でやる。**
+            #
+            # 最下段の 3 本（左 COL1/COL3/COL5）はこれでないと引けない。
+            # 行 122.7 が 2 つのキーのちょうど間にあり、45° の斜めが
+            # 行を跨いでしまうため（形 A も B も橋が斜めに乗る）。
+            # さらに COL3/COL5 は横移動（28.575 / 23.812mm）が縦
+            # （19.05mm）より大きく、**45° 1 回では届かない**。
+            #
+            # 降りる → 橋 → 45° で寄る → 縦、の順にすると、横移動が
+            # どれだけ長くても行の下側だけで処理できる。
+            if ay + BRIDGE_DY < ry < cy - BRIDGE_DY:
+                dy_left = cy - (ry + BRIDGE_DY)       # 行の下に残る縦の余裕
+                run = abs(cx - ax)
+                if dy_left >= run:                    # 45° が収まる
+                    ky = cy - run                     # 斜めを始める y
+                    # 斜めの開始が行のパッド列に近すぎないこと
+                    if ky >= ry + PAD_LANE_DY + lane_i * LANE_PITCH:
+                        shapes.append([               # C
+                            (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                            (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                            (ax, ry + BRIDGE_DY, ax, ky, pcbnew.B_Cu),
+                            (ax, ky, cx, cy, pcbnew.B_Cu),
+                        ])
+                if True:
+                    # D: **跨いだ直後にレーンで横へ寄り、そのあと降りる。**
+                    #
+                    # C は「斜めを cy - run から始める」ので、**縦の区間が
+                    # 元の列の x に長く残る**。そこにスタビの穴があると
+                    # 通れない（左 COL0 SW13→SW19。ST19 の穴が x=90.437 と
+                    # 列の x=90.528 のほぼ真上にある）。
+                    # 先に横へ逃げてから降りれば、その x を離れられる。
+                    lane_d = ry + PAD_LANE_DY + lane_i * LANE_PITCH
+                    if lane_d < cy - abs(cx - ax):
+                        ky2 = cy - abs(cx - ax)
+                        shapes.append([               # D
+                            (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                            (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                            (ax, ry + BRIDGE_DY, ax, lane_d, pcbnew.B_Cu),
+                            (ax, lane_d, cx, lane_d + abs(cx - ax), pcbnew.B_Cu),
+                            (cx, lane_d + abs(cx - ax), cx, cy, pcbnew.B_Cu),
+                        ]) if lane_d + abs(cx - ax) <= cy else None
+                # F: **跨いだあと、曲がる高さを選べるようにする。**
+                #
+                # C も D も曲がる y が 1 つに決まっている（C は cy-run、
+                # D はレーン）。**その 1 点がスタビの穴の真横だと詰む**
+                # （右 COL6 SW16→SW24。ST24 の φ3.05 が x=202.356 に
+                # あり、どちらの形も 0.289mm しか空かなかった。
+                # 2026-08-17・利用者「SW16-24 は工夫して」）。
+                #
+                # 曲がる高さを振り、足りない横移動は横の区間で詰める。
+                # 45° を保ったまま**穴の左を抜ける**経路が見つかる
+                # （実測で余裕 1.030mm ＝ 他の列と同じ値）。
+                ky3 = ry + BRIDGE_DY + 0.2
+                while ky3 < cy:
+                    hy3 = ky3 + 0.25
+                    while hy3 <= cy:
+                        mx3 = ax + (hy3 - ky3) * (1 if cx > ax else -1)
+                        if (cx - mx3) * (1 if cx > ax else -1) >= -0.001:
+                            shapes.append([           # F
+                                (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                                (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                                (ax, ry + BRIDGE_DY, ax, ky3, pcbnew.B_Cu),
+                                (ax, ky3, mx3, hy3, pcbnew.B_Cu),
+                                (mx3, hy3, cx, hy3, pcbnew.B_Cu),
+                                (cx, hy3, cx, cy, pcbnew.B_Cu),
+                            ])
+                        hy3 += 1.0
+                    ky3 += 0.5
+                if dy_left < run:
+                    # **横が縦より長い。**45° を 1 回では届かないので、
+                    # 行の下で横に走ってから 45° で降りる。
+                    #
+                    # ⚠️ **横に走る y は、行のダイオードの下まで下げる。**
+                    # `ry + BRIDGE_DY`（＝123.35）で走ると、行の K 側
+                    # パッド（y=122.7・半対角 0.75）まで 0.65mm しか無く、
+                    # 必要な 1.10mm を満たさない。**行のバスは線だけでなく
+                    # パッドの列でもある**——線を避けても、パッドを擦る
+                    # （左 COL1/COL3/COL5 が全部これで落ちていた）。
+                    lane = ry + PAD_LANE_DY + lane_i * LANE_PITCH
+                    # ⚠️ **符号に注意。**横に走るのを「行き過ぎて戻る」形に
+                    # しないこと。45° で降りる分（cy - lane）だけ **cx の
+                    # 手前で止める**。逆向きに取ると目標を追い越してから
+                    # 戻ってくる（左 COL3 が x=117.1 まで行って 135.8 へ
+                    # 戻り、18.7mm 無駄にしていた。2026-08-17）。
+                    kx = cx - (cy - lane) * (1 if cx > ax else -1)
+                    shapes.append([                   # C'
+                        (ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                        (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                        (ax, ry + BRIDGE_DY, ax, lane, pcbnew.B_Cu),
+                        (ax, lane, kx, lane, pcbnew.B_Cu),
+                        (kx, lane, cx, cy, pcbnew.B_Cu),
+                    ])
+            if not shapes:
+                skipped += 1
+                _why.append((name, '跨ぎが斜めに掛かる'))
+                continue
+
+            # **短い順に試す。**定義順に試すと、たまたま先に書いた形が
+            # 勝って長い経路が残る（最下段で C が E に勝っていた）。
+            def _len(cand):
+                return sum(math.dist((x1, y1), (x2, y2))
+                           for (x1, y1, x2, y2, _l) in cand)
+            # **通る形のうち、余裕が一番大きいものを採る。**
+            # 「最初に通ったもの」だと、規格は満たすが穴すれすれの経路が
+            # 残る（右 COL6 が ST24 まで 0.289mm だった。2026-08-17）。
+            # 同じ余裕なら短い方（_len）を選ぶ。
+            path = None
+            _ok = []
+            for cand in sorted(shapes, key=_len):
+                # ⚠️ **引数の順を間違えない。**seg の末尾は層なので、
+                # `_clear(*seg, name)` だと層と net が入れ替わり、
+                # 「表なので検査不要」の枝に落ちて**パッドを一切見なくなる**
+                # （右で U2 の上を通し、DRC に短絡 2 件。2026-08-17）。
+                if not all(_clear(x1, y1, x2, y2, name, layer)
+                           for (x1, y1, x2, y2, layer) in cand):
+                    continue
+                # 橋のビアは、跨ぐ行以外の行からも離れていること
+                vx = next(x1 for (x1, _a, _b, _c, l) in cand if l == pcbnew.F_Cu)
+                if any(abs(ry2 - vy) < VIA_D / 2 + 0.25 + TRACK_W / 2
+                       for vy in (ry - BRIDGE_DY, ry + BRIDGE_DY)
+                       for ry2 in row_y if ry2 != ry):
+                    continue
+                _ok.append(cand)
+            if _ok:
+                # **標準形を先に採る**（2026-08-18・利用者「col のラインが、
+                # 似ているが微妙に不規則です。なぜですか？」）。
+                #
+                # ⚠️ **「余裕が最大のもの」で選ぶと形が揃わない。**候補には
+                # 曲がる高さを 0.25〜0.5mm 刻みで振ったものが何十通りも
+                # 入っていて、**周りの障害物はキーごとに少しずつ違う**ので
+                # 勝つ候補が列ごとに変わる。実測で、同じ dx=+9.525 の
+                # ホップが 3 本とも違う形になっていた（曲がる y が
+                # 67.400 / 66.400 / 66.400、45° の使い方もばらばら）。
+                #
+                # **同じ dx なら同じ形になる**ように、標準形（A → C の
+                # 素直な順）が通るならそれを採り、通らないときだけ
+                # 余裕の大きいものへ落とす。
+                # **形 A ちょうどのものを探す**（縦 → 橋 → 縦 → 45° → 縦）。
+                # 「横に走らない」だけでは、45° を始める高さが自由に
+                # 選べてしまい**同じ dx でも形が変わる**（実測で
+                # dx=+9.525 が 3 種類）。**A の座標そのもの**を標準とする。
+                canon = [(ax, ay, ax, ry - BRIDGE_DY, pcbnew.B_Cu),
+                         (ax, ry - BRIDGE_DY, ax, ry + BRIDGE_DY, pcbnew.F_Cu),
+                         (ax, ry + BRIDGE_DY, ax, ay + knee, pcbnew.B_Cu),
+                         (ax, ay + knee, cx, cy, pcbnew.B_Cu)]
+                std = next((c for c in _ok if _same_path(c, canon)), None)
+                if std is not None:
+                    path = std
+                else:
+                    best_m = max(_margin(c, name) for c in _ok)
+                    path = next(c for c in _ok
+                                if _margin(c, name) >= best_m - 0.001)
+            if path is None:
+                skipped += 1
+                _why.append((name, '障害物'))
+                continue
+            # **橋の x は F.Cu の区間から取る。**`path[1]` 決め打ちだと
+            # 橋が 2 番目に無い形（E）でビアが別の場所に落ちる。
+            vx = next(x1 for (x1, _y1, _x2, _y2, layer) in path
+                      if layer == pcbnew.F_Cu)
+            for (x1, y1, x2, y2, layer) in path:
+                if (x1, y1) == (x2, y2):
+                    continue
+                t = pcbnew.PCB_TRACK(board)
+                t.SetStart(pcbnew.VECTOR2I_MM(x1, y1))
+                t.SetEnd(pcbnew.VECTOR2I_MM(x2, y2))
+                t.SetWidth(pcbnew.FromMM(TRACK_W))
+                t.SetLayer(layer)
+                t.SetNet(a.GetNet())
+                board.Add(t)
+                n += 1
+            for vy in (ry - BRIDGE_DY, ry + BRIDGE_DY):
+                v = pcbnew.PCB_VIA(board)
+                # **橋の x を使う。**`ax` 決め打ちだと形 B（先に 45° で
+                # 寄る形）でビアだけ元の列に取り残される。
+                v.SetPosition(pcbnew.VECTOR2I_MM(vx, vy))
+                v.SetWidth(pcbnew.FromMM(VIA_D))
+                v.SetDrill(pcbnew.FromMM(VIA_DRILL))
+                v.SetNet(a.GetNet())
+                # **層の対を明示する。**忘れると KiCad が「片側しか
+                # 繋がっていないビア」と見なし、via_dangling が出る
+                # （2026-08-17。guide_vias は最初から書いていた）。
+                v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+                board.Add(v)
+                vias += 1
+    for _n, _r in _why:
+        print(f'      引かなかった: {_n} … {_r}')
+    return n, vias, skipped
+
+
+def _drop_gnd_vias_hitting(board, clearance=0.25):
+    """**あとから載せた配線に当たる GND のビアを外す。**
+
+    `gnd_fanout.place` は配線より先に走るので、利用者が引いた線を
+    知らない。銅の端どうしが `clearance` を割るものを落とす
+    （ベタの塗り直しと離島の繋ぎ直しは呼び出し側でやる）。
+
+    ⚠️ **ビアだけでなく、そのスタブの線も落とす。**ファンアウトは
+    「パッド → 短い線 → ビア」の組で、ビアだけ消すと線が残る。
+    2026-08-23 に実際に出た: COL8 を引き直したら、残った GND の
+    スタブと `tracks_crossing` になった（ビアは既に外れていた）。
+    """
+    import math
+
+    def near(ax, ay, bx, by, hw2):
+        """区間 (ax,ay)-(bx,by) が、どれかの線と clearance を割るか。"""
+        for (x1, y1, x2, y2, hw) in lines:
+            # 端点 × 相手区間 の 4 通りで測る（区間どうしの最短距離の近似）
+            def pt(px, py, x1_, y1_, x2_, y2_):
+                dx, dy = x2_ - x1_, y2_ - y1_
+                ll = dx * dx + dy * dy
+                u = 0 if ll == 0 else max(0, min(1, ((px - x1_) * dx + (py - y1_) * dy) / ll))
+                return math.dist((x1_ + u * dx, y1_ + u * dy), (px, py))
+            d = min(pt(ax, ay, x1, y1, x2, y2), pt(bx, by, x1, y1, x2, y2),
+                    pt(x1, y1, ax, ay, bx, by), pt(x2, y2, ax, ay, bx, by))
+            if d - hw - hw2 < clearance:
+                return True
+        return False
+
+    lines = []
+    for t in board.GetTracks():
+        if t.GetClass() != "PCB_TRACK" or t.GetNetname() in ("GND", ""):
+            continue
+        lines.append((t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                      t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                      pcbnew.ToMM(t.GetWidth()) / 2))
+    dropped = 0
+    for v in list(board.GetTracks()):
+        if v.GetClass() != "PCB_VIA" or v.GetNetname() != "GND":
+            continue
+        vx, vy = v.GetPosition().x / 1e6, v.GetPosition().y / 1e6
+        r = pcbnew.ToMM(v.GetWidth()) / 2
+        for (x1, y1, x2, y2, hw) in lines:
+            dx, dy = x2 - x1, y2 - y1
+            ll = dx * dx + dy * dy
+            s = 0 if ll == 0 else max(0, min(1, ((vx - x1) * dx + (vy - y1) * dy) / ll))
+            if math.dist((x1 + s * dx, y1 + s * dy), (vx, vy)) - r - hw < clearance:
+                board.Delete(v)
+                dropped += 1
+                break
+    # **スタブの線も同じ基準で落とす。**残すと交差の相手になる。
+    for t in list(board.GetTracks()):
+        if t.GetClass() != "PCB_TRACK" or t.GetNetname() != "GND":
+            continue
+        if near(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                pcbnew.ToMM(t.GetWidth()) / 2):
+            board.Delete(t)
+            dropped += 1
+    return dropped
+
+
+def _drop_stitch_vias(board, tol=0.001):
+    """**どこにも繋がっていない GND のビアを外す。**
+
+    （2026-08-22・利用者「どこにもつながってない GND ビアを一旦入れない
+    ようにしてほしい。それは最後にやる工程なはずなので」）
+
+    `gnd_fanout.stitch_islands` が打つ離島の縫い止めは、**ベタ以外の何にも
+    触れていない。**パッドにも配線にも繋がらないので、配線が動けば要らなく
+    なる／別の場所に要る。**配線が固まるまでは打たない。**
+
+    ここでは「GND のパッドにも GND の配線にも触れていないビア」を落とす。
+    `gnd_fanout.place` のファンアウト（パッドの真横）は残る。
+    """
+    import math
+    keep = []
+    for f in board.GetFootprints():
+        for pad in f.Pads():
+            if pad.GetNetname() == "GND":
+                keep.append((pad.GetPosition().x / 1e6, pad.GetPosition().y / 1e6,
+                             max(pcbnew.ToMM(pad.GetSize().x),
+                                 pcbnew.ToMM(pad.GetSize().y)) / 2))
+    lines = []
+    for t in board.GetTracks():
+        if t.GetClass() == "PCB_TRACK" and t.GetNetname() == "GND":
+            lines.append((t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                          t.GetEnd().x / 1e6, t.GetEnd().y / 1e6,
+                          pcbnew.ToMM(t.GetWidth()) / 2))
+    dropped = 0
+    for v in list(board.GetTracks()):
+        if v.GetClass() != "PCB_VIA" or v.GetNetname() != "GND":
+            continue
+        vx, vy = v.GetPosition().x / 1e6, v.GetPosition().y / 1e6
+        r = pcbnew.ToMM(v.GetWidth()) / 2
+        touches = any(math.dist((px, py), (vx, vy)) - r - pr <= tol
+                      for (px, py, pr) in keep)
+        if not touches:
+            for (x1, y1, x2, y2, hw) in lines:
+                dx, dy = x2 - x1, y2 - y1
+                ll = dx * dx + dy * dy
+                u = 0 if ll == 0 else max(0, min(1, ((vx - x1) * dx + (vy - y1) * dy) / ll))
+                if math.dist((x1 + u * dx, y1 + u * dy), (vx, vy)) - r - hw <= tol:
+                    touches = True
+                    break
+        if not touches:
+            board.Delete(v)
+            dropped += 1
+    return dropped
+
+
+
+# レジストの開口はドリルより一回り大きい。シルクはその外へ逃がす。
+SILK_MASK_MARGIN_MM = 0.20
+# シルクを基板の縁からどれだけ内側に留めるか。
+SILK_EDGE_MM = 0.30
+
+
+def _silk_obstacles(board, skip_ref=None):
+    """シルクが避けるべきもの——**穴**と**他のシルク**を集める。
+
+    （2026-08-23。それまで `_hole_label_boxes` はキーの枠しか見て
+    いなかったので、`ST*` の名札が**キーの中央穴の縁**に立ったまま
+    残っていた。DRC が `silk_over_copper` を左 3・右 4 出していた。）
+
+    **穴はレジストが開くので、シルクが乗ると印字が切り取られる**
+    （KiCad の `Silkscreen clipped by solder mask`）。読めない名札は
+    組む人を迷わせるので、線が無いのと同じ。
+
+    **穴には余白を足す。**レジストの開口はドリルより一回り大きい。
+    """
+    boxes = []
+    for f in board.GetFootprints():
+        if f.GetReference() == skip_ref:
+            continue
+        for pad in f.Pads():
+            r = max(pcbnew.ToMM(pad.GetSize().x), pcbnew.ToMM(pad.GetSize().y),
+                    pcbnew.ToMM(pad.GetDrillSize().x),
+                    pcbnew.ToMM(pad.GetDrillSize().y)) / 2
+            if r <= 0:
+                continue
+            r += SILK_MASK_MARGIN_MM
+            x, y = pad.GetPosition().x / 1e6, pad.GetPosition().y / 1e6
+            boxes.append((x - r, y - r, x + r, y + r))
+        for g in f.GraphicalItems():
+            if g.GetLayerName() in ("F.Silkscreen", "B.Silkscreen"):
+                bb = g.GetBoundingBox()
+                boxes.append((bb.GetLeft() / 1e6, bb.GetTop() / 1e6,
+                              bb.GetRight() / 1e6, bb.GetBottom() / 1e6))
+    return boxes
+
+
+def _hole_label_boxes(board):
+    """キーのシルクの枠を集める（名札の逃がし先を決めるため）。"""
+    boxes = []
+    for f in board.GetFootprints():
+        if not f.GetReference().startswith("SW"):
+            continue
+        for g in f.GraphicalItems():
+            if g.GetLayerName() == "F.Silkscreen":
+                bb = g.GetBoundingBox()
+                boxes.append((bb.GetLeft() / 1e6, bb.GetTop() / 1e6,
+                              bb.GetRight() / 1e6, bb.GetBottom() / 1e6))
+    return boxes
+
+
+def _place_hole_label(board, fp, off=3.15, clr=0.15):
+    """取付穴の名札を、キーのシルクの枠に当たらない向きへ回す。
+
+    **当たらない向きが無ければ既定のまま置く。**動かせないことを
+    DRC に出させる。名札を消して黙らせない（消すと基板上で穴が
+    識別できなくなり、組む人が困る）。
+    """
+    return _nudge_text(board, fp.Reference(),
+                       fp.GetPosition().x / 1e6, fp.GetPosition().y / 1e6,
+                       _hole_label_boxes(board), off, clr)
+
+
+def _nudge_text(board, t, px, py, boxes, off, clr=0.15, rings=1):
+    """文字を、当たらない向きへ動かす。**当たらない先が無ければ動かさない。**
+
+    `boxes` は避ける矩形の一覧。`off` は 1 段目の逃がし量で、
+    `rings` を増やすと 2 倍・3 倍と外へ広げて探す。
+
+    ⚠️ **基板の外へ出さない。**避けることしか見ずに逃がしたら、
+    板名が下端から **1.54mm はみ出した**（2026-08-23。DRC が
+    `silk_edge_clearance` を出して気づいた）。**逃げ場を探すときは、
+    枠の内側かどうかも同時に見る。**
+    """
+    edge = board.GetBoardEdgesBoundingBox()
+    ex0, ey0 = edge.GetLeft() / 1e6 + SILK_EDGE_MM, edge.GetTop() / 1e6 + SILK_EDGE_MM
+    ex1, ey1 = edge.GetRight() / 1e6 - SILK_EDGE_MM, edge.GetBottom() / 1e6 - SILK_EDGE_MM
+    bb = t.GetBoundingBox()
+    hw = (bb.GetRight() - bb.GetLeft()) / 2e6
+    hh = (bb.GetBottom() - bb.GetTop()) / 2e6
+    for k in range(1, rings + 1):
+        d = off * k
+        for dx, dy in ((0, -d), (0, d), (-d, 0), (d, 0),
+                       (-d, -d), (d, -d), (-d, d), (d, d)):
+            cx, cy = px + dx, py + dy
+            x0, y0 = cx - hw - clr, cy - hh - clr
+            x1, y1 = cx + hw + clr, cy + hh + clr
+            if x0 < ex0 or y0 < ey0 or x1 > ex1 or y1 > ey1:
+                continue                      # 基板の外へ出る
+            if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1
+                       for b in boxes):
+                t.SetPosition(pcbnew.VECTOR2I(int(cx * 1e6), int(cy * 1e6)))
+                return True
+    return False
+
+
+def _fix_silk_clashes(board):
+    """**シルクが穴や他のシルクに乗っているものを逃がす**（2026-08-23）。
+
+    対象は 3 つ:
+      * `ST*`（スタビ）の名札 — 既定位置が**キーの中央穴（φ4）の縁**
+      * キー名のシルク — `ky + 8.2` が穴や U1 の輪郭に当たることがある
+      * 板名 — 端のスタビの穴に届いていた
+
+    ⚠️ **キー名は 61 個ある。**一律に動かすと、いま合っている 59 個の
+    見え方まで変わる。**当たったものだけ逃がす。**
+
+    戻り値は (逃がした数, 逃がせなかった数)。
+    """
+    moved = stuck = 0
+    for f in board.GetFootprints():
+        if not f.GetReference().startswith("ST"):
+            continue
+        boxes = _silk_obstacles(board, skip_ref=f.GetReference())
+        if _nudge_text(board, f.Reference(),
+                       f.GetPosition().x / 1e6, f.GetPosition().y / 1e6,
+                       boxes, off=2.6, rings=3):
+            moved += 1
+        else:
+            stuck += 1
+    boxes = _silk_obstacles(board)
+    for d in board.GetDrawings():
+        if d.GetClass() != "PCB_TEXT":
+            continue
+        if d.GetLayer() not in (pcbnew.F_SilkS, pcbnew.B_SilkS):
+            continue
+        bb = d.GetBoundingBox()
+        x0, y0 = bb.GetLeft() / 1e6, bb.GetTop() / 1e6
+        x1, y1 = bb.GetRight() / 1e6, bb.GetBottom() / 1e6
+        if not any(x0 < b[2] and b[0] < x1 and y0 < b[3] and b[1] < y1
+                   for b in boxes):
+            continue
+        px, py = d.GetPosition().x / 1e6, d.GetPosition().y / 1e6
+        if _nudge_text(board, d, px, py, boxes, off=1.3, rings=4):
+            moved += 1
+        else:
+            stuck += 1
+    return moved, stuck
+
+
+
+def apply_matrix_routing(board, half):
+    """**利用者が引いた配線（pcb/matrix_routing.json）を載せる。**
+
+    （2026-08-22・利用者「**今の** matrix_only からスクリプト化すれば？」）
+
+    `tools/export_matrix_routing.py` が `pcb/matrix_only/` から書き出した
+    座標をそのまま置く。**規則を推測して引き直さない**——私は 3 回失敗して
+    いる（着地で U1 の他のパッドを横切る／レーンを縦に伸ばして交差する／
+    跨がない行に橋を架ける）。**利用者が引いた座標そのものが仕様。**
+
+    ⚠️ **GND は入っていない。**ベタとファンアウトで別に配り直すため
+    （書き出しに含めると古い塗りが固定される）。
+
+    ここが載る分は `prewire_*` が引いたものと重なるので、**同じネットの
+    既存の配線は一度消してから置く。**
+    """
+    import json
+    f = ROOT / "pcb" / "matrix_routing.json"
+    if not f.exists():
+        return 0, 0
+    data = json.loads(f.read_text()).get(half)
+    if not data:
+        return 0, 0
+
+    nets = {d["net"] for d in data["tracks"]} | {d["net"] for d in data["vias"]}
+    for t in list(board.GetTracks()):
+        if t.GetNetname() in nets:
+            board.Delete(t)
+
+    n = v = 0
+    for d in data["tracks"]:
+        net = board.FindNet(d["net"])
+        if net is None:
+            continue
+        w = pcbnew.PCB_TRACK(board)
+        w.SetStart(pcbnew.VECTOR2I_MM(d["x1"], d["y1"]))
+        w.SetEnd(pcbnew.VECTOR2I_MM(d["x2"], d["y2"]))
+        w.SetWidth(pcbnew.FromMM(d["w"]))
+        w.SetLayer(board.GetLayerID(d["layer"]))
+        w.SetNet(net)
+        board.Add(w)
+        n += 1
+    for d in data["vias"]:
+        net = board.FindNet(d["net"])
+        if net is None:
+            continue
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(pcbnew.VECTOR2I_MM(d["x"], d["y"]))
+        via.SetWidth(pcbnew.FromMM(d["d"]))
+        via.SetDrill(pcbnew.FromMM(d["drill"]))
+        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        via.SetNet(net)
+        board.Add(via)
+        v += 1
+
+    # **GND のビアも、利用者が置いた位置へ置き直す**（2026-08-23）。
+    #
+    # 利用者「GND ビアの位置を変えています。3V3 の近くにあるのは
+    # 危ないのかなと」。実測すると U1/U2 の GND ビアが V3V3 まで
+    # **0.302 / 0.312mm** しか無く、利用者はそれを **1.26〜1.86mm** へ
+    # 離していた。DRC の規定 0.25mm は通るが、**通るのと余裕があるのは別。**
+    # 相手が電源と GND なので、短絡すれば信号線どうしより結果が重い。
+    #
+    # `gnd_fanout.place` はパッドの形だけから機械的に決めるので、
+    # **手で寄せた位置は次の生成で消える。**だから写して置き直す。
+    #
+    # ⚠️ **「電源から N mm 離す」という規則にしようとして失敗した**
+    # （同日）。候補を弾くと逆に V3V3 の**配線**側へ押し出され、
+    # `_drop_gnd_vias_hitting` が 7 個中 4 個を落として U1/U2 の GND
+    # パッドがベタに繋がらなくなった。**パッドしか見ない探索に、
+    # 配線の都合は表現できない。**現物の座標を写すのが正しい。
+    #
+    # **スタブの線は写さない。**ここで置き直したビアへ引き直す。
+    g = data.get("gnd_vias") or []
+    gv = 0
+    if g:
+        gnd = board.FindNet("GND")
+        for t in list(board.GetTracks()):
+            if t.GetNetname() == "GND" and t.GetClass() == "PCB_VIA":
+                board.Delete(t)
+        for d in g:
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pcbnew.VECTOR2I_MM(d["x"], d["y"]))
+            via.SetWidth(pcbnew.FromMM(gnd_fanout.VIA_DIAMETER_MM))
+            via.SetDrill(pcbnew.FromMM(gnd_fanout.VIA_DRILL_MM))
+            via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            via.SetNet(gnd)
+            board.Add(via)
+            gv += 1
+        # **スタブも写す。**引き直そうとして層を取り違え、F.Cu に引いて
+        # ROW_D / ROW_E と交差した（同日）。利用者の板では B.Cu。
+        # `gnd_fanout.place` が引いた古いスタブは先に全部消す。
+        import math
+        for t in list(board.GetTracks()):
+            if t.GetNetname() == "GND" and t.GetClass() == "PCB_TRACK" \
+                    and math.dist((t.GetStart().x / 1e6, t.GetStart().y / 1e6),
+                                  (t.GetEnd().x / 1e6, t.GetEnd().y / 1e6)) < 8.0:
+                board.Delete(t)
+        for d in data.get("gnd_stubs") or []:
+            w = pcbnew.PCB_TRACK(board)
+            w.SetStart(pcbnew.VECTOR2I_MM(d["x1"], d["y1"]))
+            w.SetEnd(pcbnew.VECTOR2I_MM(d["x2"], d["y2"]))
+            w.SetWidth(pcbnew.FromMM(d["w"]))
+            w.SetLayer(board.GetLayerID(d["layer"]))
+            w.SetNet(gnd)
+            board.Add(w)
+
+    # **名札（シルク）の位置も写す**（2026-08-23・利用者「左右ともに
+    # シルクの位置を修正しました」）。IC とコネクタの名札を、部品の
+    # 輪郭や配線から外へ逃がしてある（右で silk の警告が 20 → 4 件）。
+    # **フットプリントの既定位置は生成のたびに戻る**ので、写さないと消える。
+    for d in data.get("labels") or []:
+        fp = board.FindFootprintByReference(d["ref"])
+        if fp is None:
+            continue
+        fp.Reference().SetPosition(pcbnew.VECTOR2I_MM(
+            fp.GetPosition().x / 1e6 + d["dx"],
+            fp.GetPosition().y / 1e6 + d["dy"]))
+    return n, v, gv
+
+
+def replay_matrix(board, src):
+    """**未配線の板に引いてあるマトリクスの配線を、そのまま写す。**
+
+    （2026-08-17・利用者「このキーマトリクスの配線を凍結させてください」）
+
+    ⚠️ **配線後の板で `prewire_col_bus` を呼び直してはいけない。**
+    経路は「そのとき板の上に何があるか」から決まるので、**同じ答えに
+    ならない**。実測: `gen_pcb` 直後は 21 ホップ全部引けたのに、
+    SES 取り込み後の板（ビアが 38 → 1217 個に増えている）に対して
+    呼ぶと **13 ホップが「障害物」で落ちた。**
+
+    凍結とは「同じ手順をもう一度回す」ことではなく、**同じ結果を
+    置き直す**こと。未配線の板（`pcb/unrouted/`）が唯一の出どころで、
+    そこには `gen_pcb` が引いた線がそのまま残っている。
+
+    ROW / COL / SW*_D の配線とビアを写す。既にあるものは消してから。
+    """
+    # ⚠️ **V3V3 も写す**（2026-08-22）。正本（pcb/matrix_only/）には
+    # 利用者が引いた V3V3（U1↔C_U1↔J_DB）が入っている。ここに入れないと
+    # 写されず、Freerouting が別の経路を引いてパスコンのループが伸びる。
+    # **GND は写さない**——ベタとファンアウトで別に配り直すため。
+    keep = re.compile(r"ROW_[A-E]|COL\d+|SW\d+_D|V3V3")
+
+    # **写す線の座標をあらかじめ集める。**
+    #
+    # ⚠️ **「そのネットの線を全部消す」をしないこと**（2026-08-18）。
+    # ROW/COL は最後の 1 本（U1 へ / J_DB へ）だけ Freerouting に
+    # 引かせる約束なのに、全部消すと**その 1 本も道連れになる。**
+    # 実測で COL→U1 が 8 本・ROW→J_DB が 5 本まるごと未配線になり、
+    # 「Freerouting が引けていない」と誤診した。**引けていたものを、
+    # 私が消していた。**
+    #
+    # 消してよいのは**これから同じ場所へ置き直す線だけ**。
+    def _key(x1, y1, x2, y2, layer):
+        return (layer, tuple(sorted([(round(x1, 3), round(y1, 3)),
+                                     (round(x2, 3), round(y2, 3))])))
+    mine = set()
+    for t in src.GetTracks():
+        if not keep.fullmatch(t.GetNetname()):
+            continue
+        if t.GetClass() == "PCB_VIA":
+            mine.add(("V", round(t.GetPosition().x / 1e6, 3),
+                      round(t.GetPosition().y / 1e6, 3)))
+        else:
+            mine.add(_key(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                          t.GetEnd().x / 1e6, t.GetEnd().y / 1e6, t.GetLayer()))
+
+    for t in list(board.GetTracks()):
+        if not keep.fullmatch(t.GetNetname()):
+            continue
+        if t.GetClass() == "PCB_VIA":
+            k = ("V", round(t.GetPosition().x / 1e6, 3), round(t.GetPosition().y / 1e6, 3))
+        else:
+            k = _key(t.GetStart().x / 1e6, t.GetStart().y / 1e6,
+                     t.GetEnd().x / 1e6, t.GetEnd().y / 1e6, t.GetLayer())
+        if k in mine:
+            board.Delete(t)          # これから置き直すので消す
+    n = vias = 0
+    for t in src.GetTracks():
+        name = t.GetNetname()
+        if not keep.fullmatch(name):
+            continue
+        net = board.FindNet(name)
+        if net is None:
+            raise SystemExit(f"replay_matrix: ネットが無い: {name}")
+        if t.GetClass() == "PCB_VIA":
+            v = pcbnew.PCB_VIA(board)
+            v.SetPosition(t.GetPosition())
+            v.SetWidth(t.GetWidth())
+            v.SetDrill(t.GetDrill())
+            v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            v.SetNet(net)
+            board.Add(v)
+            vias += 1
+        else:
+            w = pcbnew.PCB_TRACK(board)
+            w.SetStart(t.GetStart())
+            w.SetEnd(t.GetEnd())
+            w.SetWidth(t.GetWidth())
+            w.SetLayer(t.GetLayer())
+            w.SetNet(net)
+            board.Add(w)
+            n += 1
+    return n, vias
 
 
 # **Freerouting が自力では見つけない経路への「中継ビア」**（2026-08-13）。
@@ -549,7 +1571,24 @@ PLACE = {
         "J_DB": (1, J_DB_X),
         # **C_BULK はここに無い。子基板へ移した**（open-gaps #41）。
         # U1 と U2 の間は C_U2 のぶん空けてある（DECOUPLE_BESIDE が埋める）。
-        "U1": (0, 2.0), "U2": (0, 15.0),
+        # **U1 / U2 とパスコンは利用者が置いた位置**（2026-08-18・
+        # 「試しに matrix の右手 U1, U2 パスこんの位置を考えてみた」）。
+        #
+        # **J_DB の真下に縦一列**に並べてある（実測）:
+        #
+        #   J_DB  x=73.850  y= 87.225
+        #   U1    x=73.832  y= 96.455   C_U1 x=68.070（V3V3 まで 2.76mm）
+        #   U2    x=73.830  y=102.995   C_U2 x=68.070（V3V3 まで 2.74mm）
+        #
+        # **パスコンはそれぞれ自分の IC の真横。**U1↔U2 は 6.54mm。
+        # ⚠️ **COL0 の縦線（x=76.240）を避けて下へ 0.91mm ずらしてある**
+        # （2026-08-18・利用者「B ずらしました」）。列は部品より先に
+        # 引かれるので、重ねて置いても止まらない。**U1 のパッド 1 が
+        # COL0 に 0.781mm 食い込んでいた。**
+        # FFC・595・パスコンが 1 本の列にまとまるので、**列のバスが
+        # 通る帯を塞がない。**以前は U1/U2 が別々の帯に散っていて、
+        # COL4・COL5 の通り道と重なっていた。
+        "U1": (1, -62.787, None, 1.375), "U2": (1, -76.170, 90, 8.038),
     },
 }
 
@@ -594,7 +1633,8 @@ def _pad_with_net(fp, netname):
     return None
 
 
-def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0)):
+def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0),
+                  angle=None):
     """パスコンを IC の**電源ピンがある側**へ、触れない最短距離で寄せる。
 
     どちら側に置くかを手で書かない。**IC の V3V3 パッドが中心のどちら側に
@@ -631,6 +1671,10 @@ def _place_beside(board, cap_ref, ic_ref, band, dy_mm=0.0, off=(0.0, 0.0)):
     # **コンデンサの V3V3 側のパッドが IC を向いているか。**
     # 逆を向いていると、わざわざ寄せた意味が半分になる（電流が部品を
     # 回り込む）。向いていなければ 180 度回す。
+    # **向きが指定されていればそれに従う**（利用者が IC を回した場合）。
+    if angle is not None:
+        cap.SetOrientationDegrees(angle)
+        return
     p_v3 = _pad_with_net(cap, "V3V3")
     p_gnd = _pad_with_net(cap, "GND")
     if p_v3 is not None and p_gnd is not None:
@@ -817,7 +1861,8 @@ def _place_electronics(board, half, net, plate_w):
             _spec = PLACE[half][ic_ref]
             _place_beside(board, cap_ref, ic_ref, _spec[0],
                           _spec[3] if len(_spec) > 3 else 0.0,
-                          DECOUPLE_OFFSET[half].get(cap_ref, (0.0, 0.0)))
+                          DECOUPLE_OFFSET[half].get(cap_ref, (0.0, 0.0)),
+                          DECOUPLE_ANGLE[half].get(cap_ref))
 
 
 def _pour(board, netitem, layers, w, h):
@@ -1005,6 +2050,14 @@ def build(half, keys):
     # 引いた線を `(type protect)` の障害物として渡す（ROW は J_DB へ
     # 戻る 1 本だけ自動配線器に任せるので、ネットは外せない）。
     prewire_row_bus(board)
+    # **列のバスもここで引く**（2026-08-17・利用者「このキーマトリクスの
+    # 配線を凍結させてください。基本的にはこの配線は変更せず、自動配線の
+    # 前に機械的に配線しておく形にしておいてください」）。
+    #
+    # ⚠️ **行のバスのあとに呼ぶ。**`prewire_col_bus` は既に引かれた
+    # ROW の配線から「行が x 方向にどこからどこまであるか」を読む。
+    # 先に呼ぶと行が 1 本も見えず、**跨いでいないと誤判定して橋を
+    # 架けなくなる**（列と行が同じ B.Cu なので短絡になる）。
     # 幅は**プレートの幅**を渡す。ケースの造作（daughterboard_x_center）は
     # plate_positions の w で決まっており、基板もプレートも X=0 中心なので
     # 値がそのまま移る（PCB_INSET は左右対称に引くだけ）。
@@ -1029,6 +2082,52 @@ def build(half, keys):
         h.SetPosition(to_kicad(mx, my))
         h.SetReference(f"H{i}")
         board.Add(h)
+        # **名札をキーの枠から逃がす**（2026-08-22）。
+        #
+        # フットプリントの既定は穴の 3.15mm 手前（KiCad の Y は下向きなので
+        # -Y）で、そこはたいてい**すぐ手前のキーのシルクの枠の中**。
+        # DRC が `silk_overlap` を右で 5 件出していた（H0/H1/H3/H6/H7）。
+        # **H0 を動かして 5 件目が増えたので気づいた**——残りの 4 件は
+        # 前から出ていて、silk は警告なので誰も見ていなかった。
+        #
+        # **枠に当たらない側へ回す。**手前・奥・左・右の 4 方向を実際に
+        # 試し、どのキーのシルクにも当たらない最初の向きを採る。
+        # 全部当たるなら既定のまま（**黙って隠さない**——DRC に出させる）。
+        _place_hole_label(board, h)
+
+    # ⚠️ **列のバスは電子部品を置いたあとに引く。**
+    #
+    # 先に引くと、**J_DB / U1 / U2 がまだ板の上に無い**ので、
+    # 衝突検査がそれらを 1 つも見られない。実際にそうなっていて、
+    # 右の COL0 が J_DB の V3V3 パッドまで **0.140mm**（要 1.017mm）の
+    # ところを通り、DRC が短絡を出した（2026-08-18・利用者
+    # 「COL0 の配線が J_DB と U1 と干渉するように変わっている」）。
+    # **凍結した時点から入っていた欠陥**で、私は「全ホップ・最小
+    # 1.030mm」と報告していたが、その数字は穴とスイッチしか見ていなかった。
+    n_col, n_via, n_skip = prewire_col_bus(board)
+    print(f"      {half}: 列のバスを裏面で {n_col} 区間 / 橋のビア {n_via} 個"
+          + (f"（引けなかったホップ {n_skip}）" if n_skip else "（全ホップ）"))
+    # **利用者が引いた配線を載せる**（2026-08-22）。列のバスのあとに呼ぶ
+    # ——同じネットの既存の配線を消してから置くので、順番が逆だと
+    # せっかく載せたものを prewire が上書きしてしまう。
+    n_ur, n_uv, n_gv = apply_matrix_routing(board, half)
+    if n_ur:
+        print(f"      {half}: 利用者の配線を載せた {n_ur} 区間 / ビア {n_uv} 個"
+              + (f" / GND ビア {n_gv} 個" if n_gv else ""))
+        if n_gv:
+            # **GND のビアも写したので、当たり判定で外す必要は無い。**
+            # 利用者が自分で避けた位置に置いてある。
+            pass
+        else:
+            # ⚠️ **利用者の配線と当たる GND のビアを打ち直す**（2026-08-22）。
+            # `gnd_fanout.place` は**この配線より前**に呼ばれるので、
+            # あとから載る線を知らない。実測で GND のビアが COL8 のレーンに
+            # 乗り、DRC が短絡 1・クリアランス 1 を出した。
+            n_rm = _drop_gnd_vias_hitting(board)
+            if n_rm:
+                print(f"      {half}: 利用者の配線に当たる GND ビアを {n_rm} 個 外した")
+    # 列を MCU へ戻すレーン（表面）。**列のバスのあとに呼ぶ**——
+    # バスの端点をレーンへの降り口として使うため。
 
     # シルクの線幅を製造能力まで太らせる。
     #
@@ -1049,8 +2148,13 @@ def build(half, keys):
                                          pcbnew.FromMM(JLC["silk_width"])))
 
     # 左右の識別。**2 種類が届いて見分けがつかないと、組み立ても修理も誤る。**
+    #
+    # ⚠️ **板名は "SSKB"。**2026-08-23 に "HHKB Split" から変えた
+    # （利用者「HHKB は商標があってまずそう」）。**基板に刷る文字は
+    # 物として世に出る**ので、他社の商標をそのまま載せない。
+    # この案件が HHKB の再現であることは記録（docs/）に書けば足りる。
     label = pcbnew.PCB_TEXT(board)
-    label.SetText(f"HHKB Split  {half.upper()}")
+    label.SetText(f"SSKB {half.upper()}")
     label.SetPosition(pcbnew.VECTOR2I_MM(ORIGIN[0], ORIGIN[1] + pcb_h / 2 - 3.0))
     label.SetLayer(pcbnew.B_SilkS)
     label.SetMirrored(True)
@@ -1058,21 +2162,99 @@ def build(half, keys):
     label.SetTextThickness(pcbnew.FromMM(0.3))
     board.Add(label)
 
+    # **シルクが穴や他のシルクに乗っているものを逃がす**（2026-08-23）。
+    #
+    # ⚠️ **線幅を太らせたあと・板名を置いたあとに呼ぶ。**当たり判定は
+    # 文字の外接矩形で見るので、太さと文字が揃っていないと実物と合わない。
+    n_mv, n_st = _fix_silk_clashes(board)
+    if n_mv or n_st:
+        print(f"      {half}: シルクを逃がした {n_mv} 個"
+              + (f" / 逃がせなかった {n_st} 個" if n_st else ""))
 
     # GND ベタ（内層 1）。**分割の左右で 2.4GHz を至近距離で動かすので、
     # 基準電位が連続していることの価値が大きい。**
     # **禁止域を先に置く。**ベタを流す前・配線する前でないと意味がない。
     _pour(board, net("GND"), GND_POUR_LAYERS, pcb_w, pcb_h)
 
+    # **ベタを塗り直し、離島を繋ぎ直す**（2026-08-22）。
+    #
+    # ⚠️ **配線を載せたあとにやる。**`_pour` はこの関数の途中で走るので、
+    # そのあとに載る「利用者の配線」を知らない。塗りが古いままだと
+    # DRC が `isolated_copper` を大量に出す（実測 左 36 / 右 60 件）。
+    # 利用者「GND ベタ塗りとか、私が直せてないところは直してほしい」。
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+
+    # **離島を繋ぐビアは、既定では打たない**（2026-08-22・利用者「どこにも
+    # つながってない GND ビアを一旦入れないようにしてほしい。それは最後に
+    # やる工程なはずなので」）。
+    #
+    # 打つと**ベタの形が変わる**ので、配線がまだ動く段階でやっても
+    # 次の変更で無駄になる。**しかも浮いたビアは配線の邪魔をする。**
+    # 配線が固まってから `GND_STITCH=1` を付けて 1 回だけ打つ。
+    # 打つまでは DRC に `isolated_copper` が出るが、**それが正しい状態**。
+    if os.environ.get("GND_STITCH") == "1":
+        n_is, n_left = gnd_fanout.stitch_islands(board)
+        if n_is or n_left:
+            print(f"      {half}: ベタを塗り直し / 離島に打ったビア {n_is} 個"
+                  f" / 繋げ切れなかった区画 {n_left}")
+    else:
+        n_is = _drop_stitch_vias(board)
+        if n_is:
+            print(f"      {half}: 浮いた GND ビアを外した {n_is} 個"
+                  f"（打ち直すには GND_STITCH=1）")
+
     # **未配線のまま pcb/unrouted/ に出す。**
     # 配線済みの pcb/hhkb_split_*.kicad_pcb は autoroute.py が作る。
     (OUT / "unrouted").mkdir(parents=True, exist_ok=True)
     path = OUT / "unrouted" / f"hhkb_split_{half}.kicad_pcb"
     board.Save(str(path))
+    _sync_project_rules(path)
     rows, cols = shape(half)
     return (path, (pcb_w, pcb_h),
             (n_sw, n_stab, len(pcb_mount_positions(half)), rows, cols, len(nets)))
 
+
+
+def _sync_project_rules(pcb_path):
+    """**`.kicad_pro` の設計規則を `pcb_rules.JLC` に合わせる**（2026-08-23）。
+
+    ⚠️ **`kicad-cli` の DRC は板ではなく、隣のプロジェクトファイルから
+    規則を読む。**`gen_pcb` は `BOARD_DESIGN_SETTINGS` に値を入れていたが、
+    **`.kicad_pro` は一度も書いていなかった。**そのため
+    `JLC["hole_to_hole"]` を 0.50 → 0.45 に直しても DRC は 0.4995 のまま
+    判定し続けた（同日に実際に起きた）。
+
+    **プロジェクトが正本になってしまっている以上、そこも揃える。**
+    手で同期している限り、また同じことが起きる。
+
+    ⚠️ **規則以外は触らない。**利用者が KiCad で設定した表示や重大度を
+    上書きしない（DRC の severity はここに入っている）。
+    """
+    import json
+    pro = Path(str(pcb_path)[:-len(".kicad_pcb")] + ".kicad_pro")
+    if not pro.exists():
+        return
+    doc = json.loads(pro.read_text())
+    r = doc.get("board", {}).get("design_settings", {}).get("rules")
+    if r is None:
+        return
+    want = {
+        "min_track_width": JLC["track_min"],
+        "min_clearance": JLC["clearance_min"],
+        "min_via_diameter": JLC["via_dia_min"],
+        "min_through_hole_diameter": JLC["hole_min"],
+        "min_hole_to_hole": JLC["hole_to_hole"],
+        "min_copper_edge_clearance": JLC["edge_clearance"],
+        "min_silk_clearance": JLC["silk_width"],
+        "min_via_annular_width": JLC["annular_ring"],
+    }
+    changed = {k: (r.get(k), v) for k, v in want.items() if r.get(k) != v}
+    if not changed:
+        return
+    r.update(want)
+    pro.write_text(json.dumps(doc, indent=2) + "\n")
+    for k, (was, now) in sorted(changed.items()):
+        print(f"      {pro.name}: {k} {was} → {now}")
 
 def main():
     keys_l, keys_r = split_halves(load_layout(str(ROOT / "layout/hhkb_split.json")))

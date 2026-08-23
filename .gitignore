@@ -42,3 +42,10 @@ build/slice/
 # KiCad が開いている間だけできるロックファイル。**コミットしてはいけない。**
 # git add -A で 2 回巻き込んだ（2026-08-10）。触ったファイルだけを名指しで stage する
 ~*.lck
+
+# 試しの配線の置き場（本番と別に出すためのもの・成果物ではない）
+#   pcb/try/    … autoroute.py --out で出す私の実験
+#   pcb/matrix/ … 利用者が KiCad で手を入れる実験用
+# **成果物は pcb/matrix_only/**（キーマトリクスだけを引いた基板）。
+pcb/try/
+pcb/matrix/

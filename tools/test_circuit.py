@@ -345,14 +345,37 @@ def test_the_divider_current_is_negligible_against_sleep():
 # 繋ぎ忘れ・繋ぎすぎ
 # --------------------------------------------------------------------------
 
+# **主基板では 1 ピンで正しいネット。**（2026-08-23）
+#
+# `SPARE` / `SPARE2` は XIAO の D4 / D9 を J_DB へ出しただけの予備線で、
+# **主基板側には行き先が無いのが設計どおり**（circuit.py:534
+# 「用途が決まるまで何も繋がない」）。子基板では 2 点繋がっている:
+#
+#     daughterboard SPARE  → [('J_MAIN','7'), ('U_MCU','D4')]
+#     left / right  SPARE  → [('J_DB','7')]              ← これが正しい
+#
+# ⚠️ **基板をまたぐネットなので、1 枚だけ見ると 1 ピンに見える。**
+# これを「繋ぎ忘れ」と読むと、**用途が決まるまで永久に赤が残り、
+# 本物の繋ぎ忘れを隠す。**
+RESERVED_ON_MAIN = {"SPARE", "SPARE2"}
+
+
 @pytest.mark.parametrize("board", list(BOARDS))
 def test_no_net_is_left_with_a_single_pin(board):
     """1 本しか繋がっていないネットが無いこと。
 
     **これが繋ぎ忘れの主な現れ方。**名前を書いたのにどこにも行っていない。
     """
-    lonely = {n: p for n, p in nets_of(BOARDS[board]()).items() if len(p) < 2}
+    nets = nets_of(BOARDS[board]())
+    lonely = {n: p for n, p in nets.items()
+              if len(p) < 2 and not (board != "daughterboard"
+                                     and n in RESERVED_ON_MAIN)}
     assert not lonely, f"{board}: 行き先の無いネット {lonely}"
+    # **予備線が消えていないことも見る。**上の除外が「何も無い」を
+    # 見逃す言い訳にならないように。
+    if board != "daughterboard":
+        for n in RESERVED_ON_MAIN:
+            assert n in nets, f"{board}: 予備線 {n} が消えている"
 
 
 @pytest.mark.parametrize("board", ["left", "right"])
