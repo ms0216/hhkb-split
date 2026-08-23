@@ -17,6 +17,7 @@
 （ここに入れると古い塗りが固定されてしまう）。
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,38 @@ import pcb_rules  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "pcb" / "matrix_only"
 OUT = ROOT / "pcb" / "matrix_routing.json"
+
+
+# 手で引いたときに出る「ごく短い残骸」。KiCad のスナップと引き直しで
+# 生まれる 5〜50µm の区間で、**両端が同じものに触れている**（実測で
+# 左 12 本・右 11 本を確認）。電気的な意味は無く、絵を汚し、
+# `hole_to_hole` や `dangling` の誤検出の元になる。
+TINY_MM = 0.05
+
+# 名札を**生成側の規則が決める**部品。ここは写さない。
+AUTO_LABEL = re.compile(r"(SW|D|ST|H)\d+$")
+
+def _drop_tiny(tracks):
+    """**ごく短い残骸を落とす。**両端が繋がっているものだけ。"""
+    import math
+    keep, dropped = [], []
+    ends = []
+    for t in tracks:
+        ends.append((t["net"], t["x1"], t["y1"]))
+        ends.append((t["net"], t["x2"], t["y2"]))
+    for t in tracks:
+        L = math.dist((t["x1"], t["y1"]), (t["x2"], t["y2"]))
+        if 0 < L < TINY_MM:
+            # 両端に、この区間以外の端点があるか
+            def n_at(px, py):
+                return sum(1 for (n, x, y) in ends
+                           if n == t["net"] and math.dist((x, y), (px, py)) < 0.06)
+            # 自分の端点 2 つを差し引く
+            if n_at(t["x1"], t["y1"]) >= 3 and n_at(t["x2"], t["y2"]) >= 3:
+                dropped.append(t)
+                continue
+        keep.append(t)
+    return keep, dropped
 
 
 def _is_stub(t):
@@ -43,6 +76,7 @@ def dump(half):
         return None
     b = pcbnew.LoadBoard(str(f))
     tracks, vias, gnd_vias, gnd_stubs, fixed = [], [], [], [], []
+    labels = []
     for t in b.GetTracks():
         n = t.GetNetname()
         if not n:
@@ -120,13 +154,47 @@ def dump(half):
                 "y2": round(t.GetEnd().y / 1e6, 4),
                 "w": round(pcbnew.ToMM(t.GetWidth()), 4),
             })
+    tracks, tiny = _drop_tiny(tracks)
+    if tiny:
+        print(f"   {half}: ごく短い残骸を {len(tiny)} 本 落とした"
+              f"（両端が繋がっているものだけ）")
+    # **名札（シルク）の位置も写す**（2026-08-23）。
+    #
+    # 利用者「左右ともにシルクの位置を修正しました」。IC とコネクタの
+    # 名札を、部品の輪郭や配線から外へ逃がしてある（右で silk の警告が
+    # 20 → 4 件に減った）。**フットプリントの既定位置は生成のたびに
+    # 戻る**ので、写さないと次の生成で消える。
+    #
+    # ⚠️ **既定と違うものだけ写す。**全部書くと、フットプリントを
+    # 差し替えたときに古い位置で上書きしてしまう。
+    # **電子部品の名札の位置を写す**（2026-08-23・利用者「左右ともに
+    # シルクの位置を修正しました」）。IC とコネクタの名札を、部品の
+    # 輪郭や配線から外へ逃がしてある（右で silk の警告が 20 → 4 件）。
+    # **フットプリントの既定位置は生成のたびに戻る**ので、写さないと消える。
+    #
+    # ⚠️ **「生成物と違うものだけ」にして壊した**（同日）。基準が
+    # `pcb/unrouted/` だと、**一度反映した瞬間に差が消えて記録が空になる。**
+    # 次の書き出しで利用者の修正が失われる。**基準を動くものに置かない。**
+    #
+    # → **電子部品（キー・ダイオード・スタビ・取付穴を除く全部）は
+    # 無条件に記録する。**数は左 5・右 6 程度で、揺れない。
+    # キーの名札は `_place_hole_label` など生成側の規則が決めるので触らない。
+    for f in b.GetFootprints():
+        if AUTO_LABEL.match(f.GetReference()):
+            continue
+        t = f.Reference()
+        labels.append({
+            "ref": f.GetReference(),
+            "dx": round(t.GetPosition().x / 1e6 - f.GetPosition().x / 1e6, 4),
+            "dy": round(t.GetPosition().y / 1e6 - f.GetPosition().y / 1e6, 4),
+        })
     if fixed:
         print(f"   {half}: アニュラーが足りないビアを {len(fixed)} 個 広げた"
               f"（穴はそのまま）")
         for n, x, y, was, now in fixed:
             print(f"       {n:8s} ({x:8.3f},{y:7.3f})  φ{was} → φ{now}")
     return {"tracks": tracks, "vias": vias,
-            "gnd_vias": gnd_vias, "gnd_stubs": gnd_stubs}
+            "gnd_vias": gnd_vias, "gnd_stubs": gnd_stubs, "labels": labels}
 
 
 def main():
@@ -138,7 +206,8 @@ def main():
             continue
         out[half] = d
         print(f"   {half}: 配線 {len(d['tracks'])} / ビア {len(d['vias'])}"
-              f" / GND ビア {len(d['gnd_vias'])} + スタブ {len(d['gnd_stubs'])}")
+              f" / GND ビア {len(d['gnd_vias'])} + スタブ {len(d['gnd_stubs'])}"
+              f" / 名札 {len(d['labels'])}")
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n")
     print(f"書き出した: {OUT}")
     return 0

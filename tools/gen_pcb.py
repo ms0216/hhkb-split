@@ -1066,6 +1066,18 @@ def apply_matrix_routing(board, half):
             w.SetLayer(board.GetLayerID(d["layer"]))
             w.SetNet(gnd)
             board.Add(w)
+
+    # **名札（シルク）の位置も写す**（2026-08-23・利用者「左右ともに
+    # シルクの位置を修正しました」）。IC とコネクタの名札を、部品の
+    # 輪郭や配線から外へ逃がしてある（右で silk の警告が 20 → 4 件）。
+    # **フットプリントの既定位置は生成のたびに戻る**ので、写さないと消える。
+    for d in data.get("labels") or []:
+        fp = board.FindFootprintByReference(d["ref"])
+        if fp is None:
+            continue
+        fp.Reference().SetPosition(pcbnew.VECTOR2I_MM(
+            fp.GetPosition().x / 1e6 + d["dx"],
+            fp.GetPosition().y / 1e6 + d["dy"]))
     return n, v, gv
 
 
