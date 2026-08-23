@@ -63,47 +63,6 @@ def _drop_tiny(tracks):
     return keep, dropped
 
 
-def _drop_useless_vias(tracks, vias):
-    """**層をまたがないビアを落とす。**
-
-    （2026-08-23・利用者の指示で `via_dangling` を調べた結果）
-
-    ビアの意味は「表と裏をつなぐ」こと。**片面にしか線が無いビアは、
-    立てても何も繋いでいない。**手で引くと必ず残る——レーンの左端で
-    7 個（右・利用者が削除済み）、J_DB まわりで 8 個が実際に出た。
-
-    害は 3 つ: **穴が 1 つ増える**（費用と `hole_to_hole` の元）、
-    **ベタに穴を開けて離島を増やす**、**絵が汚れて読み違える**。
-
-    ⚠️ **パッドに触れているビアは残す。**パッドは片面にしか無いので
-    「線が片面だけ」になるが、そのビアは**パッドを反対面のベタや配線へ
-    引き出している**（GND のファンアウトがまさにこれ）。
-    """
-    import math
-    keep, dropped = [], []
-    for v in vias:
-        lays = set()
-        for t in tracks:
-            if t["net"] != v["net"]:
-                continue
-            # ⚠️ **端点だけ見てはいけない。**列の縦バスは着地ビアの
-            # **途中を通過する**（実測 COL3 のバスは u=0.128 の位置で
-            # 交わる）。端点だけで数えて、着地ビア 11 個を「層をまたが
-            # ない」と誤判定した（2026-08-23）。**線分への距離で見る。**
-            x1, y1, x2, y2 = t["x1"], t["y1"], t["x2"], t["y2"]
-            dx, dy = x2 - x1, y2 - y1
-            ll = dx * dx + dy * dy
-            u = 0 if ll == 0 else max(0, min(1, ((v["x"] - x1) * dx
-                                                 + (v["y"] - y1) * dy) / ll))
-            if math.dist((x1 + u * dx, y1 + u * dy), (v["x"], v["y"])) < 0.06:
-                lays.add(t["layer"])
-        if len(lays) >= 2:
-            keep.append(v)
-        else:
-            dropped.append(v)
-    return keep, dropped
-
-
 def _is_stub(t):
     """GND の短い引き出し線か。**ベタを縫う長い線と区別する。**"""
     import math
@@ -196,11 +155,6 @@ def dump(half):
                 "w": round(pcbnew.ToMM(t.GetWidth()), 4),
             })
     tracks, tiny = _drop_tiny(tracks)
-    vias, useless = _drop_useless_vias(tracks, vias)
-    if useless:
-        print(f"   {half}: 層をまたがないビアを {len(useless)} 個 落とした")
-        for v in useless:
-            print(f"       {v['net']:9s} ({v['x']:8.3f},{v['y']:7.3f})")
     if tiny:
         print(f"   {half}: ごく短い残骸を {len(tiny)} 本 落とした"
               f"（両端が繋がっているものだけ）")
