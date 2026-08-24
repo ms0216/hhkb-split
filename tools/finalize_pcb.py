@@ -38,6 +38,15 @@ from gen_pcb import _sync_project_rules                      # noqa: E402
 SRC = ROOT / "pcb" / "matrix_only"
 OUT = ROOT / "pcb"
 
+# --src unrouted: gen_pcb が記録（matrix_routing.json）から再現した板を
+# 入力にする。**外形を変えたとき用**（#51 候補 3・2026-08-24）——
+# matrix_only は利用者が直接編集する板なので、こちらからは上書きしない。
+# 配線座標は同じ記録から来るので中身は等価（DRC が答え合わせ）。
+if "--src" in sys.argv:
+    i = sys.argv.index("--src")
+    SRC = ROOT / "pcb" / sys.argv[i + 1]
+    del sys.argv[i:i + 2]
+
 
 def finalize(half):
     src = SRC / f"hhkb_split_{half}.kicad_pcb"
