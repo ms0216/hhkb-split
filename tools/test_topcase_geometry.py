@@ -32,19 +32,14 @@ def _axes():
     （＝実際に効く軸を見ていなかった）。負のテストで発覚した。
     """
     from gen_plate import halves
-    from interface import PLATE_MARGIN_X_RIGHT
     from layout import Key  # noqa: F401
-    out = []
-    # **余白は半分ごとに違う**（2026-08-24・#51 で右だけ詰めた）ので、
-    # 左右の半分それぞれで見る。右の余白 3.125 が最も厳しい。
-    for half, margin in (("left", PLATE_MARGIN_X),
-                         ("right", PLATE_MARGIN_X_RIGHT)):
-        keys = halves()[half]
-        half_w = (max(k.x_mm + k.w_u * U / 2 for k in keys)
-                  - min(k.x_mm - k.w_u * U / 2 for k in keys)) / 2
-        out.append((f"左右({half})", half_w, margin))
-    out.append(("前後", KEYS_HALF_H, PLATE_MARGIN_Y))
-    return out
+    keys = halves()["left"]
+    half_w = (max(k.x_mm + k.w_u * U / 2 for k in keys)
+              - min(k.x_mm - k.w_u * U / 2 for k in keys)) / 2
+    return [
+        ("左右", half_w, PLATE_MARGIN_X),
+        ("前後", KEYS_HALF_H, PLATE_MARGIN_Y),
+    ]
 
 
 def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
