@@ -1206,6 +1206,68 @@ def foot_height(h, add_deg):
     return FOOT_BASE_H + lever * tan(radians(add_deg))
 
 
+def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max):
+    """最下段のキーが無い帯を覆う蓋（ベゼルの枠と同じ断面の板）。
+
+    実機は最下段の左右の余白を筐体の面で覆っている（利用者の指摘・
+    実機写真で確認）。帯はキーの並びから機械的に出す——手で座標を
+    書くと配列を変えたとき黙ってずれる。
+    """
+    from build123d import Box, Location
+
+    # 最下段のキーが占める x 区間（セル境界）
+    bottom = [(p, k) for p, k in zip(positions, keys)
+              if abs(p[1] - min(q[1] for q in positions)) < 1.0]
+    b0 = min(p[0] - k.w_u * 19.05 / 2 for p, k in bottom)
+    b1 = max(p[0] + k.w_u * 19.05 / 2 for p, k in bottom)
+    row_top = max(p[1] for p, _ in bottom) + 19.05 / 2   # 帯の上端（セル）
+
+    g = BEZEL_OPENING_GAP
+    ext = 10.0                                   # 枠へ食い込ませて融合する量
+    zones = []
+    if b0 - (-key_w / 2) > 2.0:                  # 左端の帯
+        zones.append((-key_w / 2 - ext, b0 - g))
+    if key_w / 2 - b1 > 2.0:                     # 右端の帯
+        zones.append((b1 + g, key_w / 2 + ext))
+
+    # **外形でクリップする。**枠へ食い込ませる延長（ext）をそのままに
+    # すると、前面から 3.6mm・側面から 7mm はみ出す（前縁高さの検査が
+    # 捕まえた——前縁の帯に覆いの斜め上面が混ざり 17.04mm に見えた）。
+    with BuildPart() as _ol:
+        with BuildSketch():
+            RectangleRounded(w, h_body, CORNER_R)
+        extrude(amount=z_max * 2)
+    outline = _ol.part
+
+    parts = []
+    y0 = -key_h / 2 - ext                        # 下は枠へ食い込ませる
+    y1 = row_top - g                             # 上はキーとの隙間を空ける
+    for x0, x1 in zones:
+        with BuildPart() as _p:
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, 0)):
+                Box(x1 - x0, y1 - y0, z_max * 2,
+                    align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # ⚠️ intersect / 減算は ShapeList を返すことがあるので、
+        # 演算のたびに 1 つの立体へ融合し直す。
+        def _one(x):
+            if hasattr(x, "intersect"):
+                return x
+            ps = list(x)
+            out = ps[0]
+            for q in ps[1:]:
+                out += q
+            return out
+        slab = _one(_p.part.intersect(outline))
+        slab = _one(slab - tilted_cutter(w, h_body, BEZEL_TOP_FRONT))
+        slab = _one(slab.intersect(
+            tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)))
+        parts.append(slab)
+    out = parts[0]
+    for p in parts[1:]:
+        out += p
+    return out
+
+
 def build_topcase(keys, half):
     """上ケース（ベゼル）。キーの周りに立つ枠。
 
@@ -1243,6 +1305,11 @@ def build_topcase(keys, half):
     # 3Dプリントの公差が未確定（docs/hardware/open-gaps.md #11）なので、
     # 押し付ける設計にすると個体差でプレートが反る。薄いガスケットで詰める。
     rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
+    # ⚠️ **コンテキストの外で作る**（中で作ると内部の Box まで即座に
+    # 合体され、全高 200mm の化け物になった——このファイル冒頭の警告を
+    # 自分で踏んだ）。
+    blank_covers = _bottom_blank_covers(positions, keys, key_w, key_h,
+                                        w, h_body, z_max)
 
     with BuildPart() as top:
         with BuildSketch():
@@ -1260,6 +1327,17 @@ def build_topcase(keys, half):
             RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
                              key_h + BEZEL_OPENING_GAP * 2, 1.5)
         extrude(amount=z_max, mode=Mode.SUBTRACT)
+        # **最下段の無キー帯を覆う**（2026-08-24・利用者の指摘）。
+        #
+        # 実機は最下段の左右の余白（左 1.5u・右の Happy Hacking ロゴ 2.5u）
+        # を筐体の面で覆っている。開口を「キー領域の外接矩形」で切ると
+        # ここでプレートが露出し、実機と違ううえ、ベゼル下辺の枠も
+        # 途切れる（剛性）。矩形で切ったあと、キーの無い帯へ蓋を戻す。
+        # 分割で新たにできた分割面側の細い帯も同様に覆う。
+        # 蓋の z はベゼルの枠と同じ（上面〜プレート上面+0.1）なので、
+        # 枠と融合して一体になる。キーに隣接する縁は開口と同じ
+        # BEZEL_OPENING_GAP を空ける。
+        add(blank_covers, mode=Mode.ADD)
         # ネジ穴（手前 3 箇所）。頭は座ぐりに沈める。
         # **座ぐりは長らくコメントだけで、実装されていなかった。**ネジを
         # 実物として組み立てに置いたら（open-gaps #29）、頭がベゼル上面
