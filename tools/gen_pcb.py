@@ -1090,6 +1090,22 @@ def apply_matrix_routing(board, half):
     if not data:
         return 0, 0
 
+    # **電子部品の位置を先に写す**（2026-08-24・#51）。利用者は配線の
+    # 引き直しで U2 / C_U2 / C_U1 も動かしている。配線座標は現物なので、
+    # 部品も現物の位置に置かないとパッドと 9 本切れる（実際に切れた）。
+    n_moved = 0
+    for ref, d in (data.get("parts") or {}).items():
+        fp = board.FindFootprintByReference(ref)
+        if fp is None:
+            continue
+        old = fp.GetPosition()
+        fp.SetPosition(pcbnew.VECTOR2I_MM(d["x"], d["y"]))
+        fp.SetOrientationDegrees(d["rot"])
+        if abs(old.x / 1e6 - d["x"]) > 1e-3 or abs(old.y / 1e6 - d["y"]) > 1e-3:
+            n_moved += 1
+    if n_moved:
+        print(f"      {half}: 利用者の位置へ動かした部品 {n_moved} 個")
+
     nets = {d["net"] for d in data["tracks"]} | {d["net"] for d in data["vias"]}
     for t in list(board.GetTracks()):
         if t.GetNetname() in nets:

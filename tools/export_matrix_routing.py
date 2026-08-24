@@ -193,8 +193,20 @@ def dump(half):
               f"（穴はそのまま）")
         for n, x, y, was, now in fixed:
             print(f"       {n:8s} ({x:8.3f},{y:7.3f})  φ{was} → φ{now}")
+    # **電子部品の位置も写す**（2026-08-24・#51）。利用者は J_DB 周りの
+    # 引き直しで U2 / C_U2 / C_U1 も動かした。gen_pcb は部品を自分の
+    # 規則で置くので、配線だけ写すと部品が別の場所にいて 9 本切れた。
+    # GND ビアと同じで、**現物の座標を写すのが正しい。**
+    parts = {}
+    for f in b.GetFootprints():
+        ref = f.GetReference()
+        if ref in ("U1", "U2", "C_U1", "C_U2", "J_DB", "D_PWR"):
+            p = f.GetPosition()
+            parts[ref] = {"x": round(p.x / 1e6, 4), "y": round(p.y / 1e6, 4),
+                          "rot": f.GetOrientationDegrees()}
     return {"tracks": tracks, "vias": vias,
-            "gnd_vias": gnd_vias, "gnd_stubs": gnd_stubs, "labels": labels}
+            "gnd_vias": gnd_vias, "gnd_stubs": gnd_stubs, "labels": labels,
+            "parts": parts}
 
 
 def main():
