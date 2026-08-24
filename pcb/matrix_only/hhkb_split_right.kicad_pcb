@@ -27756,7 +27756,7 @@
 		(descr "TSSOP, 16 Pin (https://www.jedec.org/document_search?search_api_views_fulltext=MO-153)")
 		(tags "TSSOP SO JEDEC-MO-153-AB Texas_PW0016A Microchip-ST Toshiba-TSSOP16-P-0044-0.65A NXP-SOT403-1 Infineon-P-TSSOP-16-800")
 		(property "Reference" "U2"
-			(at 0 -4.27 270)
+			(at -5.1875 0.005 270)
 			(layer "B.SilkS")
 			(uuid "e42661d0-a865-4a63-b7a4-a6d03031db39")
 			(effects
@@ -34015,13 +34015,13 @@
 	(footprint "C_0805_2012Metric"
 		(layer "B.Cu")
 		(uuid "ce957562-1d1d-451a-accc-2f348595099a")
-		(at 70.08 95.44 90)
+		(at 71 95.42 90)
 		(descr "Capacitor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 76, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf, https://docs.google.com/spreadsheets/d/1BsfQQcO9C6DZCsRaXUlFlo91Tg2WpOkGARC1WS5S8t0/edit?usp=sharing)")
 		(tags "capacitor")
 		(property "Reference" "C_U2"
-			(at 4.61 -0.02 90)
+			(at 0 -1.72 90)
 			(layer "B.SilkS")
-			(uuid "261ef149-16d3-4153-9d8f-b1be43ec4b10")
+			(uuid "534619e1-8242-42f6-80cb-ac45db879dc5")
 			(effects
 				(font
 					(size 1 1)
@@ -34033,7 +34033,7 @@
 		(property "Value" "100nF"
 			(at 0 -1.68 90)
 			(layer "B.Fab")
-			(uuid "d44d63ac-eb3d-4041-84be-d20661c207cc")
+			(uuid "f31ad567-56d8-4bb3-b7e8-40490b9ba3df")
 			(effects
 				(font
 					(size 1 1)
@@ -34046,7 +34046,7 @@
 			(at 0 0 90)
 			(layer "B.Fab")
 			(hide yes)
-			(uuid "a5d5489d-8d7c-48b9-bb79-e256a406abd0")
+			(uuid "7acbd963-07b1-4631-8db8-7dc5415240c1")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -34058,7 +34058,7 @@
 			(at 0 0 90)
 			(layer "B.Fab")
 			(hide yes)
-			(uuid "573c9093-0c43-49df-972d-901662d7b51e")
+			(uuid "e484a60f-9e82-4b21-8986-100cbdf57f6d")
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -38761,12 +38761,12 @@
 		(uuid "5221fa57-386b-4ff9-8e83-42bc081479e7")
 	)
 	(segment
-		(start 72.98 96.39)
-		(end 70.08 96.39)
+		(start 72.98 96.37)
+		(end 71 96.37)
 		(width 0.2)
 		(layer "B.Cu")
 		(net "V3V3")
-		(uuid "6046d1b1-20e4-4ff8-bcb1-64f5ed1de993")
+		(uuid "56e36e3f-7382-4d98-acd7-2a5433c78922")
 	)
 	(segment
 		(start 77.88 86.8)
@@ -38841,6 +38841,14 @@
 		(uuid "e93e1950-0755-4ab0-a19f-cacb6a806cd6")
 	)
 	(segment
+		(start 72.99 96.38)
+		(end 72.98 96.37)
+		(width 0.2)
+		(layer "B.Cu")
+		(net "V3V3")
+		(uuid "f41967f7-68b2-420e-bbc2-f22102ca6441")
+	)
+	(segment
 		(start 72.99 96.39)
 		(end 73.22 96.39)
 		(width 0.2)
@@ -38849,7 +38857,7 @@
 		(uuid "f82e60a9-43d1-459a-8c26-274b52375a91")
 	)
 	(via
-		(at 70.07 93.19)
+		(at 70.99 93.17)
 		(size 0.5)
 		(drill 0.3)
 		(layers "F.Cu" "B.Cu")
@@ -38908,14 +38916,6 @@
 		(uuid "d8667232-62c9-4ee7-83b0-7cd6c55b1f87")
 	)
 	(segment
-		(start 70.07 94.48)
-		(end 70.08 94.49)
-		(width 0.2)
-		(layer "B.Cu")
-		(net "GND")
-		(uuid "4df9a275-1a8a-460d-906c-7c7fcd2e967f")
-	)
-	(segment
 		(start 78.47 85.38)
 		(end 77.604999 85.38)
 		(width 0.2)
@@ -38972,8 +38972,8 @@
 		(uuid "95d3fd88-1b38-4fb8-a228-88a5f73cc8b0")
 	)
 	(segment
-		(start 70.07 93.19)
-		(end 70.07 94.48)
+		(start 70.99 93.17)
+		(end 70.99 94.46)
 		(width 0.2)
 		(layer "B.Cu")
 		(net "GND")
