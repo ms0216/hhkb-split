@@ -264,6 +264,26 @@ DB_BOSS_POS = [(-8.0, -13.5), (8.0, -13.5)]
 DB_FROM_REAR = 0.4
 
 # --------------------------------------------------------------------------
+# LED の窓（open-gaps #43・2026-08-24 利用者決定）
+#
+# **実機の LED 位置（右端から 61mm・上端から 6mm・実測）は再現しない**
+# （利用者「左右に分かれている時点で位置まで一緒にする理由はない」）。
+# 代わりに **XIAO の真上、コブの天井に薄肉の窓**を開ける。左右対称・
+# 部品追加なし・基板に影響しない。PLA の 0.6mm ならインジケーターの
+# 点灯が透ける。
+#
+# 位置の出所は Seeed 公式 STEP モデル（pcb_parts.json の立体一覧）:
+#   RGB LED（4 パッド）… 子基板中心から (+5.72, +14.76)
+#   充電 LED          … 同 (+5.70, +16.90)
+# 窓は両方を覆う中間 (+5.71, +15.83)・φ5.0。モデルの読み取りなので、
+# **実物を点灯させて窓から見えることを確認してから確定**
+# （向きの取り違えは 2026-08-16 に踏んだ型）。
+XIAO_LED_DX = 5.71       # [暫定] 子基板中心 → LED 群の中心（x）
+XIAO_LED_DY = 15.83      # [暫定] 同（y・奥が正）
+LED_WIN_D = 5.0          # 窓の直径（RGB と充電の両 LED を覆う）
+LED_WIN_SKIN = 0.6       # 残す肉。0.4mm ノズルの 3 層で光が透ける
+
+# --------------------------------------------------------------------------
 # ★未解決★ USB-C のメスがケースの外へ 0.26mm はみ出す（open-gaps #23 と一体）
 #
 # XIAO のメスは子基板の奥端より 3.055mm 出ている（`pcb_parts.usb_receptacle`。
@@ -673,6 +693,28 @@ def build_case(keys, half):
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
     bump_lid = ((_bl.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT))
                 .intersect(tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)))
+    # LED の窓の彫り込み（#43）。XIAO の真上の天井を、外面から
+    # LED_WIN_SKIN だけ残して内側から薄くする。円柱から「上面−肉」より
+    # 上を除いたものを引くと、ちょうど薄皮が残る（天井は傾いているので
+    # z 一定ではなく tilted_cutter で切る）。
+    _led_x = daughterboard_x_center(half, w) + XIAO_LED_DX
+    _led_y = (h_body / 2 + BUMP_DEPTH - WALL - DB_FROM_REAR - DB_D / 2
+              + XIAO_LED_DY)
+    with BuildPart() as _lw:
+        with Locations((_led_x, _led_y, FLOOR)):
+            Cylinder(LED_WIN_D / 2, z_max,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # **奥壁には食い込ませない。**LED 群は壁の内面から 2.6mm しか
+        # 手前に無く、φ5 の円柱は壁へ 1.9mm めり込む。XIAO ポケットの
+        # 彫り込みと合わさって壁が申告外の穴になった（検査が検出）。
+        # 壁の内面で切り落とす（充電 LED は壁の真下で、どのみち天井から
+        # は見えない。窓が覆うのは RGB LED）。
+        _y_wall_in = h_body / 2 + BUMP_DEPTH - WALL
+        with Locations((0, _y_wall_in + 50, 0)):
+            Box(w * 2, 100, z_max * 3, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+    led_window_void = _lw.part - tilted_cutter(
+        w, h_body, BEZEL_TOP_FRONT - LED_WIN_SKIN)
     # 電池室の仕切り壁。**基板の下面（ソケットの先端）で頭を切る。**
     #
     # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
@@ -717,6 +759,9 @@ def build_case(keys, half):
         # コブの上には何も載らないので、ケース自身が塞ぐ必要がある。
         # 「メッシュが水密」は「箱として閉じている」を意味しない。
         add(bump_lid, mode=Mode.ADD)
+        # 3-3. LED の窓（#43）。天井を張った直後に彫る（先に彫っても
+        # 後から張る天井で塞がれてしまう）。
+        add(led_window_void, mode=Mode.SUBTRACT)
 
         # 4. 電池室。後壁ぎわ（コブの中）に置き、仕切り壁と天井を作る。
         #    天井を張らないと、傾いた基板が電池室の上に落ちてきて衝突する。
