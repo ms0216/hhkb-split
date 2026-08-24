@@ -1,11 +1,12 @@
 {
   "board": "hhkb_split_left.kicad_pcb",
-  "sha256": "0b6de8086936ef74f51db6ad5795d9c97553fb424eb09eba0056f9760d5ecc22",
+  "sha256": "129fdc2337317389ed7f6dfc38feff1239842ce9e1251986ae8ab861416afb25",
   "violations": 0,
   "unconnected": 0,
-  "warnings": 27,
+  "warnings": 28,
   "warning_kinds": {
-    "hole_to_hole": 27
+    "hole_to_hole": 27,
+    "silk_edge_clearance": 1
   },
   "details": []
 }
