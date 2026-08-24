@@ -646,6 +646,20 @@ def test_ghosting_survives_a_full_row_of_simultaneous_presses():
             f"下がる。余裕は {margin * 1000:.0f}mV しかない。**ゴーストする。**")
 
 
+def test_the_diode_leakage_is_the_datasheet_guarantee():
+    """MATRIX_DIODE_IR が BAT46W のデータシート保証値そのものであること。
+
+    ミューテーション試験（2026-08-24）で、**IR を 0 にしても全検査が
+    通る**ことが分かった。ゴースト余裕の検査（上）は IR が小さいほど
+    緩くなる——楽観側へずらす誤りを捕まえる検査が無かった。
+    値は外部の事実（Vishay BAT46W データシート: IR 0.3µA @ VR=1.5V, 25℃）
+    に固定する。品番を替えたら、新しいデータシートの保証値に更新すること。
+    """
+    assert MATRIX_DIODE_IR == 0.3e-6, (
+        "MATRIX_DIODE_IR が BAT46W の保証 0.3µA からずれている。"
+        "品番を替えたのなら、新しいデータシートの値に合わせてここも更新する")
+
+
 def test_the_margin_covers_the_transmit_droop():
     """BLE 送信中の電圧降下を、マイコンの余裕が覆っていること。
 

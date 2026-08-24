@@ -58,8 +58,14 @@ def constants(path):
     """
     tree = ast.parse(path.read_text())
     out = []
+    # **[記録のみ] の定数は変異しない**（2026-08-24）。誰も読まない歴史記録
+    # なので生存して当然で、報告に混ざると「気づけない箇所」の一覧が濁る
+    # （BOSS_WALL_OVERLAP / REAR_BOSS_INSET が実際に濁らせた）。
+    from test_constants import _marked_record_only
     for node in tree.body:
         if not isinstance(node, ast.Assign):
+            continue
+        if _marked_record_only(path, node.lineno):
             continue
         for tg in node.targets:
             v = _number(node.value)
