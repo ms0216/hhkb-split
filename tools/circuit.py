@@ -286,7 +286,7 @@ def _shift_register(ref, cols, first_col, serial_in, serial_out):
 # 1.2mm の枝が出るだけで、その先に何も無い）。
 # 対になるものは対で書く。片方だけあると、こうして静かに落ちる。
 ELEC_REF = re.compile(
-    r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR_\d|J_DB|J_MAIN|BT1_[+-]")
+    r"U\d+|C_[A-Z0-9]+|R_[A-Z]+|D_PWR|SW_PWR_\d|J_DB|J_MAIN|BT1_[+-]|TP\d+")
 
 
 # ケースの中で配線し、基板側はランド 2 個で受ける部品。
@@ -437,6 +437,18 @@ def netlist(half):
         parts.append((f"SW{i}", "keyswitch", {"1": f"COL{c}", "2": f"SW{i}_D"}))
         parts.append((f"D{i}", "diode", {"A": f"SW{i}_D", "K": rows[r]}))
     assert len([p for p in parts if p[1] == "keyswitch"]) == n_keys
+
+    # ---- オシロ用のテストパッド（open-gaps #49・2026-08-25 利用者「Yes」）----
+    # 配線はレジストの下で針が届かず、595（TSSOP 0.65mm ピッチ）にも
+    # 当てられない。当てたい信号だけランドで出す。**実装部品ではない**
+    # （parts.NOT_ASSEMBLED）。GND はプローブの GND スプリング用に隣へ。
+    # ROW/COL はダイオードとソケットのパッドで見られるので出さない。
+    # 右だけ U1_U2（595 の数珠つなぎ）を足す。
+    tp_nets = ["SPI_SCK", "SPI_MOSI", "CS", "V3V3", "GND"]
+    if half == "right":
+        tp_nets.insert(3, "U1_U2")
+    for i, net in enumerate(tp_nets, start=1):
+        parts.append((f"TP{i}", "testpoint", {"1": net}))
 
     return parts
 

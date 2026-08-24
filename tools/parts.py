@@ -15,7 +15,7 @@ from circuit import WIRE_PAD_KINDS
 
 # 基板に載らない部品。リード線で繋ぐもの（電池・電源スイッチ）と、
 # 利用者が挿す XIAO。**BOM にも CPL にも出さない。**
-NOT_ASSEMBLED = set(WIRE_PAD_KINDS) | {"xiao_nrf52840"}
+NOT_ASSEMBLED = set(WIRE_PAD_KINDS) | {"xiao_nrf52840", "testpoint"}   # testpoint = オシロ用ランド（#49）
 
 # 種類 → LCSC の部品番号。**フットプリントは pcb/ の実物と突き合わせた。**
 #

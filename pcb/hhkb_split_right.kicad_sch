@@ -3,7 +3,7 @@
 	(generator "hhkb_split")
 	(generator_version "10.0")
 	(uuid "68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d")
-	(paper "User" 783.59 668.02)
+	(paper "User" 783.59 698.50)
 	(title_block
 		(title "hhkb_split_right")
 		(comment 1 "tools/gen_sch.py が circuit.py から自動生成。手で編集しない")
@@ -308,6 +308,31 @@
 				)
 			)
 		)
+		(symbol "hhkb_split_right:testpoint"
+			(pin_numbers (hide no))
+			(pin_names (offset 1.016))
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "U" (at 0 11.43 0) (effects (font (size 1.27 1.27))))
+			(property "Value" "testpoint" (at 0 -11.43 0) (effects (font (size 1.27 1.27))))
+			(property "Footprint" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+			(property "Datasheet" "" (at 0 0 0) (effects (font (size 1.27 1.27)) (hide yes)))
+			(symbol "testpoint_1_1"
+				(rectangle
+					(start -6.35 10.16)
+					(end 6.35 -10.16)
+					(stroke (width 0.254) (type default))
+					(fill (type background))
+				)
+				(pin passive line
+					(at -11.43 0.00 0)
+					(length 5.08)
+					(name "1" (effects (font (size 1.0 1.0))))
+					(number "1" (effects (font (size 1.0 1.0))))
+				)
+			)
+		)
 		(symbol "hhkb_split_right:PWR_FLAG"
 			(power global)
 			(pin_numbers (hide yes))
@@ -406,1032 +431,1094 @@
 		(uuid "e382a09a-7f17-5e9e-9d4c-a094c4250069")
 	)
 	(global_label
-		"CS"
+		"GND"
 		(shape input)
 		(at 63.50 248.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cf8fb2fe-424d-55b8-9e89-7865cf1e1581")
 	)
 	(global_label
-		"SPI_SCK"
+		"V3V3"
+		(shape input)
+		(at 63.50 254.00 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "ddbd3afd-e882-5d48-97bf-cc113eaca2fe")
+	)
+	(global_label
+		"SPI_MOSI"
 		(shape input)
 		(at 63.50 259.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "92b93667-6606-5c2e-8253-5019213e443e")
 	)
 	(global_label
-		"SPI_MOSI"
+		"CS"
 		(shape input)
 		(at 63.50 264.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f291a6d0-2aba-5877-bc06-321c2a5ceea6")
 	)
 	(global_label
-		"V3V3"
+		"SPI_SCK"
 		(shape input)
 		(at 63.50 269.24 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "83577de4-6aff-577c-9392-19471b709095")
 	)
-	(no_connect (at 63.50 274.32) (uuid "9f6cfbb1-e5d9-557b-9e29-c770039af703"))
 	(global_label
-		"ROW0"
+		"SPARE2"
+		(shape input)
+		(at 63.50 274.32 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "cec183ca-6a6d-520a-88ae-07625beb5639")
+	)
+	(global_label
+		"SPARE"
 		(shape input)
 		(at 63.50 279.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "3bf9e7d1-ba5b-54e7-b79d-728fbfc3ff03")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
 		(at 63.50 284.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d985dc56-65d7-5623-a86b-6089e4932160")
 	)
 	(global_label
-		"ROW4"
+		"ROW_B"
 		(shape input)
 		(at 63.50 289.56 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "68d269f3-6e04-5703-9dc6-51aaff88cfd7")
 	)
 	(global_label
-		"ROW3"
+		"ROW_C"
 		(shape input)
 		(at 63.50 294.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "07769957-0521-5ed0-bd0b-db9935a6361c")
 	)
 	(global_label
-		"ROW2"
+		"ROW_D"
 		(shape input)
 		(at 63.50 299.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "acfac1ad-e056-55d4-afb9-06ba00316ecb")
 	)
 	(global_label
+		"ROW_E"
+		(shape input)
+		(at 63.50 304.80 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "730cd731-22f4-5977-b9b0-a8402dc71534")
+	)
+	(global_label
+		"SPI_SCK"
+		(shape input)
+		(at 63.50 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "cb948acd-4039-5287-a1b8-ee74522ef804")
+	)
+	(global_label
+		"SPI_MOSI"
+		(shape input)
+		(at 124.46 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "3b965f68-799b-56fa-94af-a12a148bccfe")
+	)
+	(global_label
+		"CS"
+		(shape input)
+		(at 185.42 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "a9c30541-4871-56e8-b039-64177a4ea12c")
+	)
+	(global_label
+		"U1_U2"
+		(shape input)
+		(at 246.38 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "084f7f35-cad1-5f7e-8d84-1478dfda8858")
+	)
+	(global_label
+		"V3V3"
+		(shape input)
+		(at 307.34 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "318dd070-13c8-5666-959b-6f6e7d8507a1")
+	)
+	(global_label
+		"GND"
+		(shape input)
+		(at 368.30 337.82 180)
+		(effects (font (size 1.0 1.0)))
+		(uuid "9566ad0b-d5de-5b06-b110-d029c84999bc")
+	)
+	(global_label
 		"COL0"
 		(shape input)
-		(at 63.50 340.36 180)
+		(at 63.50 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "7a984fbc-de7d-5e24-8b59-ca3153804840")
 	)
 	(global_label
 		"SW1_D"
 		(shape input)
-		(at 63.50 345.44 180)
+		(at 63.50 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "9611ff3a-fbad-59d4-ad9f-8fbab191cda9")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 124.46 340.36 180)
+		(at 124.46 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "248ead8b-ba16-55db-b8c7-daa798daf334")
 	)
 	(global_label
 		"SW1_D"
 		(shape input)
-		(at 124.46 345.44 180)
+		(at 124.46 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "3a166604-bd97-597c-a25f-c58b422e7a33")
 	)
 	(global_label
 		"COL1"
 		(shape input)
-		(at 185.42 340.36 180)
+		(at 185.42 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "af0805a5-2860-5ebd-ab0f-33b03d748753")
 	)
 	(global_label
 		"SW2_D"
 		(shape input)
-		(at 185.42 345.44 180)
+		(at 185.42 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b32db502-3b37-54b1-9949-55e28afc9365")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 246.38 340.36 180)
+		(at 246.38 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cc877609-6c89-580c-b0eb-a450a6b3b47a")
 	)
 	(global_label
 		"SW2_D"
 		(shape input)
-		(at 246.38 345.44 180)
+		(at 246.38 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e3bb1ea0-4020-57fa-ae4f-d85a7742cd23")
 	)
 	(global_label
 		"COL2"
 		(shape input)
-		(at 307.34 340.36 180)
+		(at 307.34 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "71ecd51e-1574-566b-a851-17a6e1313e09")
 	)
 	(global_label
 		"SW3_D"
 		(shape input)
-		(at 307.34 345.44 180)
+		(at 307.34 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "585868f0-8867-5531-a5c3-1e66ebc8653b")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 368.30 340.36 180)
+		(at 368.30 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d1fad1d3-c5da-5980-a5f0-9630dbb65452")
 	)
 	(global_label
 		"SW3_D"
 		(shape input)
-		(at 368.30 345.44 180)
+		(at 368.30 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "754a21a2-1a01-5858-8b14-5ca7cd8b3224")
 	)
 	(global_label
 		"COL3"
 		(shape input)
-		(at 429.26 340.36 180)
+		(at 429.26 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e57828e7-563c-51f7-8834-a46940267908")
 	)
 	(global_label
 		"SW4_D"
 		(shape input)
-		(at 429.26 345.44 180)
+		(at 429.26 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1a8b1363-288d-54f3-894d-a07ea5975c7e")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 490.22 340.36 180)
+		(at 490.22 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "a812c3b8-6540-5cfa-ac99-5432fa3a2a0e")
 	)
 	(global_label
 		"SW4_D"
 		(shape input)
-		(at 490.22 345.44 180)
+		(at 490.22 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "dad7dc28-39a2-5be4-ae5a-dafbf06b98c6")
 	)
 	(global_label
 		"COL4"
 		(shape input)
-		(at 551.18 340.36 180)
+		(at 551.18 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "0520e6e4-6110-55e2-a721-2ada63dd8d98")
 	)
 	(global_label
 		"SW5_D"
 		(shape input)
-		(at 551.18 345.44 180)
+		(at 551.18 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c63838c4-1a22-5c54-985a-a258dddb1d16")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 612.14 340.36 180)
+		(at 612.14 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e7bf688b-5f73-5392-9be7-308520bc1186")
 	)
 	(global_label
 		"SW5_D"
 		(shape input)
-		(at 612.14 345.44 180)
+		(at 612.14 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "5fd7c5a1-6ada-59da-a943-9a6fc08a963a")
 	)
 	(global_label
 		"COL5"
 		(shape input)
-		(at 673.10 340.36 180)
+		(at 673.10 370.84 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "fa9dbe98-0eeb-5fe0-8e51-749907aa1d39")
 	)
 	(global_label
 		"SW6_D"
 		(shape input)
-		(at 673.10 345.44 180)
+		(at 673.10 375.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c0cfc639-1da5-5457-8db0-3763f1416980")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 63.50 375.92 180)
+		(at 63.50 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "8ffd0cf4-476b-53d8-971f-84ece605aadf")
 	)
 	(global_label
 		"SW6_D"
 		(shape input)
-		(at 63.50 381.00 180)
+		(at 63.50 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ea142828-dc68-5a59-804c-eea8ae932bdf")
 	)
 	(global_label
 		"COL6"
 		(shape input)
-		(at 124.46 375.92 180)
+		(at 124.46 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "34cb38e1-02ca-517f-b063-adf7252a3e44")
 	)
 	(global_label
 		"SW7_D"
 		(shape input)
-		(at 124.46 381.00 180)
+		(at 124.46 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f81cd188-f164-50b5-9dd7-e91275535125")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 185.42 375.92 180)
+		(at 185.42 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cf74b30a-65eb-539f-913a-f846776a7dfa")
 	)
 	(global_label
 		"SW7_D"
 		(shape input)
-		(at 185.42 381.00 180)
+		(at 185.42 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1e74e89e-44ca-5780-bb5d-73e64ac82b9a")
 	)
 	(global_label
 		"COL7"
 		(shape input)
-		(at 246.38 375.92 180)
+		(at 246.38 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "fd43490e-83cb-58f3-9833-d21aa2493c90")
 	)
 	(global_label
 		"SW8_D"
 		(shape input)
-		(at 246.38 381.00 180)
+		(at 246.38 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "fbdcac84-fe5e-5b1f-9c84-1d0b40026092")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 307.34 375.92 180)
+		(at 307.34 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c23236a0-2436-5164-aa91-6f3592ded6ce")
 	)
 	(global_label
 		"SW8_D"
 		(shape input)
-		(at 307.34 381.00 180)
+		(at 307.34 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c20ca5b4-20e6-57f7-a9b6-ab92908ab722")
 	)
 	(global_label
 		"COL8"
 		(shape input)
-		(at 368.30 375.92 180)
+		(at 368.30 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "73dbec9e-0835-5a47-99e6-fcbdfd1357ab")
 	)
 	(global_label
 		"SW9_D"
 		(shape input)
-		(at 368.30 381.00 180)
+		(at 368.30 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "95db86bd-9dbc-592a-b59e-78666e9ca9b7")
 	)
 	(global_label
-		"ROW0"
+		"ROW_C"
 		(shape input)
-		(at 429.26 375.92 180)
+		(at 429.26 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b7f519d4-271e-503d-9ae3-95c8415f9846")
 	)
 	(global_label
 		"SW9_D"
 		(shape input)
-		(at 429.26 381.00 180)
+		(at 429.26 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "49682f5f-502e-5917-bfd4-6cdae90d6b03")
 	)
 	(global_label
 		"COL0"
 		(shape input)
-		(at 490.22 375.92 180)
+		(at 490.22 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "97a16b49-202c-5897-81c1-665a0b6a1e8b")
 	)
 	(global_label
 		"SW10_D"
 		(shape input)
-		(at 490.22 381.00 180)
+		(at 490.22 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d0f27e96-7647-54d2-9e4c-36a2cd02e2c9")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 551.18 375.92 180)
+		(at 551.18 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "80873713-8977-5307-adb4-13dba6abc233")
 	)
 	(global_label
 		"SW10_D"
 		(shape input)
-		(at 551.18 381.00 180)
+		(at 551.18 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "04730703-91c8-5d31-898b-352e929e9f27")
 	)
 	(global_label
 		"COL1"
 		(shape input)
-		(at 612.14 375.92 180)
+		(at 612.14 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "3b2f4a57-d56a-531e-bfc7-6ff77c9070fb")
 	)
 	(global_label
 		"SW11_D"
 		(shape input)
-		(at 612.14 381.00 180)
+		(at 612.14 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f4cd6aa6-3ec9-58a4-ad09-50892fe792ce")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 673.10 375.92 180)
+		(at 673.10 406.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d95d4f46-fc2f-53ba-8838-90a5d1b958b9")
 	)
 	(global_label
 		"SW11_D"
 		(shape input)
-		(at 673.10 381.00 180)
+		(at 673.10 411.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ea801294-7317-5665-9646-4aa71e9ca4d0")
 	)
 	(global_label
-		"COL3"
+		"COL2"
 		(shape input)
-		(at 63.50 411.48 180)
+		(at 63.50 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e5b4c0a7-bd4d-560a-b6f8-45665e2bdd5d")
 	)
 	(global_label
 		"SW12_D"
 		(shape input)
-		(at 63.50 416.56 180)
+		(at 63.50 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6d8f53d2-b3d9-50e6-9344-8de12ca66ce1")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 124.46 411.48 180)
+		(at 124.46 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cbce2794-33ea-567d-8a45-aa2d0909a48a")
 	)
 	(global_label
 		"SW12_D"
 		(shape input)
-		(at 124.46 416.56 180)
+		(at 124.46 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "52836aea-3e16-5337-ae46-d5f1ac379505")
 	)
 	(global_label
-		"COL4"
+		"COL3"
 		(shape input)
-		(at 185.42 411.48 180)
+		(at 185.42 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cc8e6f69-f965-59a9-bbf1-b2b4cc950d41")
 	)
 	(global_label
 		"SW13_D"
 		(shape input)
-		(at 185.42 416.56 180)
+		(at 185.42 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "8bd9e3f9-0c8a-50a8-bce2-c0e5cb12650a")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 246.38 411.48 180)
+		(at 246.38 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d713390b-da62-5de1-9d33-03f2ab53eba5")
 	)
 	(global_label
 		"SW13_D"
 		(shape input)
-		(at 246.38 416.56 180)
+		(at 246.38 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "981186f4-3bdf-511b-a61f-ceedb0f9609b")
 	)
 	(global_label
-		"COL5"
+		"COL4"
 		(shape input)
-		(at 307.34 411.48 180)
+		(at 307.34 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "330a6014-1a3b-570a-b4d5-50f85ac06c04")
 	)
 	(global_label
 		"SW14_D"
 		(shape input)
-		(at 307.34 416.56 180)
+		(at 307.34 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "165a07f6-fa47-5e01-bad0-f0475a1f22ab")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 368.30 411.48 180)
+		(at 368.30 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6671538f-def6-5cb4-89e2-f818364639e6")
 	)
 	(global_label
 		"SW14_D"
 		(shape input)
-		(at 368.30 416.56 180)
+		(at 368.30 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "8ed2468e-0357-5bde-b1b3-908e95f32523")
 	)
 	(global_label
-		"COL6"
+		"COL5"
 		(shape input)
-		(at 429.26 411.48 180)
+		(at 429.26 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b081f4fb-9722-517f-bc3a-8e20b06c77d9")
 	)
 	(global_label
 		"SW15_D"
 		(shape input)
-		(at 429.26 416.56 180)
+		(at 429.26 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "753080aa-f48b-5107-8a1a-931f82f22bb6")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 490.22 411.48 180)
+		(at 490.22 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6412f31c-85f6-5758-ba21-04ebe313588b")
 	)
 	(global_label
 		"SW15_D"
 		(shape input)
-		(at 490.22 416.56 180)
+		(at 490.22 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "7f2b6b8a-67c5-5de1-9511-6e465442723b")
 	)
 	(global_label
-		"COL7"
+		"COL6"
 		(shape input)
-		(at 551.18 411.48 180)
+		(at 551.18 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "89bc9214-b4e2-5f26-b26c-d539531a5b70")
 	)
 	(global_label
 		"SW16_D"
 		(shape input)
-		(at 551.18 416.56 180)
+		(at 551.18 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e49a1ad7-6f8d-5f5e-879c-62dc842cd7a5")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 612.14 411.48 180)
+		(at 612.14 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "082c4b9f-8056-5c8b-8922-fea960f2bbd7")
 	)
 	(global_label
 		"SW16_D"
 		(shape input)
-		(at 612.14 416.56 180)
+		(at 612.14 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "24de1537-8fb3-5193-96b2-62e50d265ebc")
 	)
 	(global_label
-		"COL8"
+		"COL7"
 		(shape input)
-		(at 673.10 411.48 180)
+		(at 673.10 441.96 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "10b19951-4068-5536-a9d9-1380369b4872")
 	)
 	(global_label
 		"SW17_D"
 		(shape input)
-		(at 673.10 416.56 180)
+		(at 673.10 447.04 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6a373030-4ba1-5458-9b97-efcf2970f037")
 	)
 	(global_label
-		"ROW1"
+		"ROW_A"
 		(shape input)
-		(at 63.50 447.04 180)
+		(at 63.50 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1108644f-e9ce-5902-a1c5-17d95b14fa46")
 	)
 	(global_label
 		"SW17_D"
 		(shape input)
-		(at 63.50 452.12 180)
+		(at 63.50 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ca3f43fb-3815-5c35-9c8d-fce56ee3c734")
 	)
 	(global_label
-		"COL1"
+		"COL0"
 		(shape input)
-		(at 124.46 447.04 180)
+		(at 124.46 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f6d2128d-b9dc-5841-aa9b-86d96c1d1cb7")
 	)
 	(global_label
 		"SW18_D"
 		(shape input)
-		(at 124.46 452.12 180)
+		(at 124.46 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6d7e9bf7-39f3-51cd-b334-e4010ac99e40")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 185.42 447.04 180)
+		(at 185.42 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "85a37833-157e-5477-947e-14eb5bd129b5")
 	)
 	(global_label
 		"SW18_D"
 		(shape input)
-		(at 185.42 452.12 180)
+		(at 185.42 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "68a1f47e-7ed5-5f61-b5da-247582834d6e")
 	)
 	(global_label
-		"COL2"
+		"COL1"
 		(shape input)
-		(at 246.38 447.04 180)
+		(at 246.38 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "db699675-9a9c-52bb-967f-16908d46d2bc")
 	)
 	(global_label
 		"SW19_D"
 		(shape input)
-		(at 246.38 452.12 180)
+		(at 246.38 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d528fa55-4a8a-56be-8a3c-318d24494154")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 307.34 447.04 180)
+		(at 307.34 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "bf225ce2-d519-5986-a444-d20051e0b433")
 	)
 	(global_label
 		"SW19_D"
 		(shape input)
-		(at 307.34 452.12 180)
+		(at 307.34 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "4f56d75a-b352-522f-8d9a-d0e131ab93d7")
 	)
 	(global_label
-		"COL3"
+		"COL2"
 		(shape input)
-		(at 368.30 447.04 180)
+		(at 368.30 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f1b2fb57-6c5e-5c81-a1ca-7df6972210ec")
 	)
 	(global_label
 		"SW20_D"
 		(shape input)
-		(at 368.30 452.12 180)
+		(at 368.30 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "4f59aefc-1430-55b8-93ef-41e5e77e2746")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 429.26 447.04 180)
+		(at 429.26 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "822110aa-f845-5ca7-80d6-fdb8648d6807")
 	)
 	(global_label
 		"SW20_D"
 		(shape input)
-		(at 429.26 452.12 180)
+		(at 429.26 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "7651fb2e-0012-510a-bc73-c5dd815efcee")
 	)
 	(global_label
-		"COL4"
+		"COL3"
 		(shape input)
-		(at 490.22 447.04 180)
+		(at 490.22 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "eaf0e590-0048-5413-80ea-1e0f3c2573c3")
 	)
 	(global_label
 		"SW21_D"
 		(shape input)
-		(at 490.22 452.12 180)
+		(at 490.22 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "6c6985ff-5df1-5f96-ae2d-a03eb4d76295")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 551.18 447.04 180)
+		(at 551.18 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f8316bd1-da28-541c-85e4-e72ef01d34ef")
 	)
 	(global_label
 		"SW21_D"
 		(shape input)
-		(at 551.18 452.12 180)
+		(at 551.18 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e9629bb3-ff24-52ff-a88f-47c7154b9246")
 	)
 	(global_label
-		"COL5"
+		"COL4"
 		(shape input)
-		(at 612.14 447.04 180)
+		(at 612.14 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "e697e95b-765b-5206-bfc0-e46a541321b3")
 	)
 	(global_label
 		"SW22_D"
 		(shape input)
-		(at 612.14 452.12 180)
+		(at 612.14 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "2507c366-bd4e-5e32-bfa1-9afd4c769ceb")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 673.10 447.04 180)
+		(at 673.10 477.52 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ec030b6b-3bec-55be-a816-d7f709cab5fb")
 	)
 	(global_label
 		"SW22_D"
 		(shape input)
-		(at 673.10 452.12 180)
+		(at 673.10 482.60 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "50120e55-b671-5e1e-9292-0aafd8988f01")
 	)
 	(global_label
-		"COL6"
+		"COL5"
 		(shape input)
-		(at 63.50 482.60 180)
+		(at 63.50 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ef0cd034-0d0c-5bb9-9c06-894c5eac04bb")
 	)
 	(global_label
 		"SW23_D"
 		(shape input)
-		(at 63.50 487.68 180)
+		(at 63.50 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "983c7c00-4b7e-5aef-8fb4-893b3124f5a9")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 124.46 482.60 180)
+		(at 124.46 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "35f33362-da9f-502f-9c29-e0a56c7577c5")
 	)
 	(global_label
 		"SW23_D"
 		(shape input)
-		(at 124.46 487.68 180)
+		(at 124.46 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "48a90f36-3455-5736-b70f-a67007bc1b1e")
 	)
 	(global_label
-		"COL7"
+		"COL6"
 		(shape input)
-		(at 185.42 482.60 180)
+		(at 185.42 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b8bbe3ce-f990-52db-9911-3b3d2b4a899f")
 	)
 	(global_label
 		"SW24_D"
 		(shape input)
-		(at 185.42 487.68 180)
+		(at 185.42 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f3552197-e755-5ca0-b78f-8e6e7ac84609")
 	)
 	(global_label
-		"ROW2"
+		"ROW_B"
 		(shape input)
-		(at 246.38 482.60 180)
+		(at 246.38 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "af6c4d8a-a6f5-5438-87d9-1f3f40ef1f29")
 	)
 	(global_label
 		"SW24_D"
 		(shape input)
-		(at 246.38 487.68 180)
+		(at 246.38 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "803f686f-d873-5c04-b750-5e208d066bb6")
 	)
 	(global_label
-		"COL1"
+		"COL0"
 		(shape input)
-		(at 307.34 482.60 180)
+		(at 307.34 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b7e4d867-68fb-56cb-9284-1569432fdac7")
 	)
 	(global_label
 		"SW25_D"
 		(shape input)
-		(at 307.34 487.68 180)
+		(at 307.34 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1eb0a909-85a7-501e-9d52-2da18cf951ba")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 368.30 482.60 180)
+		(at 368.30 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f5701837-7567-5f57-b408-99bedb04cc9d")
 	)
 	(global_label
 		"SW25_D"
 		(shape input)
-		(at 368.30 487.68 180)
+		(at 368.30 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "42ba7e19-cc98-5d22-89f8-d8a0cd40c8d7")
 	)
 	(global_label
-		"COL2"
+		"COL1"
 		(shape input)
-		(at 429.26 482.60 180)
+		(at 429.26 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "334d2608-9213-536e-b408-a21760a1fd5d")
 	)
 	(global_label
 		"SW26_D"
 		(shape input)
-		(at 429.26 487.68 180)
+		(at 429.26 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "fd019274-d632-5a39-beee-7e55ad21b0f9")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 490.22 482.60 180)
+		(at 490.22 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "abe5e18e-18f8-55cb-a35f-0759d7c030aa")
 	)
 	(global_label
 		"SW26_D"
 		(shape input)
-		(at 490.22 487.68 180)
+		(at 490.22 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "31b72e6a-812a-5508-89ad-277c3803f14a")
 	)
 	(global_label
-		"COL3"
+		"COL2"
 		(shape input)
-		(at 551.18 482.60 180)
+		(at 551.18 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ad6ed9c3-faa7-5f40-b544-e3d90bd1b47d")
 	)
 	(global_label
 		"SW27_D"
 		(shape input)
-		(at 551.18 487.68 180)
+		(at 551.18 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "9c6a527d-5f15-575d-a14f-241b04ce44a8")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 612.14 482.60 180)
+		(at 612.14 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b2fd91cb-d749-5c9f-b96f-7eb1affd2922")
 	)
 	(global_label
 		"SW27_D"
 		(shape input)
-		(at 612.14 487.68 180)
+		(at 612.14 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "dd31c2da-b36a-5be5-b5dd-cfbcb4f95a93")
 	)
 	(global_label
-		"COL4"
+		"COL3"
 		(shape input)
-		(at 673.10 482.60 180)
+		(at 673.10 513.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c7225dc6-2df8-5da8-998b-265509f102d9")
 	)
 	(global_label
 		"SW28_D"
 		(shape input)
-		(at 673.10 487.68 180)
+		(at 673.10 518.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b90a61a5-74a2-5559-a5bd-0b8b8aa22b10")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 63.50 518.16 180)
+		(at 63.50 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "98140f94-9e89-518d-8cac-34d0faf1ce7f")
 	)
 	(global_label
 		"SW28_D"
 		(shape input)
-		(at 63.50 523.24 180)
+		(at 63.50 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "4ad21ba4-1b98-5983-b644-a1e3c468e6c8")
 	)
 	(global_label
-		"COL5"
+		"COL4"
 		(shape input)
-		(at 124.46 518.16 180)
+		(at 124.46 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f35f2450-6c21-5eaa-9d02-fdf528f868e5")
 	)
 	(global_label
 		"SW29_D"
 		(shape input)
-		(at 124.46 523.24 180)
+		(at 124.46 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "c9970909-2e93-5fec-9f49-759dfebc17c3")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 185.42 518.16 180)
+		(at 185.42 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1a63df72-aa9c-5e88-8ddb-260bb6fabae4")
 	)
 	(global_label
 		"SW29_D"
 		(shape input)
-		(at 185.42 523.24 180)
+		(at 185.42 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "73337b8c-4338-59f1-b75b-9a1835c017dc")
 	)
 	(global_label
-		"COL7"
+		"COL5"
 		(shape input)
-		(at 246.38 518.16 180)
+		(at 246.38 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cb7b027a-a31a-5b82-9fa6-8dab7a0b9ea0")
 	)
 	(global_label
 		"SW30_D"
 		(shape input)
-		(at 246.38 523.24 180)
+		(at 246.38 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "2ee59950-9613-5811-9084-a6dc19cb9238")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 307.34 518.16 180)
+		(at 307.34 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "4f70f532-7f23-5d75-a365-19c17a305089")
 	)
 	(global_label
 		"SW30_D"
 		(shape input)
-		(at 307.34 523.24 180)
+		(at 307.34 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "aee18aaf-e5b0-56e8-a501-fa98cc879039")
 	)
 	(global_label
-		"COL8"
+		"COL6"
 		(shape input)
-		(at 368.30 518.16 180)
+		(at 368.30 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "69c89565-08f2-55d4-9abd-5d9cd1de45f5")
 	)
 	(global_label
 		"SW31_D"
 		(shape input)
-		(at 368.30 523.24 180)
+		(at 368.30 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "24ad002c-5dbc-5ee9-8e44-17b9b5f2d06a")
 	)
 	(global_label
-		"ROW3"
+		"ROW_D"
 		(shape input)
-		(at 429.26 518.16 180)
+		(at 429.26 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "58af55f6-00d2-5572-9567-ed04b1314f8f")
 	)
 	(global_label
 		"SW31_D"
 		(shape input)
-		(at 429.26 523.24 180)
+		(at 429.26 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "1ff6f627-7c48-51be-a095-22f332b1cab4")
 	)
 	(global_label
-		"COL2"
+		"COL0"
 		(shape input)
-		(at 490.22 518.16 180)
+		(at 490.22 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "dc87ce62-d531-5728-a955-06e3e1f5971e")
 	)
 	(global_label
 		"SW32_D"
 		(shape input)
-		(at 490.22 523.24 180)
+		(at 490.22 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f17a5f6f-b651-5da2-98b7-7795d55253ff")
 	)
 	(global_label
-		"ROW4"
+		"ROW_E"
 		(shape input)
-		(at 551.18 518.16 180)
+		(at 551.18 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "a44859dc-7f60-5524-b704-267d7837d84f")
 	)
 	(global_label
 		"SW32_D"
 		(shape input)
-		(at 551.18 523.24 180)
+		(at 551.18 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "a815d414-bd13-589f-b199-5194818ac6fb")
 	)
 	(global_label
-		"COL4"
+		"COL3"
 		(shape input)
-		(at 612.14 518.16 180)
+		(at 612.14 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "b443c28a-95ac-5245-b919-f37ce01b1ad7")
 	)
 	(global_label
 		"SW33_D"
 		(shape input)
-		(at 612.14 523.24 180)
+		(at 612.14 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "63283c16-e4c6-5ebd-825a-35ac8b22b426")
 	)
 	(global_label
-		"ROW4"
+		"ROW_E"
 		(shape input)
-		(at 673.10 518.16 180)
+		(at 673.10 548.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "92b7dbb6-1dac-5e73-be12-b655adecdba3")
 	)
 	(global_label
 		"SW33_D"
 		(shape input)
-		(at 673.10 523.24 180)
+		(at 673.10 553.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "8282f04c-0d3b-5059-a52f-d2a57497188e")
 	)
 	(global_label
-		"COL5"
+		"COL4"
 		(shape input)
-		(at 63.50 553.72 180)
+		(at 63.50 584.20 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "acefd7da-ba81-55af-ae90-1f7c4dc60c67")
 	)
 	(global_label
 		"SW34_D"
 		(shape input)
-		(at 63.50 558.80 180)
+		(at 63.50 589.28 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "dc78d9ec-76f9-5058-92a4-51df25025023")
 	)
 	(global_label
-		"ROW4"
+		"ROW_E"
 		(shape input)
-		(at 124.46 553.72 180)
+		(at 124.46 584.20 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "65044373-2e6b-540c-88c8-884b14a76c3d")
 	)
 	(global_label
 		"SW34_D"
 		(shape input)
-		(at 124.46 558.80 180)
+		(at 124.46 589.28 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "7e07e2f4-a7bd-58ca-9401-a7bbde8d8b5f")
 	)
 	(global_label
 		"GND"
 		(shape input)
-		(at 74.93 591.82 180)
+		(at 74.93 622.30 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "5f289529-14a2-5e14-9ba7-42d4cd12fadc")
 	)
 	(global_label
 		"V3V3"
 		(shape input)
-		(at 100.33 591.82 180)
+		(at 100.33 622.30 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d5ef714a-59b5-578a-a02c-b75e5ade0b35")
 	)
@@ -1499,17 +1586,6 @@
 		(at 93.98 152.40 0)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cf18b83a-50a9-5c51-8b05-2d0954ae1b6d")
-	)
-	(wire
-		(pts (xy 58.42 314.96) (xy 63.50 314.96))
-		(stroke (width 0.508) (type default))
-		(uuid "3a188c71-a496-5619-af55-ec278132fbbe")
-	)
-	(label
-		"GND"
-		(at 58.42 314.96 0)
-		(effects (font (size 1.0 1.0)))
-		(uuid "4c3b69c0-d8b6-5205-838d-1f948f5d5c07")
 	)
 	(wire
 		(pts (xy 63.50 142.24) (xy 58.42 142.24))
@@ -1727,42 +1803,6 @@
 	(junction (at 246.38 182.88) (diameter 1.016) (color 0 0 0 0)
 		(uuid "f6386e1f-abff-53ec-bb9a-d6c1a38f3a99")
 	)
-	(wire
-		(pts (xy 63.50 254.00) (xy 58.42 254.00))
-		(stroke (width 0) (type default))
-		(uuid "cfecf5dd-1c58-5758-97b8-f2ff9298fd7b")
-	)
-	(wire
-		(pts (xy 58.42 254.00) (xy 58.42 314.96))
-		(stroke (width 0) (type default))
-		(uuid "0311e7ba-dbc2-5918-876f-7c789ccfcb4c")
-	)
-	(wire
-		(pts (xy 58.42 314.96) (xy 63.50 314.96))
-		(stroke (width 0) (type default))
-		(uuid "127dced0-557f-5749-8974-4d757f7cc0ab")
-	)
-	(junction (at 63.50 314.96) (diameter 1.016) (color 0 0 0 0)
-		(uuid "409c13e5-d1be-55e8-9386-80aa06aee99c")
-	)
-	(wire
-		(pts (xy 63.50 304.80) (xy 53.34 304.80))
-		(stroke (width 0) (type default))
-		(uuid "d1b709ba-0d4a-50f5-8025-7360fc241199")
-	)
-	(wire
-		(pts (xy 53.34 304.80) (xy 53.34 314.96))
-		(stroke (width 0) (type default))
-		(uuid "9a0940b5-d7b1-57c1-a552-eb82034b9ae6")
-	)
-	(wire
-		(pts (xy 53.34 314.96) (xy 63.50 314.96))
-		(stroke (width 0) (type default))
-		(uuid "7c31b70d-8d23-5fba-96fd-845800d1f02b")
-	)
-	(junction (at 63.50 314.96) (diameter 1.016) (color 0 0 0 0)
-		(uuid "d0c41667-eb24-5654-8c2d-04328c98412e")
-	)
 	(text "── シフトレジスタ ──"
 		(at 38.10 22.86 0)
 		(effects (font (size 2.54 2.54)))
@@ -1773,13 +1813,18 @@
 		(effects (font (size 2.54 2.54)))
 		(uuid "6e76fc8f-576d-577a-9fa0-300098f49e40")
 	)
+	(text "── テストパッド ──"
+		(at 38.10 312.42 0)
+		(effects (font (size 2.54 2.54)))
+		(uuid "c74497a5-0cf3-5f70-867c-c7aea42415ac")
+	)
 	(text "── マトリクス ──"
-		(at 38.10 317.50 0)
+		(at 38.10 347.98 0)
 		(effects (font (size 2.54 2.54)))
 		(uuid "84f8e6d1-0c9e-5f8c-9a06-9d8c8e3c3e19")
 	)
 	(text "── 電源フラグ（基板の外から来るネット）──"
-		(at 38.10 576.58 0)
+		(at 38.10 607.06 0)
 		(effects (font (size 2.54 2.54)))
 		(uuid "ab713d2e-262e-5a15-9da6-553997d0433c")
 	)
@@ -1932,16 +1977,142 @@
 		)
 	)
 	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 74.93 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "b38e61aa-ab29-5ca0-a926-f4e53e78ebff")
+		(property "Reference" "TP1" (at 74.93 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 74.93 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "d9995e30-e692-596b-b7ef-b62610c18d69"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 135.89 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "26f48dd0-5d23-50dc-b5c9-edd194e45a00")
+		(property "Reference" "TP2" (at 135.89 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 135.89 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "9ab5fcd7-e4c1-57d6-8b03-ebcfb170371e"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 196.85 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "83b76976-bac9-5439-ac91-9e265ff511c3")
+		(property "Reference" "TP3" (at 196.85 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 196.85 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "9fbdaa80-b3d7-5d88-8bf6-d98837e1750d"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 257.81 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f6598ddf-99b5-598a-a3fa-1176eb6e2337")
+		(property "Reference" "TP4" (at 257.81 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 257.81 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "241ef661-429d-5532-b8f7-de405ba628e0"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 318.77 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "76df1101-c85b-5bf5-91e0-8a21664831b8")
+		(property "Reference" "TP5" (at 318.77 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 318.77 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "36dda699-bfec-5792-83f8-e35e5c66ee66"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "hhkb_split_right:testpoint")
+		(at 379.73 337.82 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "608376f6-cd90-59f5-ba1f-3b8c9864efed")
+		(property "Reference" "TP6" (at 379.73 326.39 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "testpoint" (at 379.73 349.25 0) (effects (font (size 1.27 1.27))))
+		(pin "1" (uuid "a585146b-2421-5e42-95e3-61ceb12c57e1"))
+		(instances
+			(project "hhkb_split_right"
+				(path "/68e5bc58-ebc5-5f0d-bfc6-cc94dff2192d"
+					(reference "TP6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 74.93 342.90 0)
+		(at 74.93 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "76ef1bfa-e549-53d7-995e-4ee13ce07de8")
-		(property "Reference" "SW1" (at 74.93 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 74.93 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW1" (at 74.93 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 74.93 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "353ab500-1e0f-5b8a-a94a-ede873193c1d"))
 		(pin "2" (uuid "15ba744f-d90a-590e-a3cc-c9c59842c24f"))
 		(instances
@@ -1955,15 +2126,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 135.89 342.90 0)
+		(at 135.89 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "ab0bf13b-b728-5fb0-8ed9-9af0b66d1a66")
-		(property "Reference" "D1" (at 135.89 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 135.89 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D1" (at 135.89 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 135.89 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "adb07be8-0b0e-531e-ad8e-12ee16ab1669"))
 		(pin "2" (uuid "0cc5ad19-e20c-57ed-9fdb-ebef1533f6cf"))
 		(instances
@@ -1977,15 +2148,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 196.85 342.90 0)
+		(at 196.85 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "e1fb66cf-5742-58bb-bb63-bbab7bbc0ef2")
-		(property "Reference" "SW2" (at 196.85 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 196.85 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW2" (at 196.85 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 196.85 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "ab4d460e-6c6a-5eeb-a4db-da37a602d222"))
 		(pin "2" (uuid "8311edaf-087d-5ee9-b3d2-79b55ae232f3"))
 		(instances
@@ -1999,15 +2170,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 257.81 342.90 0)
+		(at 257.81 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "eaa156df-324c-5f52-9454-10a0c8f9dbc6")
-		(property "Reference" "D2" (at 257.81 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 257.81 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D2" (at 257.81 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 257.81 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "98485ca6-d0d6-54a2-bb36-0a49f376eeb6"))
 		(pin "2" (uuid "dc5c5a3b-e68b-5b48-9bba-2c535ffe4c4a"))
 		(instances
@@ -2021,15 +2192,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 318.77 342.90 0)
+		(at 318.77 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "c0a51372-9d79-5031-b67a-847378f31c8e")
-		(property "Reference" "SW3" (at 318.77 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 318.77 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW3" (at 318.77 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 318.77 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "9b61d1c7-98ed-57e0-a340-9e8af60e32cd"))
 		(pin "2" (uuid "892f3b83-fc9f-5d34-bac5-c2f684d2c2e0"))
 		(instances
@@ -2043,15 +2214,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 379.73 342.90 0)
+		(at 379.73 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "1cf3d10f-7ad7-59a7-9350-ae6ef4364f99")
-		(property "Reference" "D3" (at 379.73 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 379.73 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D3" (at 379.73 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 379.73 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "faa6652e-9944-5eea-aad2-6ca2719f474d"))
 		(pin "2" (uuid "6048e55e-4add-5dbc-a347-2fcf6a1d05f9"))
 		(instances
@@ -2065,15 +2236,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 440.69 342.90 0)
+		(at 440.69 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "9de3bc41-25f0-56b6-a7af-bd75bc51755a")
-		(property "Reference" "SW4" (at 440.69 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 440.69 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW4" (at 440.69 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 440.69 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "73b4a8e0-6b30-5109-b1de-01052225e505"))
 		(pin "2" (uuid "162ba16b-874e-5d65-bc3f-e09e6cbc3925"))
 		(instances
@@ -2087,15 +2258,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 501.65 342.90 0)
+		(at 501.65 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "59807958-792a-5029-a4f2-7c8ee90e27e6")
-		(property "Reference" "D4" (at 501.65 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 501.65 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D4" (at 501.65 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 501.65 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "936a75b1-0154-5330-b07d-da9433b84aa1"))
 		(pin "2" (uuid "8efacae3-163e-5428-8381-e73ca9bd4804"))
 		(instances
@@ -2109,15 +2280,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 562.61 342.90 0)
+		(at 562.61 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "23aa41e8-b6ab-545d-a5f6-1134457ba454")
-		(property "Reference" "SW5" (at 562.61 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 562.61 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW5" (at 562.61 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 562.61 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "1366b9c3-a489-5917-b57b-d8491f0bdd52"))
 		(pin "2" (uuid "63dd0bcb-42cb-5bb8-8b45-3f30f432e057"))
 		(instances
@@ -2131,15 +2302,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 623.57 342.90 0)
+		(at 623.57 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "61d49f2f-31bc-56f3-a836-bf02b66f2c68")
-		(property "Reference" "D5" (at 623.57 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 623.57 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D5" (at 623.57 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 623.57 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "0ff4afb3-1a9f-5d3a-9518-6c500a8d27f5"))
 		(pin "2" (uuid "28de4a1f-bc1f-519b-ac3a-fcad4147a34a"))
 		(instances
@@ -2153,15 +2324,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 684.53 342.90 0)
+		(at 684.53 373.38 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "3b45481d-405f-5957-8251-141e127161b0")
-		(property "Reference" "SW6" (at 684.53 331.47 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 684.53 354.33 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW6" (at 684.53 361.95 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 684.53 384.81 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "657d32d4-1483-5630-80f4-b17661342ee3"))
 		(pin "2" (uuid "91e73190-808f-5af3-9272-4cf4413da9e0"))
 		(instances
@@ -2175,15 +2346,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 74.93 378.46 0)
+		(at 74.93 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "596c8aad-987e-58f4-a2f6-7c6d651af79d")
-		(property "Reference" "D6" (at 74.93 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 74.93 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D6" (at 74.93 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 74.93 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "8d148d43-06a9-5052-a96b-766234e9f988"))
 		(pin "2" (uuid "75c6caa1-aa91-5bff-b671-57e0bc7807b0"))
 		(instances
@@ -2197,15 +2368,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 135.89 378.46 0)
+		(at 135.89 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "a9bdddd8-513f-5592-a6f4-0c0af831cb21")
-		(property "Reference" "SW7" (at 135.89 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 135.89 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW7" (at 135.89 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 135.89 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "0c2bbbfe-fe93-5505-89bc-221e4690253b"))
 		(pin "2" (uuid "9641e19b-5616-525f-9f42-8fe6a6f89c1c"))
 		(instances
@@ -2219,15 +2390,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 196.85 378.46 0)
+		(at 196.85 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "4a0663f2-91f1-56dc-874f-49633315038b")
-		(property "Reference" "D7" (at 196.85 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 196.85 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D7" (at 196.85 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 196.85 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "c64755c2-bce8-5630-9073-279555f5e80e"))
 		(pin "2" (uuid "7eb996f6-224c-5a0f-99e1-3bf3e6c713e3"))
 		(instances
@@ -2241,15 +2412,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 257.81 378.46 0)
+		(at 257.81 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "56491a13-5638-5167-92e4-d3b1e7bfcd9c")
-		(property "Reference" "SW8" (at 257.81 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 257.81 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW8" (at 257.81 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 257.81 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "00a67002-bb32-576d-b602-df1698d469b4"))
 		(pin "2" (uuid "1c4e77dc-886b-5ac5-9843-b6c510cf8e8f"))
 		(instances
@@ -2263,15 +2434,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 318.77 378.46 0)
+		(at 318.77 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "eed91b3c-87d8-53e1-ae07-50654cbabd2b")
-		(property "Reference" "D8" (at 318.77 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 318.77 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D8" (at 318.77 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 318.77 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "c37f1b11-ad76-5b02-a6d1-f9c7227cf75c"))
 		(pin "2" (uuid "6d7b4faf-0f36-5ddd-bd3e-99afc97575ab"))
 		(instances
@@ -2285,15 +2456,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 379.73 378.46 0)
+		(at 379.73 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "90e57352-e903-5474-a76e-f1db82900e26")
-		(property "Reference" "SW9" (at 379.73 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 379.73 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW9" (at 379.73 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 379.73 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "1d959c15-0631-5492-85c6-6dbdbd4ad8d2"))
 		(pin "2" (uuid "b20d6264-82db-5852-ba22-5c50025bd010"))
 		(instances
@@ -2307,15 +2478,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 440.69 378.46 0)
+		(at 440.69 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "de2825c3-561b-5ba2-9938-667fd70a8342")
-		(property "Reference" "D9" (at 440.69 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 440.69 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D9" (at 440.69 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 440.69 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "1fe9373e-7ab9-5093-982c-64ca3426da99"))
 		(pin "2" (uuid "ea830948-23f2-55d6-adeb-0a913f41f6d9"))
 		(instances
@@ -2329,15 +2500,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 501.65 378.46 0)
+		(at 501.65 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "da0b3448-dcdb-520a-a13e-a80ec06029be")
-		(property "Reference" "SW10" (at 501.65 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 501.65 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW10" (at 501.65 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 501.65 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "2c326253-a0a3-5b4c-8419-a533afdaa60f"))
 		(pin "2" (uuid "32384c65-a6d9-5b6d-a636-0b4a127613a7"))
 		(instances
@@ -2351,15 +2522,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 562.61 378.46 0)
+		(at 562.61 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "a7aabf8e-4f33-58df-abad-7e074dc1c83c")
-		(property "Reference" "D10" (at 562.61 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 562.61 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D10" (at 562.61 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 562.61 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "afb2dbf9-d2b1-582c-a6a2-86f805bc377c"))
 		(pin "2" (uuid "e300323a-1ae6-53bb-9b18-7ad89cca8ba0"))
 		(instances
@@ -2373,15 +2544,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 623.57 378.46 0)
+		(at 623.57 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "260adcac-daf3-5064-93b9-8bea0658887a")
-		(property "Reference" "SW11" (at 623.57 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 623.57 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW11" (at 623.57 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 623.57 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "6a261f35-d75c-58cb-a0d7-c10007109e62"))
 		(pin "2" (uuid "c8cee41e-fd3f-5f1f-aac9-8643c8ce642a"))
 		(instances
@@ -2395,15 +2566,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 684.53 378.46 0)
+		(at 684.53 408.94 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "5f3e1776-3b4d-5a2e-bfc7-bd62316d1b52")
-		(property "Reference" "D11" (at 684.53 367.03 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 684.53 389.89 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D11" (at 684.53 397.51 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 684.53 420.37 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "ad0cb60a-919d-5aaf-a4ce-2703c06c44bd"))
 		(pin "2" (uuid "acb2780d-8f1c-5f3e-9413-08bb0e7d459a"))
 		(instances
@@ -2417,15 +2588,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 74.93 414.02 0)
+		(at 74.93 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "2140aade-a601-5a30-a39f-dabd80fae6ca")
-		(property "Reference" "SW12" (at 74.93 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 74.93 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW12" (at 74.93 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 74.93 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "e1b85857-e300-58fa-8166-f5cbc5469c6d"))
 		(pin "2" (uuid "6a1b2863-6c9a-5a75-9314-87262c155a41"))
 		(instances
@@ -2439,15 +2610,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 135.89 414.02 0)
+		(at 135.89 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "5025db74-0d1f-58df-96fa-b131ab600d2a")
-		(property "Reference" "D12" (at 135.89 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 135.89 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D12" (at 135.89 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 135.89 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "60414258-be5f-593f-a5dd-ccd069503235"))
 		(pin "2" (uuid "7b415b9c-7e05-50f2-84ed-404072cf0b57"))
 		(instances
@@ -2461,15 +2632,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 196.85 414.02 0)
+		(at 196.85 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "c144e420-d101-5a80-b4f8-11bffb4e4f70")
-		(property "Reference" "SW13" (at 196.85 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 196.85 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW13" (at 196.85 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 196.85 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "24851032-a0ac-5d91-b2ed-1d556911333f"))
 		(pin "2" (uuid "b6959c54-780d-5777-9402-ae4215189a56"))
 		(instances
@@ -2483,15 +2654,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 257.81 414.02 0)
+		(at 257.81 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "7138d315-800b-56b6-96bc-5933fb9348db")
-		(property "Reference" "D13" (at 257.81 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 257.81 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D13" (at 257.81 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 257.81 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "4ffa308a-0db9-55b3-989d-1501810f7301"))
 		(pin "2" (uuid "c6826a80-0a39-51fb-8ec8-adf5bfc40e9d"))
 		(instances
@@ -2505,15 +2676,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 318.77 414.02 0)
+		(at 318.77 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "e713ff13-9288-5201-af37-ccfab0d54b87")
-		(property "Reference" "SW14" (at 318.77 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 318.77 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW14" (at 318.77 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 318.77 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "f969b70d-0846-5075-b599-501a179dc03d"))
 		(pin "2" (uuid "93d34c69-dcf5-512b-a82d-da44e30b8df5"))
 		(instances
@@ -2527,15 +2698,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 379.73 414.02 0)
+		(at 379.73 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "35b21674-1347-544a-a901-ece475319426")
-		(property "Reference" "D14" (at 379.73 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 379.73 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D14" (at 379.73 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 379.73 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "880aa174-b784-5732-8bec-33fd39601ef7"))
 		(pin "2" (uuid "9ac6daca-43af-585c-9108-e4520f853a0a"))
 		(instances
@@ -2549,15 +2720,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 440.69 414.02 0)
+		(at 440.69 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "ed28bc7d-ca4b-558c-a194-22575001baad")
-		(property "Reference" "SW15" (at 440.69 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 440.69 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW15" (at 440.69 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 440.69 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "93cb9255-f91f-590b-8e21-7eed36d546f9"))
 		(pin "2" (uuid "a2a2f2e9-3a8f-587c-bc62-34964af8eab5"))
 		(instances
@@ -2571,15 +2742,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 501.65 414.02 0)
+		(at 501.65 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "213a0aad-b4fc-5225-ae29-34f9bc45c63e")
-		(property "Reference" "D15" (at 501.65 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 501.65 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D15" (at 501.65 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 501.65 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "80a27244-e8f1-5d8b-95a6-2572ddc200ce"))
 		(pin "2" (uuid "194edf33-20a2-5900-bf37-bcc941390419"))
 		(instances
@@ -2593,15 +2764,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 562.61 414.02 0)
+		(at 562.61 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "6126cbf2-88eb-5f95-ab41-45012e96900e")
-		(property "Reference" "SW16" (at 562.61 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 562.61 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW16" (at 562.61 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 562.61 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "e771fd50-b4d1-553b-bb50-6651f30b8eef"))
 		(pin "2" (uuid "18be33f6-d971-5fe8-89cd-8f8966074490"))
 		(instances
@@ -2615,15 +2786,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 623.57 414.02 0)
+		(at 623.57 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "8ed38df9-7fc7-5487-bf00-ecdb125d57e5")
-		(property "Reference" "D16" (at 623.57 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 623.57 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D16" (at 623.57 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 623.57 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "5e3fa27c-72a0-5310-b558-4acbf2bf9a2f"))
 		(pin "2" (uuid "3ae54c5b-0be4-5ad6-9987-2adb5c3aba1d"))
 		(instances
@@ -2637,15 +2808,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 684.53 414.02 0)
+		(at 684.53 444.50 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "a7b2d5a9-1f7d-5767-bbed-d8e282fcf0d4")
-		(property "Reference" "SW17" (at 684.53 402.59 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 684.53 425.45 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW17" (at 684.53 433.07 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 684.53 455.93 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "d6ac046e-500f-540d-87ba-592f1a6728a4"))
 		(pin "2" (uuid "c2e528aa-61ba-5200-a8dd-9991dbff5da0"))
 		(instances
@@ -2659,15 +2830,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 74.93 449.58 0)
+		(at 74.93 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "3777ca24-b9d4-5738-b531-e149f2ac3ad0")
-		(property "Reference" "D17" (at 74.93 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 74.93 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D17" (at 74.93 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 74.93 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "b8f0bf7d-2d72-5666-98a9-aed26fb4a3f3"))
 		(pin "2" (uuid "e75d9f7e-52cc-5e9e-941f-b9395a6b7d79"))
 		(instances
@@ -2681,15 +2852,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 135.89 449.58 0)
+		(at 135.89 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "fe6ee174-d470-59fc-8145-55194c34d69c")
-		(property "Reference" "SW18" (at 135.89 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 135.89 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW18" (at 135.89 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 135.89 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "6bc4c9ab-7a64-5c4e-99b8-7bc99d887c62"))
 		(pin "2" (uuid "e247eb7a-3272-58c7-965a-4c1954d01e5b"))
 		(instances
@@ -2703,15 +2874,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 196.85 449.58 0)
+		(at 196.85 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "7ad7124a-ffe9-54e0-a53b-0d1abd189155")
-		(property "Reference" "D18" (at 196.85 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 196.85 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D18" (at 196.85 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 196.85 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "db397d75-0e11-5740-8049-5ab3691890fd"))
 		(pin "2" (uuid "08d80515-92f5-5b30-a881-0a00b8430b8f"))
 		(instances
@@ -2725,15 +2896,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 257.81 449.58 0)
+		(at 257.81 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "f77cdd74-d8a5-53f2-9660-891ea6b3b638")
-		(property "Reference" "SW19" (at 257.81 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 257.81 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW19" (at 257.81 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 257.81 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "6d61e3be-318b-51f2-a4ba-7e62865cf3f9"))
 		(pin "2" (uuid "aa69cff4-cb5d-5f79-a5bb-058910b4c959"))
 		(instances
@@ -2747,15 +2918,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 318.77 449.58 0)
+		(at 318.77 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "3491d2e9-b56a-5404-ae67-2a58010cc17d")
-		(property "Reference" "D19" (at 318.77 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 318.77 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D19" (at 318.77 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 318.77 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "d2c00dad-e491-5a85-8ade-eb8fb29fc8a7"))
 		(pin "2" (uuid "51fb7a7c-3037-5a05-8e84-cfc62fcdda71"))
 		(instances
@@ -2769,15 +2940,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 379.73 449.58 0)
+		(at 379.73 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "92fc6fc9-8eaa-5f34-957c-6ad5d5cb6de6")
-		(property "Reference" "SW20" (at 379.73 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 379.73 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW20" (at 379.73 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 379.73 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "440eae6e-9ec9-57a8-bd50-bf19af96f453"))
 		(pin "2" (uuid "30a15484-1af0-5c96-bb70-f302d2b66f06"))
 		(instances
@@ -2791,15 +2962,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 440.69 449.58 0)
+		(at 440.69 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "c5b8c5a7-05ee-5e84-9830-ffe493f3a99b")
-		(property "Reference" "D20" (at 440.69 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 440.69 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D20" (at 440.69 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 440.69 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "c6d9e416-567f-5f4a-8d67-98b4af4f37ec"))
 		(pin "2" (uuid "1d5735c6-2812-58cc-97b0-25a1f544925d"))
 		(instances
@@ -2813,15 +2984,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 501.65 449.58 0)
+		(at 501.65 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "53dfa2c2-62d4-57fa-81f1-7e976ac47d68")
-		(property "Reference" "SW21" (at 501.65 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 501.65 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW21" (at 501.65 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 501.65 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "16d4ee83-d8fd-5e7d-8255-36fa192b17f9"))
 		(pin "2" (uuid "09e5dc22-b6e1-55e3-a52a-3b6a3ff3604e"))
 		(instances
@@ -2835,15 +3006,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 562.61 449.58 0)
+		(at 562.61 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "05bc17d1-25ab-5f2c-b544-ac680b2638aa")
-		(property "Reference" "D21" (at 562.61 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 562.61 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D21" (at 562.61 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 562.61 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "d7ca0830-d5bf-59ee-8b72-f1d6c24af130"))
 		(pin "2" (uuid "a3da913e-b7fe-5e43-a9b3-0379f0fe06de"))
 		(instances
@@ -2857,15 +3028,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 623.57 449.58 0)
+		(at 623.57 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "afeea2b8-5679-5d7a-b035-32489286838b")
-		(property "Reference" "SW22" (at 623.57 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 623.57 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW22" (at 623.57 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 623.57 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "26e5ad2a-6fd0-5f6c-af8a-f2fc6354a66b"))
 		(pin "2" (uuid "c7c0fbb0-220a-50b8-a478-bafd173aa90f"))
 		(instances
@@ -2879,15 +3050,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 684.53 449.58 0)
+		(at 684.53 480.06 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "b5ca197d-41e2-5371-9ca3-e6c6b128ef55")
-		(property "Reference" "D22" (at 684.53 438.15 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 684.53 461.01 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D22" (at 684.53 468.63 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 684.53 491.49 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "efffb2dc-470a-5386-97bd-110d616846dc"))
 		(pin "2" (uuid "d032cfd0-459b-5942-9f0c-2de4c654a0c1"))
 		(instances
@@ -2901,15 +3072,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 74.93 485.14 0)
+		(at 74.93 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "7fd3efca-1902-5739-8e3a-362886bdb824")
-		(property "Reference" "SW23" (at 74.93 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 74.93 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW23" (at 74.93 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 74.93 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "e1a45e04-2c7a-5c29-aa1c-6a782f87fa69"))
 		(pin "2" (uuid "15cbadd3-b766-5f66-8ac4-11a61b392220"))
 		(instances
@@ -2923,15 +3094,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 135.89 485.14 0)
+		(at 135.89 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "00ba3c0a-91b4-5e45-aaf5-4e6b5c80f5bb")
-		(property "Reference" "D23" (at 135.89 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 135.89 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D23" (at 135.89 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 135.89 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "583cf121-2e7e-591b-8132-1465959f51bc"))
 		(pin "2" (uuid "5ddff567-3522-5722-b7b0-ac850a34ef38"))
 		(instances
@@ -2945,15 +3116,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 196.85 485.14 0)
+		(at 196.85 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "246c610e-c500-542b-a295-af4164d5df0d")
-		(property "Reference" "SW24" (at 196.85 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 196.85 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW24" (at 196.85 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 196.85 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "0b30c08f-de6d-5ca8-b144-7420415ef6f1"))
 		(pin "2" (uuid "d4174538-c55d-56a9-8add-073f1d5ed52d"))
 		(instances
@@ -2967,15 +3138,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 257.81 485.14 0)
+		(at 257.81 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "77f4e6d7-d302-5b55-bbab-ba3cc70a42bd")
-		(property "Reference" "D24" (at 257.81 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 257.81 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D24" (at 257.81 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 257.81 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "00864ac9-cb00-5195-a008-55861464a345"))
 		(pin "2" (uuid "1fe25dc2-ea08-50bb-a580-e4776f2bc955"))
 		(instances
@@ -2989,15 +3160,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 318.77 485.14 0)
+		(at 318.77 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "c14903b9-b921-5301-985b-ab11cb59e81b")
-		(property "Reference" "SW25" (at 318.77 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 318.77 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW25" (at 318.77 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 318.77 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "1097fb83-3644-5cc0-93d1-ff089ce96410"))
 		(pin "2" (uuid "e32dea22-5903-53d4-ac2d-23b5d9e7b765"))
 		(instances
@@ -3011,15 +3182,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 379.73 485.14 0)
+		(at 379.73 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "a5aa1436-04e8-5cff-8869-ee12401e8f17")
-		(property "Reference" "D25" (at 379.73 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 379.73 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D25" (at 379.73 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 379.73 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "891f2cec-bc3b-5a97-b5d7-cccfecf2d6dd"))
 		(pin "2" (uuid "35b99444-b382-57f7-878f-f775aa605e4b"))
 		(instances
@@ -3033,15 +3204,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 440.69 485.14 0)
+		(at 440.69 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "0ba91269-06a1-560b-a596-54b61248a05f")
-		(property "Reference" "SW26" (at 440.69 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 440.69 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW26" (at 440.69 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 440.69 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "12ae21da-31dc-5d60-8a21-b00f00e00726"))
 		(pin "2" (uuid "5bdc4628-1805-583e-9496-fa1c8f39d868"))
 		(instances
@@ -3055,15 +3226,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 501.65 485.14 0)
+		(at 501.65 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "9d26c6c6-8504-5e44-b76c-a3937283aeb3")
-		(property "Reference" "D26" (at 501.65 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 501.65 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D26" (at 501.65 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 501.65 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "9a85021e-a476-5bc0-b37d-e35d4819918e"))
 		(pin "2" (uuid "fdf49407-9541-5ebb-b357-24265cee958d"))
 		(instances
@@ -3077,15 +3248,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 562.61 485.14 0)
+		(at 562.61 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "0b491e17-989d-5536-9800-2d57cb17ec71")
-		(property "Reference" "SW27" (at 562.61 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 562.61 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW27" (at 562.61 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 562.61 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "685a5560-a07d-57bf-8294-c61eb8b0b0e4"))
 		(pin "2" (uuid "19d4652e-d685-51e8-8801-033df9a0259a"))
 		(instances
@@ -3099,15 +3270,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 623.57 485.14 0)
+		(at 623.57 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "e6d9965d-015f-56fb-9703-be3ac8b249b1")
-		(property "Reference" "D27" (at 623.57 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 623.57 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D27" (at 623.57 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 623.57 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "a656d324-e59d-5ad9-a698-bcc7275d67f3"))
 		(pin "2" (uuid "c2f8cf26-a2a7-5779-9bba-2b7916a45700"))
 		(instances
@@ -3121,15 +3292,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 684.53 485.14 0)
+		(at 684.53 515.62 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "9778cb5c-f214-5d73-9f76-1b4535b592a1")
-		(property "Reference" "SW28" (at 684.53 473.71 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 684.53 496.57 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW28" (at 684.53 504.19 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 684.53 527.05 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "9d953144-b6d6-5113-914c-0cc3a8551427"))
 		(pin "2" (uuid "44e926a1-88f4-56b4-9864-581871a08f22"))
 		(instances
@@ -3143,15 +3314,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 74.93 520.70 0)
+		(at 74.93 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "d0f90e82-fb6c-5c62-b773-82f665abef72")
-		(property "Reference" "D28" (at 74.93 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 74.93 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D28" (at 74.93 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 74.93 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "1afd6d49-6ca3-5250-ab98-4bb4018172a5"))
 		(pin "2" (uuid "7b8b293c-0f54-54b0-b57b-b58983087b42"))
 		(instances
@@ -3165,15 +3336,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 135.89 520.70 0)
+		(at 135.89 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "d26b5ce0-e541-5acc-a29e-0039c2c82ff8")
-		(property "Reference" "SW29" (at 135.89 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 135.89 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW29" (at 135.89 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 135.89 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "be27c75f-257e-5903-9e5a-1ff7caaf2965"))
 		(pin "2" (uuid "e910647f-373a-5f71-a9a0-8c458b10bfc7"))
 		(instances
@@ -3187,15 +3358,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 196.85 520.70 0)
+		(at 196.85 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "35c0b7a9-403e-5df2-a54c-0a25ae3e15cc")
-		(property "Reference" "D29" (at 196.85 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 196.85 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D29" (at 196.85 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 196.85 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "76c52869-a7f8-5828-bd56-5289e38955d4"))
 		(pin "2" (uuid "a68fd3c2-9f38-56f1-b4ac-a08132f5281a"))
 		(instances
@@ -3209,15 +3380,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 257.81 520.70 0)
+		(at 257.81 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "7a9705f3-ac3d-5021-b6d8-d9e27ae1ccc4")
-		(property "Reference" "SW30" (at 257.81 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 257.81 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW30" (at 257.81 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 257.81 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "d36fcecd-e522-5c80-9af7-85b6b212fed4"))
 		(pin "2" (uuid "5bae5bdd-a779-5cab-a285-c8ccadc326e6"))
 		(instances
@@ -3231,15 +3402,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 318.77 520.70 0)
+		(at 318.77 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "d68ef0ae-8753-53fa-905e-3adad3bfe5a3")
-		(property "Reference" "D30" (at 318.77 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 318.77 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D30" (at 318.77 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 318.77 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "192e0a5c-936f-5e4e-a4c3-30f52ddc4ea2"))
 		(pin "2" (uuid "25db5eaa-9624-56bb-9684-fdf1e8d1f194"))
 		(instances
@@ -3253,15 +3424,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 379.73 520.70 0)
+		(at 379.73 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "ee04effb-2561-5727-8ade-ed40066ae7d2")
-		(property "Reference" "SW31" (at 379.73 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 379.73 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW31" (at 379.73 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 379.73 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "4594206d-6ecd-544b-beb2-e275ec24198b"))
 		(pin "2" (uuid "ada7172c-b03a-55a3-95b1-76b1f93c3966"))
 		(instances
@@ -3275,15 +3446,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 440.69 520.70 0)
+		(at 440.69 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "d10c6df8-9a0d-5d70-8c89-81751db07caf")
-		(property "Reference" "D31" (at 440.69 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 440.69 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D31" (at 440.69 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 440.69 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "871e5850-d065-54dc-ad2f-278c283848d8"))
 		(pin "2" (uuid "8b88703c-edd4-57b2-a923-00a131d0dfdd"))
 		(instances
@@ -3297,15 +3468,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 501.65 520.70 0)
+		(at 501.65 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "934ed9e3-2260-5827-ab5f-47806437eb29")
-		(property "Reference" "SW32" (at 501.65 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 501.65 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW32" (at 501.65 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 501.65 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "a6dc469b-225f-5e78-b762-c02b6d18662f"))
 		(pin "2" (uuid "8ba4d7da-30f8-517b-9fd3-ad2f36ae204d"))
 		(instances
@@ -3319,15 +3490,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 562.61 520.70 0)
+		(at 562.61 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "4ce4dbef-778f-54d1-a84d-68d701e2f656")
-		(property "Reference" "D32" (at 562.61 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 562.61 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D32" (at 562.61 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 562.61 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "36cd8ab9-6e55-57c2-8fb3-27ec68c6e32b"))
 		(pin "2" (uuid "8ca9b32c-bedc-58a4-8700-c288dbaeea20"))
 		(instances
@@ -3341,15 +3512,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 623.57 520.70 0)
+		(at 623.57 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "66832f06-008f-5ed2-9f85-ac1545f1bf19")
-		(property "Reference" "SW33" (at 623.57 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 623.57 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW33" (at 623.57 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 623.57 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "de46680e-800e-5373-be4c-75fda272ebcd"))
 		(pin "2" (uuid "559f51d0-0401-539d-a1bb-216157e800b9"))
 		(instances
@@ -3363,15 +3534,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 684.53 520.70 0)
+		(at 684.53 551.18 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "17251541-0df4-5fc2-831c-3fff12831239")
-		(property "Reference" "D33" (at 684.53 509.27 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 684.53 532.13 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D33" (at 684.53 539.75 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 684.53 562.61 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "0b08eac9-1ab4-5346-861e-fe02375032a0"))
 		(pin "2" (uuid "84794bba-3ee8-500f-80e4-956d7ef31bcf"))
 		(instances
@@ -3385,15 +3556,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:keyswitch")
-		(at 74.93 556.26 0)
+		(at 74.93 586.74 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "0ef82cb8-20d4-526b-955e-ed94b94a61cc")
-		(property "Reference" "SW34" (at 74.93 544.83 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "keyswitch" (at 74.93 567.69 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "SW34" (at 74.93 575.31 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "keyswitch" (at 74.93 598.17 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "210cfa34-a6eb-5ddb-a047-6d4ff6b7d60f"))
 		(pin "2" (uuid "03e39e7d-3eb3-5bb4-abf3-5f980c491f05"))
 		(instances
@@ -3407,15 +3578,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:diode")
-		(at 135.89 556.26 0)
+		(at 135.89 586.74 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
 		(uuid "b211f7ed-9b48-5177-a71e-0c6420aad6ea")
-		(property "Reference" "D34" (at 135.89 544.83 0) (effects (font (size 1.27 1.27))))
-		(property "Value" "diode" (at 135.89 567.69 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "D34" (at 135.89 575.31 0) (effects (font (size 1.27 1.27))))
+		(property "Value" "diode" (at 135.89 598.17 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "4a13973a-d73a-5233-b3f1-d9a5718c4b34"))
 		(pin "2" (uuid "39cf3977-ab29-508d-9743-9f73d45cbe12"))
 		(instances
@@ -3429,15 +3600,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:PWR_FLAG")
-		(at 74.93 591.82 0)
+		(at 74.93 622.30 0)
 		(unit 1)
 		(exclude_from_sim yes)
 		(in_bom no)
 		(on_board no)
 		(dnp no)
 		(uuid "d1bf2a2e-061b-548d-887c-dc2d4a4bb2cb")
-		(property "Reference" "#FLG0" (at 74.93 589.28 0) (effects (font (size 1.27 1.27)) (hide yes)))
-		(property "Value" "PWR_FLAG" (at 74.93 586.74 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#FLG0" (at 74.93 619.76 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Value" "PWR_FLAG" (at 74.93 617.22 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "ab1f99ec-7931-5be5-bb19-d9cb2d7f061d"))
 		(instances
 			(project "hhkb_split_right"
@@ -3450,15 +3621,15 @@
 	)
 	(symbol
 		(lib_id "hhkb_split_right:PWR_FLAG")
-		(at 100.33 591.82 0)
+		(at 100.33 622.30 0)
 		(unit 1)
 		(exclude_from_sim yes)
 		(in_bom no)
 		(on_board no)
 		(dnp no)
 		(uuid "6d4ae67f-e43d-53d0-a127-c8d356495802")
-		(property "Reference" "#FLG1" (at 100.33 589.28 0) (effects (font (size 1.27 1.27)) (hide yes)))
-		(property "Value" "PWR_FLAG" (at 100.33 586.74 0) (effects (font (size 1.27 1.27))))
+		(property "Reference" "#FLG1" (at 100.33 619.76 0) (effects (font (size 1.27 1.27)) (hide yes)))
+		(property "Value" "PWR_FLAG" (at 100.33 617.22 0) (effects (font (size 1.27 1.27))))
 		(pin "1" (uuid "61d6e8f7-0519-5909-941c-d2403306c492"))
 		(instances
 			(project "hhkb_split_right"
