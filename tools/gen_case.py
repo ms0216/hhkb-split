@@ -1156,7 +1156,8 @@ def build_topcase(keys, half):
     """
     positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
-    key_w = w - PLATE_MARGIN_X * 2
+    from interface import margin_x_for_case
+    key_w = w - margin_x_for_case(w) * 2
     key_h = h_body - PLATE_MARGIN_Y * 2
     rim = PLATE_TOP_FRONT - PLATE_T
     z_max = BEZEL_TOP_FRONT + h_body * tan(radians(TILT_DEG)) + 5.0

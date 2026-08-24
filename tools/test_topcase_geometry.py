@@ -32,14 +32,19 @@ def _axes():
     （＝実際に効く軸を見ていなかった）。負のテストで発覚した。
     """
     from gen_plate import halves
+    from interface import PLATE_MARGIN_X_RIGHT
     from layout import Key  # noqa: F401
-    keys = halves()["left"]
-    half_w = (max(k.x_mm + k.w_u * U / 2 for k in keys)
-              - min(k.x_mm - k.w_u * U / 2 for k in keys)) / 2
-    return [
-        ("左右", half_w, PLATE_MARGIN_X),
-        ("前後", KEYS_HALF_H, PLATE_MARGIN_Y),
-    ]
+    out = []
+    # **余白は半分ごとに違う**（2026-08-24・#51 で右だけ詰めた）ので、
+    # 左右の半分それぞれで見る。右の余白 3.125 が最も厳しい。
+    for half, margin in (("left", PLATE_MARGIN_X),
+                         ("right", PLATE_MARGIN_X_RIGHT)):
+        keys = halves()[half]
+        half_w = (max(k.x_mm + k.w_u * U / 2 for k in keys)
+                  - min(k.x_mm - k.w_u * U / 2 for k in keys)) / 2
+        out.append((f"左右({half})", half_w, margin))
+    out.append(("前後", KEYS_HALF_H, PLATE_MARGIN_Y))
+    return out
 
 
 def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
@@ -51,10 +56,17 @@ def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
 
 
 def test_the_bezel_opening_clears_the_keycaps():
-    """開口がキーキャップに当たらないこと。**左右と前後の両方**で見る。"""
+    """開口がキーキャップに当たらないこと。**左右と前後の両方**で見る。
+
+    下限 1.0mm の出所は**実機の実測**（2026-08-24・利用者）: 実機の
+    キャップ↔ベゼルの見える隙間は 1.0〜1.5mm。以前の下限 1.5 は
+    実機より広い側に置いた保守値で、#51（A1 mini の幅詰め・候補 3）で
+    開口の隙間を 0.9 に詰めたとき、見える隙間 1.225mm が実機の範囲に
+    収まることを確認して下限を実機の下限に合わせた。
+    """
     for name, keys_half, _ in _axes():
         gap = (keys_half + BEZEL_OPENING_GAP) - (keys_half - (U - CAP) / 2)
-        assert gap >= 1.5, f"{name}: 開口とキャップの隙間が {gap:.2f}mm しかない"
+        assert gap >= 1.0, f"{name}: 開口とキャップの隙間が {gap:.2f}mm しかない"
 
 
 def test_the_screw_head_fits_inside_the_bezel():

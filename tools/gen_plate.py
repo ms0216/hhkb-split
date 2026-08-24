@@ -127,7 +127,8 @@ def build_plate(keys, half):
     # **寸法は interface.switch_plate_size が 1 つだけ持つ。**
     # ここで自前に計算していたせいで、上ケースの座ぐりとの整合が崩れていた
     # （あちらの注記を読むこと）。
-    w, h = switch_plate_size(case_w - PLATE_MARGIN_X * 2,
+    from interface import margin_x_for_case
+    w, h = switch_plate_size(case_w - margin_x_for_case(case_w) * 2,
                              case_h - PLATE_MARGIN_Y * 2)
     stabs = [(pos, stab_offset_for(k.w_u)) for pos, k in zip(positions, keys)]
     stabs = [(pos, s) for pos, s in stabs if s is not None]

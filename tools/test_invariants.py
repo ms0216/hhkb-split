@@ -169,9 +169,20 @@ def test_plate_margins_come_from_the_real_machine():
     一律 4.0mm にしていたことがあり、前後が実機より 2.4mm 狭かった。
     そのせいで取付ネジを置く余地が無くなり、取付穴が基板の外形を
     0.3mm はみ出していた。**実機に合わせると設計上の詰まりも解けた。**
+
+    ⚠️ **右半分だけ 2026-08-24 から「実機 − 1.0mm」**（open-gaps #51
+    候補 3・利用者が採用決定）。A1 mini（ベッド 180mm）に右ケース
+    （実機準拠だと 179.7mm）が入らないため、右のみ片側 1.0mm 詰めて
+    177.7mm にした（試し板の実測で「刷れる」を確認済み）。
+    **左は実機のまま**——詰めると電池（外壁基準）と子基板（内壁基準）が
+    両側から近づき、アンテナ・電池距離が要件 10mm を割る（8.56mm。
+    2026-08-24 に実装して発覚）。前後も実機のまま。
     """
-    from interface import PLATE_MARGIN_X, PLATE_MARGIN_Y
-    assert PLATE_MARGIN_X == pytest.approx((294.0 - 15 * UNIT) / 2, abs=0.01)
+    from interface import (PLATE_MARGIN_X, PLATE_MARGIN_X_RIGHT,
+                           PLATE_MARGIN_Y)
+    real = (294.0 - 15 * UNIT) / 2
+    assert PLATE_MARGIN_X == pytest.approx(real, abs=0.01)
+    assert PLATE_MARGIN_X_RIGHT == pytest.approx(real - 1.0, abs=0.01)
     assert PLATE_MARGIN_Y == pytest.approx((108.0 - 5 * UNIT) / 2, abs=0.01)
 
 
