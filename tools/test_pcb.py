@@ -943,6 +943,48 @@ def test_every_ground_pad_has_a_stub_to_a_via_on_its_own_layer(half):
 
 
 @pytest.mark.parametrize("half", NAMES)
+def test_every_debug_net_has_exposed_copper(half):
+    """オシロ／リード線用に、デバッグ対象ネットの銅が 1 点ずつ露出していること
+    （open-gaps #49・2026-08-25）。
+
+    テストパッドは足さない（利用者が取り消した）。既存のビアのテンティングを
+    外すか、配線の上のレジストに窓を開ける（finalize_pcb.expose_debug_copper）。
+    ここでは本番の板に、各ネットにつき **裏面のテンティングを外したビア**か
+    **そのネットの配線の上に載る B.Mask の窓**のどちらかがあることを見る。
+    """
+    from pcb_rules import DEBUG_NETS, DEBUG_WINDOW_W
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    # 裏面のテンティングを外したビア → ネット名。テンティングの指定は
+    # 外したビアにしか書かれず、同じ via ブロック内で (net "…") より前に来る。
+    untented = set()
+    for m in re.finditer(r"\(back no\)[\s\S]*?\(net (?:\d+ )?\"([^\"]+)\"\)", txt):
+        untented.add(m.group(1))
+    # B.Mask の窓（多角形）の中心
+    windows = []
+    for m in re.finditer(r"\(gr_poly\s*\(pts([\s\S]*?)\)\s*\)[\s\S]*?\(layer \"B\.Mask\"\)", txt):
+        xy = [(float(a), float(b)) for a, b in re.findall(r"\(xy ([-\d.]+) ([-\d.]+)\)", m.group(1))]
+        if xy:
+            windows.append((sum(x for x, _ in xy) / len(xy), sum(y for _, y in xy) / len(xy)))
+    # 窓の中心を通る配線のネット
+    windowed = set()
+    for a, b, c, d, n in re.findall(
+            r"\(segment\s*\(start ([-\d.]+) ([-\d.]+)\)\s*\(end ([-\d.]+) ([-\d.]+)\)"
+            r"[\s\S]{0,200}?\(net (?:\d+ )?\"([^\"]+)\"\)", txt):
+        x0, y0, x1, y1 = map(float, (a, b, c, d))
+        for wx, wy in windows:
+            dx, dy = x1 - x0, y1 - y0
+            l2 = dx * dx + dy * dy
+            s = 0.0 if l2 == 0 else max(0.0, min(1.0, ((wx - x0) * dx + (wy - y0) * dy) / l2))
+            if math.hypot(wx - (x0 + s * dx), wy - (y0 + s * dy)) <= DEBUG_WINDOW_W:
+                windowed.add(n)
+    missing = [net for net in DEBUG_NETS[half] + ["GND"]
+               if net not in untented and net not in windowed]
+    assert not missing, (
+        f"{half}: 露出していないデバッグネット: {missing}\n"
+        "  finalize_pcb.expose_debug_copper が本番の板で走っているか")
+
+
+@pytest.mark.parametrize("half", NAMES)
 def test_the_routing_was_made_from_the_current_placement(half):
     """配線が、いまの未配線基板から作られたものであること。
 

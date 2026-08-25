@@ -48,6 +48,118 @@ if "--src" in sys.argv:
     del sys.argv[i:i + 2]
 
 
+
+# --------------------------------------------------------------------------
+# オシロ／リード線用に銅を露出させる（open-gaps #49・2026-08-25）
+#
+# **部品も配線も足さない。**利用者の提案「適当な既存のビアにリード線を
+# 半田付けできるようにすればいい」に沿って、既存の銅のレジストだけを
+# 剥がす。テストパッド（実装なしのランド）を足す案は、パッドから既存
+# ネットへのスタブが引けず取り消した（利用者「試行錯誤したが諦める」）。
+#
+# ネットごとに **他ネットの銅から最も離れた** 1 点を機械的に選ぶ:
+#   - ビアがあれば、そのビアの**部品面（裏・B）のテンティングを外す**
+#   - ビアが無ければ（左は SPI 系が全部 B.Cu だけ）、最も孤立した直線
+#     区間の中央に **B.Mask の窓**（DEBUG_WINDOW_L × DEBUG_WINDOW_W）を開ける
+# GND は群の重心に最も近い孤立した GND ビアを同様に露出する。
+#
+# 選定は本番の板から毎回決定的に計算する（写した配線が変われば追随）。
+# ⚠️ **半田付けの現実**: 配線幅 0.2mm・隣の銅まで 0.65mm 前後の箇所も
+# ある。細いリード線（AWG30 級）と先の細いこて前提。番号は下の表で
+# 印字せず、finalize の出力と drc 記録で追う。
+# --------------------------------------------------------------------------
+from pcb_rules import DEBUG_NETS, DEBUG_WINDOW_L, DEBUG_WINDOW_W   # noqa: E402
+
+
+def _dist_pt_seg(px, py, x0, y0, x1, y1):
+    import math
+    dx, dy = x1 - x0, y1 - y0
+    l2 = dx * dx + dy * dy
+    t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / l2))
+    return math.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
+
+
+def expose_debug_copper(board, half):
+    """デバッグ用ネットの銅を 1 点ずつ露出する。露出した点の一覧を返す。"""
+    import math
+    mm = lambda v: v / 1e6
+    vias = [(t, mm(t.GetPosition().x), mm(t.GetPosition().y), t.GetNetname())
+            for t in board.GetTracks() if t.GetClass() == "PCB_VIA"]
+    segs = [(t, mm(t.GetStart().x), mm(t.GetStart().y), mm(t.GetEnd().x),
+             mm(t.GetEnd().y), t.GetNetname())
+            for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
+    pads = [(mm(p.GetPosition().x), mm(p.GetPosition().y), p.GetNetname())
+            for fp in board.GetFootprints() for p in fp.Pads()]
+
+    def clearance(x, y, net):
+        others = [math.hypot(x - a, y - b) for _, a, b, n in vias if n != net]
+        others += [math.hypot(x - a, y - b) for a, b, n in pads if n != net]
+        others += [_dist_pt_seg(x, y, a, b, c, d) for _, a, b, c, d, n in segs if n != net]
+        return min(others) if others else 99.0
+
+    exposed = []
+    for net in DEBUG_NETS[half]:
+        best = None
+        for v, x, y, n in vias:
+            if n != net:
+                continue
+            d = clearance(x, y, net)
+            if best is None or d > best[0]:
+                best = (d, "via", v, x, y)
+        if best is None:
+            for s, x0, y0, x1, y1, n in segs:
+                if n != net or math.hypot(x1 - x0, y1 - y0) < DEBUG_WINDOW_L + 0.5:
+                    continue
+                cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+                d = clearance(cx, cy, net)
+                if best is None or d > best[0]:
+                    best = (d, "window", s, cx, cy)
+        if best is None:
+            print(f"   {half}: {net} を露出できる銅が無い")
+            continue
+        exposed.append((net,) + best)
+
+    # GND: 露出点群の重心に近く、かつ孤立した GND ビア
+    if exposed:
+        gx = sum(e[4] for e in exposed) / len(exposed)   # e = (net, d, kind, item, x, y)
+        gy = sum(e[5] for e in exposed) / len(exposed)
+        best = None
+        for v, x, y, n in vias:
+            if n != "GND" or math.hypot(x - gx, y - gy) > 15.0:
+                continue
+            d = clearance(x, y, "GND")
+            score = d - 0.05 * math.hypot(x - gx, y - gy)
+            if best is None or score > best[0]:
+                best = (score, "via", v, x, y, d)
+        if best is not None:
+            exposed.append(("GND", best[5], "via", best[2], best[3], best[4]))
+
+    for net, d, kind, item, x, y in exposed:
+        if kind == "via":
+            item.SetBackTentingMode(pcbnew.TENTING_MODE_NOT_TENTED)
+        else:
+            x0, y0 = mm(item.GetStart().x), mm(item.GetStart().y)
+            x1, y1 = mm(item.GetEnd().x), mm(item.GetEnd().y)
+            ang = math.degrees(math.atan2(y1 - y0, x1 - x0))
+            # **配線に沿って回した多角形**にする。rect は軸平行にしか
+            # 保存されず（Rotate が効かない）、斜めの配線では窓が配線を
+            # 横切るだけになる。
+            ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+            hl, hw = DEBUG_WINDOW_L / 2, DEBUG_WINDOW_W / 2
+            corners = [(-hl, -hw), (hl, -hw), (hl, hw), (-hl, hw)]
+            pts = pcbnew.VECTOR_VECTOR2I()
+            for u, v in corners:
+                pts.append(pcbnew.VECTOR2I_MM(x + u * ca - v * sa, y + u * sa + v * ca))
+            win = pcbnew.PCB_SHAPE(board)
+            win.SetShape(pcbnew.SHAPE_T_POLY)
+            win.SetLayer(pcbnew.B_Mask)
+            win.SetFilled(True)
+            win.SetPolyPoints(pts)
+            board.Add(win)
+        print(f"   {half}: {net:9s} {'ビア' if kind == 'via' else '窓'} "
+              f"({x:.2f},{y:.2f}) 他ネットまで {d:.2f}mm")
+    return exposed
+
 def finalize(half):
     src = SRC / f"hhkb_split_{half}.kicad_pcb"
     if not src.exists():
@@ -73,6 +185,8 @@ def finalize(half):
 
     n_is, left = gnd_fanout.stitch_islands(board)
     print(f"   {half}: 離島に打ったビア {n_is} 個 / 繋げ切れなかった区画 {left}")
+
+    expose_debug_copper(board, half)
 
     board.Save(str(dst))
     _sync_project_rules(dst)
