@@ -106,7 +106,6 @@ GROUPS = [
     # decisions/2026-08-16-cdb-has-no-local-load.md を読んでから。
     ("マイコン",   lambda ref, kind: kind == "xiao_nrf52840"),
     ("ケーブル",   lambda ref, kind: kind == "ffc_12p"),
-    ("テストパッド", lambda ref, kind: kind == "testpoint"),   # #49
     ("マトリクス", lambda ref, kind: kind in ("keyswitch", "diode")),
 ]
 

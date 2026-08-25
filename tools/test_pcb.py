@@ -710,19 +710,6 @@ def _courtyard_bbox(blk):
     ox, oy = float(at.group(1)), float(at.group(2))
     rot = math.radians(float(at.group(3) or 0))
     pts = []
-    # **円のコートヤードも読む**（2026-08-25）。TestPoint 系の
-    # フットプリントは fp_circle（center/end）で持っている。line/rect/poly
-    # しか見ておらず「コートヤードが無い」と誤判定していた。
-    for m in re.finditer(
-            r"\(fp_circle\b([\s\S]*?)\(layer \"([^\"]+)\"\)", blk):
-        if not m.group(2).endswith(".CrtYd"):
-            continue
-        c = re.search(r"\(center ([-\d.]+) ([-\d.]+)\)", m.group(1))
-        e = re.search(r"\(end ([-\d.]+) ([-\d.]+)\)", m.group(1))
-        if c and e:
-            cx, cy = float(c.group(1)), float(c.group(2))
-            r = math.dist((cx, cy), (float(e.group(1)), float(e.group(2))))
-            pts += [(cx - r, cy - r), (cx + r, cy + r)]
     for m in re.finditer(
             r"\(fp_(line|rect|poly)\b([\s\S]*?)\(layer \"([^\"]+)\"\)", blk):
         if not m.group(3).endswith(".CrtYd"):
@@ -892,8 +879,6 @@ def test_every_ground_pad_has_a_stub_to_a_via_on_its_own_layer(half):
     for ref, blk in _footprint_blocks(txt):
         if not ELEC_REF.fullmatch(ref):
             continue
-        if ref.startswith("TP"):
-            continue    # テストパッド（#49）はベタ直結のランド。スタブは持たない
         at = re.search(r"\n\t\t\(at ([-\d.]+) ([-\d.]+)(?: ([-\d.]+))?\)", blk)
         ox, oy = float(at.group(1)), float(at.group(2))
         rot = math.radians(float(at.group(3) or 0))

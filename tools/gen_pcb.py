@@ -1465,9 +1465,6 @@ ELEC_FP = {
     # （open-gaps #17）。基板側はランド 2 個で受ける。
     # ランド自体は部品ではないので Value は kind のままでよい
     # （JLCPCB の BOM には出てこない・footprint 名で区別できれば足りる）。
-    # オシロ用のテストパッド（#49）。φ1.5 のランド・レジスト開口。
-    # 実装部品ではない（parts.NOT_ASSEMBLED）。
-    "testpoint": ("TestPoint", "TestPoint_Pad_D1.5mm", "testpoint"),
     "wire_pads": ("TestPoint", "TestPoint_Pad_2.0x2.0mm", "wire_pads"),
     "battery_holder": ("TestPoint", "TestPoint_Pad_2.0x2.0mm", "battery_holder"),
 }
@@ -1487,16 +1484,6 @@ J_DB_X = "align_with_daughterboard"
 # 電源スイッチ（SW_PWR）はここに「ランド 2 個」として現れる。実物は
 # ケース背面のパネルに付く（decisions/2026-08-08-power-switch.md）。
 # 基板の後端から背面まで 23.3mm あり、基板上には置けない。
-# テストパッドの置き場所（CAD 座標・板の中心が原点・y 上向き）。
-# **帯（BAND）には属さない**——空いている所に置くだけなので絶対座標。
-# 2026-08-24〜25 に本番の板の全銅・全部品と突き合わせて空きを測った
-# （open-gaps #49）。左は J_DB の奥に横一列、右は J_DB の左隣に縦一列。
-# 2.54mm ピッチ（プローブの GND スプリングが届く）。
-TP_PLACE = {
-    "left":  {"x0": 50.0, "y0": 28.4, "dx": 2.54, "dy": 0.0},     # 横一列
-    "right": {"x0": -83.1, "y0": 19.0, "dx": 0.0, "dy": -2.54},   # 縦一列
-}
-
 PLACE = {
     # **並びは FFC のピン順に合わせる。**子基板で効いたのと同じ考え方。
     #
@@ -1794,34 +1781,6 @@ def _place_electronics(board, half, net, plate_w):
     # 置く場所の一覧。**パスコンは PLACE に座標を持たない**（手で書いた
     # 座標が 17mm ずれていたのが指摘 6 の原因）。いったん相手の IC と
     # 同じところに出し、ネットを塗り終えてから _place_beside が寄せる。
-    # ---- テストパッド（#49）。帯に依らない絶対座標で置く ----
-    tps = [(ref, pins) for ref, (kind, pins) in decl.items() if kind == "testpoint"]
-    if tps:
-        tp = TP_PLACE[half]
-        lib, name, value = ELEC_FP["testpoint"]
-        for i, (ref, pins) in enumerate(sorted(tps, key=lambda rp: int(rp[0][2:]))):
-            fp = _load(KICAD_FP / f"{lib}.pretty", name)
-            fp.SetPosition(to_kicad(tp["x0"] + i * tp["dx"], tp["y0"] + i * tp["dy"]))
-            fp.SetReference(ref)
-            fp.SetValue(value)
-            board.Add(fp)
-            fp.Flip(fp.GetPosition(), False)        # 部品面（裏）に置く
-            # ⚠️ `net` は引数の関数（ネット名 → NETINFO）。同名で上書き
-            # すると後続の配置ループが 'NoneType' で落ちる（踏んだ）。
-            for pad in fp.Pads():
-                pad.SetNet(net(pins["1"]))
-            # コートヤードはフットプリント自身が持つ（φ2.5 の円）。
-            # シルクの名札を列の外へ逃がす（重ねると警告になる）。
-            lab = fp.Reference()
-            if tp["dx"]:      # 横一列 → 名札は上
-                lab.SetPosition(pcbnew.VECTOR2I(fp.GetPosition().x,
-                                                 fp.GetPosition().y - pcbnew.FromMM(1.8)))
-            else:             # 縦一列 → 名札は右
-                lab.SetPosition(pcbnew.VECTOR2I(fp.GetPosition().x + pcbnew.FromMM(2.2),
-                                                 fp.GetPosition().y))
-        print(f"   {half}: テストパッド {len(tps)} 個を置いた"
-              f"（{', '.join(r for r, _ in sorted(tps))}）")
-
     spots = dict(PLACE[half])
     for cap_ref, ic_ref in DECOUPLE_BESIDE.items():
         if cap_ref in decl and ic_ref in spots:

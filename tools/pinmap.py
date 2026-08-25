@@ -86,7 +86,6 @@ PINS = {
 
     # 番号がそのままピン名のもの
     "cap_100n":  _numbered(2),
-    "testpoint": _numbered(1),      # オシロ用ランド（#49）
     "res_1M":    _numbered(2),
     "keyswitch": _numbered(2),
     "ffc_12p":   _numbered(12),
