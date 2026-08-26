@@ -96,24 +96,30 @@ def expose_debug_copper(board, half):
     # 右の露出ビア 3 点が J_DB コネクタの真下にあり、実質半田付けできなかった。
     # コートヤードの矩形に DEBUG_ACCESS_MM の余裕を足した箱の中は除外。
     # 本体とみなす範囲:
-    #   - 電子部品（ELEC_REF: J_DB / U* / C_U* / D_PWR …）… フットプリント全体
-    #   - キースイッチ（SW*）… **ソケットの実占有域だけ**（bands.SOCK_*）。
+    #   - 電子部品（ELEC_REF: J_DB / U* / C_U* / D_PWR …）… Fab 外形
+    #   - キースイッチ（SW*）… **ソケット実物の外形だけ**（B.Fab 図形）。
     #     フットプリント全体（19mm 角）にすると板が丸ごと除外される（踏んだ）
-    #   - ダイオード（D*）… フットプリント全体（小さい）
+    #   - ダイオード（D*）… Fab 外形
     import re
-    from bands import SOCK_HI, SOCK_LO, SOCK_X_HI, SOCK_X_LO
     from circuit import ELEC_REF
     bodies = []
     a = DEBUG_ACCESS_MM
     for fp in board.GetFootprints():
         ref = fp.GetReference()
-        if re.fullmatch(r"SW\d+", ref):
-            cx, cy = mm(fp.GetPosition().x), mm(fp.GetPosition().y)
-            # KiCad は y 下向き。bands は CAD（y 上向き）基準なので上下を返す
-            bodies.append((cx + SOCK_X_LO - a, cy - SOCK_HI - a, cx + SOCK_X_HI + a, cy - SOCK_LO + a))
-        elif ELEC_REF.fullmatch(ref) or re.fullmatch(r"D\d+", ref):
-            bb = fp.GetBoundingBox(False)
-            bodies.append((mm(bb.GetLeft()) - a, mm(bb.GetTop()) - a, mm(bb.GetRight()) + a, mm(bb.GetBottom()) + a))
+        if not (re.fullmatch(r"SW\d+", ref) or ELEC_REF.fullmatch(ref) or re.fullmatch(r"D\d+", ref)):
+            continue
+        # 本体 = フットプリントの Fab 図形（実物の外形）。コートヤードや bands.SOCK_*
+        # （ケース側の帯）は実物より大きく、届くビアを弾いた（2026-08-26 に 2 回）。
+        # 端子パッドは本体に含めない——他ネットのパッドは clearance() が別に見る
+        # スイッチは B.Fab（裏のソケット）だけ。F.Fab は表のスイッチ本体で裏の作業に無関係
+        layers = ("B.Fab",) if re.fullmatch(r"SW\d+", ref) else ("B.Fab", "F.Fab")
+        items = [d for d in fp.GraphicalItems() if d.GetLayerName() in layers]
+        if not items:
+            raise SystemExit(f"{ref}: Fab 層に外形が無い")
+        bb = items[0].GetBoundingBox()
+        for d in items[1:]:
+            bb.Merge(d.GetBoundingBox())
+        bodies.append((mm(bb.GetLeft()) - a, mm(bb.GetTop()) - a, mm(bb.GetRight()) + a, mm(bb.GetBottom()) + a))
 
     def under_a_part(x, y):
         return any(x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in bodies)
