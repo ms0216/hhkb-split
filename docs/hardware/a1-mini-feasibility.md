@@ -118,21 +118,24 @@
 とき、利用者の板 `matrix_only` を上書きせずに gen_pcb の再現板から
 本番を作るための入力切り替え）
 
-## 印刷時間の比較（両プリンタの同梱プロファイル・0.20mm Standard・Generic PLA）
+## 印刷時間の比較（最終 STL・両プリンタの同梱プロファイル・0.20mm Standard・Generic PLA・2026-08-25 再計測）
 
-**A1 mini は同じ部品で 2.4〜4.3 倍かかる**（スライサーの推定値。
-K1 Max の Creality 製プロファイルが速度側に振ってある差が大きい）:
+**A1 mini は同じ部品で 2.4〜4.3 倍かかる**（スライサーの推定値。K1 Max の Creality 製
+プロファイルが速度側に振ってある差が大きい）。右の大物 3 点は `slice_check --printer a1mini`
+の**自動配置（実効 168.4mm 角）では NG** と出るが、GUI で手動配置すれば刷れる
+（幅 177.7 は試し板 177.6 で実証・topcase_right は実際に印刷して合格）。
 
 | 部品 | K1 Max | A1 mini | 倍率 |
 |---|---|---|---|
-| case_left | 1h 52m | 8h 07m | 4.3× |
-| topcase_left | 28m | 1h 45m | 3.7× |
+| case_left | 1h 51m | 8h 01m | 4.3× |
+| case_right | 2h 11m | （CLI 自動配置 NG・手動配置で可） | — |
+| topcase_left | 33m | 1h 54m | 3.5× |
+| topcase_right | 41m | （同上・実機で印刷済み） | — |
 | plate_left | 42m | 2h 03m | 2.9× |
+| plate_right | 51m | （同上） | — |
 | rf_spacer_pair | 7m 30s | 17m 48s | 2.4× |
 
-⚠️ 最初の計測はフィラメントに「0.2 nozzle」用が選ばれ（プロファイル名の
-辞書順の罠・slice_check の pick を完全一致優先に修正済み）、さらに 2 割
-遅い値が出ていた。上の表は修正後。
+K1 Max は 20/20、A1 mini は 17/20 がスライス成功（NG 3 点は上記のとおり自動配置の制約）。
 
 ## 印刷容易性・組み立て容易性の比較
 
