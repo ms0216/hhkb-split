@@ -68,7 +68,8 @@ if "--src" in sys.argv:
 # ある。細いリード線（AWG30 級）と先の細いこて前提。番号は下の表で
 # 印字せず、finalize の出力と drc 記録で追う。
 # --------------------------------------------------------------------------
-from pcb_rules import DEBUG_NETS, DEBUG_WINDOW_L, DEBUG_WINDOW_W   # noqa: E402
+from pcb_rules import (DEBUG_ACCESS_MM, DEBUG_MIN_CLEAR_MM,       # noqa: E402
+                       DEBUG_NETS, DEBUG_WINDOW_L, DEBUG_WINDOW_W)
 
 
 def _dist_pt_seg(px, py, x0, y0, x1, y1):
@@ -91,7 +92,44 @@ def expose_debug_copper(board, half):
     pads = [(mm(p.GetPosition().x), mm(p.GetPosition().y), p.GetNetname())
             for fp in board.GetFootprints() for p in fp.Pads()]
 
+    # **部品の本体の下は候補にしない**（2026-08-25・利用者の指摘）。
+    # 右の露出ビア 3 点が J_DB コネクタの真下にあり、実質半田付けできなかった。
+    # コートヤードの矩形に DEBUG_ACCESS_MM の余裕を足した箱の中は除外。
+    # 本体とみなす範囲:
+    #   - 電子部品（ELEC_REF: J_DB / U* / C_U* / D_PWR …）… フットプリント全体
+    #   - キースイッチ（SW*）… **ソケットの実占有域だけ**（bands.SOCK_*）。
+    #     フットプリント全体（19mm 角）にすると板が丸ごと除外される（踏んだ）
+    #   - ダイオード（D*）… フットプリント全体（小さい）
+    import re
+    from bands import SOCK_HI, SOCK_LO, SOCK_X_HI, SOCK_X_LO
+    from circuit import ELEC_REF
+    bodies = []
+    a = DEBUG_ACCESS_MM
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        if re.fullmatch(r"SW\d+", ref):
+            cx, cy = mm(fp.GetPosition().x), mm(fp.GetPosition().y)
+            # KiCad は y 下向き。bands は CAD（y 上向き）基準なので上下を返す
+            bodies.append((cx + SOCK_X_LO - a, cy - SOCK_HI - a, cx + SOCK_X_HI + a, cy - SOCK_LO + a))
+        elif ELEC_REF.fullmatch(ref) or re.fullmatch(r"D\d+", ref):
+            bb = fp.GetBoundingBox(False)
+            bodies.append((mm(bb.GetLeft()) - a, mm(bb.GetTop()) - a, mm(bb.GetRight()) + a, mm(bb.GetBottom()) + a))
+
+    def under_a_part(x, y):
+        return any(x0 <= x <= x1 and y0 <= y <= y1 for x0, y0, x1, y1 in bodies)
+
+    def body_gap(x, y):
+        """最寄りの部品本体（余裕を含まない外形）までの距離。報告用。"""
+        best = 99.0
+        for x0, y0, x1, y1 in bodies:
+            dx = max(x0 + a - x, 0.0, x - (x1 - a))
+            dy = max(y0 + a - y, 0.0, y - (y1 - a))
+            best = min(best, math.hypot(dx, dy))
+        return best
+
     def clearance(x, y, net):
+        if under_a_part(x, y):
+            return -1.0          # 除外（負の孤立度）
         others = [math.hypot(x - a, y - b) for _, a, b, n in vias if n != net]
         others += [math.hypot(x - a, y - b) for a, b, n in pads if n != net]
         others += [_dist_pt_seg(x, y, a, b, c, d) for _, a, b, c, d, n in segs if n != net]
@@ -106,6 +144,8 @@ def expose_debug_copper(board, half):
             d = clearance(x, y, net)
             if best is None or d > best[0]:
                 best = (d, "via", v, x, y)
+        if best is not None and best[0] < 0:
+            best = None          # ビアはあるが全部部品の下 → 配線の窓へ
         if best is None:
             for s, x0, y0, x1, y1, n in segs:
                 if n != net or math.hypot(x1 - x0, y1 - y0) < DEBUG_WINDOW_L + 0.5:
@@ -114,8 +154,11 @@ def expose_debug_copper(board, half):
                 d = clearance(cx, cy, net)
                 if best is None or d > best[0]:
                     best = (d, "window", s, cx, cy)
-        if best is None:
-            print(f"   {half}: {net} を露出できる銅が無い")
+        if best is None or best[0] < DEBUG_MIN_CLEAR_MM:
+            why = "部品の下しか無い" if (best is None or best[0] < 0) else \
+                  f"隣の銅まで {best[0]:.2f}mm しか無い"
+            print(f"   {half}: {net} を露出できる銅が無い（{why}）"
+                  "——利用者がその配線の上に、部品から離れた所へビアを置けば選ばれる")
             continue
         exposed.append((net,) + best)
 
@@ -128,6 +171,8 @@ def expose_debug_copper(board, half):
             if n != "GND" or math.hypot(x - gx, y - gy) > 15.0:
                 continue
             d = clearance(x, y, "GND")
+            if d < 0:
+                continue
             score = d - 0.05 * math.hypot(x - gx, y - gy)
             if best is None or score > best[0]:
                 best = (score, "via", v, x, y, d)
@@ -157,7 +202,7 @@ def expose_debug_copper(board, half):
             win.SetPolyPoints(pts)
             board.Add(win)
         print(f"   {half}: {net:9s} {'ビア' if kind == 'via' else '窓'} "
-              f"({x:.2f},{y:.2f}) 他ネットまで {d:.2f}mm")
+              f"({x:.2f},{y:.2f}) 他ネットまで {d:.2f}mm / 部品本体まで {body_gap(x, y):.2f}mm")
     return exposed
 
 def finalize(half):
