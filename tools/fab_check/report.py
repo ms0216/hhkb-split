@@ -85,27 +85,28 @@ FFC は、ピン対応（1→1、ネット並びは 3 コネクタで完全一�
 <p>3 つとも <b>裏面（B.Cu）・回転 180°・ピン 1 が +X 側・パッドが奥側＝口が手前向き</b>。これは組立モデル <code>gen_assembly.py</code> の記述「J_DB（口は手前向き）から下りて床の上を這い、J_MAIN（口は手前向き）へ入る」と一致します。</p>
 <h3>1c. 接点面を追う（横から見た図・手前が左）</h3>
 <figure>
-<svg viewBox="0 0 760 300" width="100%" role="img" aria-label="FFC 経路の側面図">
-<defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 z" fill="var(--acc)"/></marker></defs>
-<text x="20" y="20" fill="var(--mute)">横から見た図。左＝手前（キー側）、右＝奥（コブ・電池側）。寸法は縮尺なし。赤い短線＝導体（接点）が出ている面。</text>
-<line x1="40" y1="95" x2="440" y2="65" stroke="var(--ink)" stroke-width="5"/><text x="60" y="88">本体基板（7.3° 傾き・裏が下）</text>
-<rect x="320" y="76" width="70" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="395" y="90">J_DB（裏面・下接点・口は手前）</text>
-<line x1="540" y1="190" x2="730" y2="190" stroke="var(--ink)" stroke-width="5"/><text x="560" y="182">子基板（水平・裏が下）</text>
-<rect x="545" y="193" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="610" y="207">J_MAIN（裏面・下接点・口は手前）</text>
-<line x1="30" y1="262" x2="740" y2="262" stroke="var(--mute)" stroke-width="2" stroke-dasharray="6 4"/><text x="35" y="282" fill="var(--mute)">床</text>
-<path d="M320,86 L270,86 Q250,86 250,106 L250,230 Q250,248 268,248 L500,248 Q520,248 520,230 L520,215 Q520,201 534,201 L545,201" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar)"/>
+<svg viewBox="0 0 820 330" width="100%" role="img" aria-label="FFC 経路の側面図">
+<defs><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/></marker></defs>
+<text x="20" y="20" fill="var(--mute)">横から見た図。左＝手前（キー側）、右＝奥（コブ・電池側）。縮尺なし。赤い短線＝導体（接点）が出ている面。</text>
+<line x1="40" y1="110" x2="440" y2="80" stroke="var(--ink)" stroke-width="5"/><text x="40" y="60">本体基板（7.3° 傾き・裏が下）</text>
+<rect x="320" y="91" width="70" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="400" y="105">J_DB（裏面・下接点・口は手前）</text>
+<line x1="540" y1="200" x2="790" y2="200" stroke="var(--ink)" stroke-width="5"/><text x="600" y="190">子基板（水平・裏が下）</text>
+<rect x="545" y="203" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="612" y="217">J_MAIN（裏面・下接点・口は手前）</text>
+<line x1="30" y1="285" x2="800" y2="285" stroke="var(--mute)" stroke-width="2" stroke-dasharray="6 4"/><text x="35" y="305" fill="var(--mute)">床</text>
+<path d="M320,101 L270,101 Q250,101 250,121 L250,250 Q250,268 268,268 L500,268 Q520,268 520,250 L520,225 Q520,211 534,211 L542,211" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar)"/>
 <g stroke="var(--ng)" stroke-width="3">
-<line x1="280" y1="81" x2="310" y2="81"/>
-<line x1="245" y1="140" x2="245" y2="170"/>
-<line x1="350" y1="253" x2="400" y2="253"/>
-<line x1="525" y1="215" x2="525" y2="228"/>
-<line x1="534" y1="206" x2="544" y2="206"/>
+<line x1="280" y1="96" x2="310" y2="96"/>
+<line x1="245" y1="160" x2="245" y2="190"/>
+<line x1="350" y1="273" x2="400" y2="273"/>
+<line x1="525" y1="228" x2="525" y2="242"/>
+<line x1="534" y1="216" x2="542" y2="216"/>
 </g>
-<text x="255" y="72" fill="var(--ng)">① 上向き（基板側）✓</text>
-<text x="180" y="160" fill="var(--ng)">② 手前を向く</text>
-<text x="330" y="275" fill="var(--ng)">③ 床で下向き（U ターンで裏返った）</text>
-<text x="380" y="222" fill="var(--ng)">④ 上がっても向きは戻らない（S 字）</text>
-<text x="545" y="240" fill="var(--ng)">⑤ 下向きのまま J_MAIN へ ✗（上向きが要る）</text>
+<text x="150" y="128" fill="var(--ng)">① J_DB では上向き（基板側）✓</text>
+<text x="120" y="180" fill="var(--ng)">② 折り下げ：手前を向く</text>
+<text x="290" y="300" fill="var(--ng)">③ 床で下向き（U ターンで裏返った）</text>
+<text x="330" y="245" fill="var(--ng)">④ 上がる S 字では向きは戻らない</text>
+<text x="545" y="245" fill="var(--ng)">⑤ 下向きのまま J_MAIN へ ✗</text>
+<text x="545" y="262" fill="var(--ng)">（下接点なので上向きが要る）</text>
 </svg>
 <figcaption>位置関係は STEP の寸法で確認済み（J_DB z −3.6〜−1.6・J_MAIN z −2.1〜−0.1 で両方とも板の下、アクチュエータ片が両方とも手前側）。J_DB で上を向いていた導体は、手前→下→奥の U ターンで下向きになり、床→上→奥の S 字では戻らない。J_MAIN は基板の裏に付いた下接点なので上向きが必要。</figcaption>
 </figure>
