@@ -85,33 +85,29 @@ FFC は、ピン対応（1→1、ネット並びは 3 コネクタで完全一�
 <p>3 つとも <b>裏面（B.Cu）・回転 180°・ピン 1 が +X 側・パッドが奥側＝口が手前向き</b>。これは組立モデル <code>gen_assembly.py</code> の記述「J_DB（口は手前向き）から下りて床の上を這い、J_MAIN（口は手前向き）へ入る」と一致します。</p>
 <h3>1c. 接点面を追う（横から見た図・手前が左）</h3>
 <figure>
-<svg viewBox="0 0 720 250" width="100%" role="img" aria-label="FFC 経路の側面図">
-<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--acc)"/></marker></defs>
-<!-- main board tilted -->
-<line x1="40" y1="70" x2="420" y2="40" stroke="var(--ink)" stroke-width="5"/><text x="60" y="58">本体基板（裏が下・7.3° 傾き）</text>
-<rect x="300" y="52" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="302" y="83">J_DB 下接点</text>
-<!-- daughterboard -->
-<line x1="520" y1="150" x2="700" y2="150" stroke="var(--ink)" stroke-width="5"/><text x="560" y="140">子基板（裏が下・水平）</text>
-<rect x="525" y="153" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="590" y="168">J_MAIN 下接点</text>
-<!-- floor -->
-<line x1="30" y1="220" x2="710" y2="220" stroke="var(--mute)" stroke-width="2" stroke-dasharray="6 4"/><text x="35" y="240">床</text>
-<!-- cable path: exits J_DB toward front (left), drops, runs rear along floor, rises into J_MAIN -->
-<path d="M300,62 L250,62 Q230,62 230,82 L230,190 Q230,205 245,205 L480,205 Q500,205 500,190 L500,175 Q500,161 515,161 L528,161" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar)"/>
-<!-- contact face markers: small ticks on the contact side -->
+<svg viewBox="0 0 760 300" width="100%" role="img" aria-label="FFC 経路の側面図">
+<defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L6,3 L0,6 z" fill="var(--acc)"/></marker></defs>
+<text x="20" y="20" fill="var(--mute)">横から見た図。左＝手前（キー側）、右＝奥（コブ・電池側）。寸法は縮尺なし。赤い短線＝導体（接点）が出ている面。</text>
+<line x1="40" y1="95" x2="440" y2="65" stroke="var(--ink)" stroke-width="5"/><text x="60" y="88">本体基板（7.3° 傾き・裏が下）</text>
+<rect x="320" y="76" width="70" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="395" y="90">J_DB（裏面・下接点・口は手前）</text>
+<line x1="540" y1="190" x2="730" y2="190" stroke="var(--ink)" stroke-width="5"/><text x="560" y="182">子基板（水平・裏が下）</text>
+<rect x="545" y="193" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="610" y="207">J_MAIN（裏面・下接点・口は手前）</text>
+<line x1="30" y1="262" x2="740" y2="262" stroke="var(--mute)" stroke-width="2" stroke-dasharray="6 4"/><text x="35" y="282" fill="var(--mute)">床</text>
+<path d="M320,86 L270,86 Q250,86 250,106 L250,230 Q250,248 268,248 L500,248 Q520,248 520,230 L520,215 Q520,201 534,201 L545,201" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar)"/>
 <g stroke="var(--ng)" stroke-width="3">
-<line x1="270" y1="58" x2="290" y2="58"/>   <!-- at J_DB: contacts up -->
-<line x1="226" y1="120" x2="226" y2="140"/> <!-- going down: contacts face front(left) -->
-<line x1="330" y1="209" x2="360" y2="209"/> <!-- floor: contacts DOWN -->
-<line x1="504" y1="178" x2="504" y2="188"/> <!-- rising: contacts face rear(right) -->
-<line x1="516" y1="165" x2="526" y2="165"/> <!-- into J_MAIN: contacts DOWN -->
+<line x1="280" y1="81" x2="310" y2="81"/>
+<line x1="245" y1="140" x2="245" y2="170"/>
+<line x1="350" y1="253" x2="400" y2="253"/>
+<line x1="525" y1="215" x2="525" y2="228"/>
+<line x1="534" y1="206" x2="544" y2="206"/>
 </g>
-<text x="150" y="100" fill="var(--ng)">赤＝導体（接点）の面</text>
-<text x="255" y="52" fill="var(--ng)">上向き ✓</text>
-<text x="330" y="200" fill="var(--ng)">床で下向き</text>
-<text x="600" y="195" fill="var(--ng)">J_MAIN で下向き ✗（上向きが要る）</text>
-<text x="40" y="205" fill="var(--mute)">手前</text><text x="690" y="205" fill="var(--mute)">奥</text>
+<text x="255" y="72" fill="var(--ng)">① 上向き（基板側）✓</text>
+<text x="180" y="160" fill="var(--ng)">② 手前を向く</text>
+<text x="330" y="275" fill="var(--ng)">③ 床で下向き（U ターンで裏返った）</text>
+<text x="380" y="222" fill="var(--ng)">④ 上がっても向きは戻らない（S 字）</text>
+<text x="545" y="240" fill="var(--ng)">⑤ 下向きのまま J_MAIN へ ✗（上向きが要る）</text>
 </svg>
-<figcaption>J_DB で上を向いていた導体は、手前→下→奥の U ターンで下向きになり、床→上→奥の S 字では戻らない。J_MAIN は基板の裏に付いた下接点なので上向きが必要。</figcaption>
+<figcaption>位置関係は STEP の寸法で確認済み（J_DB z −3.6〜−1.6・J_MAIN z −2.1〜−0.1 で両方とも板の下、アクチュエータ片が両方とも手前側）。J_DB で上を向いていた導体は、手前→下→奥の U ターンで下向きになり、床→上→奥の S 字では戻らない。J_MAIN は基板の裏に付いた下接点なので上向きが必要。</figcaption>
 </figure>
 <p>根拠: FH12-xxS-0.5SH は下接点（DigiKey 品目「Bottom contacts」。上接点は FH12<b>A</b>）。180° ひねりは面と一緒にピン 1↔12 も反転するので、1a の「ネット並び一致」と矛盾し代用になりません。<b>B タイプ（両端で接点面が逆・導体はまっすぐ）ならピン 1→1 のまま両端が合います。</b></p>
 <div class="note">私が決めていないこと: A/B どちらを買うか、J_DB を回すか。記録は open-gaps #19 に「🔴 再開」として書きました。fab-checklist §7 の視点 C（1:1 印刷に実物を渡す）で確かめてから決めてください。</div>
