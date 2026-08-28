@@ -211,8 +211,10 @@ BESIDE_GAP = 0.25
 # import できないため。**
 # --------------------------------------------------------------------------
 DEBUG_NETS = {
-    "left":  ["SPI_SCK", "SPI_MOSI", "CS", "V3V3"],
-    "right": ["SPI_SCK", "SPI_MOSI", "CS", "U1_U2", "V3V3"],
+    # SPARE / SPARE2（XIAO D4 / D9）は I2C などの拡張用（2026-08-28・利用者が
+    # J_DB のパッド 6・7 から枝＋ビアを手で打った。主基板にはそれ以外の銅が無い）
+    "left":  ["SPI_SCK", "SPI_MOSI", "CS", "V3V3", "SPARE", "SPARE2"],
+    "right": ["SPI_SCK", "SPI_MOSI", "CS", "U1_U2", "V3V3", "SPARE", "SPARE2"],
 }
 DEBUG_WINDOW_L = 2.5     # 窓の長さ（配線に沿って・mm）
 DEBUG_WINDOW_W = 0.5     # 窓の幅（配線 0.2 + 片側 0.15・mm）。0.8 では隣の銅との
