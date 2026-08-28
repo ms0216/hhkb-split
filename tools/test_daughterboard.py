@@ -233,7 +233,13 @@ def test_the_firmware_and_the_circuit_agree_on_the_battery_divider():
 # 本体基板 2 枚（発注済み）とケーブル（購入済み）まで巻き込む。
 FROZEN_FOOTPRINT = "Hirose_FH12-12S-0.5SH_1x12-1MP_P0.50mm_Horizontal"
 FROZEN_LAYER = "B.Cu"
-FROZEN_ROTATION = 180.0
+# **回転はコネクタごとに違う**（2026-08-28・open-gaps #19 再開）。
+# J_MAIN（子基板）は 180°＝口が手前（本体側）。J_DB（本体）は 0°＝口が奥
+# （子基板側）。口どうしが向かい合い、ケーブルはまっすぐ渡る（A タイプ）。
+# 以前は両方 180°（J_DB の口が手前向き）で、ケーブルが床へ U ターンして
+# 接点面が裏返り、A タイプでは合わない配置だった（Flip() の副作用の 180° を
+# 誰も決めずに使っていた）。
+FROZEN_ROTATION = {"J_MAIN": 180.0, "J_DB": 0.0}
 FROZEN_FROM_FRONT_EDGE = 5.0     # 子基板の前端からコネクタ中心まで（mm）
 
 
@@ -270,8 +276,9 @@ def test_the_cable_interface_is_frozen():
         # **面と回転はケーブルの向き（同面/対向）を決める。**買う部品が変わる。
         assert d["layer"] == FROZEN_LAYER, \
             f"{where}: {d['layer']} 面にある。凍結は {FROZEN_LAYER}"
-        assert d["rot"] == FROZEN_ROTATION, \
-            f"{where}: 回転 {d['rot']}。凍結は {FROZEN_ROTATION}"
+        ref = where.split("/")[1]
+        assert d["rot"] == FROZEN_ROTATION[ref], \
+            f"{where}: 回転 {d['rot']}。凍結は {FROZEN_ROTATION[ref]}（口の向き）"
 
     # 子基板の前端からの距離。**ケーブルの必要長がここで決まる。**
     text = (ROOT / "pcb/hhkb_split_daughterboard.kicad_pcb").read_text()
@@ -286,7 +293,9 @@ def test_the_cable_interface_is_frozen():
     # 2 つのコネクタのピン割り当てが一致すること（向きの取り違え防止）
     main = next(p for r, _k, p in _import_netlist("left") if r == "J_DB")
     db = next(p for r, _k, p in daughterboard_netlist() if r == "J_MAIN")
-    assert main == db, "本体基板と子基板でケーブルのピン割り当てが違う"
+    # J_DB は J_MAIN の鏡像（n ↔ 13-n）。2026-08-28・上の FROZEN_ROTATION の注記。
+    expect = {str(13 - int(n)): net for n, net in db.items()}
+    assert main == expect, "本体基板と子基板でケーブルのピン割り当てが違う（J_DB は 13-n）"
 
 
 def _import_netlist(half):

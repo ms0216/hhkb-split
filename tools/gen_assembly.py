@@ -313,70 +313,66 @@ def build_assembly(keys, half, real=False):
     parts["usb_plug"] = usb_plug_envelope(db_x, db_rear + _RECEPT[2],
                                           usb_center_z())
 
-    # FFC ケーブル。**経路は未発注・未決定なので、仮置きの占有空間。**
-    # J_DB（本体・口は手前向き）から下りて床の上を這い、J_MAIN（子基板の
-    # 裏・口は手前向き）へ入る。位置は両方とも STEP の実体から取る。
+    # FFC ケーブル。**仮置きの占有空間。**
+    # **2026-08-28 に経路を作り直した**（open-gaps #19 再開）。J_DB の口は
+    # **奥向き**（子基板の方）。以前は口が手前向きで、口の前で床へ折り下げ、
+    # 床を這って奥へ U ターンする経路を「幕」と「走行部」で描いていた。
+    # U ターンは厚み方向の折り返しなので接点面が裏返り、両端とも下接点で
+    # 基板の裏という条件と A タイプ（同面接点）のケーブルが両立しなかった。
+    # 口を奥向きにすると、J_DB を出たケーブルはそのまま奥へ下って
+    # J_MAIN（子基板の裏・口は手前向き）に入る。折り返しは無い。
+    #
+    # 描くのは **J_DB の口（奥端）から J_MAIN の口（手前端）までの斜めの板**。
+    # 位置は両方とも STEP の実体から取る。
     rec = pcb_parts.load()
     jdb = [c["bbox"] for c in rec[half]["components"] if c["label"] == "ffc_conn"]
     jx = (min(b[0] for b in jdb) + max(b[3] for b in jdb)) / 2
     from interface import to_plan
-    jy = to_plan((jx, min(b[1] for b in jdb)))[1]      # 口（手前端・平面図）
-    # **端子も含める。**本体だけ見て経路を決めたら、端子に当たった
-    sock_boxes = (pcb_parts.keyswitch_boxes(half, "kailh_socket")
-                  + pcb_parts.keyswitch_boxes(half, "kailh_socket_leg"))
+    jy = to_plan((jx, max(b[4] for b in jdb)))[1]      # 口（奥端・平面図）
+    jz_conn = min(b[2] for b in jdb)                   # コネクタの下面（板の下面から）
     jm = [c["bbox"] for c in rec["db"]["components"] if c["label"] == "ffc_conn"]
-    jm_y = db_center_y + min(b[1] for b in jm)         # J_MAIN の口（子基板は水平）
+    jm_y = db_center_y + min(b[1] for b in jm)         # J_MAIN の口（手前端）
+    jm_z = FLOOR + DB_BOSS_H + min(b[2] for b in jm)   # J_MAIN の下面
     z_board_bottom = (rim_front + (jy + h_plate / 2) * tilt
                       - PLATE_TO_PCB - PCB_T)
-    z_lo = FLOOR + 1.9                                 # 走行部は床の少し上
-    hw = FFC_RIBBON_W / 2
+    # ケーブルの中心高さ: J_DB では口の高さ（板の下面とコネクタ下面の間）、
+    # J_MAIN でも同じ（子基板の下面とコネクタ下面の間）
+    z1 = FLOOR + DB_BOSS_H + min(b[2] for b in jm) / 2   # 子基板下面とコネクタ下面の間
+    import math
+    # **口の位置は、置いたあとの実体（parts["pcb_parts"]）から取る。**
+    # 記録の bbox を to_plan で写すと、傾けて置いた実体の奥端より 0.4mm
+    # 手前になり、リボンの始点がコネクタの中に入った（箱モードで 0.8mm^3）。
+    jdb_placed = [s_.bounding_box() for s_ in parts["pcb_parts"].solids()
+                  if s_.bounding_box().min.X < jx < s_.bounding_box().max.X
+                  and s_.bounding_box().min.Y < jy + 1.0
+                  and s_.bounding_box().max.Y > jy - 8.0]
+    if not jdb_placed:
+        raise SystemExit(f"{half}: 置いた J_DB の実体が見つからない")
+    jy = max(b.max.Y for b in jdb_placed) + 0.3            # 口の 0.3mm 奥
+    z0 = (min(b.min.Z for b in jdb_placed) + max(b.max.Z for b in jdb_placed)) / 2
+    jm_y = jm_y - 0.6                                      # J_MAIN の口の 0.6mm 手前
+    # **口を出てすぐ FFC_DIVE だけ急に下る。**右は口の 2mm 奥に SW10 の
+    # ソケット（板の下 3.5mm）が居て、口の高さのまま奥へ出ると当たる。
+    # FFC は厚み方向には小さく曲げられるので、口の直後で潜らせる。
+    # 実物で曲げがきついなら、ここを増やすかコネクタの高さで受け直す。
+    FFC_DIVE = 2.0        # 潜る量（mm・暫定。組んで見る）
+    FFC_DIVE_RUN = 2.0    # 潜り切るまでの奥行（mm）
+    import math
     with BuildPart() as _ffc:
-        # J_DB の口の前で下へ折り下げる幕。**薄く（1.0mm）**。
-        # 口の 1.1mm 手前からソケットの保守的な箱（はんだ余裕込み）が
-        # 始まるので、ケーブルは口を出てすぐ折れる必要がある（FFC の
-        # 静的な折りなら可能）。
-        # 上端は基板の下面の少し手前で止める（平面近似の誤差で板を
-        # 突かないため。コネクタの口 −3.6〜−1.6 は覆えている）。
-        # **折り下げる場所は、置いたあとのソケットの形から決める。**
-        # 帯（キーの列の間）にコネクタがあり、その手前にはすぐ後ろの列の
-        # ソケットが来る。**記録の座標（平らなプレート）と組み立ての座標
-        # （平面図）を混ぜて計算し、0.2mm ずれて当たった。**置いた部品から
-        # 直接測る。
-        near = [b for b in (s_.bounding_box() for s_ in parts["sockets"].solids())
-                if b.min.X < jx + FFC_RIBBON_W / 2
-                and b.max.X > jx - FFC_RIBBON_W / 2 and b.max.Y < jy]
-        y_free = max((b.max.Y for b in near), default=jy - 1.0)
-        drop_d = jy - y_free
-        assert drop_d > 0.3, (
-            f"{half}: J_DB の口とソケットの間が {drop_d:.2f}mm しかなく、"
-            "FFC を折り下げる場所が無い")
-        # 幕の上端は、**幕がかかる範囲のいちばん手前**での板の下面に
-        # 合わせる。**板は手前へ向かって下がっている**（チルト）ので、
-        # 口の位置（jy）だけで高さを決めると、手前側で板を突き抜ける。
-        #
-        # 2026-08-14 に実際に起きた: J_DB が帯またぎで手前へ移り
-        # （58b3aaf）、x 帯に入るソケットが 1 個だけになって幕が
-        # 19.45mm と長くなった結果、板に 98.3mm^3 食い込んだ。
-        # **古い pcb_parts.json がこれを緑にしていた**（記録を取り直して露見）。
-        z_top = min(z_board_bottom,
-                    rim_front + (y_free + h_plate / 2) * tilt
-                    - PLATE_TO_PCB - PCB_T)
-        with Locations((jx, (y_free + jy) / 2, z_lo)):
-            Box(FFC_RIBBON_W, drop_d, z_top - 0.5 - z_lo,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 床の上を左右方向へ走る
-        x0, x1 = sorted((jx, db_x))
-        with Locations(((x0 + x1) / 2, jy - 2.0, z_lo)):
-            Box(x1 - x0 + FFC_RIBBON_W, 4.0, 1.8,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥へ走って J_MAIN の口の手前まで
-        with Locations((db_x, (jy - 4.0 + jm_y) / 2, z_lo)):
-            Box(FFC_RIBBON_W, jm_y - (jy - 4.0), 1.8,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # **差込口ぴったりで止める。**中まで描くと、塞がった箱に食い込む
-        # ことになり、許容値でごまかす羽目になる（上の走行部の終端が
-        # そのまま J_MAIN の口の面）。**届くかどうか**はケーブルの長さの
-        # 検査（test_pcb の FFC 長）が別に見る。
+        # 1) 口の直後の潜り
+        a1 = math.degrees(math.atan2(-FFC_DIVE, FFC_DIVE_RUN))
+        l1 = math.hypot(FFC_DIVE, FFC_DIVE_RUN)
+        with Locations(Location((jx, jy + FFC_DIVE_RUN / 2, z0 - FFC_DIVE / 2), (a1, 0, 0))):
+            Box(FFC_RIBBON_W, l1, 0.4)
+        # 2) そこから J_MAIN の口まで斜めに
+        y_a, z_a = jy + FFC_DIVE_RUN, z0 - FFC_DIVE
+        dy_, dz_ = jm_y - y_a, z1 - z_a
+        ang = math.degrees(math.atan2(dz_, dy_))
+        # X 軸まわりに ang 回す（右手系: +Y が +Z 側へ回るのが正）。奥（+Y）へ
+        # 向かって下る（dz<0 → ang<0）ので、そのまま ang を渡す。**−ang にすると
+        # 奥へ向かって上るリボンになる**（2026-08-29 に断面図で発覚）。
+        with Locations(Location((jx, (y_a + jm_y) / 2, (z_a + z1) / 2), (ang, 0, 0))):
+            Box(FFC_RIBBON_W, math.hypot(dy_, dz_), 0.4)
     parts["ffc"] = _ffc.part
 
     # M2 熱圧入インサート（本体ボス 3＋子基板ボス 2）。

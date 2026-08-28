@@ -406,84 +406,84 @@
 		(uuid "e382a09a-7f17-5e9e-9d4c-a094c4250069")
 	)
 	(global_label
-		"GND"
+		"ROW_E"
 		(shape input)
 		(at 63.50 248.92 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cf8fb2fe-424d-55b8-9e89-7865cf1e1581")
 	)
 	(global_label
-		"V3V3"
+		"ROW_D"
 		(shape input)
 		(at 63.50 254.00 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "ddbd3afd-e882-5d48-97bf-cc113eaca2fe")
 	)
 	(global_label
-		"SPI_MOSI"
+		"ROW_C"
 		(shape input)
 		(at 63.50 259.08 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "92b93667-6606-5c2e-8253-5019213e443e")
 	)
 	(global_label
-		"CS"
+		"ROW_B"
 		(shape input)
 		(at 63.50 264.16 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "f291a6d0-2aba-5877-bc06-321c2a5ceea6")
 	)
 	(global_label
-		"SPI_SCK"
+		"ROW_A"
 		(shape input)
 		(at 63.50 269.24 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "83577de4-6aff-577c-9392-19471b709095")
 	)
 	(global_label
-		"SPARE2"
+		"SPARE"
 		(shape input)
 		(at 63.50 274.32 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "cec183ca-6a6d-520a-88ae-07625beb5639")
 	)
 	(global_label
-		"SPARE"
+		"SPARE2"
 		(shape input)
 		(at 63.50 279.40 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "3bf9e7d1-ba5b-54e7-b79d-728fbfc3ff03")
 	)
 	(global_label
-		"ROW_A"
+		"SPI_SCK"
 		(shape input)
 		(at 63.50 284.48 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "d985dc56-65d7-5623-a86b-6089e4932160")
 	)
 	(global_label
-		"ROW_B"
+		"CS"
 		(shape input)
 		(at 63.50 289.56 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "68d269f3-6e04-5703-9dc6-51aaff88cfd7")
 	)
 	(global_label
-		"ROW_C"
+		"SPI_MOSI"
 		(shape input)
 		(at 63.50 294.64 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "07769957-0521-5ed0-bd0b-db9935a6361c")
 	)
 	(global_label
-		"ROW_D"
+		"V3V3"
 		(shape input)
 		(at 63.50 299.72 180)
 		(effects (font (size 1.0 1.0)))
 		(uuid "acfac1ad-e056-55d4-afb9-06ba00316ecb")
 	)
 	(global_label
-		"ROW_E"
+		"GND"
 		(shape input)
 		(at 63.50 304.80 180)
 		(effects (font (size 1.0 1.0)))

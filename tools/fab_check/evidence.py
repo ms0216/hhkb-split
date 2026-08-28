@@ -42,13 +42,14 @@ for name,(ex,ey) in seeed.items():
 R["xiao"]=xrows; R["xiao_fp"]={"layer":xf["layer"],"rot":xf["rot"]}
 # ---- FFC: J_DB(left/right) vs J_MAIN pad→net, and pin-1 side geometry
 ffc=[]
+# J_DB は J_MAIN の鏡像（n ↔ 13-n）。2026-08-28 に J_DB の口を奥向きに回したため。
 for n in range(1,13):
-    ffc.append({"pin":n,"left_J_DB":net("left","J_DB",str(n)),"right_J_DB":net("right","J_DB",str(n)),"J_MAIN":net("daughterboard","J_MAIN",str(n))})
+    ffc.append({"pin":n,"J_MAIN":net("daughterboard","J_MAIN",str(n)),"jdb_pin":13-n,"left_J_DB":net("left","J_DB",str(13-n)),"right_J_DB":net("right","J_DB",str(13-n))})
 R["ffc"]=ffc
 geo={}
 for b,ref in (("left","J_DB"),("right","J_DB"),("daughterboard","J_MAIN")):
     f=fp(b,ref); p1=next(p for p in f["pads"] if p["n"]=="1"); p12=next(p for p in f["pads"] if p["n"]=="12")
-    geo[f"{b}/{ref}"]={"layer":f["layer"],"center":(f["x"],f["y"]),"rot":f["rot"],"pad1":(p1["x"],p1["y"]),"pad12":(p12["x"],p12["y"]),"pad1_side":"+X(右)" if p1["x"]>f["x"] else "-X(左)","pads_side_y":"KiCad -Y(奥)" if p1["y"]<f["y"] else "KiCad +Y(手前)","body":f["bbox"]}
+    geo[f"{b}/{ref}"]={"layer":f["layer"],"center":(f["x"],f["y"]),"rot":f["rot"],"pad1":(p1["x"],p1["y"]),"pad12":(p12["x"],p12["y"]),"pad1_side":"+X(右)" if p1["x"]>f["x"] else "-X(左)","pads_side_y":("KiCad -Y(奥) → 口は手前向き" if p1["y"]<f["y"] else "KiCad +Y(手前) → 口は奥向き"),"body":f["bbox"]}
 R["ffc_geo"]=geo
 # ---- D_PWR schottky + divider on db
 d=fp("daughterboard","D_PWR"); R["dpwr"]=[{"pad":p["n"],"role":"K(カソード・帯)" if p["n"]=="1" else "A(アノード)","net":p["net"]} for p in d["pads"]]

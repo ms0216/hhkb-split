@@ -13,13 +13,13 @@ for r in R["xiao"]:
 tf=""
 for r in R["ffc"]:
     same=r["left_J_DB"]==r["right_J_DB"]==r["J_MAIN"]
-    tf+=f'<tr><td class="n">{r["pin"]}</td><td>{esc(r["left_J_DB"])}</td><td>{esc(r["right_J_DB"])}</td><td>{esc(r["J_MAIN"])}</td><td>{OK if same else NG}</td></tr>'
+    tf+=f'<tr><td class="n">{r["pin"]}</td><td>{esc(r["J_MAIN"])}</td><td class="n">{r["jdb_pin"]}</td><td>{esc(r["left_J_DB"])}</td><td>{esc(r["right_J_DB"])}</td><td>{OK if same else NG}</td></tr>'
 tc=""
 for c in R["chain"]:
     tc+=f'<tr><td>{c["half"]}</td><td>{c["sw"]}</td><td><b>{esc(c["key"])}</b></td><td>{esc(c["col_net"])}</td><td>{c["diode"]}</td><td>{esc(c["row_net"])} ({c["row_pin"]})</td><td class="n">RC({c["board_rc"][0]},{c["board_rc"][1]})</td><td class="n">RC({c["fw_rc"][0]},{c["fw_rc"][1]})</td><td>{OK if c["ok"] else NG}</td></tr>'
 g=R["ffc_geo"]
 def gr(k):
-    v=g[k]; return f'<tr><td>{k}</td><td>{v["layer"]}</td><td class="n">{v["rot"]:.0f}°</td><td>{v["pad1_side"]}</td><td>{v["pads_side_y"]} → 口は手前向き</td></tr>'
+    v=g[k]; return f'<tr><td>{k}</td><td>{v["layer"]}</td><td class="n">{v["rot"]:.0f}°</td><td>{v["pad1_side"]}</td><td>{v["pads_side_y"]}</td></tr>'
 nok=sum(1 for c in R["chain"] if c["ok"])
 page=f'''<title>HHKB 分割 配線検証 2026-08-28</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap">
@@ -63,55 +63,47 @@ svg text{{font-family:"IBM Plex Sans JP",sans-serif;font-size:11px;fill:var(--in
 <div class="card"><b>74LVC595（左 U1・右 U1/U2）</b><div class="big">{OK} 48 ピン全部</div>TI SCASE93A Table 4-1 と一致</div>
 <div class="card"><b>XIAO nRF52840</b><div class="big">{OK} 14 パッド全部</div>Seeed 公式の座標と一致・ファームのピンと一致</div>
 <div class="card"><b>キー → 行列 → ファーム</b><div class="big">{OK} {nok} / 61 キー</div>ダイオード向きも全部 col→row</div>
-<div class="card"><b>FFC ケーブル</b><div class="big">{NG} 要判断</div>A タイプでは接点面が合わない可能性（板は無傷）</div>
+<div class="card"><b>FFC ケーブル</b><div class="big">{OK} 直線経路に修正</div>J_DB の口を奥向きに回した。A タイプで正しい。<b>右の配線は引き直し待ち</b></div>
 </div>
 
-<div class="alert"><b>起きたら見るもの（1 つだけ判断が要る）</b><br>
-FFC は、ピン対応（1→1、ネット並びは 3 コネクタで完全一致）は正しいのですが、<b>ケーブルの経路に「厚み方向の U ターン」が 1 回</b>あり、そこで接点面が裏返ります。両端のコネクタは<b>下接点</b>で両方とも基板の裏に付くので、<b>A タイプ（同面接点）では両端を同時に満たせず、B タイプ（両端で接点面が逆）が要る</b>と読めます。これは open-gaps #19（2026-08-16「A タイプで決着」）の見落としです。下の §1 の図と、紙のリボンで 1 分で確かめられます。</div>
+<div class="alert"><b>寝ている間に直したこと（1 つ判断が要る → 0 に、代わりに右の配線が 1 つ残った）</b><br>
+J_DB（本体基板の FFC コネクタ）の口が<b>手前向き</b>だったのは、2026-08-08 の初回配置で KiCad の Flip() が与えた 180° をそのまま使い、誰も向きを決めていなかったためです（履歴で確認）。<b>口を奥向きに回しました。</b>ケーブルは J_DB を奥へ出てそのまま子基板の J_MAIN に入る直線経路になり、U ターンが消え、<b>買ってある A タイプで正しく</b>なりました。J_DB のピン番号は J_MAIN の鏡像（13−n）です（回すとピン 1 の側が入れ替わるため。表はそう直しました）。<br>
+<b>左</b>: パッドが回す前と同じ座標に来るよう置いたので、あなたの配線は無傷・DRC 0。<b>右</b>: 同じ置き方は SW10 の位置決め穴に当たるため、回しただけの位置に置いてあり、<b>J_DB 周りの 12 パッドの配線があなたの引き直し待ち</b>（DRC 違反 20・未配線 8）。</div>
 
-<div class="todo"><b>あなたがやること（順番どおり・合計 30 分）</b>
+<div class="todo"><b>あなたがやること</b>
 <ol>
-<li><b>紙のリボンで §1 を再現する</b>（片面に線を引き、図の経路をなぞる）。私の読みが合っていれば、床で線が下を向きます</li>
-<li>合っていたら <b>B タイプ 80mm を買う</b>か、<b>J_DB を 180° 回して U ターンを無くす</b>かを決める（後者は板の変更・発注前限定）。A タイプを既に買っていたら B を買い足す</li>
-<li><b>1:1 印刷</b>: <code>build/fab_check/daughterboard_1to1_top_view.pdf</code> を「実際のサイズ」で印刷し、手元の XIAO を載せる（§3）。印刷の正しさは取付穴の間隔 <b>16.0mm</b> を定規で見る</li>
-<li>595 が届いたら、シルクの 1 番ピン印（§2 の図の左下・右は上）と実物の丸印を見比べる</li>
+<li><b>右 <code>pcb/matrix_only/hhkb_split_right.kicad_pcb</code> の J_DB 周りを引き直す</b>（パッド y=88.675・0°・ネットは 1 番 ROW_E … 12 番 GND）。露出ビア（#49）は<b>コネクタの南側</b>（口の反対）に。引いたら <code>export_matrix_routing → gen_pcb → finalize_pcb → drc → pcb_parts --write/--write-groups</code></li>
+<li>左は <code>SPARE / SPARE2 / SPI_SCK</code> の露出ビアがコネクタの下に入ったので、南側に打ち直す（任意・I2C 用）</li>
+<li><b>1:1 印刷</b>: <code>build/fab_check/daughterboard_1to1_top_view.pdf</code> を「実際のサイズ」で印刷し、手元の XIAO を載せる（§3）。取付穴の間隔 <b>16.0mm</b> で印刷を確認</li>
+<li>595 が届いたら、シルクの 1 番ピン印と実物の丸印を見比べる</li>
 </ol></div>
 
-<h2>1. FFC — ピン対応は正しい。接点面の向きに問題</h2>
-<h3>1a. ピン対応（3 コネクタでネットの並びが同じ）</h3>
-<div class="tbl"><table><tr><th>ピン</th><th>左 J_DB</th><th>右 J_DB</th><th>子基板 J_MAIN</th><th>判定</th></tr>{tf}</table></div>
+<h2>1. FFC — 口の向きを直した。ピン対応は J_DB が J_MAIN の鏡像</h2>
+<h3>1a. ピン対応（同じ導体は J_MAIN の n 番と J_DB の 13−n 番）</h3>
+<div class="tbl"><table><tr><th>J_MAIN ピン</th><th>J_MAIN のネット</th><th>J_DB ピン</th><th>左 J_DB</th><th>右 J_DB</th><th>判定</th></tr>{tf}</table></div>
 <h3>1b. 幾何（板の実体から）</h3>
 <div class="tbl"><table><tr><th>コネクタ</th><th>面</th><th>回転</th><th>ピン 1 の側</th><th>パッドの側</th></tr>{gr("left/J_DB")}{gr("right/J_DB")}{gr("daughterboard/J_MAIN")}</table></div>
-<p>3 つとも <b>裏面（B.Cu）・回転 180°・ピン 1 が +X 側・パッドが奥側＝口が手前向き</b>。これは組立モデル <code>gen_assembly.py</code> の記述「J_DB（口は手前向き）から下りて床の上を這い、J_MAIN（口は手前向き）へ入る」と一致します。</p>
-<h3>1c. 接点面を追う（横から見た図・手前が左）</h3>
+<p>J_MAIN は裏面・180°・ピン 1 が +X・口は手前（本体側）。<b>J_DB は裏面・0°・ピン 1 が −X・口は奥（子基板側）</b>——2026-08-28 夜に回した。口どうしが向かい合い、ケーブルはまっすぐ渡る。</p>
+<h3>1c. 接点面を追う（横から見た図・手前が左）— 直した後</h3>
 <figure>
-<svg viewBox="0 0 820 330" width="100%" role="img" aria-label="FFC 経路の側面図">
-<defs><marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/></marker></defs>
-<text x="20" y="20" fill="var(--mute)">横から見た図。左＝手前（キー側）、右＝奥（コブ・電池側）。縮尺なし。赤い短線＝導体（接点）が出ている面。</text>
+<svg viewBox="0 0 820 300" width="100%" role="img" aria-label="直した後の FFC 経路の側面図">
+<defs><marker id="ar2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/></marker></defs>
+<text x="20" y="20" fill="var(--mute)">左＝手前（キー側）、右＝奥（コブ側）。縮尺なし。赤い短線＝導体（接点）が出ている面。</text>
 <line x1="40" y1="110" x2="440" y2="80" stroke="var(--ink)" stroke-width="5"/><text x="40" y="60">本体基板（7.3° 傾き・裏が下）</text>
-<rect x="320" y="91" width="70" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="400" y="105">J_DB（裏面・下接点・口は手前）</text>
+<rect x="320" y="91" width="70" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="230" y="130">J_DB（裏面・下接点・口は奥）</text>
 <line x1="540" y1="200" x2="790" y2="200" stroke="var(--ink)" stroke-width="5"/><text x="600" y="190">子基板（水平・裏が下）</text>
 <rect x="545" y="203" width="60" height="16" fill="var(--code)" stroke="var(--ink)"/><text x="612" y="217">J_MAIN（裏面・下接点・口は手前）</text>
 <line x1="30" y1="285" x2="800" y2="285" stroke="var(--mute)" stroke-width="2" stroke-dasharray="6 4"/><text x="35" y="305" fill="var(--mute)">床</text>
-<path d="M320,101 L270,101 Q250,101 250,121 L250,250 Q250,268 268,268 L500,268 Q520,268 520,250 L520,225 Q520,211 534,211 L542,211" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar)"/>
-<g stroke="var(--ng)" stroke-width="3">
-<line x1="280" y1="96" x2="310" y2="96"/>
-<line x1="245" y1="160" x2="245" y2="190"/>
-<line x1="350" y1="273" x2="400" y2="273"/>
-<line x1="525" y1="228" x2="525" y2="242"/>
-<line x1="534" y1="216" x2="542" y2="216"/>
-</g>
-<text x="150" y="128" fill="var(--ng)">① J_DB では上向き（基板側）✓</text>
-<text x="120" y="180" fill="var(--ng)">② 折り下げ：手前を向く</text>
-<text x="290" y="300" fill="var(--ng)">③ 床で下向き（U ターンで裏返った）</text>
-<text x="330" y="245" fill="var(--ng)">④ 上がる S 字では向きは戻らない</text>
-<text x="545" y="245" fill="var(--ng)">⑤ 下向きのまま J_MAIN へ ✗</text>
-<text x="545" y="262" fill="var(--ng)">（下接点なので上向きが要る）</text>
+<path d="M390,99 L430,99 Q450,99 462,112 L520,198 Q528,211 540,211 L545,211" fill="none" stroke="var(--acc)" stroke-width="4" marker-end="url(#ar2)"/>
+<g stroke="var(--ng)" stroke-width="3"><line x1="400" y1="94" x2="428" y2="94"/><line x1="480" y1="140" x2="497" y2="164"/><line x1="530" y1="206" x2="544" y2="206"/></g>
+<text x="440" y="70" fill="var(--ng)">① J_DB で上向き ✓</text>
+<text x="500" y="150" fill="var(--ng)">② 折り返し無し・面は上のまま</text>
+<text x="560" y="250" fill="var(--ng)">③ J_MAIN でも上向き ✓（A タイプで正しい）</text>
 </svg>
-<figcaption>位置関係は STEP の寸法で確認済み（J_DB z −3.6〜−1.6・J_MAIN z −2.1〜−0.1 で両方とも板の下、アクチュエータ片が両方とも手前側）。J_DB で上を向いていた導体は、手前→下→奥の U ターンで下向きになり、床→上→奥の S 字では戻らない。J_MAIN は基板の裏に付いた下接点なので上向きが必要。</figcaption>
+<figcaption>J_DB の口を奥向きにしたので、ケーブルは奥へ出てそのまま斜めに下り J_MAIN に入る。厚み方向の折り返しが無く、導体の面は両端で上向き。組立モデル（<code>gen_assembly.py</code>）もこの経路に描き直し、箱モードの干渉 0。</figcaption>
 </figure>
-<p>根拠: FH12-xxS-0.5SH は下接点（DigiKey 品目「Bottom contacts」。上接点は FH12<b>A</b>）。180° ひねりは面と一緒にピン 1↔12 も反転するので、1a の「ネット並び一致」と矛盾し代用になりません。<b>B タイプ（両端で接点面が逆・導体はまっすぐ）ならピン 1→1 のまま両端が合います。</b></p>
-<div class="note">私が決めていないこと: A/B どちらを買うか、J_DB を回すか。記録は open-gaps #19 に「🔴 再開」として書きました。fab-checklist §7 の視点 C（1:1 印刷に実物を渡す）で確かめてから決めてください。</div>
+<details><summary>直す前の経路（U ターンで面が裏返っていた）</summary><p>口が手前向きだったときの経路は「手前へ出る → 床へ折り下げ → 床を奥へ → J_MAIN」。手前→下→奥の U ターンで導体が下を向き、J_MAIN（下接点）で合わなかった。この向きは 2026-08-08 の初回配置で KiCad の Flip() が与えた 180° が残ったもので、誰も決めていなかった（git 履歴で確認）。</p></details>
+<div class="note">残り: <b>右基板の J_DB 周りの配線</b>（あなたの引き直し待ち・open-gaps #19）。左は配線無傷で DRC 0。</div>
 
 <h2>2. 74LVC595 — 48 ピン全部が TI のデータシートどおり</h2>
 <p>期待値は TI SCASE93A Table 4-1（TSSOP-16: 1 QB … 8 GND, 9 QH′, 10 SRCLR, 11 SRCLK, 12 RCLK, 13 OE, 14 SER, 15 QA, 16 VCC）から、回路の役割（SRCLK=SPI_SCK, RCLK=CS, SER=MOSI または前段の QH′, SRCLR=3V3 固定, OE=GND 固定）に置き換えたもの。実際は板のパッドに付いたネット名。</p>

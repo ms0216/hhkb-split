@@ -1,5 +1,8 @@
 # 基板の配線 — 現状と経緯
 
+
+> **2026-08-28 夜:** J_DB（本体の FFC コネクタ）の口を**奥向き**に回した（open-gaps #19 再開）。ピン表は J_MAIN の鏡像（13−n）。左はパッド座標を保って配線無傷・DRC 0。**右は J_DB 周りの 12 パッドが利用者の引き直し待ち**（DRC 違反 20・未配線 8）。`pcb/matrix_only/` を編集 → `export_matrix_routing → gen_pcb → finalize_pcb → drc → pcb_parts --write/--write-groups`。
+
 ## ✅ 2026-08-13 — 回路レビュー 8 件、対応完了
 
 熟練エンジニアの指摘 8 件（回路図・2 層化・GND ベタ・GND ビア・

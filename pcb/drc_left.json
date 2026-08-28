@@ -1,13 +1,15 @@
 {
   "board": "hhkb_split_left.kicad_pcb",
-  "sha256": "852e39f3b24f0cb860ce0fee82cebf85dad9580bcb5ce2436151baac20b39a1e",
+  "sha256": "5df7c4075c83d073dadf0a183369f2c968f6389dbb981a7b7a95c520ea7c876d",
   "violations": 0,
   "unconnected": 0,
-  "warnings": 34,
+  "warnings": 36,
   "warning_kinds": {
     "hole_to_hole": 27,
     "via_dangling": 6,
-    "silk_edge_clearance": 1
+    "silk_edge_clearance": 1,
+    "silk_overlap": 1,
+    "silk_over_copper": 1
   },
   "details": []
 }

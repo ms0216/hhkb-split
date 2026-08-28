@@ -434,7 +434,16 @@ def test_the_two_boards_agree_on_the_cable():
     """
     main = next(p for r, k, p in netlist("left") if r == "J_DB")
     db = next(p for r, k, p in daughterboard_netlist() if r == "J_MAIN")
-    assert main == db, f"ケーブルの結線が食い違っている\n本体 {main}\n子基板 {db}"
+    # **J_DB は J_MAIN の鏡像（n ↔ 13-n）**（2026-08-28・open-gaps #19 再開）。
+    # 両コネクタとも基板の裏で口が向かい合い、ケーブルはまっすぐ（A タイプ）。
+    # J_MAIN はピン 1 が +X、J_DB は 180° 回して口を奥向きにしたのでピン 1 が
+    # -X。同じ導体（同じ X）は J_MAIN の n 番と J_DB の 13-n 番に着く。
+    # 以前は「表が同一」を要求していたが、それは口が手前向きで床へ U ターン
+    # する経路（接点面が裏返る）を前提にしていた。
+    expect = {str(13 - int(n)): net for n, net in db.items()}
+    assert main == expect, (
+        f"ケーブルの結線が食い違っている（J_DB は J_MAIN の 13-n 番）\n"
+        f"本体 {main}\n子基板から期待 {expect}")
 
 
 # --------------------------------------------------------------------------
@@ -588,11 +597,16 @@ def test_the_cable_pinout_table_matches_the_circuit():
     # **BOARDS 経由で読む。**モジュール直下の netlist を掴むと、
     # test_the_rules_actually_bite の差し替えが効かない。
     j_db = next(p for r, _, p in BOARDS["left"]() if r == "J_DB")
+    j_main = next(p for r, _, p in daughterboard_netlist() if r == "J_MAIN")
     mcu = next(p for r, _, p in daughterboard_netlist() if r == "U_MCU")
 
     for num, net, xiao_pin in rows:
-        assert j_db[num] == net, (
-            f"FFC {num} 番: 文書は {net}、circuit.py は {j_db[num]}")
+        # 文書の番号は**子基板 J_MAIN の番号**。J_DB は 13-n（2026-08-28）。
+        assert j_main[num] == net, (
+            f"FFC {num} 番: 文書は {net}、circuit.py の J_MAIN は {j_main[num]}")
+        assert j_db[str(13 - int(num))] == net, (
+            f"FFC {num} 番: J_DB の {13 - int(num)} 番が {net} でない"
+            f"（{j_db[str(13 - int(num))]}）。J_DB は J_MAIN の鏡像のはず")
         # **予備ピンは行き先が無い。**ネットが NC のものは XIAO の
         # どのピンにも繋がらないので、ピン列の照合対象から外す
         # （2026-08-14 に 6 番を予備にした・#41）。
