@@ -102,6 +102,7 @@ J_DB（本体基板の FFC コネクタ）の口が<b>手前向き</b>だった�
 </svg>
 <figcaption>J_DB の口を奥向きにしたので、ケーブルは奥へ出てそのまま斜めに下り J_MAIN に入る。厚み方向の折り返しが無く、導体の面は両端で上向き。組立モデル（<code>gen_assembly.py</code>）もこの経路に描き直し、箱モードの干渉 0。</figcaption>
 </figure>
+<figure><img src="{img('build/assembly/left_section_db.png')}" alt="左の組立モデルの断面（子基板の x で切った図）"><figcaption>組立モデルの断面（左・x=58.5、<code>tools/refresh_view.sh</code> の出力）。黒＝J_DB（本体基板の裏）、橙＝FFC、紫＝J_MAIN（子基板の裏の手前端）、青＝子基板と XIAO の占有、緑＝本体基板。FFC は J_DB を奥へ出てすぐ潜り、斜めに下って J_MAIN に入る。右も同じ（<code>build/assembly/right_section_db.png</code>）。</figcaption></figure>
 <details><summary>直す前の経路（U ターンで面が裏返っていた）</summary><p>口が手前向きだったときの経路は「手前へ出る → 床へ折り下げ → 床を奥へ → J_MAIN」。手前→下→奥の U ターンで導体が下を向き、J_MAIN（下接点）で合わなかった。この向きは 2026-08-08 の初回配置で KiCad の Flip() が与えた 180° が残ったもので、誰も決めていなかった（git 履歴で確認）。</p></details>
 <div class="note">残り: <b>右基板の J_DB 周りの配線</b>（あなたの引き直し待ち・open-gaps #19）。左は配線無傷で DRC 0。</div>
 

@@ -1812,7 +1812,7 @@ CLAUDE.md の 3 条件のうち、**A について 3 つとも未了**：
 | `gen_pcb.py` 配置表 | J_DB に向き 0°（口が奥）と dy を明記（左 −3.7 / 右 −0.4） |
 | **左 `matrix_only`** | J_DB を 0° に回し、中心を 3.7mm 奥へ → **12 パッド全部が回す前と同じ座標**に来て**配線は無傷**。DRC **違反 0 / 未配線 0**。ただし利用者の枝とビア（SPARE/SPARE2/SCK/CS/V3V3）は**コネクタ本体の下**に入った（電気的には無害。#49 の露出は finalize が別の窓／ビアを選ぶ。**SPARE/SPARE2/SCK は露出できる銅が無い**） |
 | **右 `matrix_only`** | 同じ 3.7mm は **SW10 の位置決め穴に当たる**（コートヤードに NPTH が入る。0.4mm までしか寄せられない）。0.4mm 奥・0° で置いた結果、**パッドが南側の枝・ビア（MOSI/CS/SCK/V3V3/GND/COL0・MP パッド）に重なり、違反 20・未配線 8（ROW_A〜E・SPARE・SPARE2・V3V3）**。**🔴 利用者が J_DB 周りを引き直す**（`pcb/matrix_only/hhkb_split_right.kicad_pcb`）。引いたら `export_matrix_routing.py → gen_pcb.py → finalize_pcb.py → drc.py → pcb_parts.py --write/--write-groups` |
-| `gen_assembly.py` | 幕と床走行を消し、**J_DB の奥端の口から J_MAIN の口までの斜めの板**に置き換えた |
+| `gen_assembly.py` | 幕と床走行を消し、**口の直後の潜り（`FFC_DIVE` 2.0mm・暫定）＋ J_MAIN の口までの斜めの板**に置き換えた。箱モード 0・**実形状の干渉検査 左右とも 0**（2026-08-29 00:50）。断面図 `build/assembly/*_section_db.png` で経路を目視 |
 | 回路図 | `gen_sch.py` で出し直し |
 | #19 の結論 | **A タイプ・80mm で正しい**（経路が直線になったため）。買ってあるケーブルはそのまま使える |
 
