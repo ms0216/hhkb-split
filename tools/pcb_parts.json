@@ -1,7 +1,7 @@
 {
  "left": {
   "source": "pcb/hhkb_split_left.kicad_pcb",
-  "board_sha256": "9e381d77e015d368d9c3c6eb9dfcbb092607dbf6f88c0d141e5bf181af0f4617",
+  "board_sha256": "651b0a86eb5bb29391e81ace458f8d9eebe0f05ad841c20ba879a41b8a8c3816",
   "solids": 124,
   "board_bbox": [
    -69.181,
@@ -1381,7 +1381,7 @@
  },
  "right": {
   "source": "pcb/hhkb_split_right.kicad_pcb",
-  "board_sha256": "9e9cb101d0177dfe860403dd501dfd75b2cd5dbb6356deae813755a3da35d6fa",
+  "board_sha256": "70dea8aefc3064294cb0579155f99368f7200353043ff0caee0c2ec1c68378c1",
   "solids": 154,
   "board_bbox": [
    -85.85,
@@ -2926,10 +2926,10 @@
     "label": "ffc_conn",
     "bbox": [
      -79.7,
-     11.975,
+     10.34,
      -3.595,
      -70.6,
-     16.575,
+     14.94,
      -1.595
     ]
    },
@@ -2937,10 +2937,10 @@
     "label": "ffc_conn",
     "bbox": [
      -79.335,
-     14.575,
+     12.94,
      -3.595,
      -70.965,
-     17.575,
+     15.94,
      -1.745
     ]
    },
@@ -2948,10 +2948,10 @@
     "label": "ffc_conn",
     "bbox": [
      -80.2,
-     11.175,
+     9.54,
      -3.395,
      -70.1,
-     15.175,
+     13.54,
      -1.595
     ]
    },
