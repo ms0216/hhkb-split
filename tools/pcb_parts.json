@@ -1,7 +1,7 @@
 {
  "left": {
   "source": "pcb/hhkb_split_left.kicad_pcb",
-  "board_sha256": "5df7c4075c83d073dadf0a183369f2c968f6389dbb981a7b7a95c520ea7c876d",
+  "board_sha256": "ce2678f184cdcccf51ee0f810c7856ff9c0b78d5163e5b9c5b1f125613bdefba",
   "solids": 124,
   "board_bbox": [
    -69.181,
@@ -1381,7 +1381,7 @@
  },
  "right": {
   "source": "pcb/hhkb_split_right.kicad_pcb",
-  "board_sha256": "b51b46c83e03d5fd6ef4b26e166fb9e8593fc5eeec71322a00eb8319c8589281",
+  "board_sha256": "3fd880403799fdc11f54877c5d8ecda5d40fdb1a950e74cc9905f1f6cff0c633",
   "solids": 154,
   "board_bbox": [
    -85.85,

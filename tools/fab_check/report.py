@@ -63,19 +63,19 @@ svg text{{font-family:"IBM Plex Sans JP",sans-serif;font-size:11px;fill:var(--in
 <div class="card"><b>74LVC595（左 U1・右 U1/U2）</b><div class="big">{OK} 48 ピン全部</div>TI SCASE93A Table 4-1 と一致</div>
 <div class="card"><b>XIAO nRF52840</b><div class="big">{OK} 14 パッド全部</div>Seeed 公式の座標と一致・ファームのピンと一致</div>
 <div class="card"><b>キー → 行列 → ファーム</b><div class="big">{OK} {nok} / 61 キー</div>ダイオード向きも全部 col→row</div>
-<div class="card"><b>FFC ケーブル</b><div class="big">{OK} 直線経路に修正</div>J_DB の口を奥向きに回した。A タイプで正しい。<b>右の配線は引き直し待ち</b></div>
+<div class="card"><b>FFC ケーブル</b><div class="big">{OK} 直線経路に修正</div>J_DB の口を奥向きに回した。A タイプで正しい。右も引き直し済み・3 基板とも DRC 0</div>
 </div>
 
 <div class="alert"><b>寝ている間に直したこと（1 つ判断が要る → 0 に、代わりに右の配線が 1 つ残った）</b><br>
 J_DB（本体基板の FFC コネクタ）の口が<b>手前向き</b>だったのは、2026-08-08 の初回配置で KiCad の Flip() が与えた 180° をそのまま使い、誰も向きを決めていなかったためです（履歴で確認）。<b>口を奥向きに回しました。</b>ケーブルは J_DB を奥へ出てそのまま子基板の J_MAIN に入る直線経路になり、U ターンが消え、<b>買ってある A タイプで正しく</b>なりました。J_DB のピン番号は J_MAIN の鏡像（13−n）です（回すとピン 1 の側が入れ替わるため。表はそう直しました）。<br>
-<b>左</b>: パッドが回す前と同じ座標に来るよう置いたので、あなたの配線は無傷・DRC 0。<b>右</b>: 同じ置き方は SW10 の位置決め穴に当たるため、回しただけの位置に置いてあり、<b>J_DB 周りの 12 パッドの配線があなたの引き直し待ち</b>（DRC 違反 20・未配線 8）。</div>
+<b>左</b>: パッドが回す前と同じ座標に来るよう置いたので配線は無傷。<b>右</b>: 同じ置き方は SW10 の位置決め穴に当たるため回しただけの位置に置き、あなたが 08-30 に引き直した（私は COL0 を MP パッドの外へ逃がした）。<b>3 基板とも DRC 0 / 未配線 0。</b></div>
 
-<div class="todo"><b>あなたがやること</b>
+<div class="todo"><b>あなたがやること（判断 2 つ＋前からの 2 つ）</b>
 <ol>
-<li><b>右 <code>pcb/matrix_only/hhkb_split_right.kicad_pcb</code> の J_DB 周りを引き直す</b>（パッド y=88.675・0°・ネットは 1 番 ROW_E … 12 番 GND）。露出ビア（#49）は<b>コネクタの南側</b>（口の反対）に。引いたら <code>export_matrix_routing → gen_pcb → finalize_pcb → drc → pcb_parts --write/--write-groups</code></li>
-<li>左は <code>SPARE / SPARE2 / SPI_SCK</code> の露出ビアがコネクタの下に入ったので、南側に打ち直す（任意・I2C 用）</li>
-<li><b>1:1 印刷</b>: <code>build/fab_check/daughterboard_1to1_top_view.pdf</code> を「実際のサイズ」で印刷し、手元の XIAO を載せる（§3）。取付穴の間隔 <b>16.0mm</b> で印刷を確認</li>
-<li>595 が届いたら、シルクの 1 番ピン印と実物の丸印を見比べる</li>
+<li><b>右 J_DB とソケットの保守的占有範囲の重なり 1.63mm</b>（<code>test_the_electronics_do_not_bite_the_key_sockets[right]</code>）。実形状の干渉検査は 0 なので実物は当たらない見込み。(a) J_DB を 1.63mm 手前へ動かして南の枝を引き直す／(b) 承知して残す、のどちらか</li>
+<li><b>露出ビア（#49）</b>: 左の SPARE/SPARE2/SCK、右の SPARE/SPARE2 がコネクタの下。使うなら南側に打ち直す。使わないなら <code>DEBUG_NETS</code> から外す</li>
+<li><b>1:1 印刷</b>: <code>build/fab_check/daughterboard_1to1_top_view.pdf</code> を「実際のサイズ」で印刷し XIAO を載せる（取付穴 16.0mm で確認）</li>
+<li>595 が届いたら 1 番ピンの印を見比べる／JLCPCB の配置プレビュー（fab-checklist §1）</li>
 </ol></div>
 
 <h2>1. FFC — 口の向きを直した。ピン対応は J_DB が J_MAIN の鏡像</h2>
@@ -104,7 +104,7 @@ J_DB（本体基板の FFC コネクタ）の口が<b>手前向き</b>だった�
 </figure>
 <figure><img src="{img('build/assembly/left_section_db.png')}" alt="左の組立モデルの断面（子基板の x で切った図）"><figcaption>組立モデルの断面（左・x=58.5、<code>tools/refresh_view.sh</code> の出力）。黒＝J_DB（本体基板の裏）、橙＝FFC、紫＝J_MAIN（子基板の裏の手前端）、青＝子基板と XIAO の占有、緑＝本体基板。FFC は J_DB を奥へ出てすぐ潜り、斜めに下って J_MAIN に入る。右も同じ（<code>build/assembly/right_section_db.png</code>）。</figcaption></figure>
 <details><summary>直す前の経路（U ターンで面が裏返っていた）</summary><p>口が手前向きだったときの経路は「手前へ出る → 床へ折り下げ → 床を奥へ → J_MAIN」。手前→下→奥の U ターンで導体が下を向き、J_MAIN（下接点）で合わなかった。この向きは 2026-08-08 の初回配置で KiCad の Flip() が与えた 180° が残ったもので、誰も決めていなかった（git 履歴で確認）。</p></details>
-<div class="note">残り: <b>右基板の J_DB 周りの配線</b>（あなたの引き直し待ち・open-gaps #19）。左は配線無傷で DRC 0。</div>
+<div class="note">残り: 右 J_DB とソケットの保守的占有範囲の重なり（判断）と露出ビア（open-gaps #19）。</div>
 
 <h2>2. 74LVC595 — 48 ピン全部が TI のデータシートどおり</h2>
 <p>期待値は TI SCASE93A Table 4-1（TSSOP-16: 1 QB … 8 GND, 9 QH′, 10 SRCLR, 11 SRCLK, 12 RCLK, 13 OE, 14 SER, 15 QA, 16 VCC）から、回路の役割（SRCLK=SPI_SCK, RCLK=CS, SER=MOSI または前段の QH′, SRCLR=3V3 固定, OE=GND 固定）に置き換えたもの。実際は板のパッドに付いたネット名。</p>

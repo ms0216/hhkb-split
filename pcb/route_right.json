@@ -4,5 +4,5 @@
   "unrouted_fingerprint": "88a6b7b1639d5afe847f88c9903c2fc37787a910dbaba9704c2a10451c2a6546",
   "freerouting": null,
   "made_by": "finalize_pcb.py",
-  "unconnected": 8
+  "unconnected": 0
 }
