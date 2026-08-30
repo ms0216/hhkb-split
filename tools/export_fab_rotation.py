@@ -19,7 +19,13 @@ ROTATION_DB = {
 # **補正表に無く、向きを確認していないフットプリント。**
 # 発注ページの配置プレビューで目視確認する対象。
 # 2 端子の受動部品（0805/1206）は向きが無いので確認不要。
-ROTATION_UNVERIFIED = ("Hirose_FH12", "SW_Hotswap_Kailh")
+# ⚠️ **D_SOD-123 は 2026-08-30 に足した。**それまで補正表にも
+# この一覧にも無く、**62 個のダイオード（マトリクス 61 + D_PWR）が
+# 警告ひとつ出ないまま出ていた。**open-gaps #52 は「発注前に目視せよ」と
+# 書いてあるのに、**発注時に読む道具の側が黙っていた**（記録と道具が
+# ちぐはぐだった）。逆向きなら D_PWR は電池が使えず、マトリクスは
+# キーが 1 つも入らない。
+ROTATION_UNVERIFIED = ("Hirose_FH12", "SW_Hotswap_Kailh", "D_SOD-123")
 
 
 def rotation_for_jlcpcb(footprint, rot_deg, bottom):
