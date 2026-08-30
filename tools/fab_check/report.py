@@ -114,6 +114,7 @@ J_DB（本体基板の FFC コネクタ）の口が<b>手前向き</b>だった�
 <p>期待座標は Seeed 公式ピン配置（左列 D0〜D6、右列 5V/GND/3V3/D10/D9/D8/D7、2.54mm ピッチ・列間 15.24mm）。「板の座標」はフットプリントの中心を原点に戻した値。ファーム列は overlay/dtsi から。</p>
 <figure><img src="{img('build/fab_check/db_nets.png')}" alt="子基板のパッドとネット名"><figcaption>子基板。XIAO（表・0°）、D_PWR（裏）、J_MAIN（裏・180°）。SPI は D7=CS, D8=SCK, D10=MOSI（XIAO 既定の SPI ピン）、D0=電池電圧（AIN0）。</figcaption></figure>
 <div class="tbl"><table><tr><th>パッド</th><th>Seeed 座標</th><th>板の座標</th><th>位置</th><th>ネット</th><th>ファームでの役割</th></tr>{tx}</table></div>
+<p><b>独立ソースとの照合（2026-08-30）</b>: Seeed 公式 KiCad ライブラリ（別の作者の DIP フットプリント 14 穴＋シンボルのピン名＋USB の出っ張り）と、鏡像・回転の 8 通りで突き合わせ → <b>鏡像なし・90° 回転で 14 穴すべて誤差 0.000mm、USB は奥側で一致</b>。フットプリントの鏡像・180° 逆は否定された。</p>
 <p>電源まわり: D_PWR（B5819W）は <b>パッド 1＝カソード（帯）＝V3V3</b>、パッド 2＝アノード＝VBATT_SW。電池 → スイッチ → ダイオード → 3V3 の向きで正しい（USB 給電時に電池へ逆流しない向き）。<b>ただし JLCPCB 側の回転補正はこのページでは検証できない</b>（fab-checklist §1・配置プレビューで目視）。</p>
 
 <h2>4. 61 キーそれぞれの経路 — 板 ↔ ファームが全キー一致</h2>
