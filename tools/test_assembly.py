@@ -1703,8 +1703,8 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
     """
     import numpy as np
     import trimesh
-    from gen_case import (BUMP_DEPTH, SW_SLOT_W, USB_H, USB_W,
-                          WALL, plan_depth, power_switch_slot_z,
+    from gen_case import (BUMP_DEPTH, CORNER_R, SW_SLOT_W, USB_H, USB_W,
+                          plan_depth, power_switch_slot_z,
                           daughterboard_x_center,
                           power_switch_center_z, power_switch_x_center,
                           rear_lid_opening, usb_center_z)
@@ -1729,17 +1729,41 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
          db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
     ]
 
-    xs = np.arange(-w / 2 + 1.0, w / 2 - 1.0, 1.0)
+    # ⚠️ **2026-08-30 に判定を入れ替えた。**それまでは「奥面から WALL の
+    # 範囲を 6 つの深さで掃いて、どこにも材料が無ければ穴」としていた。
+    # **これは「材料は奥面から WALL 以内にある」を前提にしている。**
+    # 電池蓋まわりで壁を内側へ厚くした（REAR_LID_LIP_BOSS /
+    # REAR_LID_UPPER_BOSS）ところ、材料はその前提の**手前**へ移り、
+    # **健全な板を 1209 点の穴として報告した**（左右とも常時赤）。
+    #
+    # 代わりに**外から光線を飛ばし、最初に当たる面が奥壁の帯にあるか**を見る。
+    # 「外から中が見える」を直接measureするので、壁の厚みをどう変えても
+    # 前提が壊れない。
+    #
+    # **入れ替えの前に、デグレしないことを測った**（利用者の要求）:
+    #   健全時        旧 1209 点の赤 / 新 0
+    #   窓の外へ φ3 の穴を開けて検出できるか … 左 94 点・右 165 点で
+    #   **見逃し 0**（間引きを 6.5 倍に上げても 0 のまま）
+    #   斜め 30°/60° に貫く穴も検出。貫通しない窪みは見逃す（＝正しい）
+    #   速度も 36.6 秒 → 1.4 秒
+    # ⚠️ この過程で **2 回**「検出できた」と早合点しかけた。1 回目は標本が
+    # 3 点で（偶然を示すだけ・利用者の指摘）、2 回目は判定自体にバグが
+    # あった（**手前側の壁に当たったのを「材料あり」と誤判定**し 4/16 見逃し）。
+    # **合格条件を「見逃し 0」に固定していなければ、どちらも通していた。**
+    xs = np.arange(-w / 2 + CORNER_R + 1.0, w / 2 - CORNER_R - 1.0, 1.0)
     zs = np.arange(0.5, 30.0, 0.5)
-    depths = y_out - np.linspace(0.15, WALL - 0.15, 6)
     gx, gz = np.meshgrid(xs, zs, indexing="ij")
     gx, gz = gx.ravel(), gz.ravel()
-    solid = np.zeros(gx.shape, dtype=bool)
-    for d in depths:
-        pts = np.column_stack([gx, np.full_like(gx, d), gz])
-        solid |= mesh.contains(pts)
-
-    holes = [(x, z) for x, z, ok in zip(gx, gz, solid) if not ok]
+    # 奥壁とみなす帯。ここより手前で最初に当たったら「奥壁には無い」。
+    # **6mm は壁 WALL(2.4) に内側の裏打ちを足しても収まる余裕。**
+    near = y_out - 6.0
+    _idx, ray, loc = mesh.ray.intersects_id(
+        np.column_stack([gx, np.full_like(gx, y_out + 5.0), gz]),
+        np.tile([0, -1, 0], (len(gx), 1)),
+        return_locations=True, multiple_hits=False)
+    first = np.full(len(gx), -1e9)     # 当たらなかった点は「材料なし」
+    first[ray] = loc[:, 1]
+    holes = [(x, z) for x, z, fy in zip(gx, gz, first) if fy < near]
     stray = [(x, z) for x, z in holes
              if not any(x0 <= x <= x1 and z0 <= z <= z1
                         for _n, x0, z0, x1, z1 in windows)]
