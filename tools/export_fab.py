@@ -161,7 +161,24 @@ def _cpl(board, outdir, kinds):
         if kind is None or kind in NOT_ASSEMBLED:
             continue
         p = fp.GetPosition()
-        bottom = fp.IsFlipped()
+        # **実装面は「パッドがどちらの銅箔に載っているか」で決まる。**
+        #
+        # ⚠️ **2026-09-01 まで `fp.IsFlipped()` を見ていた。**それは
+        # フットプリントを置いた側であって、はんだ付けする側ではない。
+        # **ホットスワップソケットはこの 2 つが食い違う**——
+        # フットプリントは F.Cu に置くが、パッドは
+        # `(layers "B.Cu" "B.Mask" "B.Paste")` と裏に宣言されている
+        # （キーは表から挿し、ソケットは裏から付ける部品なので、
+        # 上流 perigoso のフットプリントがそう作ってある）。
+        # そのため CPL に **top** と書かれ、**61 個のソケットを表面に
+        # 実装させる指示**になっていた。ペーストは B_Paste にしか無く、
+        # F_Paste は空。**噛み合っていない。**
+        smd = [pad for pad in fp.Pads()
+               if pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD]
+        if smd:
+            bottom = all(pad.IsOnLayer(pcbnew.B_Cu) for pad in smd)
+        else:
+            bottom = fp.IsFlipped()
         name = fp.GetFPIDAsString().split(":")[-1]
         if any(name.startswith(u) for u in ROTATION_UNVERIFIED):
             unverified.add(name)
