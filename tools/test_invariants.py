@@ -138,9 +138,17 @@ def test_bottom_row_is_the_real_hhkb_arrangement():
     assert max(k.right_u for k in bottom) == pytest.approx(12.5)
 
 
-def test_both_spaces_are_3u():
-    """6u を 3u+3u に割る。左右とも Space。"""
-    spaces = [k for k in load_layout(SPLIT) if k.w_u == pytest.approx(3.0)]
+def test_both_spaces_are_2_75u():
+    """6u のスペースを 2.75u+2.75u に割る。左右とも Space。
+
+    **元は 3u+3u だった**（実機の 6u をちょうど半分）。
+    **3u のスタビライザーが国内で買えない**ので 2.75u へ変えた
+    （2026-08-31・利用者の判断）。Cherry 規格では 2〜2.75u が
+    同じスタビ（支点 ±11.938）なので、**2u スタビが使える最大の幅**＝
+    実機からのずれが最小。縮めたのは**内側だけ**で、
+    Meta との間に隙間はできない（test_layout が端の位置を固定している）。
+    """
+    spaces = [k for k in load_layout(SPLIT) if k.w_u == pytest.approx(2.75)]
     assert len(spaces) == 2
 
 

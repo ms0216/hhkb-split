@@ -75,7 +75,10 @@ SWITCH_FP = {
     1.5: "SW_Hotswap_Kailh_MX_1.50u",
     1.75: "SW_Hotswap_Kailh_MX_1.75u",
     2.25: "SW_Hotswap_Kailh_MX_2.25u",
-    3.0: "SW_Hotswap_Kailh_MX_3.00u",
+    # スペースは 2.75u（**3u スタビが国内で買えないので 2026-08-31 に変更**）。
+    # フットプリントは perigoso 上流から取った。**パッドと穴は 2.25u と完全一致**
+    # （違うのはキャップ幅の注記だけ）。3.00u は使わなくなったので消した。
+    2.75: "SW_Hotswap_Kailh_MX_2.75u",
 }
 # スタビライザーの半間隔 → フットプリント名
 STAB_FP = {11.938: "Stabilizer_Cherry_MX_2.00u", 19.05: "Stabilizer_Cherry_MX_3.00u"}
@@ -600,7 +603,7 @@ def prewire_col_bus(board):
                 ])
             # E: **下のキーの x で降ろし、横移動は上のキーの側でやる。**
             #
-            # 最下段は幅広キー（Alt / Meta 1.5u / L-Space 3.0u）なので、
+            # 最下段は幅広キー（Alt / Meta 1.5u / L-Space 2.75u）なので、
             # **キーの中心が自分の列から大きく外れている**（左 COL5 の
             # L-Space は 24mm ずれ）。上のキーから真下に降ろすと、
             # 下のキーまで長い横断になる（実測: 最下段 3 本で 164.44mm）。
