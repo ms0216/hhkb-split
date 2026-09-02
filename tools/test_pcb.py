@@ -1663,16 +1663,9 @@ MIN_GND_VIAS = {"left": 240, "right": 310}
 # ソケット 61 個が top・XIAO が BOM に載っている、の 3 つが出ていた。
 # **こちらの道具で直しても、向こうの道具は板しか見ない。**だから板に書く。
 # --------------------------------------------------------------------------
-def _footprint_blocks(half):
+def _board_blocks(half):
     """本番の板のフットプリントを (参照名, ブロック文字列) で返す。"""
-    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
-    out = []
-    for m in re.finditer(r'\n\t\(footprint "[^"]+"[\s\S]*?(?=\n\t\(footprint "|\n\t\((?!footprint)[a-z_]+\s*\n|\Z)', txt):
-        block = m.group(0)
-        ref = re.search(r'\(property "Reference" "([^"]+)"', block)
-        if ref:
-            out.append((ref.group(1), block))
-    return out
+    return _footprint_blocks((PCB / f"hhkb_split_{half}.kicad_pcb").read_text())
 
 
 def _fab_kinds(half):
@@ -1686,7 +1679,7 @@ def test_every_assembled_part_carries_its_lcsc_number_on_the_board(half):
     """実装する部品は全部、板に LCSC の番号を持っていること（BOM の出所）。"""
     from parts import NOT_ASSEMBLED, PARTS
     kinds = _fab_kinds(half)
-    blocks = dict(_footprint_blocks(half))
+    blocks = dict(_board_blocks(half))
     assert set(kinds) <= set(blocks), sorted(set(kinds) - set(blocks))
     wrong = {}
     for ref, kind in kinds.items():
@@ -1710,7 +1703,7 @@ def test_parts_soldered_on_the_other_side_say_so_for_the_fab_tool(half):
     from parts import NOT_ASSEMBLED
     kinds = _fab_kinds(half)
     wrong = []
-    for ref, block in _footprint_blocks(half):
+    for ref, block in _board_blocks(half):
         kind = kinds.get(ref)
         if kind is None or kind in NOT_ASSEMBLED:
             continue
@@ -1731,7 +1724,7 @@ def test_the_xiao_is_not_handed_to_the_assembler():
     """XIAO は利用者がピンソケットで載せる。BOM にも CPL にも出さない。"""
     from parts import NOT_ASSEMBLED
     kinds = _fab_kinds("daughterboard")
-    blocks = dict(_footprint_blocks("daughterboard"))
+    blocks = dict(_board_blocks("daughterboard"))
     for ref, kind in kinds.items():
         if kind in NOT_ASSEMBLED:
             attr = re.search(r"\(attr ([^)]*)\)", blocks[ref])
