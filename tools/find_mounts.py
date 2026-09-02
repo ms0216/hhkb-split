@@ -15,7 +15,7 @@ M2 のネジ穴・φ5 のボス・基板の縁が並ばないことが分かっ�
 import re
 from pathlib import Path
 
-from interface import CASE_WALL, M2_BOSS_D, M2_CLEAR_D, plate_size, stab_offset_for
+from interface import CASE_WALL, M2_BOSS_D, M2_CLEAR_D, plate_size, stab_flipped, stab_offset_for
 from layout import bounds_mm, load_layout, split_halves  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,7 +69,10 @@ def keepout_boxes(keys):
         if s is not None:
             name = "Stabilizer_Cherry_MX_3.00u" if s > 15 else "Stabilizer_Cherry_MX_2.00u"
             e = _footprint_extent(name)
-            poly = stab_polygon(s)                 # プレート側の開口（Y 上向き）
+            f = stab_flipped(k)
+            if f:                                  # 180°: 上下（と左右）が入れ替わる
+                e = (-e[1], -e[0], -e[3], -e[2])
+            poly = stab_polygon(s, flipped=f)      # プレート側の開口（Y 上向き）
             px = [q[0] for q in poly]
             py = [q[1] for q in poly]
             boxes.append((kx + min(e[0], min(px)), ky + min(-e[3], min(py)),

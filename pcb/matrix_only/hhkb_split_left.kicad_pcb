@@ -14178,11 +14178,11 @@
 	(footprint "Stabilizer_Cherry_MX_2.00u"
 		(layer "F.Cu")
 		(uuid "cf0097b6-209b-4afb-abb3-11aed208ce53")
-		(at 183.3375 138.1)
+		(at 183.3375 138.1 180)
 		(descr "Cherry MX PCB Stabilizer 2.00u 2.25u 2.50u 2.75u")
 		(tags "Cherry MX Keyboard Stabilizer 2.00u 2.25u 2.50u 2.75u Cutout")
 		(property "Reference" "ST27"
-			(at 0 -2 0)
+			(at 0 -2 180)
 			(layer "F.SilkS")
 			(uuid "9574ec58-51ed-41a2-b019-946e929633b1")
 			(effects
@@ -14193,7 +14193,7 @@
 			)
 		)
 		(property "Value" "Stabilizer_Cherry_MX_2.00u"
-			(at 0 2 0)
+			(at 0 2 180)
 			(layer "F.Fab")
 			(uuid "dcb5d8f8-d332-4d93-8ef4-eeb73ee153c1")
 			(effects
@@ -14204,7 +14204,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 0 0 0)
+			(at 0 0 180)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "17a9180d-b312-4c0c-9459-92b84803d2eb")
@@ -14215,7 +14215,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 0 0 0)
+			(at 0 0 180)
 			(layer "F.Fab")
 			(hide yes)
 			(uuid "a42362b1-8e56-4feb-b76c-c10fc17f2de2")
@@ -14228,16 +14228,6 @@
 		(attr exclude_from_pos_files exclude_from_bom)
 		(duplicate_pad_numbers_are_jumpers no)
 		(fp_line
-			(start -2 0)
-			(end 2 0)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "Dwgs.User")
-			(uuid "fa46923b-571e-4df6-9208-43de747d0eae")
-		)
-		(fp_line
 			(start 0 2)
 			(end 0 -2)
 			(stroke
@@ -14248,64 +14238,24 @@
 			(uuid "2f20f33a-29cf-4d44-ba26-618aaa6091ce")
 		)
 		(fp_line
-			(start -15.313 -5.53)
-			(end -15.313 6.77)
+			(start -2 0)
+			(end 2 0)
 			(stroke
 				(width 0.1)
 				(type solid)
 			)
-			(layer "Eco1.User")
-			(uuid "d2894c89-3cc9-4d95-9f64-917641f27624")
+			(layer "Dwgs.User")
+			(uuid "fa46923b-571e-4df6-9208-43de747d0eae")
 		)
 		(fp_line
-			(start -15.313 6.77)
-			(end -8.563 6.77)
+			(start 15.313 6.77)
+			(end 15.313 -5.53)
 			(stroke
 				(width 0.1)
 				(type solid)
 			)
 			(layer "Eco1.User")
-			(uuid "d5e9539c-4009-474d-b0da-7ee826bdb2c0")
-		)
-		(fp_line
-			(start -8.563 -5.53)
-			(end -15.313 -5.53)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "Eco1.User")
-			(uuid "93d028c1-86f7-49f1-8a25-c52cf2939774")
-		)
-		(fp_line
-			(start -8.563 6.77)
-			(end -8.563 -5.53)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "Eco1.User")
-			(uuid "e260e9c5-490e-49dd-bc63-dbf9b13a2de8")
-		)
-		(fp_line
-			(start 8.563 -5.53)
-			(end 8.563 6.77)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "Eco1.User")
-			(uuid "42a8beb5-bd4f-4046-bb80-ca47fc56e3e1")
-		)
-		(fp_line
-			(start 8.563 6.77)
-			(end 15.313 6.77)
-			(stroke
-				(width 0.1)
-				(type solid)
-			)
-			(layer "Eco1.User")
-			(uuid "d1c7bd01-ef71-456f-b09b-226fda3c5487")
+			(uuid "45e6a52f-6f24-4141-87db-e5bd8cee529d")
 		)
 		(fp_line
 			(start 15.313 -5.53)
@@ -14318,17 +14268,67 @@
 			(uuid "cc795ae8-6bcd-4dce-a7b4-0d4b36d25452")
 		)
 		(fp_line
-			(start 15.313 6.77)
-			(end 15.313 -5.53)
+			(start 8.563 6.77)
+			(end 15.313 6.77)
 			(stroke
 				(width 0.1)
 				(type solid)
 			)
 			(layer "Eco1.User")
-			(uuid "45e6a52f-6f24-4141-87db-e5bd8cee529d")
+			(uuid "d1c7bd01-ef71-456f-b09b-226fda3c5487")
+		)
+		(fp_line
+			(start 8.563 -5.53)
+			(end 8.563 6.77)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "Eco1.User")
+			(uuid "42a8beb5-bd4f-4046-bb80-ca47fc56e3e1")
+		)
+		(fp_line
+			(start -8.563 6.77)
+			(end -8.563 -5.53)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "Eco1.User")
+			(uuid "e260e9c5-490e-49dd-bc63-dbf9b13a2de8")
+		)
+		(fp_line
+			(start -8.563 -5.53)
+			(end -15.313 -5.53)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "Eco1.User")
+			(uuid "93d028c1-86f7-49f1-8a25-c52cf2939774")
+		)
+		(fp_line
+			(start -15.313 6.77)
+			(end -8.563 6.77)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "Eco1.User")
+			(uuid "d5e9539c-4009-474d-b0da-7ee826bdb2c0")
+		)
+		(fp_line
+			(start -15.313 -5.53)
+			(end -15.313 6.77)
+			(stroke
+				(width 0.1)
+				(type solid)
+			)
+			(layer "Eco1.User")
+			(uuid "d2894c89-3cc9-4d95-9f64-917641f27624")
 		)
 		(fp_text user "${REFERENCE}"
-			(at 0 0 0)
+			(at 0 0 180)
 			(layer "F.Fab")
 			(uuid "e4646a79-ae6d-4ce0-ae33-3ff3c125c805")
 			(effects
@@ -14339,28 +14339,28 @@
 			)
 		)
 		(pad "" np_thru_hole circle
-			(at -11.938 -6.985)
+			(at -11.938 -6.985 180)
 			(size 3.048 3.048)
 			(drill 3.048)
 			(layers "*.Cu" "*.Mask")
 			(uuid "319f0e29-ca72-4d98-9a41-375b9a7a2f9c")
 		)
 		(pad "" np_thru_hole circle
-			(at -11.938 8.225)
+			(at -11.938 8.225 180)
 			(size 3.9878 3.9878)
 			(drill 3.9878)
 			(layers "*.Cu" "*.Mask")
 			(uuid "81dcbd2d-3327-45a9-9889-ea533ed63348")
 		)
 		(pad "" np_thru_hole circle
-			(at 11.938 -6.985)
+			(at 11.938 -6.985 180)
 			(size 3.048 3.048)
 			(drill 3.048)
 			(layers "*.Cu" "*.Mask")
 			(uuid "7b53f7d3-b4a2-44f9-9f9d-adb3d457adf8")
 		)
 		(pad "" np_thru_hole circle
-			(at 11.938 8.225)
+			(at 11.938 8.225 180)
 			(size 3.9878 3.9878)
 			(drill 3.9878)
 			(layers "*.Cu" "*.Mask")

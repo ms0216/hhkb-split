@@ -1,7 +1,7 @@
 {
   "board": "hhkb_split_right.kicad_pcb",
   "unrouted": "hhkb_split_right.kicad_pcb",
-  "unrouted_fingerprint": "099b1231852e75be6b6ae3f31152002143be375500d86c7f1730f3766558f53f",
+  "unrouted_fingerprint": "a71a42578d746b52d559da84a14f5fbb02589ce7105e30d9746c7bb047ac4bb7",
   "freerouting": null,
   "made_by": "finalize_pcb.py",
   "unconnected": 0

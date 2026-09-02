@@ -14,7 +14,7 @@ from gen_plate import (
     halves,
     stab_offset_for,
 )
-from interface import PLATE_MARGIN_X, PLATE_MARGIN_Y, STAB_KERF
+from interface import PLATE_MARGIN_X, PLATE_MARGIN_Y, STAB_KERF, stab_flipped
 from layout import UNIT
 from verify import assert_bbox, assert_watertight, to_mesh
 
@@ -186,10 +186,13 @@ def test_stab_cutouts_are_where_the_wide_keys_are(name):
 
     **逃げ（STAB_KERF）は外向きに効く**ので、幅は両側に、高さは手前側だけに
     足される（奥側の縁はスイッチ開口 14mm 角の +7.0 で、そちらは広がらない）。
+
+    **スペースは 180°（ワイヤ奥・open-gaps #53）**なので長い側が奥になり、
+    Y のずれと逃げの向きが反転する。`interface.stab_flipped` が正。
     """
     keys = HALVES[name]
     part, (w, h), positions = build_plate(keys, name)
-    wide = [(pos, stab_offset_for(k.w_u))
+    wide = [(pos, stab_offset_for(k.w_u), stab_flipped(k))
             for pos, k in zip(positions, keys) if stab_offset_for(k.w_u)]
     assert wide, f"{name}: 2u 以上のキーが 1 つも無いのはおかしい"
 
@@ -199,7 +202,8 @@ def test_stab_cutouts_are_where_the_wide_keys_are(name):
     expect_h = 7.0 + 7.97 + STAB_KERF
     expect_dy = (-7.97 - STAB_KERF + 7.0) / 2
 
-    for (px, py), s in wide:
+    for (px, py), s, flipped in wide:
+        sign = -1 if flipped else 1
         match = [c for c in found if c[0] == pytest.approx(px, abs=1e-6)]
         assert match, f"{name}: X={px:.2f} に幅広開口が無い（左右非対称になっている）"
         cx, cy, cw, ch = match[0]
@@ -210,8 +214,8 @@ def test_stab_cutouts_are_where_the_wide_keys_are(name):
         assert ch == pytest.approx(expect_h, abs=1e-6), (
             f"{name}: 開口高さ {ch:.3f} != 期待 {expect_h:.3f}"
         )
-        assert cy - py == pytest.approx(expect_dy, abs=1e-6), (
-            f"{name}: Y ずれ {cy - py:.3f} != 期待 {expect_dy:.3f}"
+        assert cy - py == pytest.approx(sign * expect_dy, abs=1e-6), (
+            f"{name}: Y ずれ {cy - py:.3f} != 期待 {sign * expect_dy:.3f}"
             "（前後の向きが逆になっている可能性）"
         )
 

@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from interface import (
     PCB_INSET_Y,CORNER_R, PCB_INSET, boss_positions,        # noqa: E402
-                       plate_positions, stab_offset_for)
+                       plate_positions, stab_flipped, stab_offset_for)
 from layout import load_layout, split_halves                       # noqa: E402
 from matrix import assignments, keymap_order, shape                # noqa: E402
 from bands import BAND_Y                                           # noqa: E402
@@ -1999,6 +1999,8 @@ def build(half, keys):
         if s is not None:
             st = _load(KEYSWITCH_LIB, STAB_FP[s])
             st.SetPosition(to_kicad(kx, ky))
+            if stab_flipped(k):                  # スペース: ワイヤ奥（#53）
+                st.SetOrientationDegrees(180)
             st.SetReference(f"ST{i}")
             board.Add(st)
             n_stab += 1

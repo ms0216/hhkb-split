@@ -1730,3 +1730,40 @@ def test_the_xiao_is_not_handed_to_the_assembler():
             attr = re.search(r"\(attr ([^)]*)\)", blocks[ref])
             attr = attr.group(1) if attr else ""
             assert "exclude_from_bom" in attr and "exclude_from_pos_files" in attr, (ref, attr)
+
+
+# --------------------------------------------------------------------------
+# 穴の縁と板の縁（open-gaps #53・2026-09-02）
+#
+# スペースのスタビの大穴 φ3.988 が、素の向きだと基板前縁まで 0.381mm しか
+# 無かった。JLC の外形公差 ±0.2 を引くと 0.18mm の橋にクリップが力を掛ける。
+# DRC は銅の縁距離しか見ず、`test_every_footprint_is_inside_the_outline` は
+# 部品中心しか見ない。**穴そのものの縁を数える。**
+# --------------------------------------------------------------------------
+HOLE_TO_EDGE_MIN = 1.0   # mm。外形公差 ±0.2 の 5 倍。JLC は非キャスタレーション穴の規定値を公表していない
+# 見るのは NPTH だけ。PTH（XIAO のピン φ1.0・縁まで 0.83）はランドで補強され、
+# 銅→縁 0.48mm は JLC の 0.2mm を満たす（fab-checklist §8b）。力も掛からない。
+
+
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
+def test_every_hole_keeps_its_distance_from_the_board_edge(half):
+    import math
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    xs, ys = [], []
+    for m in re.finditer(r"\(gr_(?:line|arc)\s*\(start ([\d.-]+) ([\d.-]+)\)[\s\S]*?\(end ([\d.-]+) ([\d.-]+)\)", txt):
+        x0, y0, x1, y1 = map(float, m.groups())
+        xs += [x0, x1]; ys += [y0, y1]
+    ex0, ex1, ey0, ey1 = min(xs), max(xs), min(ys), max(ys)
+    bad = []
+    for ref, blk in _footprint_blocks(txt):
+        m = re.search(r"\n\t\t\(at ([\d.-]+) ([\d.-]+)(?: ([\d.-]+))?\)", blk)
+        fx, fy, rot = float(m.group(1)), float(m.group(2)), float(m.group(3) or 0)
+        c, s = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+        for p in re.finditer(r"\(pad \"[^\"]*\" np_thru_hole \w+\s*\(at ([\d.-]+) ([\d.-]+)[^)]*\)\s*\(size [\d.]+ [\d.]+\)\s*\(drill ([\d.]+)", blk):
+            px, py, d = map(float, p.groups())
+            # KiCad は Y 下向きなので回転の向きが逆に見えるが、180° では効かない
+            x, y = fx + px * c + py * s, fy - px * s + py * c
+            gap = min(x - d / 2 - ex0, ex1 - x - d / 2, y - d / 2 - ey0, ey1 - y - d / 2)
+            if gap < HOLE_TO_EDGE_MIN:
+                bad.append(f"{ref} φ{d} 縁まで {gap:.3f}mm")
+    assert not bad, f"{half}: 穴が板の縁に近すぎる（{HOLE_TO_EDGE_MIN}mm 未満）: {bad}"

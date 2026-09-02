@@ -45,6 +45,7 @@ from interface import (
     STAB_KERF,
     SWITCH_CUTOUT,
     boss_positions,
+    stab_flipped,
     stab_offset_for,
     switch_plate_size,
 )
@@ -70,7 +71,7 @@ SPLIT = "layout/hhkb_split.json"
 # --------------------------------------------------------------------------
 # スタビライザー間隔は interface.py（凍結境界）から読む。基板と共有するため。
 
-def stab_polygon(s, at=(0.0, 0.0)):
+def stab_polygon(s, at=(0.0, 0.0), flipped=False):
     """半間隔 s のスタビライザー開口を、中心 `at` に置いた点列で返す。
 
     平行移動は Locations に頼らず自分で行う。BuildLine の中身には
@@ -93,10 +94,12 @@ def stab_polygon(s, at=(0.0, 0.0)):
         (-s + 3.375, -2.3),
     ]
     ax, ay = at
+    if flipped:                       # 180°（スペース。interface.stab_flipped）
+        return [(ax - x, ay + y) for x, y in pts]
     return [(ax + x, ay - y) for x, y in pts]
 
 
-def stab_cutout_face(s, at=(0.0, 0.0), kerf=None):
+def stab_cutout_face(s, at=(0.0, 0.0), kerf=None, flipped=False):
     """スタビ開口の面を、規格の輪郭から `kerf` だけ**外へ広げて**返す。
 
     **点列に ±kerf を足してはいけない。**28 点は凹凸が入り混じっていて
@@ -112,7 +115,7 @@ def stab_cutout_face(s, at=(0.0, 0.0), kerf=None):
         kerf = STAB_KERF
     with BuildSketch(mode=Mode.PRIVATE) as sk:
         with BuildLine():
-            Polyline(*stab_polygon(s, at=at), close=True)
+            Polyline(*stab_polygon(s, at=at, flipped=flipped), close=True)
         make_face()
         if kerf:
             offset(amount=kerf, kind=Kind.INTERSECTION)
@@ -132,16 +135,17 @@ def build_plate(keys, half):
     # （あちらの注記を読むこと）。
     w, h = switch_plate_size(case_w - PLATE_MARGIN_X * 2,
                              case_h - PLATE_MARGIN_Y * 2)
-    stabs = [(pos, stab_offset_for(k.w_u)) for pos, k in zip(positions, keys)]
-    stabs = [(pos, s) for pos, s in stabs if s is not None]
+    stabs = [(pos, stab_offset_for(k.w_u), stab_flipped(k))
+             for pos, k in zip(positions, keys)]
+    stabs = [(pos, s, f) for pos, s, f in stabs if s is not None]
 
     with BuildPart() as plate:
         with BuildSketch():
             RectangleRounded(w, h, CORNER_R)
             with Locations(*positions):
                 Rectangle(SWITCH_CUTOUT, SWITCH_CUTOUT, mode=Mode.SUBTRACT)
-            for pos, s in stabs:
-                add(stab_cutout_face(s, at=pos), mode=Mode.SUBTRACT)
+            for pos, s, f in stabs:
+                add(stab_cutout_face(s, at=pos, flipped=f), mode=Mode.SUBTRACT)
             # 取付ネジの逃げ。**手前の 3 箇所は縁を跨ぐので切り欠きになる。**
             # プレートの縁 y=±52.40 に対して逃げが 50.30〜52.70 なので、
             # 穴ではなく開いた切り欠きとして抜ける（設計どおり）。
