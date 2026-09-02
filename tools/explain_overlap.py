@@ -19,36 +19,23 @@ UNIT = 19.05
 
 L, R = "#2f6fb5", "#c0562f"          # 左半分 / 右半分
 
-# (row, x, w, side)  side: "L" or "R"
-KEYS = []
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+from layout import load_layout, split_halves  # noqa: E402
 
+# 配列は layout/ の JSON から読む（2026-09-03 まで 3u+3u の写しを持っていて、
+# 2.75u 化に取り残されていた）。右の島は分割 JSON で右へ離して置いてあるので、
+# 原機の位置に戻す: 数字段は全部 1u で一意なので、左の数字段のキー数 n を
+# 数え、原機の数字段 n 番目の左端を右の島の元の左端とする。
+_ORIG = load_layout(ROOT / "layout" / "hhkb_original.json")
+_L, _R = split_halves(load_layout(ROOT / "layout" / "hhkb_split.json"))
+_n_left_row0 = sum(1 for k in _L if k.row == 0)
+_right_min_orig = sorted(k.left_u for k in _ORIG if k.row == 0)[_n_left_row0]
+_shift = min(k.left_u for k in _R if k.row == 0) - _right_min_orig
 
-def add_row(row, items):
-    x = 0.0
-    for w, side, skip in items:
-        if skip:
-            x += w
-            continue
-        KEYS.append((row, x, w, side))
-        x += w
-
-
-# 数字段: 1u x 15 、左6/右9
-add_row(0, [(1, "L" if i < 6 else "R", False) for i in range(15)])
-# QWERTY段: Tab1.5 + 1u x12 + Del1.5 、左は Tab..T
-add_row(1, [(1.5, "L", False)] + [(1, "L" if i < 5 else "R", False) for i in range(12)]
-        + [(1.5, "R", False)])
-# ASDF段: Ctrl1.75 + 1u x11 + Enter2.25 、左は Ctrl..G
-add_row(2, [(1.75, "L", False)] + [(1, "L" if i < 5 else "R", False) for i in range(11)]
-        + [(2.25, "R", False)])
-# ZXCV段: Shift2.25 + 1u x10 + Shift1.75 + Fn1 、左は Shift..B
-add_row(3, [(2.25, "L", False)] + [(1, "L" if i < 5 else "R", False) for i in range(10)]
-        + [(1.75, "R", False), (1, "R", False)])
-# 最下段: 余白1.5 + Alt1 + ◇1.5 + Space6 + ◇1.5 + Alt1 + 余白2.5
-#         スペースは 3u+3u に割る
-add_row(4, [(1.5, "L", True), (1, "L", False), (1.5, "L", False),
-            (3, "L", False), (3, "R", False),
-            (1.5, "R", False), (1, "R", False)])
+# (row, x, w, side)  side: "L" or "R"。x は原機の座標（u）
+KEYS = [(k.row, k.left_u, k.w_u, "L") for k in _L] + \
+       [(k.row, k.left_u - _shift, k.w_u, "R") for k in _R]
 
 LEFT_MAX = max(x + w for _, x, w, s in KEYS if s == "L")     # 7.25u
 RIGHT_MIN = min(x for _, x, w, s in KEYS if s == "R")        # 6.00u
