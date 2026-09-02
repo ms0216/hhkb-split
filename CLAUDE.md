@@ -9,7 +9,7 @@ HHKB Professional HYBRID Type-S（US 配列・無刻印）を**完全分割型**
 |---|---|
 | **[docs/hardware/pcb-routing-handover.md](docs/hardware/pcb-routing-handover.md)** | 基板の作り方と、配線を自動配線器に移した経緯。**3 基板とも DRC 0（2026-08-30）。J_DB の口は奥向き・右は 1.63mm 手前（open-gaps #19 決着）** |
 | [docs/hardware/open-gaps.md](docs/hardware/open-gaps.md) | 実機と違うところ・未解決のもの。**差があること自体は悪くない。気づけないことが悪い**。**冒頭の「いま残っているもの」から読む**（節を直しても一覧を直さず、解決済みが 4 日間「未解決」で残ったことがある） |
-| **[open-gaps.md #23](docs/hardware/open-gaps.md)** | **★発注前に決めることが 1 つ残っている。**アンテナが地板に挟まれている件。`export_fab.py` が門で止めている。**次の一手は手 0（アルミ箔で地板を模擬して RSSI・¥0・1 日／[Task C3 §6-6b](docs/hardware/task-c3-ble-split.md)）** |
+| [open-gaps.md #23](docs/hardware/open-gaps.md) | アンテナが地板に挟まれている件。**✅ 2026-08-23 に手 0（アルミ箔）で実測して決着**（E の差 −7dB・共振なし）。`export_fab.py` の門も開いた。発注前の利用者側の残りは **#52（SOD-123 の向きを JLCPCB のプレビューで確認）** |
 | [firmware/](firmware/) | **このリポジトリ自身が ZMK のモジュール**（`zephyr/module.yml`）。乾電池の残量計と、打ち止めでの停止。**手元に Zephyr SDK は無い。push → 2 分半 → `.uf2` で焼く**（ただし **`config/` `firmware/` `build.yaml` `zephyr/` を触った push だけ**。それ以外で `.uf2` が要るときは Actions タブから `Build ZMK firmware` を手で回す） |
 | [docs/hardware/decisions/](docs/hardware/decisions/) | なぜそう決めたかの記録。覆す前に読む |
 | [docs/hardware/fab-checklist.md](docs/hardware/fab-checklist.md) | **発注の直前に見るもの。**記録が無いと検査が落ちる |
