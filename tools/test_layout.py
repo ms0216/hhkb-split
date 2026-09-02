@@ -64,10 +64,36 @@ def test_split_has_61_keys():
     assert len(load_layout(SPLIT)) == 61
 
 
-def test_split_has_two_3u_spaces():
-    spaces = [k for k in load_layout(SPLIT) if k.w_u == pytest.approx(3.0)]
+def test_split_has_two_2_75u_spaces():
+    """スペースは 2.75u。**3u ではない。**
+
+    元は 3u だったが、**3u のスタビライザーが国内で買えない**ので
+    2.75u へ変更した（2026-08-31・利用者の判断）。Cherry 規格では
+    2u/2.25u/2.5u/2.75u が同じスタビ（支点 ±11.938）なので、
+    **2u スタビが使える最大の幅**を選んだ＝実機からのずれが最小。
+    """
+    spaces = [k for k in load_layout(SPLIT) if k.w_u == pytest.approx(2.75)]
     assert len(spaces) == 2
     assert {k.label for k in spaces} == {"L-Space", "R-Space"}
+
+
+def test_shrinking_the_spaces_did_not_move_any_other_key():
+    """**スペース以外は 1 つも動いていないこと。**
+
+    縮めたぶんは「左右の島の間」（もともと何も無い）に吸収される。
+    **キーどうしの隙間ができてはいけない**ので、隣り合う端を突き合わせる。
+    """
+    keys = load_layout(SPLIT)
+    bottom = sorted((k for k in keys if k.row == 4), key=lambda k: k.x_mm)
+    got = [(k.label, round(k.left_u, 3), round(k.right_u, 3)) for k in bottom]
+    assert got == [
+        ("Alt", 1.5, 2.5),
+        ("Meta", 2.5, 4.0),
+        ("L-Space", 4.0, 6.75),      # 左端は Meta に接したまま。右端だけ縮む
+        ("R-Space", 10.25, 13.0),    # 右端は Meta に接したまま。左端だけ縮む
+        ("Meta", 13.0, 14.5),
+        ("Alt", 14.5, 15.5),
+    ]
 
 
 def test_split_half_key_counts():

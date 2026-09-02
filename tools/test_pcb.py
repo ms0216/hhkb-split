@@ -526,13 +526,18 @@ def test_the_board_has_no_drc_violations(half):
 # 製造能力
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("half", ["left", "right"])
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_board_declares_the_manufacturer_rules(half):
     """基板に JLCPCB の製造能力が設計規則として書き込まれていること。
 
     **これが無い間、DRC は KiCad の既定値で通していただけだった。**
     「違反 0 件」は「JLCPCB で製造できる」を意味していなかった。
     規則が消えると、また同じ状態に戻る。
+
+    ⚠️ **2026-08-31 まで子基板を見ていなかった。**中身は正しかったが、
+    **見ていなかったので「正しい」と言える状態ではなかった**
+    （隣の 2 つの検査も同じ穴で、片方は実際に 23 本の細いシルクを見逃していた）。
+    **3 枚とも同じ JLCPCB で作る。**
     """
     # **設計規則は .kicad_pcb ではなく .kicad_pro に入る。**
     # 最初 .kicad_pcb を見ていて「書かれていない」と誤検出した。
@@ -579,12 +584,17 @@ def test_the_board_declares_the_netclass_used_for_routing(half):
             f"{half}: ネットクラスの {key} が {cls[key]}（期待 {mm}）"
 
 
-@pytest.mark.parametrize("half", ["left", "right"])
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_actual_geometry_is_inside_the_manufacturer_limits(half):
     """実際の線幅・ビアが能力の内側にあること。
 
     規則を書いただけでは足りない。**規則を緩めれば通ってしまう**ので、
     実物の寸法も直接見る。
+
+    ⚠️ **2026-08-31 まで子基板を見ていなかった**（隣の
+    `test_the_silkscreen_is_thick_enough_to_print` と同じ穴。そちらでは
+    実際に 23 本の細いシルクが 3 か月見逃されていた）。
+    **子基板も同じ JLCPCB で作る**ので同じ能力に収まっている必要がある。
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
     # **銅箔の配線だけを見る。** 単に (width ...) を拾うと、フットプリントの
@@ -598,13 +608,21 @@ def test_the_actual_geometry_is_inside_the_manufacturer_limits(half):
         assert ring >= 0.13, f"{half}: アニュラリング {ring:.3f}mm が薄すぎる"
 
 
-@pytest.mark.parametrize("half", ["left", "right"])
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
 def test_the_silkscreen_is_thick_enough_to_print(half):
     """シルクの線幅が JLCPCB の最小 0.15mm 以上であること。
 
     KiCad の標準フットプリントは 0.12mm で描かれており、そのままだと
     かすれるか印字されない。**DRC はシルクの線幅を見ないので、
     自分で担保するしかない。**
+
+    ⚠️ **2026-08-31 まで `["left", "right"]` しか見ていなかった。**
+    そのあいだ**子基板は 23 本が 0.12mm のまま**だった
+    （D_PWR / R_HI / R_LO / J_MAIN / BT1_- / SW_PWR_1）。
+    `gen_daughterboard.py` に太らせる処理そのものが無く、
+    `gen_pcb.py` にはあった——**片方だけ直して、もう片方を忘れていた。**
+    CLAUDE.md「検査対象に入っていない部品は、検査していないのと同じ」。
+    **板を 3 枚とも見る。**
     """
     txt = (ROOT / f"pcb/hhkb_split_{half}.kicad_pcb").read_text()
     thin = set()

@@ -454,6 +454,34 @@ def build():
     import gnd_fanout
     gnd_fanout.place(board)
 
+    # シルクの線幅を製造能力まで太らせる。
+    #
+    # ⚠️ **主基板にあってここに無かった**（2026-08-31 に発見）。
+    # `gen_pcb` は部品を置き終えたあとに同じことをしているが、
+    # **子基板の生成器にはこの処理が無く、フットプリント由来の
+    # シルクが 0.12mm のまま出ていた**（KiCad 標準。JLCPCB の最小は
+    # 0.15mm）。D_PWR / R_HI / R_LO / J_MAIN / BT1_- / SW_PWR_1 の
+    # 計 23 本。**かすれるか印字されない。**
+    #
+    # 見つかったのは、検査が `["left", "right"]` しか見ておらず
+    # **子基板が検査対象に入っていなかった**から
+    # （CLAUDE.md「検査対象に入っていない部品は、検査していないのと同じ」）。
+    # `test_the_silkscreen_is_thick_enough_to_print` に db を足した。
+    from pcb_rules import JLC
+    silk_w = JLC["silk_width"]
+    silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+    for fp in board.GetFootprints():
+        for it in fp.GraphicalItems():
+            # **PCB_TEXT が混ざる**（GetWidth を持たない）。線だけ太らせる。
+            if not hasattr(it, "GetWidth"):
+                continue
+            if it.GetLayer() in silk and it.GetWidth() < pcbnew.FromMM(silk_w):
+                it.SetWidth(pcbnew.FromMM(silk_w))
+        for fld in (fp.Reference(), fp.Value()):
+            if fld.GetLayer() in silk:
+                fld.SetTextThickness(max(fld.GetTextThickness(),
+                                         pcbnew.FromMM(silk_w)))
+
     UNROUTED.mkdir(parents=True, exist_ok=True)
     path = UNROUTED / "hhkb_split_daughterboard.kicad_pcb"
     board.Save(str(path))

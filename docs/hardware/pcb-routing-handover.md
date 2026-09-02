@@ -437,3 +437,30 @@ B.Cu が密になったぶん、Freerouting の丸め不足が顕在化した
   故意に壊して検出できることを確かめてから足す
 - 実機と違うところは [open-gaps](open-gaps.md) に書く。
   差があること自体は悪くない。**気づけないことが悪い**
+
+## matrix_only を手（スクリプト）で触ったときに落ちる穴（2026-08-31）
+
+スペースキーを 2.75u にするとき、`pcb/matrix_only/` のフットプリントを
+KiCad の API で差し替えた。**そのとき 3 回続けて同じ型の失敗をした。**
+
+| やったこと | 何が落ちたか | どう気づいたか |
+|---|---|---|
+| フットプリント名をテキスト置換 | **名前だけ変わり、パッドは 3u の ±19.05 のまま** | 穴の座標を実測して発覚 |
+| API で差し替え | **パッドのネットが全部消えた**（`COL3` / `SW27_D` が無くなった） | 保存後にネットを読んで発覚 |
+| 引き直した配線を追加 | **シルクが 0.12mm のまま**（KiCad 標準。JLCPCB の最小は 0.15mm） | `test_the_silkscreen_is_thick_enough_to_print` |
+
+**原因は 1 つ。**`gen_pcb.py` は部品を置いたあとに
+**シルクを太らせる・ネットを張る**といった仕上げを一括でやっている。
+**matrix_only を直接触ると、その仕上げを通らない。**
+
+→ **matrix_only を触ったら、必ず次を通すこと**（どれか 1 つでも飛ばさない）:
+
+    "$KPY" tools/export_matrix_routing.py   # matrix_only → 記録
+    "$KPY" tools/gen_pcb.py                 # 記録 → unrouted（**ここで仕上げが入る**）
+    "$KPY" tools/finalize_pcb.py            # → 本番 pcb/
+    .venv/bin/python3 tools/pcb_parts.py --write
+    .venv/bin/python3 tools/pcb_parts.py --write-groups
+    .venv/bin/python3 tools/drc.py
+
+**DRC は 3 つとも見逃した。**シルクの線幅も、ネットの消失も、
+パッドの座標も、DRC の 0 件では捕まらない。**検査（pytest）が捕まえた。**
