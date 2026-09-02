@@ -4,6 +4,9 @@
  * 出典: docs/hardware/dimensions.md §3（配列）と §4（Fn 面）。
  * Fn 面は Wikimedia Commons の HHKB Pro 2 の KLE 図（刻印つき）から読み取り、
  * 実機写真のキーキャップ前面刻印とも照合した。推測で埋めていない。
+ * 2026-09-03: PFU 取扱説明書 P3PC-6641-05EN p.13/15 の Fn 表と全行照合。
+ * A/S（音量）だけ KLE の読みが逆で、取説どおり A=Vol Dn・S=Vol Up に直した。
+ * Delete は base で BS（実機の DIP SW3 ON 相当）。Del は Fn+` で出す。
  *
  * バインディングの並び順は「左 27 キー → 右 34 キー」で、各半分は
  * 上段左から順に読む。overlay の matrix-transform の map と一対一で対応する。
