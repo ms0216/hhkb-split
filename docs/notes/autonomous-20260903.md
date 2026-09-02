@@ -27,6 +27,7 @@
 | 11 | Fn レイヤーの **A/S が逆**だった（A=Vol Up・S=Vol Dn）。PFU 取扱説明書 P3PC-6641-05EN p.15 は **A=Vol Dn・S=Vol Up・D=Mute**。keymap と dimensions.md を訂正 | 「実機の刻印をそのまま移植」の出所が KLE 図の読み取りだけで、外の事実（取説）と突き合わせていなかった。他の Fn 割当（F1〜F12・Ins/Del・矢印・Home/PgUp/End/PgDn・*・/・+・-・PrtSc/ScrLk/Pause・Caps・Power・Eject）は取説どおり | 取説 PDF を pdftotext で読んだ。`test_firmware / test_keyscan` 30 緑 | 6f9ae81 | |
 | 12 | 取説 P3PC-6641-05EN の Fn 表（p.13/15）を全行、keymap の fn レイヤーと照合。A/S 以外は一致（1〜= F1〜F12・\ Ins・` Del・I PSc・O ScrLk・P Pause・K Home・L PgUp・, End・. PgDn・Tab Caps・Return Enter・N +・M −・H *・J /・[ ↑・/ ↓・; ←・' →・D Mute・F Eject・Esc Power・右◇ Stop）。LED の表（青 2 回/秒＝ペアリング待機・橙 1 回/30 秒＝残量低・橙 2 回/15 秒＝交換）も Kconfig の記述と一致 | #11 の裏取りを A/S だけで止めない | 取説 PDF（pdftotext） | — | 記録のみ |
 | 13 | provisional-values.md の 45 定数の「現在値」を、`tools/` の実際の定数と機械で突き合わせ: **45/45 一致** | 表と設計値のずれ（open-gaps 冒頭の教訓）が暫定値の表にも起きていないか | 正規表現で表を読み、各モジュールの属性と比較 | — | 記録のみ |
+| 14 | open-gaps #43 の節本体が「窓は未設計」のままだった（一覧も「実装はケースの改善サイクルで」）。窓は 2026-08-24 の f94a2ca で `gen_case.py` に入っている。節と一覧を「実装済み・残るは刷って透けるか」に直した | 冒頭の教訓（節と一覧のずれ）が節の内側でも起きていた。#43 の CAD 化を「改善テーマ」として着手しかけて気づいた | `git log -S LED_WIN_D`・`gen_case.py` L295〜 | (下) | |
 
 ## 方針
 
