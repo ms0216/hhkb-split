@@ -1775,6 +1775,54 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
         "  **外から中が見える。**切削の箱が壁を突き抜けていないか見ること")
 
 
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_plate_rear_edge_rests_on_the_case(half):
+    """プレートの**奥端の下に、ケースの材料がある**こと（PLATE_SHELF_*）。
+
+    利用者の指摘（2026-08-29・現物）: プレートは手前のネジ 3 本だけで
+    留まり、奥端の下には何も無かった（基板は y=48.7 で終わり、その奥は
+    電池箱と子基板）。**約 100mm の片持ちで、奥端（右の「0」付近）が撓む。**
+    干渉検査は「当たらない」しか見ないので、支えが無いことは検出しない。
+
+    やり方: 奥端の 1mm 手前で、リム面のすぐ上から真下へ光線を飛ばし、
+    最初に当たるケースの面がリム面から 0.3mm 以内にあることを、
+    側壁の内側の全幅（子基板の切り欠きを除く）で 1mm 刻みに要求する。
+    **見逃し 0 が合格**。PLATE_SHELF_D を 0 にすると左右とも全点で落ちる
+    ことを確認済み（2026-09-02）。
+    """
+    import numpy as np
+    import trimesh
+    from math import cos, radians, tan
+    from envelopes import XIAO_W
+    from gen_case import (CLEARANCE, CORNER_R, PLATE_T, PLATE_TOP_FRONT,
+                          TILT_DEG, WALL, daughterboard_x_center, plan_depth)
+    from interface import (PLATE_MARGIN_X, PLATE_MARGIN_Y, plate_positions,
+                           switch_plate_size)
+    from matrix import keymap_order
+
+    mesh = trimesh.load(_case_stl(half))
+    _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
+    h_body = plan_depth(h_plate)
+    _pw, ph = switch_plate_size(w - PLATE_MARGIN_X * 2, h_body - PLATE_MARGIN_Y * 2)
+    y = ph * cos(radians(TILT_DEG)) / 2 - 1.0          # 奥端の 1mm 手前（平面図）
+    rim = PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
+    db_x = daughterboard_x_center(half, w)
+    xs = np.arange(-w / 2 + WALL + CORNER_R, w / 2 - WALL - CORNER_R, 1.0)
+    xs = xs[np.abs(xs - db_x) > XIAO_W / 2 + 3.0 + 0.5]   # 子基板の切り欠きは除く
+    _idx, ray, loc = mesh.ray.intersects_id(
+        np.column_stack([xs, np.full_like(xs, y), np.full_like(xs, rim + 0.5)]),
+        np.tile([0, 0, -1], (len(xs), 1)),
+        return_locations=True, multiple_hits=False)
+    top = np.full(len(xs), -1e9)
+    top[ray] = loc[:, 2]
+    unsupported = [round(float(x), 1) for x, z in zip(xs, top)
+                   if z < rim - 0.3 - CLEARANCE]
+    assert not unsupported, (
+        f"{half}: プレートの奥端（y={y:.1f}）の下にケースの材料が無い点が "
+        f"{len(unsupported)}/{len(xs)}。x = {unsupported[:6]}…\n"
+        "  奥端が宙吊りになる（片持ち）。gen_case の棚（PLATE_SHELF_*）を見ること")
+
+
 def test_the_blender_script_only_imports_what_blender_has():
     """`blend_assembly.py` が、**Blender の Python に有る物しか import しない**こと。
 

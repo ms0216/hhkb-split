@@ -47,7 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # 電池ボックスの外形。**出所は envelopes.py の 1 か所だけ。**
 # （残りの envelopes からの取り込みは下の方にあるが、BATT_* は定数の定義で
 #   使うのでここで先に読む）
-from envelopes import BATT_BOX_H, BATT_BOX_L, BATT_BOX_W  # noqa: E402
+from envelopes import BATT_BOX_H, BATT_BOX_L, BATT_BOX_W, XIAO_W  # noqa: E402
 from gen_plate import build_plate, halves, plate_positions  # noqa: E402
 from interface import (  # noqa: E402
     BEZEL_OPENING_GAP,
@@ -200,6 +200,19 @@ BATT_MARGIN_REAR = 2.0           # 電池と後壁の間隔
 # 左右と奥=側壁 / 下=蓋 / 上=基板 で保持）。箱の重心（8.4mm）より低くても、
 # 上を基板が押さえているので倒れない。箱の高さ 16.8 の約 1/3 を残す。
 BATT_DIVIDER_H = 6.0
+# プレートの奥端を受ける棚（利用者の指摘 2026-08-29: 奥端が宙吊りで撓む）。
+#
+# プレートはネジ 3 本（手前 y=−51）にしか留まっておらず、奥端（y=+51.7）の
+# 下には何も無い（基板は y=48.7 で終わり、その奥は電池と子基板）。床から
+# 柱を立てる場所は無い（幅いっぱいが電池箱と子基板）ので、**コブの天井の
+# 前縁から垂らした帯（フランジ）の下に棚を出し、リム面で受ける**。
+# 棚の下は電池箱の上面（FLOOR+16.8=19.2）。厚み 2.4 で底は 20.1〜20.7。
+PLATE_SHELF_D = 4.0      # 棚が本体側へ出る量（プレートとの掛かりは 2.2mm）
+PLATE_SHELF_T = 2.4      # 棚の厚み。リム面に平行
+# 子基板の上（XIAO_W/2 + 3 の幅）は**棚を切り欠く**。XIAO 一式の予約は
+# FLOOR+DB_BOSS_H+DB_T+DB_XIAO_LIFT+部品 = 21.7〜22.9 で、リム面（22.6〜23.1）
+# との隙が 1mm 無い。フランジだけは XIAO の上（22.2）から天井まで残す。
+PLATE_SHELF_XIAO_FLOOR = 22.2
 # **コブは要る。実機と同じ理由で。**
 #
 # 一度「コブは不要になった」として 0 にしていた。だが実際には、
@@ -837,6 +850,34 @@ def build_case(keys, half):
             Box(BATT_X, WALL, BATT_DIVIDER_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     divider = _d.part - cutter_under_pcb
+    # プレートの奥端の棚（PLATE_SHELF_*）。コンテキストの外で作る。
+    #   棚      … y = h_body/2 − D 〜 フランジの奥面。上面はリム面（cutter）
+    #   フランジ … y = h_body/2 + CLEARANCE 〜 +WALL。上は天井（cutter_bump）
+    # 底は「リム面 − T」の傾いた平面。XIAO の幅だけ平らに上げる。
+    _sy0 = h_body / 2 - PLATE_SHELF_D
+    _fy0 = h_body / 2 + CLEARANCE
+    _fy1 = _fy0 + WALL
+    _sx = w - WALL * 2 + 2.0                   # 側壁へ 1mm ずつ食い込ませて融合
+    # 切削用の平面は**コンテキストの外で**作る（中で作ると即座に合体される。
+    # このファイル冒頭の警告。ここでも踏んで、ケースが z_max まで詰まった）
+    _cut_rim = tilted_cutter(w, h_body, rim_front)
+    _cut_under = tilted_cutter(w, h_body, rim_front - PLATE_SHELF_T)
+    with BuildPart() as _sh:
+        with Locations((0, (_sy0 + _fy1) / 2, 0)):
+            Box(_sx, _fy1 - _sy0, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        add(_cut_rim, mode=Mode.SUBTRACT)
+        with Locations((0, (_fy0 + _fy1) / 2, 0)):
+            Box(_sx, _fy1 - _fy0, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        add(cutter_bump, mode=Mode.SUBTRACT)
+        add(_cut_under, mode=Mode.INTERSECT)
+        _dbx = daughterboard_x_center(half, w)
+        with Locations((_dbx, (_sy0 - 1.0 + _fy0) / 2, 0)):        # 棚を切り欠く
+            Box(XIAO_W + 6.0, _fy0 - (_sy0 - 1.0), z_max,
+                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with Locations((_dbx, (_fy0 + _fy1 + 1.0) / 2, 0)):        # フランジの下を上げる
+            Box(XIAO_W + 6.0, _fy1 + 1.0 - _fy0, PLATE_SHELF_XIAO_FLOOR,
+                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    plate_shelf = _sh.part
     with BuildPart() as _n:
         with Locations((0, 0, FLOOR)):
             Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H,
@@ -880,6 +921,10 @@ def build_case(keys, half):
         # **幅は電池ぶんだけ。** 以前は内寸いっぱいに張っていたが、
         # 内縁側は子基板の場所として空けておく必要がある。
         add(divider, mode=Mode.ADD)
+        # 4-2. プレートの奥端を受ける棚（PLATE_SHELF_*）。
+        #      フランジは上ケースの後壁（y ≤ h_body/2）の真後ろに CLEARANCE
+        #      を空けて立ち、コブの天井へ融合する。
+        add(plate_shelf, mode=Mode.ADD)
         # 天井は張らない。電池の上には基板が来るので、板を入れると
         # 傾いた基板の下端を突き上げる（2,817mm^3 の食い込みとして検出）。
         # 電池は 手前=仕切り壁 / 左右と奥=側壁 / 下=蓋 / 上=基板 で保持される。
