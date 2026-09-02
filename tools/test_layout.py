@@ -77,11 +77,14 @@ def test_split_has_two_2_75u_spaces():
     assert {k.label for k in spaces} == {"L-Space", "R-Space"}
 
 
-def test_shrinking_the_spaces_did_not_move_any_other_key():
-    """**スペース以外は 1 つも動いていないこと。**
+def test_the_spaces_hug_the_inner_edge_and_nothing_else_moved():
+    """**スペースは両島の内側端に寄せ、Alt/Meta は原機の位置のまま。**
 
-    縮めたぶんは「左右の島の間」（もともと何も無い）に吸収される。
-    **キーどうしの隙間ができてはいけない**ので、隣り合う端を突き合わせる。
+    原機で両親指が押している場所は B の真下あたり（左 6.5〜7.25u・右は
+    N の左）だった（2026-09-02・利用者の実測）。2.75u に縮めたぶんは
+    Meta とスペースの間の空きになる。**空きは左右対称に 0.5u**（利用者。
+    右を内側端 9.0 まで寄せると空きが 1.25u になり左右で違ってしまう）。
+    左は島の右端 7.25 に接し、右は内側端 9.0 から 0.75u 空く。
     """
     keys = load_layout(SPLIT)
     bottom = sorted((k for k in keys if k.row == 4), key=lambda k: k.x_mm)
@@ -89,11 +92,14 @@ def test_shrinking_the_spaces_did_not_move_any_other_key():
     assert got == [
         ("Alt", 1.5, 2.5),
         ("Meta", 2.5, 4.0),
-        ("L-Space", 4.0, 6.75),      # 左端は Meta に接したまま。右端だけ縮む
-        ("R-Space", 10.25, 13.0),    # 右端は Meta に接したまま。左端だけ縮む
+        ("L-Space", 4.5, 7.25),      # 右端が島の右端（B の右端）に接する
+        ("R-Space", 9.75, 12.5),     # Meta との空き 0.5u（左と同じ）
         ("Meta", 13.0, 14.5),
         ("Alt", 14.5, 15.5),
     ]
+    left, right = split_halves(keys)
+    assert max(k.right_u for k in left) == pytest.approx(7.25)
+    assert min(k.left_u for k in right) == pytest.approx(9.0)
 
 
 def test_split_half_key_counts():

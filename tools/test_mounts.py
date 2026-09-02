@@ -25,7 +25,9 @@ from interface import (
     M2_BOSS_D,
     M2_CLEAR_D,
     MOUNT_POSITIONS,
+    PCB_POST_D,
     boss_positions,
+    pcb_mount_positions,
     plate_size,
 )
 from layout import bounds_mm
@@ -73,6 +75,28 @@ def test_bosses_do_not_touch_any_key(name):
             dy = max(by0 - y, 0.0, y - by1)
             assert dx * dx + dy * dy >= r * r - 1e-9, \
                 f"{name}: ({x}, {y}) のボスがキーの占有範囲に食い込む"
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_pcb_posts_do_not_touch_any_key(name):
+    """基板を留める柱（φ4・PCB_MOUNT_POSITIONS）もキーの占有範囲に食い込まないこと。
+
+    上の検査はケースのボスしか見ておらず、柱は見ていなかった。2026-09-02 に
+    スペースを内側端へ寄せたら、右 H4 が R-Space の真下に立っていたのを
+    プレートの開口数の検査が偶然拾った。柱そのものを見る。
+
+    余裕は柱の半径だけ（BOSS_KEEPOUT_GAP は足さない）。凍結済みの柱は占有範囲
+    から 2.1〜2.4mm にあり、そこは DRC（コートヤード）と実形状の組み立て検査が
+    別に見ている。ここで見たいのは**柱がキーの真下に立つ**取り違え。
+    """
+    boxes = keepout_boxes(HALVES[name])
+    r = PCB_POST_D / 2
+    for x, y in pcb_mount_positions(name):
+        for bx0, by0, bx1, by1 in boxes:
+            dx = max(bx0 - x, 0.0, x - bx1)
+            dy = max(by0 - y, 0.0, y - by1)
+            assert dx * dx + dy * dy >= r * r - 1e-9, \
+                f"{name}: ({x}, {y}) の柱がキーの占有範囲 ({bx0:.1f},{by0:.1f})-({bx1:.1f},{by1:.1f}) に食い込む"
 
 
 @pytest.mark.parametrize("name", NAMES)
