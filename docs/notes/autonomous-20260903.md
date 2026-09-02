@@ -25,6 +25,8 @@
 | 9 | `tools/explain_overlap.py`（分割で幅が増える理由の説明図）が配列の写しを自前で持ち、最下段が 3u+3u のままだった。`layout/` の JSON（原機＋分割）から読むよう変更。右の島は数字段のキー数で原機の位置へ戻す | CLAUDE.md の作法 3「自分の生成物どうし」＋作法 8「置き換えたら古い方を消す」。`3u` の grep で見つけた唯一の取り残し | 図を出して目で見た（最下段が 2.75u×2＋空き）。数字は不変（7.25＋9.0＝16.25u・+23.8mm） | b6f06cf | |
 | 10 | 3 枚の設計規則と実配線の数字を読み直した: 規則 clr/trk 0.127・via 0.45/drill 0.2/annular 0.13・hole2hole 0.45・銅–板端 0.3・シルク間 0.15。実物は配線幅 0.2（子基板は 0.6 も）・ビア 0.3/0.6（右に 0.56 が 1 個・8b 既知） | JLCPCB 2 層（trace/space 0.127・via 0.3/0.5・annular 0.13）に対する余裕の再確認 | pcbnew で全 track/via を集計 | — | 記録のみ |
 | 11 | Fn レイヤーの **A/S が逆**だった（A=Vol Up・S=Vol Dn）。PFU 取扱説明書 P3PC-6641-05EN p.15 は **A=Vol Dn・S=Vol Up・D=Mute**。keymap と dimensions.md を訂正 | 「実機の刻印をそのまま移植」の出所が KLE 図の読み取りだけで、外の事実（取説）と突き合わせていなかった。他の Fn 割当（F1〜F12・Ins/Del・矢印・Home/PgUp/End/PgDn・*・/・+・-・PrtSc/ScrLk/Pause・Caps・Power・Eject）は取説どおり | 取説 PDF を pdftotext で読んだ。`test_firmware / test_keyscan` 30 緑 | 6f9ae81 | |
+| 12 | 取説 P3PC-6641-05EN の Fn 表（p.13/15）を全行、keymap の fn レイヤーと照合。A/S 以外は一致（1〜= F1〜F12・\ Ins・` Del・I PSc・O ScrLk・P Pause・K Home・L PgUp・, End・. PgDn・Tab Caps・Return Enter・N +・M −・H *・J /・[ ↑・/ ↓・; ←・' →・D Mute・F Eject・Esc Power・右◇ Stop）。LED の表（青 2 回/秒＝ペアリング待機・橙 1 回/30 秒＝残量低・橙 2 回/15 秒＝交換）も Kconfig の記述と一致 | #11 の裏取りを A/S だけで止めない | 取説 PDF（pdftotext） | — | 記録のみ |
+| 13 | provisional-values.md の 45 定数の「現在値」を、`tools/` の実際の定数と機械で突き合わせ: **45/45 一致** | 表と設計値のずれ（open-gaps 冒頭の教訓）が暫定値の表にも起きていないか | 正規表現で表を読み、各モジュールの属性と比較 | — | 記録のみ |
 
 ## 方針
 
