@@ -1652,3 +1652,88 @@ MIN_GND_VIAS = {"left": 240, "right": 310}
 # **効いていたのは 12 のほう**で、検査の文言が「0 でなければならない」と
 # 言いながら、浮いた区画が 12 個まで黙って通っていた。
 # CLAUDE.md #8「置き換えたら、置き換えられた方を消す」の実例。
+
+
+# --------------------------------------------------------------------------
+# 発注の道具（Fabrication Toolkit）が読むものが板に入っていること
+# （2026-09-02・tools/fab_fields.py）
+#
+# **実際の発注は `export_fab.py` ではなくこのプラグインで行う**（#52）。
+# 本番の板 3 枚にプラグインを通してみたら、BOM の LCSC が全行空・
+# ソケット 61 個が top・XIAO が BOM に載っている、の 3 つが出ていた。
+# **こちらの道具で直しても、向こうの道具は板しか見ない。**だから板に書く。
+# --------------------------------------------------------------------------
+def _footprint_blocks(half):
+    """本番の板のフットプリントを (参照名, ブロック文字列) で返す。"""
+    txt = (PCB / f"hhkb_split_{half}.kicad_pcb").read_text()
+    out = []
+    for m in re.finditer(r'\n\t\(footprint "[^"]+"[\s\S]*?(?=\n\t\(footprint "|\n\t\((?!footprint)[a-z_]+\s*\n|\Z)', txt):
+        block = m.group(0)
+        ref = re.search(r'\(property "Reference" "([^"]+)"', block)
+        if ref:
+            out.append((ref.group(1), block))
+    return out
+
+
+def _fab_kinds(half):
+    from circuit import board_refs, daughterboard_netlist, netlist
+    parts = daughterboard_netlist() if half == "daughterboard" else netlist(half)
+    return {b: k for r, k, pins in parts for b in board_refs(r, k, pins)}
+
+
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
+def test_every_assembled_part_carries_its_lcsc_number_on_the_board(half):
+    """実装する部品は全部、板に LCSC の番号を持っていること（BOM の出所）。"""
+    from parts import NOT_ASSEMBLED, PARTS
+    kinds = _fab_kinds(half)
+    blocks = dict(_footprint_blocks(half))
+    assert set(kinds) <= set(blocks), sorted(set(kinds) - set(blocks))
+    wrong = {}
+    for ref, kind in kinds.items():
+        if kind in NOT_ASSEMBLED:
+            continue
+        m = re.search(r'\(property "LCSC" "([^"]*)"', blocks[ref])
+        got = m.group(1) if m else None
+        if got != PARTS[kind]["lcsc"]:
+            wrong[ref] = (got, PARTS[kind]["lcsc"])
+    assert not wrong, f"{half}: LCSC が無い／違う {wrong}"
+
+
+@pytest.mark.parametrize("half", ["left", "right", "daughterboard"])
+def test_parts_soldered_on_the_other_side_say_so_for_the_fab_tool(half):
+    """置いた面とパッドの面が違う部品は `FT Layer Override` を持つこと。
+
+    プラグインは `fp.GetLayer()` で CPL の面を決める。ホットスワップ
+    ソケットは F.Cu に置いてパッドが B.Cu なので、フィールドが無いと
+    **61 個が top で出る**（fab-checklist §1b と同じ穴・道具違い）。
+    """
+    from parts import NOT_ASSEMBLED
+    kinds = _fab_kinds(half)
+    wrong = []
+    for ref, block in _footprint_blocks(half):
+        kind = kinds.get(ref)
+        if kind is None or kind in NOT_ASSEMBLED:
+            continue
+        placed = re.search(r'\(footprint "[^"]+"\s*\n\s*\(layer "([FB])\.Cu"\)', block).group(1)
+        smd_layers = re.findall(r'\(pad "[^"]*" smd [\s\S]*?\(layers "([FB])\.Cu"', block)
+        if not smd_layers:
+            continue
+        side = "B" if all(l == "B" for l in smd_layers) else "F"
+        m = re.search(r'\(property "FT Layer Override" "([^"]*)"', block)
+        want = {"B": "bottom", "F": "top"}[side] if side != placed else None
+        got = m.group(1) if m else None
+        if got != want:
+            wrong.append((ref, got, want))
+    assert not wrong, f"{half}: 実装面の上書きが合わない {wrong}"
+
+
+def test_the_xiao_is_not_handed_to_the_assembler():
+    """XIAO は利用者がピンソケットで載せる。BOM にも CPL にも出さない。"""
+    from parts import NOT_ASSEMBLED
+    kinds = _fab_kinds("daughterboard")
+    blocks = dict(_footprint_blocks("daughterboard"))
+    for ref, kind in kinds.items():
+        if kind in NOT_ASSEMBLED:
+            attr = re.search(r"\(attr ([^)]*)\)", blocks[ref])
+            attr = attr.group(1) if attr else ""
+            assert "exclude_from_bom" in attr and "exclude_from_pos_files" in attr, (ref, attr)

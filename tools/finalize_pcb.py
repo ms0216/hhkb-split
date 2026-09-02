@@ -239,6 +239,12 @@ def finalize(half):
 
     expose_debug_copper(board, half)
 
+    # **発注の道具（Fabrication Toolkit）が読むフィールドを焼き込む**
+    # （2026-09-02・fab_fields.py）。無いと BOM の LCSC が空で、
+    # ソケット 61 個が top で出る。
+    import fab_fields
+    fab_fields.stamp(board, half)
+
     board.Save(str(dst))
     _sync_project_rules(dst)
 

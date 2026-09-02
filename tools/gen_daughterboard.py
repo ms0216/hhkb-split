@@ -482,6 +482,10 @@ def build():
                 fld.SetTextThickness(max(fld.GetTextThickness(),
                                          pcbnew.FromMM(silk_w)))
 
+    # 発注の道具が読むフィールド（LCSC・XIAO の除外）。fab_fields.py
+    import fab_fields
+    fab_fields.stamp(board, "daughterboard")
+
     UNROUTED.mkdir(parents=True, exist_ok=True)
     path = UNROUTED / "hhkb_split_daughterboard.kicad_pcb"
     board.Save(str(path))
