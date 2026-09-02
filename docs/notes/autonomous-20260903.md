@@ -21,7 +21,7 @@
 | 6 | open-gaps 冒頭の一覧で、節は済なのに一覧が古かった 2 行を直した: #53 の旧行（「発注前に利用者が決める」が残っていた）と #43（「発注前に方針だけ決める」が残っていたが 2026-08-24 に小窓で決定済み・基板に影響なし） | この文書の冒頭自身が警告している状態。発注をせき止める表に決着済みが「未決」で残ると読み手が止まる | 節本文と「承知した差」の表を読んで照合 | 3dc198b | |
 | 7 | `firmware/src/low_battery_off.c`: 打ち止め判定を `zmk_battery_state_changed` 待ちから、`ZMK_BATTERY_REPORT_INTERVAL` と同周期の自前 `k_timer`（低優先 work）に変更。初回は 1 周待つ。`CONFIG_ZMK_USB` があれば USB 給電中は数えない | #25b の 2026-09-02 追記: upstream `battery.c` は `last_state_of_charge != val1` のときだけ事象を出す（raw.githubusercontent で再確認・L94）。0% 張り付きで止まらない。タイマー化すると「スイッチ OFF＋USB＝0mV」で即 soft off するので USB の門が要る | `test_firmware.py` 13 緑（静的検査のみ）。**⚠️ コンパイル未確認**——SDK が手元に無く、このブランチは push しない。**取り込むなら push 後の `Build ZMK firmware` の緑を見てから**。`zmk_usb_is_powered()` / `zmk_workqueue_lowprio_work_q()` の存在は upstream ヘッダで確認 | dc37e79 | **要ビルド確認** |
 | 8 | Task C4-4 の手順に、上の変更の影響（USB 給電中は判定が走らない → ログを読むなら VBUS 切りケーブル B のみ／事象の有無は気にしなくてよい）を追記 | 記録が古い機構を前提にしたままだと、試験で「止まらない」の切り分けを誤る | 文書の照合のみ | 6302709 | |
-| — | **#7 の残り論点（利用者判断）:** `CONFIG_ZMK_USB` が無いビルド（右がそうなら）で「スイッチ OFF＋USB」は分圧 0mV を 2 回数えて soft off する。「0mV は電池なし」の床（例: 500mV 未満は数えない）を足すか。**合意の外なので足していない** | | | | |
+| — | ~~#7 の残り論点: `CONFIG_ZMK_USB` が無いビルドでは「スイッチ OFF＋USB」で 0mV を数えて soft off する~~ **解消: `xiao_ble//zmk` の board defconfig（upstream `app/boards/seeed/xiao_ble/xiao_ble_zmk_defconfig`）が `CONFIG_ZMK_USB=y` で、hhkb_split の左右どちらの .conf も上書きしていない**（grep 0 件）。左右とも USB の門が効く | | | | |
 
 ## 方針
 
