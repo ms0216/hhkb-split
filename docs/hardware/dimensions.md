@@ -118,7 +118,7 @@ KLE 図の刻印と突き合わせると:
 | P | Pause / Break |
 | **[** | **↑** |
 | Delete | BS / Clear |
-| A / S | Volume Up / Volume Down |
+| A / S | **Volume Down / Volume Up**（2026-09-03 訂正。KLE 図の読みで逆になっていた。PFU 取扱説明書 P3PC-6641-05EN p.15「A Vol_Dn / S Vol_Up / D Mute」） |
 | D | Mute |
 | F | Eject |
 | H / J | `*` / `/` |

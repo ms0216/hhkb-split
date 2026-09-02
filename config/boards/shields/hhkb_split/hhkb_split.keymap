@@ -90,7 +90,7 @@
 			/* --- 左 27 --- */
 			&kp K_POWER &kp F1 &kp F2 &kp F3 &kp F4 &kp F5
 			&kp CAPS    &trans &trans &trans &trans &trans
-			&mo SYS     &kp C_VOL_UP &kp C_VOL_DN &kp C_MUTE &kp C_EJECT &trans
+			&mo SYS     &kp C_VOL_DN &kp C_VOL_UP &kp C_MUTE &kp C_EJECT &trans
 			&trans      &trans &trans &trans &trans &trans
 			&trans      &trans &trans
 			/* --- 右 34 --- */
