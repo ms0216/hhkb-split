@@ -11,11 +11,18 @@
  *       （nRF52840 の NVMC は VDD ≧ 1.7V が条件）
  *
  * どう止めるか:
- *   ZMK が電池を測るたび（ZMK_BATTERY_REPORT_INTERVAL・既定 60 秒）に
- *   出す zmk_battery_state_changed を待ち受け、**その場で driver が
- *   キャッシュしている電圧**を読む（ADC を余分に回さない）。
- *   打ち止め（devicetree の empty-millivolts）を下回った状態が
- *   規定回数続いたら zmk_pm_soft_off() に入る。
+ *   ZMK が電池を測る周期（ZMK_BATTERY_REPORT_INTERVAL・既定 60 秒）と
+ *   同じ周期の自前タイマーで、**driver がキャッシュしている電圧**を読む
+ *   （ADC を余分に回さない）。打ち止め（devicetree の empty-millivolts）を
+ *   下回った状態が規定回数続いたら zmk_pm_soft_off() に入る。
+ *
+ *   ⚠️ 2026-09-03 まで zmk_battery_state_changed を待ち受けていたが、
+ *   ZMK 本体（app/src/battery.c）はその事象を **% が変わったときしか
+ *   出さない**（last_state_of_charge != val1）。% が 0 に張り付くと
+ *   2 回目が来ず、止まらなかった。周期で読む形に直した。
+ *
+ *   USB 給電中は判定しない。電源スイッチ OFF＋USB のとき分圧は 0mV を
+ *   返すので、そのまま数えると USB でつないだ瞬間に soft off する。
  *
  * 復帰:
  *   電池を替えれば、背面の電源スイッチが電池を機械的に切り離しているので
@@ -33,9 +40,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <zmk/event_manager.h>
-#include <zmk/events/battery_state_changed.h>
+#include <zephyr/init.h>
+
 #include <zmk/pm.h>
+#include <zmk/workqueue.h>
+#if IS_ENABLED(CONFIG_ZMK_USB)
+#include <zmk/usb.h>
+#endif
 
 LOG_MODULE_DECLARE(hhkb_battery, CONFIG_SENSOR_LOG_LEVEL);
 
@@ -49,27 +60,29 @@ BUILD_ASSERT(DT_NODE_HAS_PROP(BATTERY_NODE, empty_millivolts),
 
 static const struct device *const battery = DEVICE_DT_GET(BATTERY_NODE);
 
-static int low_battery_listener(const zmk_event_t *eh) {
+static void low_battery_check(struct k_work *work) {
     static uint8_t consecutive;
 
-    if (as_zmk_battery_state_changed(eh) == NULL) {
-        return ZMK_EV_EVENT_BUBBLE;
+#if IS_ENABLED(CONFIG_ZMK_USB)
+    if (zmk_usb_is_powered()) {
+        consecutive = 0;
+        return;
     }
+#endif
 
-    /* **測り直さない。**この事象は ZMK が測った直後に出るので、
-     * driver のキャッシュを読むだけでよい（sensor_channel_get は
-     * fetch 済みの値を返す）。ADC をもう一度回すと電池を余分に使う。 */
+    /* **測り直さない。**ZMK が同じ周期で fetch 済みなので、driver の
+     * キャッシュを読むだけでよい。ADC をもう一度回すと電池を余分に使う。 */
     struct sensor_value voltage;
     int rc = sensor_channel_get(battery, SENSOR_CHAN_GAUGE_VOLTAGE, &voltage);
     if (rc != 0) {
         LOG_WRN("電池電圧が読めない (%d)。判定を飛ばす", rc);
-        return ZMK_EV_EVENT_BUBBLE;
+        return;
     }
 
     uint32_t mv = voltage.val1 * 1000U + voltage.val2 / 1000U;
     if (mv > EMPTY_MV) {
         consecutive = 0;
-        return ZMK_EV_EVENT_BUBBLE;
+        return;
     }
 
     consecutive++;
@@ -78,13 +91,26 @@ static int low_battery_listener(const zmk_event_t *eh) {
 
     /* 1 回では止めない。BLE 送信中は電池の内部抵抗ぶん一時的に下がる。 */
     if (consecutive < CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES) {
-        return ZMK_EV_EVENT_BUBBLE;
+        return;
     }
 
     LOG_ERR("電池が尽きた。soft off に入る（電池を替えて電源を入れ直すこと）");
     zmk_pm_soft_off();
-    return ZMK_EV_EVENT_BUBBLE;
 }
 
-ZMK_LISTENER(hhkb_low_battery, low_battery_listener);
-ZMK_SUBSCRIPTION(hhkb_low_battery, zmk_battery_state_changed);
+K_WORK_DEFINE(low_battery_work, low_battery_check);
+
+static void low_battery_tick(struct k_timer *timer) {
+    k_work_submit_to_queue(zmk_workqueue_lowprio_work_q(), &low_battery_work);
+}
+
+K_TIMER_DEFINE(low_battery_timer, low_battery_tick, NULL);
+
+static int low_battery_init(void) {
+    /* 最初の 1 周は待つ。ZMK がまだ一度も測っていないと、キャッシュは 0mV。 */
+    k_timer_start(&low_battery_timer, K_SECONDS(CONFIG_ZMK_BATTERY_REPORT_INTERVAL + 5),
+                  K_SECONDS(CONFIG_ZMK_BATTERY_REPORT_INTERVAL));
+    return 0;
+}
+
+SYS_INIT(low_battery_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);

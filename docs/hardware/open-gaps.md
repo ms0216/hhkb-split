@@ -1976,6 +1976,13 @@ C2-b の実測では 6 押しで 8 文字（`abcdabccdabcdabcdabcdabccd`）。
 > **直し方の候補**: `CONFIG_ZMK_BATTERY_REPORT_INTERVAL` に相乗りする
 > 自前タイマーで `sensor_channel_get` を読む／`SAMPLES=1` に落とす。
 > [Task C4-4](task-c4-c5-power.md) の実機試験の前に直す。
+> **✅ 2026-09-03 直した（ブランチ autonomous-20260903・コンパイル未確認）:**
+> 事象の待ち受けをやめ、`ZMK_BATTERY_REPORT_INTERVAL` と同じ周期の自前
+> `k_timer` → 低優先 work で driver のキャッシュを読む。最初の 1 周は待つ
+> （ZMK が測る前はキャッシュが 0mV）。**USB 給電中は数えない**
+> （スイッチ OFF＋USB で分圧が 0mV を返し、即 soft off になるため。
+> `zmk_usb_is_powered()`・`CONFIG_ZMK_USB` があるときだけ）。
+> ⚠️ 手元に SDK が無いので **CI（push）でビルドが通るまでは「書いた」だけ**。
 
 BAT46W にしたので、**マイコンがマトリクスより先に落ちる**ようになった
 （レール下限 1.80V はマイコン律速）。キーが 1 つずつ反応しなくなる壊れ方は
@@ -2003,7 +2010,7 @@ BAT46W にしたので、**マイコンがマトリクスより先に落ちる**
 
 | | |
 |---|---|
-| きっかけ | ZMK が電池を測るたびに出す `zmk_battery_state_changed` |
+| きっかけ | ~~ZMK が電池を測るたびに出す `zmk_battery_state_changed`~~ **2026-09-03: 同じ周期の自前タイマー**（上の追記。事象は % が変わったときしか出ない） |
 | 読む値 | **その場で driver がキャッシュしている電圧**。ADC を余分に回さない |
 | しきい値 | devicetree の `empty-millivolts` = **2400mV**。#13 の 0% と**同じ 1 つの数字** |
 | 何回で止めるか | 既定 2 回連続（`CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES`）。1 回で止めないのは、BLE 送信中に電池の内部抵抗ぶん一時的に下がるため |
