@@ -24,7 +24,7 @@
 | — | ~~#7 の残り論点: `CONFIG_ZMK_USB` が無いビルドでは「スイッチ OFF＋USB」で 0mV を数えて soft off する~~ **解消: `xiao_ble//zmk` の board defconfig（upstream `app/boards/seeed/xiao_ble/xiao_ble_zmk_defconfig`）が `CONFIG_ZMK_USB=y` で、hhkb_split の左右どちらの .conf も上書きしていない**（grep 0 件）。左右とも USB の門が効く | | | | |
 | 9 | `tools/explain_overlap.py`（分割で幅が増える理由の説明図）が配列の写しを自前で持ち、最下段が 3u+3u のままだった。`layout/` の JSON（原機＋分割）から読むよう変更。右の島は数字段のキー数で原機の位置へ戻す | CLAUDE.md の作法 3「自分の生成物どうし」＋作法 8「置き換えたら古い方を消す」。`3u` の grep で見つけた唯一の取り残し | 図を出して目で見た（最下段が 2.75u×2＋空き）。数字は不変（7.25＋9.0＝16.25u・+23.8mm） | b6f06cf | |
 | 10 | 3 枚の設計規則と実配線の数字を読み直した: 規則 clr/trk 0.127・via 0.45/drill 0.2/annular 0.13・hole2hole 0.45・銅–板端 0.3・シルク間 0.15。実物は配線幅 0.2（子基板は 0.6 も）・ビア 0.3/0.6（右に 0.56 が 1 個・8b 既知） | JLCPCB 2 層（trace/space 0.127・via 0.3/0.5・annular 0.13）に対する余裕の再確認 | pcbnew で全 track/via を集計 | — | 記録のみ |
-| 11 | Fn レイヤーの **A/S が逆**だった（A=Vol Up・S=Vol Dn）。PFU 取扱説明書 P3PC-6641-05EN p.15 は **A=Vol Dn・S=Vol Up・D=Mute**。keymap と dimensions.md を訂正 | 「実機の刻印をそのまま移植」の出所が KLE 図の読み取りだけで、外の事実（取説）と突き合わせていなかった。他の Fn 割当（F1〜F12・Ins/Del・矢印・Home/PgUp/End/PgDn・*・/・+・-・PrtSc/ScrLk/Pause・Caps・Power・Eject）は取説どおり | 取説 PDF を pdftotext で読んだ。`test_firmware / test_keyscan` 30 緑 | (下) | |
+| 11 | Fn レイヤーの **A/S が逆**だった（A=Vol Up・S=Vol Dn）。PFU 取扱説明書 P3PC-6641-05EN p.15 は **A=Vol Dn・S=Vol Up・D=Mute**。keymap と dimensions.md を訂正 | 「実機の刻印をそのまま移植」の出所が KLE 図の読み取りだけで、外の事実（取説）と突き合わせていなかった。他の Fn 割当（F1〜F12・Ins/Del・矢印・Home/PgUp/End/PgDn・*・/・+・-・PrtSc/ScrLk/Pause・Caps・Power・Eject）は取説どおり | 取説 PDF を pdftotext で読んだ。`test_firmware / test_keyscan` 30 緑 | 6f9ae81 | |
 
 ## 方針
 
