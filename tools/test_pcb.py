@@ -159,6 +159,41 @@ def test_switch_positions_match_the_plate(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
+def test_every_key_name_on_the_silk_sits_under_its_own_switch(name):
+    """裏面シルクのキー名が、そのキーのスイッチの真下にあること。
+
+    キー名は部品ではなく**板のテキスト**なので、フットプリントを API で
+    動かしても付いてこない（2026-09-02・#56）。左は古い位置のまま
+    スタビの穴に掛かって DRC の警告が 1 件増えて気づいたが、**右は
+    警告ゼロのままキーから 21mm 離れた場所に名札だけ残っていた**。
+    DRC が黙る取り違えなので、名札とスイッチの対応を自分で見る。
+
+    gen_pcb はキー中心の +8.2mm（レイアウト座標）に置き、穴や輪郭に
+    当たったものだけ `_fix_silk_clashes` が最大 4 段（5.2mm）逃がす
+    （いまの板では 4 個。右 Shift は +10.8mm で自分の枠 9.525 を越えるが、
+    隣の Enter の中心までは 17mm あるので読み違えない）。だから
+    **「その名前の文字で、いちばん近いスイッチが自分」なものがちょうど
+    1 つあること**を、名前が重複するキー（Alt/Meta など）も含めて
+    1 対 1 で消し込む。21mm 離れた名札は隣のキーの方が近くなり捕まる。
+    """
+    keys = HALVES[name]
+    sw = {ref: (x, y) for lib, ref, x, y in footprints(name)
+          if re.fullmatch(r"SW\d+", ref)}
+    texts = []
+    for m in re.finditer(r'\(gr_text "([^"]+)"\s*\(at ([-\d.]+) ([-\d.]+)[^)]*\)'
+                         r'\s*\(layer "B\.SilkS"\)', _pcb_text(name)):
+        texts.append((m.group(1).replace("\\\\", "\\"),   # 板の中では \ が \\
+                      float(m.group(2)) - ORIGIN[0], ORIGIN[1] - float(m.group(3))))
+    def nearest(tx, ty):
+        return min(sw, key=lambda r: (sw[r][0] - tx) ** 2 + (sw[r][1] - ty) ** 2)
+    for i, k in enumerate(keys, start=1):
+        hit = [t for t in texts if t[0] == k.label and nearest(t[1], t[2]) == f"SW{i}"]
+        assert len(hit) == 1, \
+            f"{name}: SW{i}（{k.label}）を最寄りとする名札が {len(hit)} 個（1 個でないといけない）"
+        texts.remove(hit[0])
+
+
+@pytest.mark.parametrize("name", NAMES)
 def test_switch_footprint_size_matches_the_key_width(name):
     """キーの幅に対応するフットプリントが使われていること。
 
