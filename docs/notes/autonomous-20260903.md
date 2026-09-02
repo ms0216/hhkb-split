@@ -28,6 +28,7 @@
 | 12 | 取説 P3PC-6641-05EN の Fn 表（p.13/15）を全行、keymap の fn レイヤーと照合。A/S 以外は一致（1〜= F1〜F12・\ Ins・` Del・I PSc・O ScrLk・P Pause・K Home・L PgUp・, End・. PgDn・Tab Caps・Return Enter・N +・M −・H *・J /・[ ↑・/ ↓・; ←・' →・D Mute・F Eject・Esc Power・右◇ Stop）。LED の表（青 2 回/秒＝ペアリング待機・橙 1 回/30 秒＝残量低・橙 2 回/15 秒＝交換）も Kconfig の記述と一致 | #11 の裏取りを A/S だけで止めない | 取説 PDF（pdftotext） | — | 記録のみ |
 | 13 | provisional-values.md の 45 定数の「現在値」を、`tools/` の実際の定数と機械で突き合わせ: **45/45 一致** | 表と設計値のずれ（open-gaps 冒頭の教訓）が暫定値の表にも起きていないか | 正規表現で表を読み、各モジュールの属性と比較 | — | 記録のみ |
 | 14 | open-gaps #43 の節本体が「窓は未設計」のままだった（一覧も「実装はケースの改善サイクルで」）。窓は 2026-08-24 の f94a2ca で `gen_case.py` に入っている。節と一覧を「実装済み・残るは刷って透けるか」に直した | 冒頭の教訓（節と一覧のずれ）が節の内側でも起きていた。#43 の CAD 化を「改善テーマ」として着手しかけて気づいた | `git log -S LED_WIN_D`・`gen_case.py` L295〜 | de0556f | |
+| 15 | `mutate.py` を 01:15 に再実行（9/1 の 106/0 以後に interface.py・circuit.py が変わったため）。**41/106 まで走って生存 0**。1 変異あたり約 10 分で終わらず、07:55 に利用者の了解で kill。変異中だった `circuit.py` `interface.py` は `git checkout` で復元（作業ツリー clean・右の板 sha f5866a892afd 不変） | 検査の検出力が変更後も保たれているか | mutate.log（検出 41・生存 0） | (下) | 途中まで |
 
 ## 方針
 
