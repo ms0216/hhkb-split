@@ -17,10 +17,10 @@
 |---|---|---|
 | 層数 / 厚さ | **2 層 / 1.6mm** | `envelopes.PCB_T = 1.6`。ケース・プレート・ソケットの落ち込みが全部この値で計算されている。**1.2 や 2.0 を選ぶとプレートからソケットまでの寸法が狂う** |
 | 銅厚 | 1oz（既定） | `pcb_rules.JLC` は 1oz の能力値 |
-| 表面処理 | HASL（鉛フリー）で可。ENIG は任意 | 最細ピッチは FFC の 0.5mm。HASL で実装実績のある範囲 |
+| 表面処理 | **HASL（有鉛・¥0）**。無鉛 HASL は +¥222（2026-09-03 実測）。ENIG は任意 | 最細ピッチは FFC の 0.5mm。HASL で実装実績のある範囲。板はケースの中で、部品はんだは JLC が付けるので有鉛で機能上の差なし（2026-09-03 に利用者が有鉛を選択） |
 | 注文番号の印字 | **Remove Order Number** を選ぶ（または任意の場所） | 選ばないと JLC が空いた所にシルクで番号を刷る。表面はキーの下で見えないが、裏面のシルクに重なりうる |
 | 実装面 | **Bottom（裏面のみ）** | 3 枚とも SMD は全部 B.Cu。F_Paste は空（→ 1b） |
-| 実装枚数 | 板 5 枚のうち **2 枚**を実装（→ 5.） | |
+| 実装枚数 | 主基板は板 5 枚のうち **2 枚**を実装（→ 5.）。**子基板は 5 枚全部**（1 台に 2 枚要るので 2 枚だと予備 0。部品が安く差額は数百円。2026-09-03） | |
 | 「Confirm Parts Placement」 | **Yes** | 第 1 節の目視はここで出るプレビューでやる |
 | PCBA の区分 | **Economic**（Standard を選ばない） | Standard は部品〜板端 ≥2.5mm と 70×70mm 以上が条件。実測: 左 D24・右 D9/D31 が板端 1.40mm、子基板 J_MAIN 0.55mm、子基板は 21×32mm。Economic は 0.3mm・10×10mm〜・片面で、3 枚とも B 面のみなので足りる（[JLC PCBA capabilities](https://jlcpcb.com/capabilities/pcb-assembly-capabilities)・2026-09-02 §8b） |
 
@@ -46,6 +46,21 @@ CPL 134 点すべて `bottom`・XIAO 無しを確認した。**さらに
 `test_parts_soldered_on_the_other_side_say_so_for_the_fab_tool` /
 `test_the_xiao_is_not_handed_to_the_assembler`。**3 つとも故意に壊して
 赤になることを確認した。**
+
+**実際に回したコマンド（2026-09-03・左と子基板）**。`cli.py` は相対 import なので
+**プラグインのディレクトリからモジュールとして**呼ぶ。出力先は `pcb/production/` 1 か所で
+**板ごとに上書きされる**ので、1 枚回すたびにサブフォルダへ移す。最後に wxWidgets の
+assert が出るが出力はできている（出来た物を見て判定する）。
+
+```
+cd ~/Documents/KiCad/10.0/3rdparty/plugins
+KPY=/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/3.9/bin/python3.9
+"$KPY" -m com_github_bennymeg_JLC-Plugin-for-KiCad.cli -p <repo>/pcb/hhkb_split_left.kicad_pcb -t -nI
+mv <repo>/pcb/production/{bom.csv,positions.csv,designators.csv,netlist.ipc,hhkb_split_left.zip} <repo>/pcb/production/left/
+```
+
+発注ページへ上げるのは zip・`bom.csv`・`positions.csv` の 3 つ。`designators.csv` は使わない
+（XIAO が載っているが BOM/CPL には無い）。
 
 ⚠️ プラグインは **`-t`（Apply automatic position/rotation translations）を
 付けて**回すこと。付けないと TSSOP の 270° 補正が入らない（CLI では `-t`、
@@ -81,7 +96,23 @@ JLCPCB の発注ページに部品を並べた**配置プレビュー**が出る
 
 <!-- 下の見出しをそのまま残して、日付と結果を書くこと -->
 
-（まだ確認していない）
+**2026-09-03 確認済み（左・子基板。発注ページの 3D 配置プレビュー・Bottom 表示・利用者のスクリーンショットを私が KiCad の板のパッド座標と突き合わせた）**
+
+前提: JLCPCB の Bottom 表示は**裏から見た絵**（X だけ裏返り、Y はそのまま。裏面シルク "SSKB LEFT" が正しく読める）。
+
+| 部品 | KiCad の板（pcbnew でパッド座標を読んだ） | JLCPCB の 3D プレビュー | 判定 |
+|---|---|---|---|
+| **左 D1**（BAT46W・SOD-123・62 個の代表） | Pin 1=K（ROW_C）が y=65.55、Pin 2=A（SW1_D）が y=62.25 → **帯は手前（画面の下）** | 3D 本体の灰色の帯が**下端**。シルク枠も下端だけ閉じている。「+」はアノード側の上パッド | ✅ 一致 |
+| **子基板 D_PWR**（B5819W・同じ SOD-123） | Pin 1=K（V3V3）が x=153.16（+X）→ Bottom で裏返って**画面の左端** | 帯（白線）と三角の先が**左端**。「−」が左・「+」が右 | ✅ 一致 |
+| **左 U1**（74LVC595・TSSOP-16） | Pin 1（COL1）が (192.28, 91.0) ＝ 左下 → Bottom で**右下** | 3D の Pin 1 の黒点が**右下**。シルクの三角も右下 | ✅ 一致 |
+| **左 J_DB**（FH12） | パッド列 y=85.38 が中心 83.525 より手前 → **口は奥向き** | 金色のピンが下（手前）、口が上（奥） | ✅ 一致 |
+| **子基板 J_MAIN**（FH12） | パッド列 y=109.15 が中心 111.0 より奥 → **口は手前向き**（J_DB と逆で、2 枚を並べるとケーブルが直線） | ピンが上（板の内側）、口が下（板の端） | ✅ 一致 |
+| **ソケット 27 個** | パッドは B.Cu | Bottom にマゼンタの形で 27 個。3D モデルが無いだけで実装対象（CPL 57 点＝27+27+3） | ✅ |
+| **XIAO（U_MCU）** | 発注しない | BOM・CPL とも無し。14 穴は空 | ✅ |
+
+**「+」マークの意味（#52 の未確定だったもの）**: 62 個ともアノード側のパッドに「+」、D_PWR にはカソード側に「−」が出た。**「+」＝ Pin 1 ではなく、＝アノード**。判定は 3D 本体の帯で行い、「+」はその裏付けにだけ使った。
+
+右基板は未発注（今回は左＋子基板だけ）。右を出すときは U1/U2 と D1 と J_DB を同じ手順で見ること。
 
 ---
 
