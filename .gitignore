@@ -49,3 +49,6 @@ build/slice/
 # **成果物は pcb/matrix_only/**（キーマトリクスだけを引いた基板）。
 pcb/try/
 pcb/matrix/
+
+# 発注ごとに作る製造ファイル（ガーバー・BOM・CPL）。生成物で再現できる。
+pcb/production/
