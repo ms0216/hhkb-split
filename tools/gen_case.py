@@ -559,6 +559,33 @@ REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
 
+# 手前面の造作（実機再現・dimensions.md §4 の 1・2。2026-09-05）
+#
+# 実機は手前面が下へ行くほど奥へ傾き（目測 12°）、ベゼル上面から手前面へ
+# 大きな R（目測 R6）で移る。**どちらも丸ごとは再現できない**:
+#   * 傾け: 手前の M2 ボス（φ5.6・中心 y=−51.5）は外面から 0.74 はみ出す位置に
+#     あり、内側の端は基板の手前縁まで 0.44。面を傾けるとボスが削れて
+#     インサートが露出する。基板は発注済みで、ボスを内へ動かせない
+#   * R6: ベゼルの手前バーは高さ 6.5 しか無く、R6 だと座ぐりの壁まで消える
+# できるのは**ベゼルのバーの範囲だけ**: 上端から FRONT_FACET_H の高さだけ
+# 12° で内側へ傾け（上端が最前点。下端で 1.2 内側）、上端の縁を R2 で丸める。
+# R は CAD カーネルが左右の縁では拒否した（隅の小さな面）ので手前だけ。
+FRONT_FACET_DEG = 12.0   # [目測] 実機写真から
+FRONT_FACET_H = 0.0      # 傾ける高さ（上端から）。**0 ＝ 無効。**5.5 で試すと
+                         # 下端（z=12）に幅 1.2 の水平な段ができた——その下は
+                         # プレートの座ぐりの壁で、面を内側へ入れられない。
+                         # 実機に無い線が 1 本増えるので、R2 だけにした
+                         # （2026-09-05）。手前のボスを内へ動かせる基板改版が
+                         # あれば、下まで通して復活させる
+FRONT_EDGE_R = 0.0       # 上端の丸め。**0 ＝ 無効。**R2 は手前の辺だけなら
+                         # カーネルが通したが、**通した結果が奥の天井の一部を
+                         # 黙って失っていた**（max Z 33.53 → 33.26。x=60, y=71 の
+                         # 天井が消えた。2026-09-05 に is_inside で検出）。
+                         # OCC のフィレットは失敗を例外で言わないことがある。
+                         # 丸めは試作後に手やすり、または別の作り方で
+BOTTOM_EDGE_R = 1.5      # 下シェルの底縁の丸め（実機の「合わせ目より下は
+                         # 一回り小さい」の代用。dimensions.md §5「R1〜2 から試作」）
+
 # ゴム足（市販品）
 RUBBER_D = 10.0
 RUBBER_T = 2.0           # [暫定] 厚み。**傾斜角に直接効く。**買う製品で確定させる
@@ -1006,7 +1033,28 @@ def build_case(keys, half):
                 RectangleRounded(w, h, CORNER_R)
         extrude(amount=z_max, mode=Mode.INTERSECT)
 
-    return case.part, (w, h_body), (z_front, z_rear)
+    # 底縁の丸め（BOTTOM_EDGE_R）。床の外周の辺だけ。
+    part = case.part
+    # **外周の辺だけ**（ゴム足の座ぐりの円やナットの穴の辺を含めるとカーネルが
+    # 拒否する。2026-09-05 に R0.5 まで全部失敗した）
+    bb = part.bounding_box()
+    bottom_edges = [e for e in part.edges()
+                    if e.center().Z < 0.01 and e.length > 5.0
+                    and (abs(abs(e.center().X) - bb.max.X) < 3.5
+                         or abs(e.center().Y - bb.min.Y) < 3.5
+                         or abs(e.center().Y - bb.max.Y) < 3.5)]
+    _v0, _b0 = part.volume, part.bounding_box()
+    part = part.fillet(BOTTOM_EDGE_R, bottom_edges)
+    # **フィレットは失敗を黙る**（上シェルの手前 R2 で奥の天井が消えた・
+    # 2026-09-05）。削れた体積が外周 × R² × (1−π/4) の見積りから 30% 以上
+    # ずれたら、どこか別の面を失っている
+    _per = 2 * ((_b0.max.X - _b0.min.X) + (_b0.max.Y - _b0.min.Y))
+    _est = _per * (1 - 3.14159265 / 4) * BOTTOM_EDGE_R ** 2
+    _got = _v0 - part.volume
+    if abs(_got - _est) > 0.3 * _est or len(part.solids()) != 1:
+        raise ValueError(f"底縁の丸めで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
+                         "**カーネルが別の面を失った**")
+    return part, (w, h_body), (z_front, z_rear)
 
 
 def battery_center(h_body):
@@ -1455,7 +1503,39 @@ def build_topcase(keys, half):
             with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):
                 Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.CENTER))
-    return top.part, (w, h_body)
+    # 手前面の傾き（FRONT_FACET_*）: 上端から FRONT_FACET_H の帯を、上端を
+    # 支点に 12° 内側へ倒した平面で切る。外形は変わらない（上端が最前点）。
+    y_front = -h_body / 2
+    z_edge = BEZEL_TOP_FRONT
+    # X 軸まわり +θ: 面の下端（局所 z<0）が +y（内側）へ倒れる。−θ にすると
+    # 外へ倒れて何も切れない（2026-09-05 に実際にそうなった。z=14 で 0.0）
+    part = top.part
+    if FRONT_FACET_H > 0:
+        wedge = (Location((0, y_front, z_edge), (FRONT_FACET_DEG, 0, 0))
+                 * Box(w * 3, 20.0, FRONT_FACET_H * 3,
+                       align=(Align.CENTER, Align.MAX, Align.CENTER)))
+        # 帯の下端より下は切らない（垂直のまま）
+        with BuildPart() as _fw:
+            add(wedge)
+            with Locations((0, 0, z_edge - FRONT_FACET_H)):
+                Box(w * 3, 200, 100, mode=Mode.INTERSECT,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+        part = part - _fw.part
+    # 上端の縁を丸める（手前だけ。左右はカーネルが拒否する）
+    bb = part.bounding_box()
+    front_edges = [e for e in part.edges()
+                   if e.center().Z > z_edge - 1.0 and e.center().Y < bb.min.Y + 2.0
+                   and e.length > 20.0]
+    if FRONT_EDGE_R > 0:
+        if not front_edges:
+            raise ValueError("手前の上縁が見つからない（丸める対象が無い）")
+        _before = part.bounding_box()
+        part = part.fillet(FRONT_EDGE_R, front_edges)
+        _after = part.bounding_box()
+        # **フィレットは失敗を黙る。**外形（丸めた辺以外）が動いたら止める
+        if abs(_after.max.Z - _before.max.Z) > 1e-3 or abs(_after.max.Y - _before.max.Y) > 1e-3:
+            raise ValueError("手前の丸めで奥の形が変わった（カーネルが面を失った）")
+    return part, (w, h_body)
 
 
 def rear_window(half, w):
