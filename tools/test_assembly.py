@@ -1553,6 +1553,62 @@ def test_the_pcb_is_actually_fastened_to_the_plate(half):
 # 奥板（案 A・2026-09-05）: 上シェルの奥を押さえ、外せば上シェルが抜ける
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("half", ["left", "right"])
+def test_the_plate_can_be_put_into_the_shells(half):
+    """プレート（＋基板）が**上シェルに入れられる**こと（2026-09-05）。
+
+    ⚠️ 案 A の最初の版は、プレートを受ける段（下）と押さえるベゼルの縁（上）
+    を両方とも上シェルに持たせたので、**プレートが上からも下からも入らなかった**
+    （利用者が .blend で指摘。「留まる」だけ見て「入れられる」を見ていない、
+    CLAUDE.md の教訓 9 そのもの）。
+
+    入れ方: 上シェルを裏返し、プレートの手前を PLATE_REAR_GAP 相当だけ
+    下げて（傾けて）、奥端を棚とベゼルの縁の溝へ差し込み、手前を上げる。
+    ここでは「据わった位置」「奥へ引いた傾き」「傾けたまま手前を下げた」の
+    3 姿勢で上シェルと当たらないことと、据わった位置から上へ 0.3 動かすと
+    ベゼルの縁に当たる（＝押さえている）ことを見る。
+    """
+    from math import atan2, degrees
+    from build123d import Location
+    from gen_case import PLATE_SHELF_D
+    from interface import PLATE_T
+
+    parts, (_w, h_case) = build_assembly(HALVES[half], half)
+    plate, top = parts["plate"], parts["topcase"]
+
+    def hit(loc):
+        v = 0.0
+        for a in (loc * plate).solids():
+            for b in top.solids():
+                s_ = a & b
+                if s_ is not None and s_.volume > 1e-6:
+                    v += s_.volume
+        return v
+
+    seated = Location((0, 0, 0))
+    assert hit(seated) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
+    assert hit(Location((0, 0, 0.3))) > 1.0, (
+        f"{half}: プレートを 0.3 上げてもベゼルに当たらない＝押さえていない")
+    # 奥端の下の縁を支点に手前を下げる（傾き）。手前の縁が**板厚＋0.5**
+    # だけ下がる角度——手前の縁がリム面より下に出て、手前のベゼルの壁を
+    # くぐれるように。奥端の角の持ち上がりは 2.7·sin(1.1°) ≈ 0.05
+    bb = plate.bounding_box()
+    y_rear = bb.max.Y
+    tilt = degrees(atan2(PLATE_T + 0.5, bb.max.Y - bb.min.Y))
+    tilted = Location((0, y_rear, bb.min.Z)) * Location((0, 0, 0), (tilt, 0, 0)) \
+        * Location((0, -y_rear, -bb.min.Z))
+    # 傾けたまま手前へ PLATE_SHELF_D 引いた姿勢（溝に入る前）
+    pulled = Location((0, -PLATE_SHELF_D - 0.5, 0)) * tilted
+    v = hit(pulled)
+    assert v < 1e-6, (
+        f"{half}: 傾けて（{tilt:.2f}°）手前へ引いた姿勢で上シェルに {v:.2f}mm³ 当たる。"
+        "**プレートを上シェルに入れられない**")
+    v = hit(tilted)
+    assert v < 1e-6, (
+        f"{half}: 奥端を溝に入れた傾き姿勢で上シェルに {v:.2f}mm³ 当たる。"
+        "**差し込んだ後に手前を上げられない**")
+
+
+@pytest.mark.parametrize("half", ["left", "right"])
 def test_the_rear_plate_locks_the_top_shell(half):
     """奥板が**上シェルの奥を押さえ**、奥板を外せば**上シェルが上へ抜ける**こと。
 

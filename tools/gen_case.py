@@ -508,10 +508,16 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # --------------------------------------------------------------------------
 # 上下シェルの合わせ目とスカート（2026-09-05・案 A）
 #
-# 上シェル（ベゼル＋コブ天井）は**側壁を外側から被るスカート**を持ち、
-# 合わせ目（SEAM_Z）より上の側壁・手前壁は上シェルの物になる。下シェルの
-# 壁は SEAM_Z + SKIRT_LAP まで残し、そのうち外側 SKIRT_LAP_T + CLEARANCE を
-# 削って段にする（相欠き）。実機の「側面の中ほどに上下シェルの合わせ目」
+# 上シェル（ベゼル＋コブ天井）は**側壁を外側から被るスカート**（厚み SKIRT_T）
+# を持つ。下シェルの側壁は合わせ目（SEAM_Z）より上で外側 SKIRT_T + CLEARANCE
+# を削り、内側 1.0 の帯が**リム面までプレートを受ける**。
+#
+# ⚠️ 一度「合わせ目より上の側壁は丸ごと上シェルの物」にした（2026-09-05 の
+# 最初の版）。すると**プレートを受ける段と押さえるベゼルの縁が同じ部品に
+# 入り、プレートが上からも下からも入らなかった**（利用者が .blend を見て
+# 指摘。CLAUDE.md の教訓 9 を、検査を足さずに踏んだ）。受けるのは下、押さえる
+# のは上——元の分担に戻し、`test_the_plate_can_be_put_into_the_shells` が
+# 入れられることを見張る。実機の「側面の中ほどに上下シェルの合わせ目」
 # （dimensions.md §4 の 3）を再現し、#12（上ケースの奥の留め）の原因だった
 # 「同一外形の落とし込み（平面方向の逃げ 0）」をやめる。
 # 経緯は docs/hardware/decisions/2026-09-05-case-redesign-plan-a.md。
@@ -521,9 +527,13 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # すると熱圧入インサートが外へ出る）ので、合わせ目をリムに揃えると
 # 手前と側面の合わせ目が一直線になる。
 SEAM_Z = PLATE_TOP_FRONT - PLATE_T
-SKIRT_LAP = 3.0          # 相欠きの高さ
-SKIRT_LAP_T = 1.2        # 相欠きでスカート側が持つ厚み（0.4 ノズル 3 周）。
-                         # 下シェル側は WALL − SKIRT_LAP_T − CLEARANCE = 1.0
+SKIRT_T = 1.2            # スカートの厚み（0.4 ノズル 3 周）。下シェル側の
+                         # 帯は WALL − SKIRT_T − CLEARANCE = 1.0
+# プレートの奥端の上の隙間（座ぐりの天井をプレート上面からこれだけ上げる）。
+# 奥端は上シェルの棚（下）とベゼルの縁（上）の**溝**に入るので、プレートを
+# 少し傾けて奥から差し込む（手前が板厚＋0.5 下がる ≈ 1.1°。奥端の角の
+# 持ち上がりは 0.05 程度）。0.1 のままだと傾けた瞬間に溝に当たる。
+PLATE_REAR_GAP = 0.5
 REAR_CORNER_D = 6.0      # 奥の隅は下シェルが全高で持つ（奥壁と一体の柱）。
                          # スカートはここで止まる
 # 奥板（電池窓を塞ぐ板。旧・電池蓋のスライド＋ビードは全廃）
@@ -658,23 +668,18 @@ def build_case(keys, half):
     # 天井の下面（ベゼル上面 − WALL）から CLEARANCE 下げて切る。
     cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
     _y_out = h_body / 2 + BUMP_DEPTH
-    # 合わせ目より上の側壁・手前壁を落とし、相欠きの段を作る（案 A）。
-    # 奥の隅（y > 奥面 − REAR_CORNER_D）は奥壁と一体の柱として全高で残す。
+    # 合わせ目より上の側壁の外側 SKIRT_T + CLEARANCE を削る（上シェルの
+    # スカートが被る）。内側 1.0 の帯はリム面（コブでは天井の下）まで残り、
+    # プレートを受ける。奥の隅（y > 奥面 − REAR_CORNER_D）は柱として全厚で残す。
     with BuildPart() as _sk:
-        with BuildSketch(Plane.XY.offset(SEAM_Z + SKIRT_LAP)):
-            with Locations((0, y_off)):
-                RectangleRounded(w + 2.0, h + 2.0, CORNER_R + 1.0)
-                RectangleRounded(w - WALL * 2, h - WALL * 2,
-                                 max(CORNER_R - WALL, 0.5), mode=Mode.SUBTRACT)
-        extrude(amount=z_max)
         with BuildSketch(Plane.XY.offset(SEAM_Z)):
             with Locations((0, y_off)):
                 RectangleRounded(w + 2.0, h + 2.0, CORNER_R + 1.0)
-                RectangleRounded(w - (SKIRT_LAP_T + CLEARANCE) * 2,
-                                 h - (SKIRT_LAP_T + CLEARANCE) * 2,
-                                 max(CORNER_R - SKIRT_LAP_T - CLEARANCE, 0.5),
+                RectangleRounded(w - (SKIRT_T + CLEARANCE) * 2,
+                                 h - (SKIRT_T + CLEARANCE) * 2,
+                                 max(CORNER_R - SKIRT_T - CLEARANCE, 0.5),
                                  mode=Mode.SUBTRACT)
-        extrude(amount=SKIRT_LAP + 0.01)
+        extrude(amount=z_max)
         with Locations((0, _y_out - REAR_CORNER_D + 100, 0)):
             Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
@@ -1283,20 +1288,21 @@ def build_topcase(keys, half):
     cut_above_top = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     above_rim = tilted_cutter(w, h_body, rim)
     under_ceiling = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)
-    # 空洞 1: 壁 WALL の内側、リム面より下（本体・コブとも。ここに下シェルの
-    # 中身——基板・電池・子基板——が入る。**本体とコブの境に壁を作らない**。
-    # 子基板と電池箱は境をまたいでいる）
+    # 空洞 1: スカート SKIRT_T の内側、リム面より下（本体・コブとも。ここに
+    # 下シェルの側壁の帯と中身——基板・電池・子基板——が入る。**プレートを
+    # 受ける段は作らない**（受けるのは下シェル。SKIRT_T の注記）。
+    # **本体とコブの境に壁を作らない**（子基板と電池箱が境をまたぐ）。
     with BuildPart() as _cav:
         with BuildSketch():
             with Locations((0, y_off)):
-                RectangleRounded(w - WALL * 2, h - WALL * 2, max(CORNER_R - WALL, 0.5))
+                RectangleRounded(w - SKIRT_T * 2, h - SKIRT_T * 2, max(CORNER_R - SKIRT_T, 0.5))
         extrude(amount=z_max)
     cav_below_rim = _cav.part - above_rim
     # 空洞 2: コブ（y > 本体の奥端）は天井の下面まで
     with BuildPart() as _cavb:
         with BuildSketch():
             with Locations((0, y_off)):
-                RectangleRounded(w - WALL * 2, h - WALL * 2, max(CORNER_R - WALL, 0.5))
+                RectangleRounded(w - SKIRT_T * 2, h - SKIRT_T * 2, max(CORNER_R - SKIRT_T, 0.5))
         extrude(amount=z_max)
         with Locations((0, h_body / 2 - 100, 0)):
             Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
@@ -1310,16 +1316,19 @@ def build_topcase(keys, half):
             RectangleRounded(w - BEZEL_WALL * 2, h_body - BEZEL_WALL * 2,
                              max(CORNER_R - BEZEL_WALL, 0.5))
         extrude(amount=z_max)
-    rebate = (_inner.part.intersect(above_rim)
-              - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1))
-    # 相欠き: スカートの内側、合わせ目から SKIRT_LAP + CLEARANCE を SKIRT_LAP_T 残して抜く
-    with BuildPart() as _lap:
-        with BuildSketch(Plane.XY.offset(SEAM_Z - 1.0)):
-            with Locations((0, y_off)):
-                RectangleRounded(w - SKIRT_LAP_T * 2, h - SKIRT_LAP_T * 2,
-                                 max(CORNER_R - SKIRT_LAP_T, 0.5))
-        extrude(amount=1.0 + SKIRT_LAP + CLEARANCE)
-    lap_cut = _lap.part
+    # ⚠️ **`.intersect(...)` の結果から `-` で引いてはいけない。**引き算が効かず、
+    # リム面より上の材料が丸ごと消えた（2026-09-05。ベゼルの縁が全周で無くなり、
+    # 利用者が .blend で「押さえられていない」と指摘。私は数字で確かめる前に
+    # 「押さえている」と 2 度言った）。**引いてから intersect** の順にする。
+    # ここはリムより下は空洞（cav_below_rim）なので intersect 自体が要らない。
+    rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
+    # 奥端の上だけ隙間を PLATE_REAR_GAP に広げる（傾けて差し込むため）
+    with BuildPart() as _rg:
+        with Locations((0, h_body / 2 - BEZEL_WALL - (PLATE_SHELF_D + 2.0) / 2, 0)):
+            Box(w - BEZEL_WALL * 2, PLATE_SHELF_D + 2.0, z_max,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+    rear_gap = (_rg.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + PLATE_REAR_GAP)
+                ).intersect(above_rim)                # 引いてから intersect（上の注記）
     # 奥の隅は下シェルの柱。天井より下のスカートをそこで止める
     with BuildPart() as _rc:
         with Locations((0, y_out - REAR_CORNER_D - CLEARANCE + 100, 0)):
@@ -1372,6 +1381,7 @@ def build_topcase(keys, half):
     _sy0, _sy1 = h_body / 2 - PLATE_SHELF_D, h_body / 2
     with BuildPart() as _sh:
         with Locations((0, (_sy0 + _sy1) / 2, 0)):
+            # 幅は下シェルの側壁の帯（内面 ±(w/2 − WALL)）に触れない所まで
             Box(w - WALL * 2 - CLEARANCE * 2, _sy1 - _sy0, z_max,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         _dbx = daughterboard_x_center(half, w)
@@ -1402,7 +1412,6 @@ def build_topcase(keys, half):
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         add(cav_below_rim, mode=Mode.SUBTRACT)
         add(cav_bump, mode=Mode.SUBTRACT)
-        add(lap_cut, mode=Mode.SUBTRACT)
         add(rear_corner_cut, mode=Mode.SUBTRACT)
         add(front_cut, mode=Mode.SUBTRACT)
         add(plate_band_cut, mode=Mode.SUBTRACT)
@@ -1411,6 +1420,7 @@ def build_topcase(keys, half):
         add(shelf, mode=Mode.ADD)
         add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
         add(rebate, mode=Mode.SUBTRACT)              # プレートが入る座ぐり
+        add(rear_gap, mode=Mode.SUBTRACT)
         add(lip_rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
         # キーの開口
