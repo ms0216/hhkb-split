@@ -1407,8 +1407,12 @@ def build_topcase(keys, half):
     # リム面より上の材料が丸ごと消えた（2026-09-05。ベゼルの縁が全周で無くなり、
     # 利用者が .blend で「押さえられていない」と指摘。私は数字で確かめる前に
     # 「押さえている」と 2 度言った）。**引いてから intersect** の順にする。
-    # ここはリムより下は空洞（cav_below_rim）なので intersect 自体が要らない。
-    rebate = _inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
+    # ⚠️ **リム面より下まで引いてはいけない。**一度「リムより下は空洞だから
+    # intersect は要らない」と書いて、リムより下に**後から足す棚**まで削った
+    # （2026-09-05。test_the_plate_rear_edge_rests_on_the_case が捕まえた。
+    # 棚の無い上シェルを利用者が刷り始めていた）。引いてから intersect。
+    rebate = (_inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
+              ).intersect(above_rim)
     # 奥端の上だけ隙間を PLATE_REAR_GAP に広げる（傾けて差し込むため）
     with BuildPart() as _rg:
         with Locations((0, h_body / 2 - BEZEL_WALL - (PLATE_SHELF_D + 2.0) / 2, 0)):

@@ -648,9 +648,9 @@ def pcb_mount_positions(half):
     return list(PCB_MOUNT_POSITIONS[half])
 
 
-MOUNT_POSITIONS = {
-    "left":  [(-60.00, -51.50), (0.00, -51.50), (60.00, -51.50)],
-    "right": [(-75.00, -51.50), (0.00, -51.50), (75.00, -51.50)],
+MOUNT_POSITIONS = {   # y は MOUNT_Y（2026-09-05 に 51.5 → 50.91。上の注記）
+    "left":  [(-60.00, -MOUNT_Y), (0.00, -MOUNT_Y), (60.00, -MOUNT_Y)],
+    "right": [(-75.00, -MOUNT_Y), (0.00, -MOUNT_Y), (75.00, -MOUNT_Y)],
 }
 
 

@@ -1012,10 +1012,17 @@ def test_the_screws_engage_enough_of_the_insert(half):
         best = 0.0
         for scr in parts["screws"].solids():
             sb = scr.bounding_box()
-            if (abs(sb.center().X - ib.center().X) > 1.0
-                    or abs(sb.center().Y - ib.center().Y) > 1.0):
+            if abs(sb.center().X - ib.center().X) > 1.0:
                 continue
-            best = max(best, min(sb.max.Z, ib.max.Z) - max(sb.min.Z, ib.min.Z))
+            if ib.size.Y <= ib.size.Z and abs(sb.center().Y - ib.center().Y) > 1.0:
+                continue
+            # 軸の向きで測る。奥面のネジ（案 A・2026-09-05）は y 軸
+            if ib.size.Y > ib.size.Z:
+                if abs(sb.center().Z - ib.center().Z) > 1.0:
+                    continue
+                best = max(best, min(sb.max.Y, ib.max.Y) - max(sb.min.Y, ib.min.Y))
+            else:
+                best = max(best, min(sb.max.Z, ib.max.Z) - max(sb.min.Z, ib.min.Z))
         if best < need:
             short.append(f"({ib.center().X:+.1f},{ib.center().Y:+.1f}) 噛み合い {best:.2f}mm")
     assert not short, (
@@ -1567,7 +1574,7 @@ def test_the_plate_can_be_put_into_the_shells(half):
     3 姿勢で上シェルと当たらないことと、据わった位置から上へ 0.3 動かすと
     ベゼルの縁に当たる（＝押さえている）ことを見る。
     """
-    from math import atan2, degrees
+    from math import atan2, degrees, radians
     from build123d import Location
     from gen_case import PLATE_SHELF_D
     from interface import PLATE_T
@@ -1596,8 +1603,14 @@ def test_the_plate_can_be_put_into_the_shells(half):
     tilt = degrees(atan2(PLATE_T + 0.5, bb.max.Y - bb.min.Y))
     tilted = Location((0, y_rear, bb.min.Z)) * Location((0, 0, 0), (tilt, 0, 0)) \
         * Location((0, -y_rear, -bb.min.Z))
-    # 傾けたまま手前へ PLATE_SHELF_D 引いた姿勢（溝に入る前）
-    pulled = Location((0, -PLATE_SHELF_D - 0.5, 0)) * tilted
+    # 傾けたまま手前へ PLATE_SHELF_D 引いた姿勢（溝に入る前）。**座ぐりの面
+    # （7.3°）に沿って引く。**水平に引くと、傾いた座ぐりの天井が手前ほど
+    # 低いので 4.5·tan7.3° = 0.58 だけ相対的に上がり、縁に当たる（2026-09-05
+    # に 56mm³ の偽の赤）。実際も上シェルを裏返して面に沿って滑らせる
+    from math import cos, sin
+    from gen_case import TILT_DEG
+    _d = PLATE_SHELF_D + 0.5
+    pulled = Location((0, -_d * cos(radians(TILT_DEG)), -_d * sin(radians(TILT_DEG)))) * tilted
     v = hit(pulled)
     assert v < 1e-6, (
         f"{half}: 傾けて（{tilt:.2f}°）手前へ引いた姿勢で上シェルに {v:.2f}mm³ 当たる。"
@@ -1706,6 +1719,11 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
         ("USB-C の口", db_x - USB_W / 2 - m, usb_center_z() - USB_H / 2 - m,
          db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
     ]
+    # 奥面 3 本目のネジのバカ穴（案 A・2026-09-05）
+    from gen_case import M2_CLEAR_D, rear_screw3
+    _x3, _z3 = rear_screw3(half, w, plan_depth(h_plate))
+    windows.append(("奥の 3 本目のネジ", _x3 - M2_CLEAR_D / 2 - m, _z3 - M2_CLEAR_D / 2 - m,
+                    _x3 + M2_CLEAR_D / 2 + m, _z3 + M2_CLEAR_D / 2 + m))
 
     # ⚠️ **2026-08-30 に判定を入れ替えた。**それまでは「奥面から WALL の
     # 範囲を 6 つの深さで掃いて、どこにも材料が無ければ穴」としていた。

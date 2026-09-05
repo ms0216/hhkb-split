@@ -399,6 +399,7 @@ def build_assembly(keys, half, real=False):
         _rear_seats = [(sx, _y_face, sz) for sx, sz in rear_screw_positions(half, w, h_case)]
         _x3, _z3 = rear_screw3(half, w, h_case)
         _rear_seats.append((_x3, _y_out_case - WALL - CLEARANCE, _z3))
+        _rear_screw_len = {(_x3, _z3): 8.0}                 # 3 本目だけ長い
         for x_, y_, z_ in _rear_seats:
             with Locations((x_, y_, z_)):
                 Cylinder(M2_INSERT_D / 2, M2_INSERT_L, rotation=(90, 0, 0),
@@ -421,12 +422,13 @@ def build_assembly(keys, half, real=False):
                 Cylinder(SCREW_SHAFT_D / 2, SCREW_L_MAIN,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
         # 奥面の横向き M2（奥板 2 本は板の外面から、3 本目は奥壁の外面から）
-        from envelopes import SCREW_L_DB as _SCREW_L_REAR
+        from envelopes import SCREW_L_DB, SCREW_L_REAR3
         for x_, y_, z_ in _rear_seats:
+            _len = SCREW_L_REAR3 if (x_, z_) in _rear_screw_len else SCREW_L_DB
             with Locations((x_, _y_out_case, z_)):    # 頭は奥面（外）に座る
                 Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H, rotation=(90, 0, 0),
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
-                Cylinder(SCREW_SHAFT_D / 2, _SCREW_L_REAR, rotation=(90, 0, 0),
+                Cylinder(SCREW_SHAFT_D / 2, _len, rotation=(90, 0, 0),
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         for dx_, dy_ in DB_BOSS_POS:
             with Locations((db_x + dx_, db_center_y + dy_,
