@@ -1558,10 +1558,12 @@ def build_topcase(keys, half):
             with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):
                 Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 3 本目（奥壁の内面に接するボスへ）
-        with Locations((_x3, y_out - WALL - CLEARANCE - 2.5 + 0.01, _z3)):
-            Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 3 本目（奥壁の内面に接するボスへ）。**下穴はボスを貫く。**ネジは
+        # M2×8 で先端がボスの奥面から 7.4 入る。深さ 5.0 だと先端が底に
+        # 0.41 当たる（箱モードで 1.29mm³・2026-09-05）
+        with Locations((_x3, y_out - WALL - CLEARANCE - (REAR_RAIL_D + 1.0) / 2 + 0.01, _z3)):
+            Cylinder(M2_INSERT_D / 2, REAR_RAIL_D + 1.0, rotation=(90, 0, 0),
+                     mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     # 手前面の傾き（FRONT_FACET_*）: 上端から FRONT_FACET_H の帯を、上端を
     # 支点に 12° 内側へ倒した平面で切る。外形は変わらない（上端が最前点）。
     y_front = -h_body / 2
