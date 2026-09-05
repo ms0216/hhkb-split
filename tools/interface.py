@@ -211,7 +211,24 @@ BEZEL_TOP_FRONT = 17.5    # 前縁でのベゼル上面＝**手前端そのも�
                           # その間を採った（docs/hardware/dimensions.md）。
                           # 組み上げた立体の前縁が実際にこの値になることは
                           # test_front_edge_height が実測で見張る。
-MOUNT_Y = 51.5            # ネジのボス中心。4 つの制約が同時に成立する唯一の帯
+# 手前のネジ（ボス）の中心 y。**2026-09-05 に 51.5 → 50.86。**
+# 51.5 では熱圧入インサート（外径 3.2）の外側の肉が 0.46 しか無く、圧入で
+# 割れる。基板の手前縁は外面から PCB_INSET_Y 5.3（y=−48.26）。そこに
+# CLEARANCE 0.2 とインサートの内側の肉 FRONT_BOSS_WALL_IN 0.8 を残すと、
+# インサートの中心は 48.26 + 0.2 + 0.8 + 1.6 = 50.86 まで内へ寄せられる。
+# 外面までの肉は 53.56 − 50.86 − 1.6 = 1.1（0.46 から）。
+# ボスは円柱ではなく**壁と一体の角柱**（gen_case）にして、内端を基板の縁 +
+# 0.2 で止める。test_topcase_geometry が両側の肉を見張る。
+# 基板の手前縁（平面図）。基板はプレートと一緒に 7.3° 傾いて入るので、平らな
+# 座標の (5u/2 + 余白 − PCB_INSET_Y) に cos(TILT) が掛かる。
+# ⚠️ test_topcase_geometry は長らく平らな座標（54.0 基準）で見ていて、実際の
+# 平面図（53.56 基準）と 0.44 ずれていた。ここで 1 つに揃える。
+from math import cos as _cos, radians as _radians  # noqa: E402
+_KEY_H_HALF = 5 * 19.05 / 2                       # HHKB は 5 段
+PCB_FRONT_EDGE_PLAN = (_KEY_H_HALF + PLATE_MARGIN_Y - 5.3) * _cos(_radians(TILT_DEG))
+FRONT_BOSS_WALL_IN = 0.8  # インサートの内側（基板側）に残す肉
+FRONT_BOSS_W = 8.0        # 手前ボス（角柱）の x 幅
+# MOUNT_Y は M2_INSERT_D の定義の後（下）で計算する
 
 PCB_INSET = 3.0        # 左右。これ以上詰めるとキー領域が基板からはみ出す
 # 前後は**もっと詰める。**取付ボス（y=±51.5, φ5 → 内端 49.0）を基板の外に
@@ -311,6 +328,8 @@ def stab_flipped(key):
 # **PLA に直接タッピングすると数回の開け閉めで舐める。**
 # インサート外径 3.2mm に対して肉厚 1.2mm を確保すると φ5.6。
 M2_INSERT_D = 3.2
+# 手前のネジの中心 y（上の PCB_FRONT_EDGE_PLAN の注記）
+MOUNT_Y = round(PCB_FRONT_EDGE_PLAN + CLEARANCE + FRONT_BOSS_WALL_IN + M2_INSERT_D / 2, 2)
 M2_BOSS_D = 5.6          # ボス外径
 M2_PILOT_D = 3.2         # ケース側の下穴。**熱圧入インサートの外径。**
                          # タッピング用の 1.7mm ではない

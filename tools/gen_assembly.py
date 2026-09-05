@@ -131,15 +131,9 @@ HELD_BY = {
 }
 
 
-def plate_placement(w, h):
-    """プレートをリム面に載せる位置。
-
-    プレートは XY 平面上に平らに作られている。X 軸まわりに TILT_DEG 回すと
-    底面が z = y·tan(TILT) の平面になるので、リム面の中央高さだけ持ち上げる。
-    """
-    rim_front = PLATE_TOP_FRONT - PLATE_T
-    mid_z = rim_front + (h / 2) * tan(radians(TILT_DEG))
-    return Location((0, 0, mid_z), (TILT_DEG, 0, 0))
+# プレートの姿勢は gen_case.plate_placement が出所（上シェルの開口も同じ姿勢で
+# 切るので、そちらに置いた。2026-09-05）
+from gen_case import plate_placement  # noqa: E402,F401
 
 
 def build_assembly(keys, half, real=False):
@@ -396,6 +390,23 @@ def build_assembly(keys, half, real=False):
             with Locations((x_, y_, z_)):
                 Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
+        # 奥面の横向きインサート（奥板 2 ＋ 3 本目。案 A・2026-09-05）。
+        # 軸は y。奥板の手前面（桟の奥面）から手前へ M2_INSERT_L 入る。
+        from gen_case import (REAR_PLATE_T, rear_rail_y, rear_screw3,
+                              rear_screw_positions)
+        _y_out_case = h_case / 2 + BUMP_DEPTH             # 奥面（外）
+        _y_face = rear_rail_y(h_case)[1]                  # 桟の奥面
+        _rear_seats = [(sx, _y_face, sz) for sx, sz in rear_screw_positions(half, w, h_case)]
+        _x3, _z3 = rear_screw3(half, w, h_case)
+        _rear_seats.append((_x3, _y_out_case - WALL - CLEARANCE, _z3))
+        for x_, y_, z_ in _rear_seats:
+            with Locations((x_, y_, z_)):
+                Cylinder(M2_INSERT_D / 2, M2_INSERT_L, rotation=(90, 0, 0),
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for x_, y_, z_ in _rear_seats:
+            with Locations((x_, y_, z_)):
+                Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, rotation=(90, 0, 0),
+                         mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.MIN))
     parts["inserts"] = _ins.part
 
     # M2 ネジ（上ケースの 3 本＋子基板の 2 本）。
@@ -409,6 +420,14 @@ def build_assembly(keys, half, real=False):
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
                 Cylinder(SCREW_SHAFT_D / 2, SCREW_L_MAIN,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
+        # 奥面の横向き M2（奥板 2 本は板の外面から、3 本目は奥壁の外面から）
+        from envelopes import SCREW_L_DB as _SCREW_L_REAR
+        for x_, y_, z_ in _rear_seats:
+            with Locations((x_, _y_out_case, z_)):    # 頭は奥面（外）に座る
+                Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H, rotation=(90, 0, 0),
+                         align=(Align.CENTER, Align.CENTER, Align.MAX))
+                Cylinder(SCREW_SHAFT_D / 2, _SCREW_L_REAR, rotation=(90, 0, 0),
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
         for dx_, dy_ in DB_BOSS_POS:
             with Locations((db_x + dx_, db_center_y + dy_,
                             FLOOR + DB_BOSS_H + DB_T)):

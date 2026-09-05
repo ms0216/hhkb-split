@@ -81,7 +81,10 @@ def test_a_screwdriver_reaches_the_screw():
     開けるのに 5〜9 個のキャップを外す必要があった。
     """
     clear = (MOUNT_Y - M2_HEAD_D / 2) - CAP_EDGE
-    assert clear >= 2.0, f"キャップからネジ頭まで {clear:.2f}mm しかない"
+    # 2026-09-05: 2.0 → 1.8。ネジを 0.64 内へ寄せた（インサートの外側の肉
+    # 0.46 → 1.05）。ドライバーの軸はネジ頭（φ3.8）より細いので、頭の縁と
+    # キャップの縁の距離がそのまま軸の余裕になる
+    assert clear >= 1.8, f"キャップからネジ頭まで {clear:.2f}mm しかない"
 
 
 def test_the_pcb_needs_no_notch():
@@ -92,11 +95,20 @@ def test_the_pcb_needs_no_notch():
     # **基板の実寸から取る。** 以前ここを CASE_HALF - PCB_INSET - 2.0 と
     # 適当な式で書いており、実際の 51.0 ではなく 49.0 として通っていた
     # （＝基板が 2mm 重なるのに合格していた）。
-    from interface import PCB_INSET_Y
-    pcb_half = (KEYS_HALF_H + PLATE_MARGIN_Y) - PCB_INSET_Y
-    boss_inner = MOUNT_Y - M2_BOSS_D / 2
-    assert pcb_half <= boss_inner + 1e-9, \
-        f"基板の縁 {pcb_half:.2f} がボスの内端 {boss_inner:.2f} に掛かる"
+    from interface import (CLEARANCE, FRONT_BOSS_WALL_IN, M2_INSERT_D,
+                           PCB_FRONT_EDGE_PLAN)
+    pcb_half = PCB_FRONT_EDGE_PLAN                    # 平面図（傾けた後）の縁
+    # ボスは角柱で、内端は基板の縁 + CLEARANCE に置く（gen_case）。ここで見るのは
+    # **インサートの内側の肉**が FRONT_BOSS_WALL_IN 残ること
+    insert_inner = MOUNT_Y - M2_INSERT_D / 2
+    boss_inner = pcb_half + CLEARANCE
+    assert insert_inner - boss_inner >= FRONT_BOSS_WALL_IN - 1e-9, \
+        f"インサートの内側の肉が {insert_inner - boss_inner:.2f}mm（要 {FRONT_BOSS_WALL_IN}）"
+    from math import cos, radians
+    from interface import TILT_DEG
+    case_half_plan = CASE_HALF * cos(radians(TILT_DEG))   # 平面図の外面
+    assert case_half_plan - (MOUNT_Y + M2_INSERT_D / 2) >= 1.0, \
+        f"インサートの外側の肉が {case_half_plan - (MOUNT_Y + M2_INSERT_D / 2):.2f}mm しかない"
 
 
 def test_the_plate_notch_is_expected():

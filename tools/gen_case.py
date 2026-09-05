@@ -152,6 +152,7 @@ PLATE_TOP_FRONT = round(
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
+from interface import FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
 FLOOR = 2.4              # 底板。0.4mm の 6 倍。
@@ -556,6 +557,12 @@ REAR_GROOVE_D = 1.2      # 同・深さ（床 2.4 の半分）
 REAR_RAIL_H = 6.0        # 上シェルの奥縁の裏に付ける桟（奥板のネジを受ける）
 REAR_RAIL_D = 6.0        # 同・奥行
 REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
+# 奥面 3 本目のネジ（2026-09-05・利用者「見えない所ならネジを増やしてよい」）。
+# 奥板のリップは電池窓の幅（109）しか押さえず、子基板側の 35mm は隅の柱で
+# 受けるだけだった。奥壁を貫いて上シェルの天井裏のボスへ M2 を横に入れる。
+# 位置は子基板の中心から電池側へ REAR_SCREW3_DX（LED 窓と USB を避ける）。
+REAR_SCREW3_DX = 8.0
+REAR_SCREW3_BOSS_W = 6.0 # 天井裏のボス（角柱）の x 幅
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
 
@@ -731,10 +738,15 @@ def build_case(keys, half):
     # 無く（feec08b で廃止）、ボスは基板の外に立っている。切る高さは
     # 20 行ほど下で「プレートの下面（リム）」に決めている。
     with BuildPart() as _b:
+        # **角柱**（2026-09-05）。円柱 φ5.6 では中心 51.5 でインサートの外側の
+        # 肉が 0.46 だった。角柱にして外面（y=−h_body/2 − 1）から基板の縁 + 0.2
+        # まで一体で作り、インサートを内へ寄せる（interface.MOUNT_Y の注記）。
         for bx, by in _boss_positions(half):
-            with Locations((bx, by, FLOOR)):
-                Cylinder(M2_BOSS_D / 2, z_max,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+            _y_in = -PCB_FRONT_EDGE_PLAN + CLEARANCE          # 基板の縁 + 0.2
+            _y_out_ = -h_body / 2 - 1.0                          # 外面より外（外形で切る）
+            with Locations((bx, (_y_in + _y_out_) / 2, FLOOR)):
+                Box(FRONT_BOSS_W, _y_in - _y_out_, z_max,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
     # **ボスの頭はプレートの下面（リム）で止める。**
     # 以前は基板の下面で止めていた（基板をボスに載せる設計だったため）。
     # 上ケース方式ではネジは上ケースから入り、プレートはボスの上に載る。
@@ -959,6 +971,11 @@ def build_case(keys, half):
             Box(SW_SLOT_W, WALL * 4, _sl1 - _sl0,
                 mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 6-0c. 奥面 3 本目のネジのバカ穴（奥壁を貫いて上シェルのボスへ）
+        _x3, _z3 = rear_screw3(half, w, h_body)
+        with Locations((_x3, y_rear_outer - WALL / 2, _z3)):
+            Cylinder(M2_CLEAR_D / 2, WALL * 3, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
 
 
 
@@ -1247,7 +1264,20 @@ def foot_height(h, add_deg):
     return FOOT_BASE_H + lever * tan(radians(add_deg))
 
 
-def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max):
+def plate_placement(w, h_plate):
+    """プレートをリム面に載せる位置（gen_assembly から移した・2026-09-05）。
+
+    プレートは XY 平面上に平らに作られている。X 軸まわりに TILT_DEG 回すと
+    底面が z = y·tan(TILT) の平面になるので、リム面の中央高さだけ持ち上げる。
+    **上シェルの開口と最下段の覆いも同じ姿勢で切る**（キャップと同じ傾き）。
+    """
+    del w
+    rim_front = PLATE_TOP_FRONT - PLATE_T
+    mid_z = rim_front + (h_plate / 2) * tan(radians(TILT_DEG))
+    return Location((0, 0, mid_z), (TILT_DEG, 0, 0))
+
+
+def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max, pose):
     """最下段のキーが無い帯を覆う蓋（ベゼルの枠と同じ断面の板）。
 
     実機は最下段の左右の余白を筐体の面で覆っている（利用者の指摘・
@@ -1288,6 +1318,9 @@ def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max):
             with Locations(((x0 + x1) / 2, (y0 + y1) / 2, 0)):
                 Box(x1 - x0, y1 - y0, z_max * 2,
                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # **プレートと同じ姿勢に傾ける**（2026-09-05）。垂直のままだと、覆いの
+        # 奥の面（次の段のキャップに向く）が 7.3° ずれる。開口と同じ理由
+        _p_part = pose * _p.part
         # ⚠️ intersect / 減算は ShapeList を返すことがあるので、
         # 演算のたびに 1 つの立体へ融合し直す。
         def _one(x):
@@ -1298,7 +1331,7 @@ def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max):
             for q in ps[1:]:
                 out += q
             return out
-        slab = _one(_p.part.intersect(outline))
+        slab = _one(_p_part.intersect(outline))
         slab = _one(slab - tilted_cutter(w, h_body, BEZEL_TOP_FRONT))
         slab = _one(slab.intersect(
             tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)))
@@ -1420,6 +1453,13 @@ def build_topcase(keys, half):
             Box((wx1 - wx0) - 1.0, REAR_RAIL_D, REAR_RAIL_H + 8.0,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     rail = _rail.part - cut_above_top
+    # 奥面 3 本目のネジを受けるボス（桟と同じ高さ・奥壁の内面に接する）
+    _x3, _z3 = rear_screw3(half, w, h_body)
+    with BuildPart() as _b3:
+        with Locations((_x3, y_out - WALL - CLEARANCE - REAR_RAIL_D / 2, rail_z0)):
+            Box(REAR_SCREW3_BOSS_W, REAR_RAIL_D, REAR_RAIL_H + 8.0,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+    boss3 = _b3.part - cut_above_top
     # 電源スイッチの押さえ柱（天井から溝の上 0.3mm まで）。溝は上が開いて
     # いる（落とし込むため）ので、上シェルが上への抜けを塞ぐ。
     from envelopes import SW_PWR_BODY_D, SW_PWR_H
@@ -1454,7 +1494,19 @@ def build_topcase(keys, half):
             Box(w * 2, 100, z_max * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
     led_window_void = _lw.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT - LED_WIN_SKIN)
-    blank_covers = _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max)
+    pose = plate_placement(w, h_plate)
+    blank_covers = _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max, pose)
+    # キーの開口。**プレートと同じ 7.3° に傾けて切る**（2026-09-05）。
+    # 垂直に切ると開口の壁とキャップの面が 7.3° ずれ、手前段ではキャップが
+    # 上へ行くほど縁に近づく（箱モードで 0.03mm³ 触れた。旧・隙間 0.9 でも
+    # 縁との余裕は 0.18 しか無く、奥の段は逆に広すぎた）。傾けて切れば
+    # 全段で隙間が BEZEL_OPENING_GAP になる（実機 §4 の 5「窪んだトレイ」）。
+    with BuildPart() as _op:
+        with BuildSketch():
+            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
+                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
+        extrude(amount=100.0, both=True)
+    opening_cut = pose * _op.part
 
     with BuildPart() as top:
         with BuildSketch():
@@ -1470,6 +1522,7 @@ def build_topcase(keys, half):
         add(front_cut, mode=Mode.SUBTRACT)
         add(plate_band_cut, mode=Mode.SUBTRACT)
         add(rail, mode=Mode.ADD)
+        add(boss3, mode=Mode.ADD)
         add(keeper, mode=Mode.ADD)
         add(shelf, mode=Mode.ADD)
         add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
@@ -1477,15 +1530,8 @@ def build_topcase(keys, half):
         add(rear_gap, mode=Mode.SUBTRACT)
         add(lip_rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
-        # キーの開口
-        with BuildSketch():
-            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
-                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
-        extrude(amount=z_max, mode=Mode.SUBTRACT)
-        with BuildSketch(Plane.XY.offset(-z_max)):
-            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
-                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
-        extrude(amount=z_max, mode=Mode.SUBTRACT)
+        # キーの開口（プレートと同じ姿勢。上の opening_cut の注記）
+        add(opening_cut, mode=Mode.SUBTRACT)
         # 最下段の無キー帯を覆う（2026-08-24・利用者の指摘。実機は最下段の
         # 左右の余白を筐体の面で覆っている）
         add(blank_covers, mode=Mode.ADD)
@@ -1503,6 +1549,10 @@ def build_topcase(keys, half):
             with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):
                 Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 3 本目（奥壁の内面に接するボスへ）
+        with Locations((_x3, y_out - WALL - CLEARANCE - 2.5 + 0.01, _z3)):
+            Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
     # 手前面の傾き（FRONT_FACET_*）: 上端から FRONT_FACET_H の帯を、上端を
     # 支点に 12° 内側へ倒した平面で切る。外形は変わらない（上端が最前点）。
     y_front = -h_body / 2
@@ -1582,6 +1632,13 @@ def rear_screw_positions(half, w, h_body):
     bx = battery_x_center(half, w)
     z = rear_rail_z0(h_body) + REAR_RAIL_H / 2
     return [(bx - REAR_SCREW_DX, z), (bx + REAR_SCREW_DX, z)]
+
+
+def rear_screw3(half, w, h_body):
+    """奥面 3 本目のネジ (x, z)。子基板の中心から電池側へ REAR_SCREW3_DX、
+    高さは桟と同じ（天井の下 REAR_RAIL_H の中心）。"""
+    x = daughterboard_x_center(half, w) - inner_sign(half) * REAR_SCREW3_DX
+    return x, rear_rail_z0(h_body) + REAR_RAIL_H / 2
 
 
 def battery_hole_xs(half, w):
