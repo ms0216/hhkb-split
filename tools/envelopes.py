@@ -210,11 +210,18 @@ def battery_envelope(center):
     検査することになる。
 
     ⚠️ 寸法は商品ページの記載で、**ノギスでは測っていない**（provisional-values.md）。
+    データシート（BH-325-1A・図面 3251A-0410）とは一致している。
+
+    **横倒しに置く**（2026-09-05・案 A）。データシートで箱は**上面（長辺の
+    開口）から電池を入れる樋型**と分かった。奥面の板から出し入れするには
+    開口を奥（+y）へ向ける必要があるので、箱の高さ 16.8 が奥行（y）、
+    幅 16.6 が高さ（z）になる。床（箱の取付穴のある面）は手前（−y）を向き、
+    そこから仕切り壁へ M2 で締める。
     """
     from build123d import Align, Box, Location
 
     return (Location(center)
-            * Box(BATT_BOX_L, BATT_BOX_W, BATT_BOX_H,
+            * Box(BATT_BOX_L, BATT_BOX_H, BATT_BOX_W,
                   align=(Align.CENTER, Align.CENTER, Align.CENTER)))
 
 
