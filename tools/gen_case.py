@@ -509,8 +509,8 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # 上下シェルの合わせ目とスカート（2026-09-05・案 A）
 #
 # 上シェル（ベゼル＋コブ天井）は**側壁を外側から被るスカート**（厚み SKIRT_T）
-# を持つ。下シェルの側壁は合わせ目（SEAM_Z）より上で外側 SKIRT_T + CLEARANCE
-# を削り、内側 1.0 の帯が**リム面までプレートを受ける**。
+# を持つ。下シェルの側壁は合わせ目（SEAM_Z）より上で外側 SKIRT_T + SKIRT_FIT
+# を削り、内側の帯（1.2）が**リム面までプレートを受ける**。
 #
 # ⚠️ 一度「合わせ目より上の側壁は丸ごと上シェルの物」にした（2026-09-05 の
 # 最初の版）。すると**プレートを受ける段と押さえるベゼルの縁が同じ部品に
@@ -528,7 +528,13 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # 手前と側面の合わせ目が一直線になる。
 SEAM_Z = PLATE_TOP_FRONT - PLATE_T
 SKIRT_T = 1.2            # スカートの厚み（0.4 ノズル 3 周）。下シェル側の
-                         # 帯は WALL − SKIRT_T − CLEARANCE = 1.0
+                         # 帯は WALL − SKIRT_T − SKIRT_FIT = 1.2（同じく 3 周）
+# スカートの内面と帯の外面の隙間。**0 ＝ 接触**（2026-09-05・利用者の判断:
+# 「隙間があるとガタつく。合わなければ削る」。電池蓋のビードを大きい側に
+# 振ったのと同じ方針）。印刷の公差 CLEARANCE(0.2) をここに入れると帯が
+# 1.0（2.5 周）に痩せ、横に ±0.2 の遊びが出る。0 で刷って被さらなければ
+# 帯（平らで外から手が届く）をやすりで削る。クーポン（#11）で確定させる。
+SKIRT_FIT = 0.0          # [暫定] クーポンで実測してから決める
 # プレートの奥端の上の隙間（座ぐりの天井をプレート上面からこれだけ上げる）。
 # 奥端は上シェルの棚（下）とベゼルの縁（上）の**溝**に入るので、プレートを
 # 少し傾けて奥から差し込む（手前が板厚＋0.5 下がる ≈ 1.1°。奥端の角の
@@ -668,16 +674,16 @@ def build_case(keys, half):
     # 天井の下面（ベゼル上面 − WALL）から CLEARANCE 下げて切る。
     cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
     _y_out = h_body / 2 + BUMP_DEPTH
-    # 合わせ目より上の側壁の外側 SKIRT_T + CLEARANCE を削る（上シェルの
-    # スカートが被る）。内側 1.0 の帯はリム面（コブでは天井の下）まで残り、
+    # 合わせ目より上の側壁の外側 SKIRT_T + SKIRT_FIT を削る（上シェルの
+    # スカートが被る）。内側 1.2 の帯はリム面（コブでは天井の下）まで残り、
     # プレートを受ける。奥の隅（y > 奥面 − REAR_CORNER_D）は柱として全厚で残す。
     with BuildPart() as _sk:
         with BuildSketch(Plane.XY.offset(SEAM_Z)):
             with Locations((0, y_off)):
                 RectangleRounded(w + 2.0, h + 2.0, CORNER_R + 1.0)
-                RectangleRounded(w - (SKIRT_T + CLEARANCE) * 2,
-                                 h - (SKIRT_T + CLEARANCE) * 2,
-                                 max(CORNER_R - SKIRT_T - CLEARANCE, 0.5),
+                RectangleRounded(w - (SKIRT_T + SKIRT_FIT) * 2,
+                                 h - (SKIRT_T + SKIRT_FIT) * 2,
+                                 max(CORNER_R - SKIRT_T - SKIRT_FIT, 0.5),
                                  mode=Mode.SUBTRACT)
         extrude(amount=z_max)
         with Locations((0, _y_out - REAR_CORNER_D + 100, 0)):
