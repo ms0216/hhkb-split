@@ -787,14 +787,7 @@ def build_case(keys, half):
             RectangleRounded(w + 20, h_body, CORNER_R)
         extrude(amount=z_max + 50, both=True)
     cutter = tilted_cutter(w, h_body, rim_front).intersect(_body.part)
-    # コブの天井。**検討中: 見栄え対策で水平化**（3D プリント時の傾いた面の
-    # レイヤー跡対策・利用者要望 2026-09-03）。継ぎ目（y=h_body/2、本体と
-    # コブの境）の高さで本体側の傾斜と一致させ、そこから奥は水平にする。
-    _bump_join_z = BEZEL_TOP_FRONT + h_body * tan(radians(TILT_DEG))
-    with BuildPart() as _cb:
-        with Locations((0, 0, _bump_join_z)):
-            Box(w * 3, h * 6, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    cutter_bump = _cb.part
+    cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
     from envelopes import under_pcb_base
@@ -812,15 +805,13 @@ def build_case(keys, half):
     # 以前は基板の下面で止めていた（基板をボスに載せる設計だったため）。
     # 上ケース方式ではネジは上ケースから入り、プレートはボスの上に載る。
     bosses = _b.part - cutter
-    # コブの天井（水平板。cutter_bump と同じ継ぎ目高さを使う）。
+    # コブの天井（傾いた板）。コンテキストの外で作る。
     with BuildPart() as _bl:
         with Locations((0, h_body / 2 + BUMP_DEPTH / 2, 0)):
             Box(w - WALL * 2, BUMP_DEPTH, z_max * 2,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
-    with BuildPart() as _bump_bot:
-        with Locations((0, 0, _bump_join_z - WALL)):
-            Box(w * 3, h * 6, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    bump_lid = (_bl.part - cutter_bump).intersect(_bump_bot.part)
+    bump_lid = ((_bl.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT))
+                .intersect(tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)))
     # LED の窓の彫り込み（#43）。XIAO の真上の天井を、外面から
     # LED_WIN_SKIN だけ残して内側から薄くする。円柱から「上面−肉」より
     # 上を除いたものを引くと、ちょうど薄皮が残る（天井は傾いているので
