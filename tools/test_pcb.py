@@ -240,10 +240,15 @@ def test_mounting_holes_match_the_case_bosses(name):
         f"{name}: 基板の取付穴が {n_hole} 個。設計は {want} 個"
         "（interface.PCB_MOUNT_POSITIONS）")
     x0, y0, x1, y1 = outline_extent(name)
-    half_h = (y1 - y0) / 2
+    # 基板は 7.3° 傾いて入るので平面図では cos ぶん縮む。ボスは角柱（2026-09-05）で
+    # 内面 = ネジ中心 − インサート半径 − 内側の肉（interface.MOUNT_Y の注記）
+    from math import cos, radians
+    from interface import CLEARANCE, FRONT_BOSS_WALL_IN, M2_INSERT_D, TILT_DEG
+    half_h = (y1 - y0) / 2 * cos(radians(TILT_DEG))
     for bx, by in boss_positions(name):
-        assert abs(by) - M2_BOSS_D / 2 >= half_h - 1e-6, \
-            f"{name}: ボス({bx},{by}) が基板（半深 {half_h:.2f}）に掛かる"
+        boss_inner = abs(by) - M2_INSERT_D / 2 - FRONT_BOSS_WALL_IN
+        assert boss_inner >= half_h + CLEARANCE - 1e-6, \
+            f"{name}: ボス({bx},{by}) の内面 {boss_inner:.2f} が基板（平面図の半深 {half_h:.2f}）に掛かる"
 
 
 @pytest.mark.parametrize("name", NAMES)
