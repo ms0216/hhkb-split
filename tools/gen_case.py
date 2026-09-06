@@ -153,6 +153,7 @@ PLATE_TOP_FRONT = round(
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
 from interface import FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN  # noqa: E402
+from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
 FLOOR = 2.4              # 底板。0.4mm の 6 倍。
@@ -160,7 +161,12 @@ FLOOR = 2.4              # 底板。0.4mm の 6 倍。
                          # 床の内面より上に出て電池に食い込んだため厚くした。
 # CLEARANCE（嵌合の逃げ 0.2）は interface.py から読む。プレートも同じ値で
 # 上ケースの座ぐりに落とし込むので、出所を 2 つ持たない。
-PORT_CLEAR = 0.6         # 抜き差しする穴の逃げ。嵌合より広くとる（印刷の公差＋挿しやすさ）
+USB_HOLE_R = 1.2         # USB-C 穴の角の丸み。実物のメスの角 r≈1.0 に逃げを足した。
+                         # 両端を半円にするとメスの箱の四隅が穴の外に出る（箱モードで
+                         # 1.4mm³・2026-09-06）
+PORT_CLEAR = 0.4         # 抜き差しする穴の逃げ。**0.6 → 0.4**（2026-09-06・利用者
+                         # 「USB-C の穴が大きすぎる」。メスは外面から出ているので
+                         # 穴が通すのはメス自体。印刷公差 0.2 ＋ 0.1）
 
 # --------------------------------------------------------------------------
 # 内部に収めるもの
@@ -197,6 +203,14 @@ BATT_HOLE_Z_FROM_EDGE = 4.1      # [暫定] 図面「4.1±0.2」を箱の長辺�
 BATT_HOLE_X1_FROM_END = 75.9     # [暫定] 穴 1。黒線側の端から。図面 75.9±0.5
 BATT_HOLE_X2_FROM_END = 82.8     # [暫定] 穴 2。同 75.9 に隣の 6.9±0.2 を足した
 BATT_WIRE_NOTCH = 4.0            # 仕切り壁の両端に開ける、リード線の逃げ（幅・高さ）
+# 箱の裏面（横倒しでは仕切り壁を向く面）のケーブル受けの突起。**利用者が現物を
+# 実測**（2026-09-06）: 黒線側の端から 14 / 53.5 / 93、幅 4、高さ 5.5。仕切り壁を
+# そこだけ切り下げる（利用者「他は下げなくてよい」）
+BATT_GUIDE_X1_FROM_END = 14.0   # [暫定] 利用者の実測（現物）
+BATT_GUIDE_X2_FROM_END = 53.5   # [暫定] 同
+BATT_GUIDE_X3_FROM_END = 93.0   # [暫定] 同
+BATT_GUIDE_W = 4.0                            # [暫定] 同
+BATT_GUIDE_H = 5.5                            # [暫定] 同。床からこの高さまで壁を残す
 # 電池室の仕切り壁の高さ（床から）。
 #
 # ⚠️ **2026-08-29 に 16.8（＝BATT_H）→ 6.0 へ下げた。利用者が刷って触った指摘。**
@@ -492,21 +506,9 @@ USB_H = max(USB_SHELL_H, _RECEPT[1]) + PORT_CLEAR * 2
 # ここを USB_W x USB_H で貫く。**メスはこの中に収まり、外面より
 # USB_RECESS だけ引っ込む**（上の DB_FROM_REAR の注記）。
 USB_PLUG_ENTRY = WALL - (XIAO_OVERHANG - DB_FROM_REAR)
-# **保険の座ぐり。**手持ちのケーブルは金属が 1.0mm 見えていたが、
-# **ケーブルによってはもっと短い。**その場合は樹脂がわずかに壁へ入る必要がある。
-# ここを 0 にすると「このケーブルでしか挿さらないキーボード」になる。
-#
-# **定数で置かず、要求から導く**（2026-08-10）。メスを 0.3mm 引っ込めたら
-# 壁が 0.555mm 厚くなり、**実測したケーブル（金属の露出 1.0mm）が
-# 0.055mm 届かなくなった。**#28 の検査が捕まえた。0.5 と直書きしていた
-# ので、片方を動かしたときに追随しなかった。
-#
-#   金属だけで届かないぶん ＝ USB_PLUG_ENTRY − USB_SHELL_EXPOSED
-#   そこへ印刷の公差（CLEARANCE）を足したぶんを、樹脂に譲る
-#
-# 壁を貫通してはいけない（外に大きな口が開く）。`test_a_real_cable_can_reach
-# _the_socket` の 3 番目がそれを見張っている。
-USB_COUNTERBORE = max(0.5, USB_PLUG_ENTRY - USB_SHELL_EXPOSED + CLEARANCE)
+# 樹脂用の座ぐり（USB_COUNTERBORE）は **2026-09-06 に廃止**。メスの面は外面より
+# 0.26 外に出ている（#30）ので樹脂は壁に入らない。穴はメスの小判形だけ
+# （test_a_real_cable_can_reach_the_socket の 2 が根拠を見張る）。
 # 内側のポケット（XIAO の端を受ける）の深さ。
 XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 
@@ -589,6 +591,10 @@ FRONT_FACET_H = 0.0      # 傾ける高さ（上端から）。**0 ＝ 無効。
                          # 実機に無い線が 1 本増えるので、R2 だけにした
                          # （2026-09-05）。手前のボスを内へ動かせる基板改版が
                          # あれば、下まで通して復活させる
+OPENING_CHAMFER = 0.8    # 開口（キーの窪み）の上縁の面取り（2026-09-06・利用者
+                         # 「角が丸くなっておらず当たると痛い」）。丸めは
+                         # カーネルが不安定だが、直線の辺の面取りは通る。
+                         # 最下段の覆いの縁も同じ
 FRONT_EDGE_R = 0.0       # 上端の丸め。**0 ＝ 無効。**R2 は手前の辺だけなら
                          # カーネルが通したが、**通した結果が奥の天井の一部を
                          # 黙って失っていた**（max Z 33.53 → 33.26。x=60, y=71 の
@@ -773,6 +779,16 @@ def build_case(keys, half):
             Box(BATT_X, WALL, BATT_DIVIDER_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     divider = _d.part - cutter_under_pcb
+    # ケーブル受けの突起（BATT_GUIDE_*）が当たる所だけ BATT_GUIDE_H まで切り下げる
+    _bx0 = battery_x_center(half, w)
+    _sgn = 1 if half == "left" else -1
+    _x_end = _bx0 - _sgn * BATT_X / 2
+    with BuildPart() as _gn:
+        for d in (BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END, BATT_GUIDE_X3_FROM_END):
+            with Locations((_x_end + _sgn * d, y_div, FLOOR + BATT_GUIDE_H)):
+                Box(BATT_GUIDE_W + 2.0, WALL * 2, 30.0,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+    divider = divider - _gn.part
     # プレートの奥端の棚は上シェルの物になった（build_topcase・2026-09-05）。
     with BuildPart() as _n:
         with Locations((0, 0, FLOOR)):
@@ -818,10 +834,12 @@ def build_case(keys, half):
         #    ケースに合体してから切ると、平面がケース全体に効いてリムまで
         #    5.1mm 下がる（プレートが沈む）。高さのテストで検出された。
         add(bosses, mode=Mode.ADD)
-        for bx, by in _boss_positions(half):
-            with Locations((bx, by, FLOOR)):
-                Cylinder(M2_INSERT_D / 2, z_max, mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # **手前のネジは裏から**（2026-09-06・利用者「表のネジは見栄えが悪い。
+        # 頭を底に埋める」）。ボス柱は M2 のバカ穴を床ごと貫き、底に頭の座ぐり。
+        # 雌ねじ（インサート）は上シェルのベゼル手前バーの裏（build_topcase）。
+        # 頭は底面より中に沈むので、振動吸収シートを貼っても平ら。
+        # （バカ穴と座ぐりは底縁の丸めの**後**に切る。関数の末尾。座ぐりは
+        #   底縁から 0.45 で、先に切るとフィレットが失敗する）
 
         # 6. 電池蓋の開口とレール（底面）
         #
@@ -852,14 +870,14 @@ def build_case(keys, half):
         # **1 段で貫くと、樹脂が入る大きさの穴が壁を貫通する。**外から見て
         # 大きな口が開き、ほこりも入る。段にすれば、外に見えるのは
         # 普通の機器と同じ大きさの穴だけで済む。
-        with Locations((db_x, y_rear_outer - USB_PLUG_ENTRY / 2, usb_center_z())):
-            Box(USB_W, USB_PLUG_ENTRY, USB_H, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 樹脂用の浅い座ぐり（外面から USB_COUNTERBORE mm だけ）
-        with Locations((db_x, y_rear_outer - USB_COUNTERBORE / 2, usb_center_z())):
-            Box(USB_PLUG_W + CLEARANCE * 2, USB_COUNTERBORE,
-                USB_PLUG_H + CLEARANCE * 2, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # **小判形（両端が半円）でメスの断面ぴったり**（2026-09-06・利用者の
+        # 指摘「穴が大きすぎる。四角も見栄えが悪い」）。メスの面は外面より
+        # 0.26 外に出る（#30）ので、ケーブルの樹脂は壁に入らない——樹脂用の
+        # 座ぐり（12.4×7.4）は不要で、外に見えるのはこの小判だけ。
+        with BuildSketch(Plane.XZ.offset(-(y_rear_outer + 1.0))):
+            with Locations((db_x, usb_center_z())):
+                RectangleRounded(USB_W, USB_H, USB_HOLE_R)
+        extrude(amount=USB_PLUG_ENTRY + 1.0, mode=Mode.SUBTRACT)
         # 内側のポケット。**幅は XIAO の外形＋逃げ。**深さは残りの壁。
         with Locations((db_x, y_rear_outer - WALL + XIAO_POCKET_D / 2,
                         FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2)):
@@ -893,10 +911,12 @@ def build_case(keys, half):
         # ドライバーは奥の窓から箱の中を通す（箱の座ぐりに頭が沈む）。
         _bz = FLOOR + BATT_HOLE_Z_FROM_EDGE
         _yd_front = y_div - WALL / 2
+        # **床から立てる**（2026-09-06・利用者の指摘「浮かせる理由がない。
+        # サポートが取れず見栄えが悪い」）。ブロックの下端が床から 1.3 浮いていた
         for hx in battery_hole_xs(half, w):
-            with Locations((hx, _yd_front - 2.5, _bz)):
-                Box(M2_BOSS_D, 5.5, M2_BOSS_D,
-                    align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            with Locations((hx, _yd_front - 2.5, FLOOR - 0.5)):
+                Box(M2_BOSS_D, 5.5, (_bz + M2_BOSS_D / 2) - (FLOOR - 0.5),
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((hx, y_div + WALL / 2 - 2.25 + 0.01, _bz)):
                 Cylinder(M2_INSERT_D / 2, 4.5, rotation=(90, 0, 0),
                          mode=Mode.SUBTRACT,
@@ -943,10 +963,11 @@ def build_case(keys, half):
         y_rear_inner = y_rear_outer - WALL
         holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB   # 本体ぶん＋奥のリブ
         sw_bot = sw_z - SW_PWR_H / 2 - CLEARANCE / 2    # 溝の底（ここに座る）
-        with Locations((sw_x, y_rear_inner - holder_d / 2,
-                        sw_bot - SW_RIB)):
+        # **床から立てる**（2026-09-06・利用者の指摘。床から 2.6 浮いていて
+        # サポートが要った）。溝の底（sw_bot）から上は変えない
+        with Locations((sw_x, y_rear_inner - holder_d / 2, FLOOR - 0.5)):
             Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d,
-                SW_HOLD_H + SW_RIB,
+                (sw_bot + SW_HOLD_H) - (FLOOR - 0.5),
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 本体の空所。**上へ突き抜けさせる**（落とし込む口）。
         with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE) / 2,
@@ -1076,6 +1097,19 @@ def build_case(keys, half):
     if abs(_got - _est) > 0.3 * _est or len(part.solids()) != 1:
         raise ValueError(f"底縁の丸めで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
                          "**カーネルが別の面を失った**")
+    # 手前 3 本のバカ穴（φ2.4・床とボス柱を貫く）と、底の頭の座ぐり（裏からネジ・
+    # 2026-09-06）。丸めの後に切る（上の注記）
+    with BuildPart() as _fh:
+        for bx, by in _boss_positions(half):
+            with Locations((bx, by, -1.0)):
+                Cylinder(M2_CLEAR_D / 2, z_max,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((bx, by, -1.0)):
+                Cylinder(SCREW_HEAD_D / 2 + 0.3, 1.0 + SCREW_HEAD_H + 0.2,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+    part = part - _fh.part
+    if len(part.solids()) != 1:
+        raise ValueError("バカ穴を切ったら下シェルが分かれた")
     return part, (w, h_body), (z_front, z_rear)
 
 
@@ -1544,14 +1578,15 @@ def build_topcase(keys, half):
         # 最下段の無キー帯を覆う（2026-08-24・利用者の指摘。実機は最下段の
         # 左右の余白を筐体の面で覆っている）
         add(blank_covers, mode=Mode.ADD)
-        # ネジ穴（手前 3 箇所）。頭は座ぐりに沈める（傾いたベゼル上面から掘る）
+        # 手前のネジ（3 箇所）は**裏から**（2026-09-06）。ベゼル手前バーの裏
+        # （プレートの座ぐりの天井）から上へインサートの下穴。表は無傷。
+        # バーの高さ 6.5 に対しインサート 4.0 で、上面までの肉は 2.5
+        # 座はプレート上面 + FRONT_INSERT_LIFT（0.1 だと傾きの端数でプレートに
+        # 0.18 食う）。下穴はインサートより 1.0 深く（M2×14 の先端の逃げ）
         for bx, by in _boss_positions(half):
-            with Locations((bx, by, 0)):
-                Cylinder(M2_CLEAR_D / 2, z_max * 2, mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
-            z_top = BEZEL_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG))
-            with Locations((bx, by, z_top - SCREW_HEAD_H - 0.4)):
-                Cylinder(SCREW_HEAD_D / 2 + 0.3, z_max, mode=Mode.SUBTRACT,
+            z_seat = front_insert_seat_z(by, h_body)
+            with Locations((bx, by, z_seat - 0.5)):
+                Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.0, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥板のネジ（桟へ横向きに。熱圧入インサートの下穴）
         for sx, sz in rear_screw_positions(half, w, h_body):
@@ -1587,6 +1622,29 @@ def build_topcase(keys, half):
     front_edges = [e for e in part.edges()
                    if e.center().Z > z_edge - 1.0 and e.center().Y < bb.min.Y + 2.0
                    and e.length > 20.0]
+    # 開口と覆いの上縁を面取り（OPENING_CHAMFER）。プレート座標でベゼル上面の
+    # 高さにあり、開口の内側にある辺を選ぶ。**削れた体積を見積りと突き合わせ、
+    # カーネルが別の面を失っていないことを確かめる**（フィレットの教訓）
+    if OPENING_CHAMFER > 0:
+        _inv = pose.inverse()
+        _z_top_local = BEZEL_TOP_FRONT - PLATE_TOP_FRONT + PLATE_T
+        # 手前の縁も含む。表のネジ頭の座ぐりが開口の縁から 0.36 しか無くて
+        # 面取りが失敗していたが、ネジを裏へ移して座ぐりが消えた（2026-09-06）
+        _edges = [e for e in part.edges()
+                  if abs((_inv * e).center().Z - _z_top_local) < 0.3
+                  and abs((_inv * e).center().X) < key_w / 2 + 3.0
+                  and abs((_inv * e).center().Y) < key_h / 2 + 1.5
+                  and e.length > 1.0]
+        _v0, _b0 = part.volume, part.bounding_box()
+        part = part.chamfer(OPENING_CHAMFER, None, _edges)
+        _b1 = part.bounding_box()
+        _len = sum(e.length for e in _edges)
+        _est = _len * OPENING_CHAMFER ** 2 / 2
+        _got = _v0 - part.volume
+        if (abs(_got - _est) > 0.3 * _est or len(part.solids()) != 1
+                or abs(_b1.max.Z - _b0.max.Z) > 1e-3 or abs(_b1.max.Y - _b0.max.Y) > 1e-3):
+            raise ValueError(f"開口の面取りで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
+                             "**カーネルが別の面を失った**")
     if FRONT_EDGE_R > 0:
         if not front_edges:
             raise ValueError("手前の上縁が見つからない（丸める対象が無い）")
@@ -1597,6 +1655,15 @@ def build_topcase(keys, half):
         if abs(_after.max.Z - _before.max.Z) > 1e-3 or abs(_after.max.Y - _before.max.Y) > 1e-3:
             raise ValueError("手前の丸めで奥の形が変わった（カーネルが面を失った）")
     return part, (w, h_body)
+
+
+FRONT_INSERT_LIFT = 0.4  # 手前のインサートの座を、プレート上面からどれだけ上げるか
+
+
+def front_insert_seat_z(by, h_body):
+    """手前のインサート（上シェルのベゼル手前バーの裏）の座の高さ。
+    **ケースと組み立てがこの 1 つから取る。**"""
+    return PLATE_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG)) + FRONT_INSERT_LIFT
 
 
 def rear_window(half, w):

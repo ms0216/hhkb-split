@@ -104,8 +104,8 @@ INSERT_PATH = {
 
 HELD_BY = {
     "case":       "外殻そのもの（基準）",
-    "topcase":    "手前 M2×3（熱圧入インサート）＋スカートが側壁に被る＋奥板のリップが天井を押さえる（案 A・2026-09-05）",
-    "plate":      "下シェルの側壁の帯と手前壁が受け、上シェルのベゼルの縁が押さえる＋手前 M2×3。奥端は上シェルの棚（傾けて差し込む。案 A）",
+    "topcase":    "手前 M2×3（**裏から**。底の座ぐりに頭、ベゼル手前バーの裏のインサートへ。2026-09-06）＋スカートが側壁に被る＋奥板のリップ＋奥面 3 本目",
+    "plate":      "下シェルの側壁の帯と手前壁が受け、上シェルのベゼルの縁が押さえる。手前 M2×3 は切り欠きを貫く（共締め）。奥端は上シェルの棚（傾けて差し込む。案 A）",
     "pcb":        "⚠️ 固定具なし。スイッチのピン 54 本の摩擦のみ（#36 で対応中）",
     "pcb_real":   "同上",
     "pcb_parts":  "基板に半田付け",
@@ -378,10 +378,21 @@ def build_assembly(keys, half, real=False):
     # 「食い込んでいる」ことになり、許容値でごまかす羽目になる。
     # 穴の径はネジの軸と同じにする（実物はここがネジ山で噛み合う）。
     with BuildPart() as _ins:
-        seats = [(bx, by, rim_front + (by + h_case / 2) * tilt - 0.25)
-                 for bx, by in _boss_positions(half)]
-        seats += [(db_x + dx_, db_center_y + dy_, FLOOR + DB_BOSS_H)
-                  for dx_, dy_ in DB_BOSS_POS]
+        # 手前 3 本のインサートは**上シェルのベゼル手前バーの裏**に上向きに
+        # 入る（2026-09-06・裏からネジ）。座はプレートの座ぐりの天井
+        from gen_case import front_insert_seat_z
+        seats_up = [(bx, by, front_insert_seat_z(by, h_case))
+                    for bx, by in _boss_positions(half)]
+        seats = [(db_x + dx_, db_center_y + dy_, FLOOR + DB_BOSS_H)
+                 for dx_, dy_ in DB_BOSS_POS]
+        for x_, y_, z_ in seats_up:
+            with Locations((x_, y_, z_)):
+                Cylinder(M2_INSERT_D / 2, M2_INSERT_L,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        for x_, y_, z_ in seats_up:
+            with Locations((x_, y_, z_)):
+                Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
         for x_, y_, z_ in seats:
             with Locations((x_, y_, z_)):
                 Cylinder(M2_INSERT_D / 2, M2_INSERT_L,
@@ -413,14 +424,15 @@ def build_assembly(keys, half, real=False):
     # M2 ネジ（上ケースの 3 本＋子基板の 2 本）。
     # 上ケースの頭は座ぐり（ベゼル上面 −0.4 の深さ）に沈む。
     with BuildPart() as _scr:
+        # 手前 3 本は**裏から**（2026-09-06）。頭は底の座ぐり（底面から 0.2 沈む）、
+        # 軸は床・ボス柱・プレートの切り欠きを貫いて上シェルのインサートへ
         for bx, by in _boss_positions(half):
-            zt = (BEZEL_TOP_FRONT + (by + h_case / 2) * tilt
-                  - SCREW_HEAD_H - 0.4)
-            with Locations((bx, by, zt)):
+            with Locations((bx, by, 0.2)):
                 Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((bx, by, 0.2 + SCREW_HEAD_H)):
                 Cylinder(SCREW_SHAFT_D / 2, SCREW_L_MAIN,
-                         align=(Align.CENTER, Align.CENTER, Align.MAX))
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥面の横向き M2（奥板 2 本は板の外面から、3 本目は奥壁の外面から）
         from envelopes import SCREW_L_DB, SCREW_L_REAR3
         for x_, y_, z_ in _rear_seats:

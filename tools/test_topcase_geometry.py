@@ -65,13 +65,18 @@ def test_the_bezel_opening_clears_the_keycaps():
 
 
 def test_the_screw_head_fits_inside_the_bezel():
-    """ネジ頭がベゼルの幅に収まること。
+    """ネジ頭の座ぐりが**底のボス柱の足元**に収まること（2026-09-06・裏からネジ）。
 
-    はみ出すと開口に掛かるか、ケースの外へ出る。
+    表に頭は無い。座ぐり（φ3.8+0.6）は角柱ボスの y 範囲（外面 〜 基板の縁 +
+    CLEARANCE）の中に無ければ、床の外へはみ出すか基板の下へ食い込む。
     """
-    lo, hi = MOUNT_Y - M2_HEAD_D / 2, MOUNT_Y + M2_HEAD_D / 2
-    assert BEZEL_IN <= lo, f"ネジ頭が開口に掛かる（{lo:.2f} < {BEZEL_IN:.3f}）"
-    assert hi <= CASE_HALF, f"ネジ頭がケースの外へ出る（{hi:.2f} > {CASE_HALF:.2f}）"
+    from math import cos, radians
+    from interface import CLEARANCE, PCB_FRONT_EDGE_PLAN, TILT_DEG
+    lo, hi = MOUNT_Y - M2_HEAD_D / 2 - 0.3, MOUNT_Y + M2_HEAD_D / 2 + 0.3
+    case_half_plan = CASE_HALF * cos(radians(TILT_DEG))
+    assert hi <= case_half_plan, f"座ぐりがケースの外へ出る（{hi:.2f} > {case_half_plan:.2f}）"
+    assert lo >= PCB_FRONT_EDGE_PLAN + CLEARANCE - 1e-9, \
+        f"座ぐりがボス柱の内端を越える（{lo:.2f} < {PCB_FRONT_EDGE_PLAN + CLEARANCE:.2f}）"
 
 
 def test_a_screwdriver_reaches_the_screw():
@@ -80,11 +85,14 @@ def test_a_screwdriver_reaches_the_screw():
     **これが今回の作り直しの主目的。** 以前は 14 本中 9 本がキャップの下にあり、
     開けるのに 5〜9 個のキャップを外す必要があった。
     """
-    clear = (MOUNT_Y - M2_HEAD_D / 2) - CAP_EDGE
-    # 2026-09-05: 2.0 → 1.8。ネジを 0.64 内へ寄せた（インサートの外側の肉
-    # 0.46 → 1.05）。ドライバーの軸はネジ頭（φ3.8）より細いので、頭の縁と
-    # キャップの縁の距離がそのまま軸の余裕になる
-    assert clear >= 1.8, f"キャップからネジ頭まで {clear:.2f}mm しかない"
+    # 2026-09-06: ネジは裏から。ドライバーは底面から入るので、キャップは
+    # 関係ない。邪魔になり得るのは底面のゴム足の座ぐり（縁から RUBBER_INSET）
+    from gen_case import RUBBER_D, RUBBER_INSET
+    from math import cos, radians
+    from interface import TILT_DEG
+    rubber_edge = (CASE_HALF * cos(radians(TILT_DEG)) - RUBBER_INSET) + RUBBER_D / 2
+    clear = (MOUNT_Y - M2_HEAD_D / 2 - 0.3) - rubber_edge
+    assert clear >= 1.0, f"ネジ頭の座ぐりとゴム足の座ぐりが {clear:.2f}mm しか離れていない"
 
 
 def test_the_pcb_needs_no_notch():

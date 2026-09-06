@@ -396,9 +396,14 @@ def test_a_real_cable_can_reach_the_socket(name):
     v = probe(USB_SHELL_W, USB_SHELL_H, g.USB_PLUG_ENTRY)
     assert v < 1.0, f"{name}: プラグの金属が壁に {v:.1f}mm^3 当たる"
 
-    # 2. 樹脂は座ぐりのぶんだけ入れること（露出の短いケーブルへの保険）
-    v = probe(USB_PLUG_W, USB_PLUG_H, g.USB_COUNTERBORE)
-    assert v < 1.0, f"{name}: 樹脂が座ぐりに {v:.1f}mm^3 当たる"
+    # 2. **メスの面が外面より外にある**こと（2026-09-06）。樹脂用の座ぐりは
+    #    廃止した（利用者「穴が大きすぎる」）。座ぐり無しで足りる根拠は、
+    #    メスの面が壁の外に出ていて樹脂が壁に入らないこと。引っ込んでも
+    #    金属の露出（USB_SHELL_EXPOSED）から印刷公差を引いた分まで
+    recept_face = (y_out - g.WALL - g.DB_FROM_REAR) + g._RECEPT[2]
+    assert recept_face - y_out >= -(USB_SHELL_EXPOSED - g.CLEARANCE), (
+        f"{name}: メスの面が外面より {y_out - recept_face:.2f} 引っ込んでいる。"
+        f"金属の露出 {USB_SHELL_EXPOSED} のケーブルが届かない（座ぐりは廃止）")
 
     # 3. **穴が大きすぎないこと。**樹脂が壁を貫通できてはいけない
     #    （貫通できる＝実機と違う大きな口が開いている）。
@@ -407,10 +412,7 @@ def test_a_real_cable_can_reach_the_socket(name):
         f"{name}: 樹脂が壁を素通りする。穴が大きすぎる"
         f"（外から見える口が {g.USB_W:.1f}x{g.USB_H:.1f}mm を超えている）")
 
-    # 4. 実測したケーブルが挿さること
-    need = g.USB_PLUG_ENTRY - g.USB_COUNTERBORE
-    assert need <= USB_SHELL_EXPOSED, (
-        f"金属の露出が {USB_SHELL_EXPOSED}mm のケーブルでは {need:.2f}mm 足りない")
+    # 4. （2 に統合。座ぐり廃止・2026-09-06）
 
     # 5. 高さ方向の余裕（XIAO の積み上げに対して）
     assert DB_STACK_H >= XIAO_H_WITH_USB
