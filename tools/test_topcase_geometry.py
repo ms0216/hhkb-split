@@ -105,18 +105,23 @@ def test_the_pcb_needs_no_notch():
     # （＝基板が 2mm 重なるのに合格していた）。
     from interface import (CLEARANCE, FRONT_BOSS_WALL_IN, M2_INSERT_D,
                            PCB_FRONT_EDGE_PLAN)
-    pcb_half = PCB_FRONT_EDGE_PLAN                    # 平面図（傾けた後）の縁
-    # ボスは角柱で、内端は基板の縁 + CLEARANCE に置く（gen_case）。ここで見るのは
-    # **インサートの内側の肉**が FRONT_BOSS_WALL_IN 残ること
-    insert_inner = MOUNT_Y - M2_INSERT_D / 2
-    boss_inner = pcb_half + CLEARANCE
-    assert insert_inner - boss_inner >= FRONT_BOSS_WALL_IN - 1e-9, \
+    # **平面図の座標で見る**（2026-09-06）。MOUNT_Y はプレート座標で、ボスは
+    # boss_positions_plan で cos(7.3°) 倍された位置に立つ（50.91 → 50.50、51.16 →
+    # 50.75）。以前は MOUNT_Y をそのまま平面図の外面 53.56 と比べていて、外側の肉を
+    # 0.44 少なく見積もっていた（STL の実測 1.47 に対し 1.05）。ボスの内面は
+    # gen_case の角柱と同じ −PCB_FRONT_EDGE_PLAN + CLEARANCE
+    from gen_case import boss_positions_plan
+    mount_plan = abs(boss_positions_plan("left")[0][1])
+    insert_inner = mount_plan - M2_INSERT_D / 2
+    boss_inner = PCB_FRONT_EDGE_PLAN - CLEARANCE
+    assert insert_inner - boss_inner >= FRONT_BOSS_WALL_IN - 0.02, \
         f"インサートの内側の肉が {insert_inner - boss_inner:.2f}mm（要 {FRONT_BOSS_WALL_IN}）"
-    from math import cos, radians
-    from interface import TILT_DEG
-    case_half_plan = CASE_HALF * cos(radians(TILT_DEG))   # 平面図の外面
-    assert case_half_plan - (MOUNT_Y + M2_INSERT_D / 2) >= 1.0, \
-        f"インサートの外側の肉が {case_half_plan - (MOUNT_Y + M2_INSERT_D / 2):.2f}mm しかない"
+    from gen_plate import halves, plate_positions
+    from interface import plan_depth
+    _, (_w, _h_plate) = plate_positions(halves()["left"])
+    case_half_plan = plan_depth(_h_plate) / 2                 # 外面（53.56）
+    assert case_half_plan - (mount_plan + M2_INSERT_D / 2) >= 1.0, \
+        f"インサートの外側の肉が {case_half_plan - (mount_plan + M2_INSERT_D / 2):.2f}mm しかない"
 
 
 def test_the_plate_notch_is_expected():

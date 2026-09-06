@@ -154,7 +154,8 @@ PLATE_TOP_FRONT = round(
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
 from interface import (FRONT_BOSS_W, FRONT_PIN_D, FRONT_PIN_DX,  # noqa: E402
-                       FRONT_PIN_INTO_LOWER, FRONT_PIN_TIP, PCB_FRONT_EDGE_PLAN)
+                       FRONT_PIN_INTO_LOWER, FRONT_PIN_ROOT, FRONT_PIN_TIP,
+                       PCB_FRONT_EDGE_PLAN)
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -315,6 +316,9 @@ DB_ANTENNA_KEEPOUT = 5.0
 DB_D = 32.0
 DB_T = 1.6
 DB_BOSS_H = 4.0          # 床からの高さ。これが USB-C の高さを決める
+DB_BOSS_D = 5.6          # ボス径。M2_BOSS_D を 6.4 にしたとき（2026-09-06）ここだけ 5.6 の
+                         # まま: 6.4 だと右の子基板の裏面の部品に 0.32mm³ 当たる。高さ 4 で
+                         # 荷重も小さいので据え置き（肉 1.2）
 # **ネジは手前の 2 本だけ。奥は壁のポケットが受ける**（open-gaps #28）。
 #
 # 以前は対角（-8,-13.5）と（8,+13.5）だった。XIAO を奥へ寄せた（#28）ので、
@@ -584,7 +588,9 @@ REAR_GROOVE_D = 1.0      # 溝の深さ（床 2.4 に 1.4 残る）
 # （板は上シェルの桟にネジ留めで、足は床の溝から上へ自由に抜ける）。天井を奥面まで
 # 通常の厚みで通し、板は床から天井の下面までにした。足と溝も廃止（y を止める役は
 # ネジが担う）。奥の留めは奥面 3 本目のネジ
-REAR_RAIL_H = 6.0        # 上シェルの奥縁の裏に付ける桟（奥板のネジを受ける）
+REAR_RAIL_H = 7.0        # 上シェルの奥縁の裏に付ける桟（奥板のネジを受ける）。
+                         # 6 → 7（2026-09-06 根元の強化）: インサート 3.2 の上下の肉 1.4 → 1.9。
+                         # 下端は電池箱の上面から 1mm 以上（生成時に確認）
 REAR_RAIL_D = 6.0        # 同・奥行
 REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
 # 奥面 3 本目のネジ（2026-09-05・利用者「見えない所ならネジを増やしてよい」）。
@@ -597,7 +603,7 @@ REAR_SCREW3_FROM_LED = 9.0  # LED 窓の中心から、**内壁と反対の方�
                             # 試し刷りで発見）、次に「−x 側 7.5」にしたら右が内壁から
                             # 3.8 の隅に寄った（利用者の指摘）。右は LED 窓と電源
                             # スイッチの窪みの間に 16mm 空いている（2026-09-06）
-REAR_SCREW3_BOSS_W = 6.0 # 天井裏のボス（角柱）の x 幅
+REAR_SCREW3_BOSS_W = 7.0 # 天井裏のボス（角柱）の x 幅。6 → 7（2026-09-06）: 左右の肉 1.4 → 1.9
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
 
@@ -893,7 +899,7 @@ def build_case(keys, half):
         db_y = y_rear_outer - WALL - DB_FROM_REAR - DB_D / 2
         for dx, dy in DB_BOSS_POS:
             with Locations((db_x + dx, db_y + dy, FLOOR)):
-                Cylinder(M2_BOSS_D / 2, DB_BOSS_H,
+                Cylinder(DB_BOSS_D / 2, DB_BOSS_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((db_x + dx, db_y + dy, FLOOR)):
                 Cylinder(M2_INSERT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
@@ -952,7 +958,8 @@ def build_case(keys, half):
         _yd_rear = y_div + BATT_DIVIDER_T / 2
         for hx in battery_hole_xs(half, w):
             with Locations((hx, _yd_rear - (WALL + 2.6) / 2, FLOOR - 0.5)):
-                Box(M2_BOSS_D, WALL + 2.6, (_bz + M2_BOSS_D / 2) - (FLOOR - 0.5),
+                # 上端は穴の上 2.8（M2_BOSS_D/2 だと 6.4 で右の基板に 0.05 当たる）
+                Box(M2_BOSS_D, WALL + 2.6, (_bz + 2.8) - (FLOOR - 0.5),
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((hx, y_div + BATT_DIVIDER_T / 2 - 2.25 + 0.01, _bz)):
                 Cylinder(M2_INSERT_D / 2, 4.5, rotation=(90, 0, 0),
@@ -1694,6 +1701,10 @@ def build_topcase(keys, half):
             c = c.chamfer(FRONT_PIN_TIP, None,
                           [e for e in c.edges() if abs(e.center().Z) < 1e-6])
             _pin_list.append(Location((bx + dx, by, z_rim - FRONT_PIN_INTO_LOWER)) * c)
+            # 根元の裾（2026-09-06 根元の強化）: バーの裏に φ2 で立つ柱の付け根に
+            # 円錐の裾。高さは座とプレート上面の隙（FRONT_INSERT_LIFT）の中
+            _root = Solid.make_cone(FRONT_PIN_D / 2, FRONT_PIN_D / 2 + FRONT_PIN_ROOT, FRONT_PIN_ROOT)
+            _pin_list.append(Location((bx + dx, by, z_seat - FRONT_PIN_ROOT)) * _root)
     for _q in _pin_list:
         part = part + _q
     if len(part.solids()) != 1:

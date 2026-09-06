@@ -230,8 +230,12 @@ BEZEL_TOP_FRONT = 17.5    # 前縁でのベゼル上面＝**手前端そのも�
 from math import cos as _cos, radians as _radians  # noqa: E402
 _KEY_H_HALF = 5 * 19.05 / 2                       # HHKB は 5 段
 PCB_FRONT_EDGE_PLAN = (_KEY_H_HALF + PLATE_MARGIN_Y - 5.3) * _cos(_radians(TILT_DEG))
-FRONT_BOSS_WALL_IN = 0.8  # インサートの内側（基板側）に残す肉
-FRONT_BOSS_W = 14.0       # 手前ボス（角柱）の x 幅（位置決めピンの穴 2 つを収める）
+FRONT_BOSS_WALL_IN = 1.05 # インサートの内側（基板側）に残す肉。0.8 → 1.05
+                          # （2026-09-06 根元の強化）: 上シェルのバーは開口の縁が
+                          # 7.3° 傾いていて、インサートの内側の肉が座+2 で 0.93、
+                          # 上端で 0.7 しか無かった。外側は 1.47 あったので 0.25 外へ
+FRONT_BOSS_W = 17.0       # 手前ボス（角柱）の x 幅（位置決めピンの穴 2 つを収める）。
+                          # 14 → 17（2026-09-06）: ピン穴の外側の肉が 0.8 しか無かった → 2.3
 # 手前の位置決めピン（2026-09-06・利用者の提案「ビスの左右に突起や穴を増やして
 # 上下ケースとプレートの位置合わせを」）。**上シェルのベゼル手前バーの裏
 # （インサートの座）から下向き**に φ FRONT_PIN_D のピンを立て、プレートの
@@ -246,6 +250,8 @@ FRONT_PIN_DX = 5.0        # ビス中心からの x
 FRONT_PIN_D = 2.0         # ピンの直径。穴は + CLEARANCE×2
 FRONT_PIN_INTO_LOWER = 2.6  # リム面から下シェルのボスへ入る深さ（プレート 1.5 の上は座まで）
 FRONT_PIN_TIP = 0.5       # 先端の面取り（入りやすく）
+FRONT_PIN_ROOT = 0.2      # 根元の裾（円錐）。FRONT_INSERT_LIFT 0.4 の隙に収める。0.35 だと
+                          # 傾いたプレートの上面（裾の奥側で +0.15）に 0.08mm³ 当たった
 # MOUNT_Y は M2_INSERT_D の定義の後（下）で計算する
 
 PCB_INSET = 3.0        # 左右。これ以上詰めるとキー領域が基板からはみ出す
@@ -348,7 +354,8 @@ def stab_flipped(key):
 M2_INSERT_D = 3.2
 # 手前のネジの中心 y（上の PCB_FRONT_EDGE_PLAN の注記）
 MOUNT_Y = round(PCB_FRONT_EDGE_PLAN + CLEARANCE + FRONT_BOSS_WALL_IN + M2_INSERT_D / 2, 2)
-M2_BOSS_D = 5.6          # ボス外径
+M2_BOSS_D = 6.4          # ボス外径。5.6 → 6.4（2026-09-06 根元の強化）: 熱圧入
+                         # インサートのボスは外径の 2 倍が定石。肉 1.2 → 1.6
 M2_PILOT_D = 3.2         # ケース側の下穴。**熱圧入インサートの外径。**
                          # タッピング用の 1.7mm ではない
 M2_CLEAR_D = 2.4         # プレート側のバカ穴（M2 に 0.4mm の逃げ）
