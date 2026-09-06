@@ -573,10 +573,12 @@ REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
 # 奥板のリップは電池窓の幅（109）しか押さえず、子基板側の 35mm は隅の柱で
 # 受けるだけだった。奥壁を貫いて上シェルの天井裏のボスへ M2 を横に入れる。
 # 位置は子基板の中心から電池側へ REAR_SCREW3_DX（LED 窓と USB を避ける）。
-REAR_SCREW3_DX = 7.5     # **LED 窓の反対側**（子基板中心 −x）。LED は子基板中心
-                         # +5.7 の側にあり、右では電池側になる。一度「電池側」に
-                         # 置いて右だけ LED 窓の薄肉と重なりボスが欠けた（利用者が
-                         # 試し刷りで発見・2026-09-06）
+REAR_SCREW3_FROM_LED = 9.0  # LED 窓の中心から、**内壁と反対の方向**へ。窓 r2.5 ＋
+                            # ボス半幅 3 ＋ 余裕 3.5。一度「子基板中心から電池側 8」に
+                            # 置いて右だけ LED 窓の薄肉と重なりボスが欠け（利用者が
+                            # 試し刷りで発見）、次に「−x 側 7.5」にしたら右が内壁から
+                            # 3.8 の隅に寄った（利用者の指摘）。右は LED 窓と電源
+                            # スイッチの窪みの間に 16mm 空いている（2026-09-06）
 REAR_SCREW3_BOSS_W = 6.0 # 天井裏のボス（角柱）の x 幅
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
@@ -1762,7 +1764,8 @@ def rear_screw_positions(half, w, h_body):
 def rear_screw3(half, w, h_body):
     """奥面 3 本目のネジ (x, z)。子基板の中心から電池側へ REAR_SCREW3_DX、
     高さは桟と同じ（天井の下 REAR_RAIL_H の中心）。"""
-    x = daughterboard_x_center(half, w) - REAR_SCREW3_DX   # 左右とも −x 側（LED の反対）
+    led_x = daughterboard_x_center(half, w) + XIAO_LED_DX
+    x = led_x - inner_sign(half) * REAR_SCREW3_FROM_LED    # 内壁と反対の方向へ
     return x, rear_rail_z0(h_body) + REAR_RAIL_H / 2
 
 
