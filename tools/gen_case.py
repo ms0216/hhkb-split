@@ -194,8 +194,7 @@ BATT_X = BATT_BOX_L              # 占有幅（長辺。裸の電池 2 本＋電
 from interface import BATT_X as _IF_BATT_X  # noqa: E402
 assert BATT_X == _IF_BATT_X, (
     f"interface.BATT_X({_IF_BATT_X}) が envelopes.BATT_BOX_L({BATT_X}) とずれている")
-# 電池箱の開口面（奥）と奥板の内面の間隔。奥板の舌の足（REAR_TONGUE）が
-# 内側へ 1.2 出るので、それより広く。
+# 電池箱の開口面（奥）と奥板の内面の間隔。
 BATT_MARGIN_REAR = 1.0
 # 箱の床の取付穴（データシート: 2×φ2.4、内側から φ3.8×0.8 の座ぐり）。
 # 横倒しなので床は手前（−y）を向き、穴の軸は y。
@@ -555,11 +554,12 @@ REAR_PLATE_FRAME = 1.5   # 座ぐりを窓から広げる量（左右）＝板�
                          # 2.0 → 1.5（2026-09-06）: 電池箱をリード線の逃げ 2.0 だけ
                          # 内へ寄せたら、左の電源スイッチの窪みと座ぐりが 0.62
                          # 重なった。板はネジ 2 本で留まるので掛かり代は 1.5 で足りる
-REAR_PLATE_LIP = 3.0     # 上縁のリップがコブ天井の奥縁に被る量
-REAR_TONGUE_T = 1.2      # 板の下端の足（内側へ L 字に出る）の厚み
-REAR_TONGUE_H = 1.0      # 同・床の溝へ入る深さ
-REAR_GROOVE_W = 1.4      # 床の溝の幅（足 + 0.2）
-REAR_GROOVE_D = 1.2      # 同・深さ（床 2.4 の半分）
+# 奥板の上縁は**天井の下**（2026-09-06）。以前は天井の奥縁を 1.6 座ぐって板の
+# リップを被せていたが、裏返して刷ると座ぐりの下の 0.8 が 3.2 の幅で宙に出て
+# 印刷が壊れた（利用者の試し刷り）。リップは上シェルの押さえにもなっていなかった
+# （板は上シェルの桟にネジ留めで、足は床の溝から上へ自由に抜ける）。天井を奥面まで
+# 通常の厚みで通し、板は床から天井の下面までにした。足と溝も廃止（y を止める役は
+# ネジが担う）。奥の留めは奥面 3 本目のネジ
 REAR_RAIL_H = 6.0        # 上シェルの奥縁の裏に付ける桟（奥板のネジを受ける）
 REAR_RAIL_D = 6.0        # 同・奥行
 REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
@@ -913,11 +913,6 @@ def build_case(keys, half):
         with Locations(((rx0 + rx1) / 2, y_rear_outer + 0.5, wz0)):
             Box(rx1 - rx0, REAR_PLATE_T + 0.5, z_max, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.MAX, Align.MIN))
-        # 奥板の足が入る床の溝。板は据えてから下へ REAR_TONGUE_H 落として留める
-        # （旧・庇と舌の代わり。撓ませない）。
-        with Locations(((wx0 + wx1) / 2, rear_groove_y(h_body), FLOOR - REAR_GROOVE_D)):
-            Box((wx1 - wx0) - 2.0, REAR_GROOVE_W, REAR_GROOVE_D + 0.5,
-                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 電池箱の取付ボス（仕切り壁の手前側に横向きの柱）。箱の床の穴 2 個
         # （φ2.4・データシート）に M2 を通し、仕切り壁のインサートへ締める。
         # ドライバーは奥の窓から箱の中を通す（箱の座ぐりに頭が沈む）。
@@ -1507,20 +1502,8 @@ def build_topcase(keys, half):
         with Locations((0, -h_body / 2 + WALL + CLEARANCE - 100, 0)):
             Box(w * 3, 200, z_max * 3, align=(Align.CENTER, Align.CENTER, Align.MIN))
     front_cut = _fc.part - above_rim
-    # 奥板が立つ帯（奥面から REAR_PLATE_T + CLEARANCE）は天井も無い。
-    # 板が床から天井の上面まで一枚で立ち、リップで天井の奥縁に被る。
-    rx0, rx1 = rear_plate_rebate(half, w)
-    with BuildPart() as _pb:
-        with Locations(((rx0 + rx1) / 2, y_out - REAR_PLATE_T - CLEARANCE, 0)):
-            Box((rx1 - rx0) + CLEARANCE * 2, 100, z_max * 3,
-                align=(Align.CENTER, Align.MIN, Align.MIN))
-    plate_band_cut = _pb.part
-    # リップの座ぐり（天井の奥縁を REAR_PLATE_T 削る）。桟が真下で裏打ちする。
-    with BuildPart() as _lr:
-        with Locations(((rx0 + rx1) / 2, y_out, 0)):
-            Box((rx1 - rx0) + CLEARANCE * 2, (REAR_PLATE_LIP + CLEARANCE) * 2, z_max * 3,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    lip_rebate = _lr.part.intersect(tilted_cutter(w, h_body, BEZEL_TOP_FRONT - REAR_PLATE_T))
+    # 天井は奥面まで通常の厚みで通す。奥板はその下に立つ（リップを
+    # 消した経緯は定数の所）。
     # 奥の桟（奥板のネジ 2 本を受ける）。天井の下・窓の x 範囲・奥板の手前。
     wx0, _, wx1, _ = rear_window(half, w)
     rail_y0, rail_y1 = rear_rail_y(h_body)
@@ -1591,13 +1574,11 @@ def build_topcase(keys, half):
         add(cav_bump, mode=Mode.SUBTRACT)
         add(rear_corner_cut, mode=Mode.SUBTRACT)
         add(front_cut, mode=Mode.SUBTRACT)
-        add(plate_band_cut, mode=Mode.SUBTRACT)
         add(rail, mode=Mode.ADD)
         add(boss3, mode=Mode.ADD)
         add(keeper, mode=Mode.ADD)
         add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
         add(rebate, mode=Mode.SUBTRACT)              # プレートが入る座ぐり
-        add(lip_rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
         # キーの開口（プレートと同じ姿勢。上の opening_cut の注記）
         add(opening_cut, mode=Mode.SUBTRACT)
@@ -1729,12 +1710,6 @@ def rear_plate_rebate(half, w):
             min(x1 + REAR_PLATE_FRAME, w / 2 - 1.0))
 
 
-def rear_groove_y(h_body):
-    """奥板の足が入る床の溝の中心 y。板の内面から CLEARANCE 空けた所。"""
-    y_out = h_body / 2 + BUMP_DEPTH
-    return y_out - REAR_PLATE_T - CLEARANCE - REAR_GROOVE_W / 2
-
-
 def rear_rail_y(h_body):
     """上シェルの奥の桟の y 範囲 (手前, 奥)。奥板の手前に CLEARANCE 空ける。"""
     y_out = h_body / 2 + BUMP_DEPTH
@@ -1782,13 +1757,11 @@ def build_rear_plate(half, keys):
     """奥板（電池窓を塞ぐ板。2026-09-05・案 A。旧・スライド式の電池蓋の代わり）。
 
     **ケース座標のまま作る**（旧・蓋で回して 5 回取り違えた教訓）。
-      板   … 床の上面から天井の上面まで一枚。奥壁の座ぐりに面一で沈む
-      リップ … 上縁が REAR_PLATE_LIP だけ手前へ折れ、天井の奥縁に被る
-              ＝上シェルを押さえる（#12 の奥の留め）
-      足   … 下端が内側へ L 字に出て、床の溝へ REAR_TONGUE_H 落ちる
-      ネジ … M2×2 を上シェルの桟へ。板を桟へ引き付け、足が下シェルへ
-              繋ぐので、上シェルの奥が下シェルへ留まる
-    外し方: ネジ 2 本を外す → 板を 1.2 持ち上げる → 奥へ引く。
+      板   … 床の上面から**天井の下面 − CLEARANCE** まで一枚。奥壁の座ぐりに
+              面一で沈み、上縁は天井が被う（2026-09-06。リップと足は廃止。
+              REAR_PLATE_T の下の注記）
+      ネジ … M2×2 を上シェルの桟へ
+    外し方: ネジ 2 本を外す → 奥へ引く。付け方はその逆（真っ直ぐ差す）。
     """
     _positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
@@ -1798,28 +1771,13 @@ def build_rear_plate(half, keys):
     px0, px1 = rx0 + CLEARANCE / 2, rx1 - CLEARANCE / 2
     cx = (px0 + px1) / 2
     z_top_out = BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
-    cut_above_top = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
-    with BuildPart() as _lip:
-        with Locations((cx, y_out - REAR_PLATE_LIP / 2, FLOOR)):
-            Box(px1 - px0, REAR_PLATE_LIP, z_top_out + 5,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    lip = _lip.part.intersect(tilted_cutter(w, h_body, BEZEL_TOP_FRONT - REAR_PLATE_T))
-    gy = rear_groove_y(h_body)
+    # 上縁は天井の下面 − CLEARANCE（天井が板の上縁を被う）
+    cut_under_ceiling = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
     with BuildPart() as p:
         with Locations((cx, y_out - REAR_PLATE_T / 2, FLOOR)):
             Box(px1 - px0, REAR_PLATE_T, z_top_out + 5,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        add(lip, mode=Mode.ADD)
-        add(cut_above_top, mode=Mode.SUBTRACT)
-        # 足: 板の内面から溝の上まで水平に、そこから溝へ下りる
-        _fx0, _fx1 = wx0 + 1.0 + CLEARANCE / 2, wx1 - 1.0 - CLEARANCE / 2
-        _fy0 = gy - REAR_TONGUE_T / 2
-        with Locations(((_fx0 + _fx1) / 2, (_fy0 + (y_out - REAR_PLATE_T + 0.1)) / 2, FLOOR)):
-            Box(_fx1 - _fx0, (y_out - REAR_PLATE_T + 0.1) - _fy0, REAR_TONGUE_T,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        with Locations(((_fx0 + _fx1) / 2, gy, FLOOR - REAR_TONGUE_H)):
-            Box(_fx1 - _fx0, REAR_TONGUE_T, REAR_TONGUE_H + 0.1,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        add(cut_under_ceiling, mode=Mode.SUBTRACT)
         # ネジのバカ穴
         for sx, sz in rear_screw_positions(half, w, h_body):
             with Locations((sx, y_out - REAR_PLATE_T / 2, sz)):
@@ -1829,8 +1787,8 @@ def build_rear_plate(half, keys):
     b = p.part.bounding_box()
     if abs(b.max.Y - y_out) > 1e-6:
         raise ValueError(f"奥板の外面が y={b.max.Y:.2f}。奥面 {y_out:.2f} と一致しない")
-    if abs(b.min.Z - (FLOOR - REAR_TONGUE_H)) > 1e-6:
-        raise ValueError(f"足の先が z={b.min.Z:.2f}。溝の底 {FLOOR - REAR_TONGUE_H:.2f} に届かない")
+    if abs(b.min.Z - FLOOR) > 1e-6:
+        raise ValueError(f"奥板の下端が z={b.min.Z:.2f}。床 {FLOOR:.2f} に立っていない")
     if len(p.part.solids()) != 1:
         raise ValueError(f"奥板が {len(p.part.solids())} 個に分かれている")
     return p.part, (px1 - px0, z_top_out - FLOOR)
