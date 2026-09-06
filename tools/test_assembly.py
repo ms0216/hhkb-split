@@ -1608,8 +1608,10 @@ def test_the_rear_plate_locks_the_top_shell(half):
       1. 据わった位置で奥板・上シェル・下シェルが互いに当たらない
       2. 奥板を上へ 0.3 動かすと天井に当たる（上縁が天井の下にある）
       3. 上シェルを上へ 3.0 動かしても下シェルに当たらない（外せる）
-      4. 奥板は**下縁を支点に上を奥へ倒して**外せる（上縁の切り欠き NAIL_NOTCH_*
-         に爪を掛ける。3°〜35° で両シェルに当たらない）
+      4. 奥板は**舌の外下の角を支点に上を奥へ倒し、舌を溝から持ち上げて**外せる
+         （上縁の切り欠き NAIL_NOTCH_* に爪を掛ける。gen_assembly.rear_plate_path の
+         姿勢で両シェルに当たらない。下シェルとの当たりは put_in_from_outside も見る
+         が、天井は上シェルなのでここで見る）
     奥板そのものの真っ直ぐな着脱は INSERT_PATH（test_every_part_can_be_put_in_from_outside）。
     """
     from build123d import Location
@@ -1633,15 +1635,13 @@ def test_the_rear_plate_locks_the_top_shell(half):
     assert hit(top, case, (0, 0, 3.0)) < 1e-6, (
         f"{half}: 上シェルを 3mm 上げると下シェルに "
         f"{hit(top, case, (0, 0, 3.0)):.2f}mm³ 当たる。**上シェルが外せない**")
-    b = plate.bounding_box()
-    pivot = (0, b.max.Y, b.min.Z)          # 下縁の外側の稜（下シェルの受け縁）
-    for deg in (3, 10, 35):
-        m = (Location(pivot) * Location((0, 0, 0), (-deg, 0, 0))
-             * Location((-pivot[0], -pivot[1], -pivot[2])))
-        tilted = m * plate
+    from gen_assembly import rear_plate_path
+    for step, m in enumerate(rear_plate_path(case.bounding_box().max.Y), start=1):
+        moved = m * plate
         for name, other in (("下シェル", case), ("上シェル", top)):
-            v = hit(tilted, other, (0, 0, 0))
-            assert v < 1e-6, f"{half}: 奥板を {deg}° 倒すと{name}に {v:.2f}mm³ 当たる。**倒して外せない**"
+            v = hit(moved, other, (0, 0, 0))
+            assert v < 1e-6, (
+                f"{half}: 奥板の着脱 {step} 手目で{name}に {v:.2f}mm³ 当たる。**倒して外せない**")
 
 
 # --------------------------------------------------------------------------
@@ -1914,7 +1914,8 @@ def test_every_part_can_be_put_in_from_outside(half):
 
     def hit(part, d):
         v = 0.0
-        for a in (Location(d) * part).solids():
+        loc = d if isinstance(d, Location) else Location(d)
+        for a in (loc * part).solids():
             for b in case.solids():
                 s_ = a & b
                 if s_ is not None and s_.volume > 1e-6:
@@ -1926,6 +1927,9 @@ def test_every_part_can_be_put_in_from_outside(half):
 
     for name, path in sorted(INSERT_PATH.items()):
         part = parts[name]
+        if isinstance(path, str):          # 姿勢を作る関数の名前（奥板の回転）
+            import gen_assembly
+            path = getattr(gen_assembly, path)(case.bounding_box().max.Y)
         assert hit(part, (0, 0, 0)) < 1e-6, (
             f"{half}: {name} が据わった位置で当たっている")
         for step, d in enumerate(path, start=1):
@@ -1935,7 +1939,8 @@ def test_every_part_can_be_put_in_from_outside(half):
                 f"（{step}/{len(path)} 手目）。**入れられない＝組み立てできない**")
         # 最後は本当に外へ出ていること（当たらないだけでは中に居るかもしれない）
         b_case = case.bounding_box()
-        b_end = (Location(path[-1]) * part).bounding_box()
+        _last = path[-1] if isinstance(path[-1], Location) else Location(path[-1])
+        b_end = (_last * part).bounding_box()
         outside = (b_end.min.Z > b_case.max.Z - 1e-6
                    or b_end.min.Y > b_case.max.Y - 1e-6
                    or b_end.max.Y < b_case.min.Y + 1e-6)

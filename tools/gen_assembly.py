@@ -92,8 +92,9 @@ INSERT_PATH = {
     "xiao":     [(0, -8, 0), (0, -8, 40)],
     # 電源スイッチ: 受けの上まで上げてから手前へ（ツマミがスロットを滑る）
     "sw_pwr":   [(0, 0, 5.6), (0, -8, 5.6), (0, -8, 40)],
-    # 奥板: 奥へ真っ直ぐ（2026-09-06。リップと足を廃止し、上縁は天井の下）
-    "rear_plate": [(0, 40, 0)],
+    # 奥板: 舌の外下の角を支点に 15° 倒し、舌を溝から持ち上げ、奥へ（2026-09-06。
+    # 上縁は天井の下なので真っ直ぐには持ち上がらない。姿勢は rear_plate_path が作る）
+    "rear_plate": "rear_plate_path",
     # 本体基板とソケットは真上（プレートを外した状態）。プレートも真上
     # （2026-09-06 に上シェルの棚と溝を廃止したので、傾けて入れる必要は無い。
     # 上シェルとの関係は test_the_plate_can_be_put_into_the_shells が見る）
@@ -101,6 +102,20 @@ INSERT_PATH = {
     "pcb":      [(0, 0, 40)],
     "sockets":  [(0, 0, 40)],
 }
+
+def rear_plate_path(y_out):
+    """奥板の着脱の姿勢（Location の列）。INSERT_PATH の "rear_plate_path" の実体。
+    支点は舌の外下の角（gen_case.REAR_TONGUE_* の注記）。y_out は奥面の y。"""
+    from build123d import Location
+    from gen_case import FLOOR, REAR_PLATE_T, REAR_TONGUE_H, REAR_TONGUE_T
+    pivot = (0, y_out - REAR_PLATE_T + REAR_TONGUE_T, FLOOR - REAR_TONGUE_H)
+    def pose(deg, lift=0.0, back=0.0):
+        return (Location((0, back, lift)) * Location(pivot)
+                * Location((0, 0, 0), (-deg, 0, 0))
+                * Location((-pivot[0], -pivot[1], -pivot[2])))
+    return [pose(5), pose(10), pose(15), pose(15, REAR_TONGUE_H + CLEARANCE),
+            pose(15, REAR_TONGUE_H + CLEARANCE, 40)]
+
 
 HELD_BY = {
     "case":       "外殻そのもの（基準）",
@@ -127,7 +142,7 @@ HELD_BY = {
     "rubber":     "座ぐり＋粘着",
     "foot":       "φ4×2.4mm のピン圧入 ＋ 先端の返しφ4.4／穴の奥の溝φ4.7（2026-08-12）",
     "usb_plug":   "利用者が挿すケーブル（留めるものではない）",
-    "rear_plate": "M2×2 で上シェルの桟へ。左右は奥壁の座ぐり、上縁は天井の下（2026-09-06。足と溝は廃止）",
+    "rear_plate": "M2×2 で上シェルの桟へ。左右は奥壁の座ぐり、上縁は天井の下、下縁の舌は床の溝（2026-09-06）",
 }
 
 

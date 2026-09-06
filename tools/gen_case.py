@@ -38,6 +38,7 @@ from build123d import (
     Mode,
     add,
     Plane,
+    Polygon,
     RectangleRounded,
     RegularPolygon,
     extrude,
@@ -561,6 +562,22 @@ REAR_PLATE_FRAME = 1.5   # 座ぐりを窓から広げる量（左右）＝板�
 # （両シェルは無傷。切り欠きは天井の奥縁の下に隠れる）
 NAIL_NOTCH_W = 15.0      # 幅（x。板の中央）
 NAIL_NOTCH_H = 2.5       # 上縁から下へ切る深さ
+# 奥板の下縁の舌と床の溝（2026-09-06・利用者「蓋の下と、それを受ける下シェルの溝は？」）。
+# 倒すときの支点。**舌は板の内側の肉をそのまま下へ伸ばしたもの**（旧・L 字の足は
+# 溝にはまる部分だけ宙に浮いて刷れなかった——利用者）。板は**内面を下**にして刷る
+# ので舌はベッドに着く。溝は床の奥縁に、外側の縁（受け縁）を REAR_LIP_T 残して掘る。
+# 外し方: **舌の外下の角**（溝の外下の隅に座る）を支点に上を奥へ倒す。回ると
+# 舌の外面は受け縁の内面へ寄るので、外面を上へ向かって REAR_TONGUE_RELIEF だけ
+# 内へ傾けておく（≈17° まで回る）。板の下縁の外側は受け縁の上面に食い込むので
+# 45° に面取り（内面を下に刷るので上側の斜面＝支え要らず）。上縁が天井の下から
+# 出たら持ち上げて舌を溝から抜く。実形状で 5〜15° の回転・持ち上げ・引き出しを
+# 検査する（test_the_rear_plate_locks_the_top_shell）
+REAR_TONGUE_T = 0.8      # 舌の厚み（先端。板の内面から。0.4 の 2 倍）
+REAR_TONGUE_RELIEF = 0.3 # 舌の外面の逃げ（根元で薄くなる量）
+REAR_TONGUE_H = 1.0      # 舌が溝へ入る深さ
+REAR_LIP_T = 0.8         # 溝の外側に残す床の縁（受け縁。0.4 の 2 倍）
+REAR_GROOVE_W = REAR_TONGUE_T + CLEARANCE   # 溝の幅（内側に 0.2）
+REAR_GROOVE_D = 1.0      # 溝の深さ（床 2.4 に 1.4 残る）
 # 奥板の上縁は**天井の下**（2026-09-06）。以前は天井の奥縁を 1.6 座ぐって板の
 # リップを被せていたが、裏返して刷ると座ぐりの下の 0.8 が 3.2 の幅で宙に出て
 # 印刷が壊れた（利用者の試し刷り）。リップは上シェルの押さえにもなっていなかった
@@ -920,6 +937,10 @@ def build_case(keys, half):
         with Locations(((rx0 + rx1) / 2, y_rear_outer + 0.5, wz0)):
             Box(rx1 - rx0, REAR_PLATE_T + 0.5, z_max, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.MAX, Align.MIN))
+        # 奥板の舌が入る床の溝（REAR_TONGUE_* の注記）。外側に受け縁 REAR_LIP_T
+        with Locations(((wx0 + wx1) / 2, y_rear_outer - REAR_LIP_T, FLOOR - REAR_GROOVE_D)):
+            Box((wx1 - wx0) - 2.0, REAR_GROOVE_W, REAR_GROOVE_D + 0.5,
+                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.MAX, Align.MIN))
         # 電池箱の取付ボス（仕切り壁の手前側に横向きの柱）。箱の床の穴 2 個
         # （φ2.4・データシート）に M2 を通し、仕切り壁のインサートへ締める。
         # ドライバーは奥の窓から箱の中を通す（箱の座ぐりに頭が沈む）。
@@ -1767,10 +1788,12 @@ def build_rear_plate(half, keys):
       板   … 床の上面から**天井の下面 − CLEARANCE** まで一枚。奥壁の座ぐりに
               面一で沈み、上縁は天井が被う（2026-09-06。リップと足は廃止。
               REAR_PLATE_T の下の注記）
+      舌   … 下縁の内側の肉（REAR_TONGUE_T）を REAR_TONGUE_H 下へ伸ばし、床の溝へ
       切り欠き … 上縁の中央に NAIL_NOTCH_W × NAIL_NOTCH_H（爪の掛かり）
       ネジ … M2×2 を上シェルの桟へ
-    外し方: ネジ 2 本を外す → 天井の奥縁の下から切り欠きに爪を掛け、下縁を
-    支点に上を奥へ倒す。付け方は奥から真っ直ぐ差す。
+    外し方: ネジ 2 本を外す → 天井の奥縁の下から切り欠きに爪を掛け、舌を支点に
+    上を奥へ倒す → 上縁が天井の下から出たら持ち上げて舌を抜く。付け方はその逆。
+    印刷は**内面を下**（舌がベッドに着く）。
     """
     _positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
@@ -1787,6 +1810,20 @@ def build_rear_plate(half, keys):
             Box(px1 - px0, REAR_PLATE_T, z_top_out + 5,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         add(cut_under_ceiling, mode=Mode.SUBTRACT)
+        # 舌（板の内側の肉を下へ。断面は REAR_TONGUE_* の注記）。x は溝より CLEARANCE 狭く
+        _tw = (wx1 - wx0) - 2.0 - CLEARANCE
+        _yi = y_out - REAR_PLATE_T                       # 板の内面
+        with BuildSketch(Plane.YZ.offset(cx - _tw / 2)):
+            Polygon((_yi, FLOOR - REAR_TONGUE_H), (_yi + REAR_TONGUE_T, FLOOR - REAR_TONGUE_H),
+                    (_yi + REAR_TONGUE_T - REAR_TONGUE_RELIEF, FLOOR + 0.1), (_yi, FLOOR + 0.1),
+                    align=None)
+        extrude(amount=_tw)
+        # 板の下縁の外角の 45° 面取り（舌の根元の外面から外面の縁へ）
+        _ch = REAR_PLATE_T - (REAR_TONGUE_T - REAR_TONGUE_RELIEF)
+        with BuildSketch(Plane.YZ.offset(cx - (px1 - px0) / 2 - 1.0)):
+            Polygon((y_out - _ch, FLOOR - 0.01), (y_out + 1.0, FLOOR - 0.01),
+                    (y_out + 1.0, FLOOR + _ch + 1.0), align=None)
+        extrude(amount=(px1 - px0) + 2.0, mode=Mode.SUBTRACT)
         # 上縁の爪の切り欠き（NAIL_NOTCH_* の注記）。天井の下面 − CLEARANCE から下へ
         _z_top_in = (BEZEL_TOP_FRONT - WALL - CLEARANCE) + (y_out + h_body / 2) * tan(radians(TILT_DEG))
         with Locations((cx, y_out, _z_top_in - NAIL_NOTCH_H)):
@@ -1801,8 +1838,8 @@ def build_rear_plate(half, keys):
     b = p.part.bounding_box()
     if abs(b.max.Y - y_out) > 1e-6:
         raise ValueError(f"奥板の外面が y={b.max.Y:.2f}。奥面 {y_out:.2f} と一致しない")
-    if abs(b.min.Z - FLOOR) > 1e-6:
-        raise ValueError(f"奥板の下端が z={b.min.Z:.2f}。床 {FLOOR:.2f} に立っていない")
+    if abs(b.min.Z - (FLOOR - REAR_TONGUE_H)) > 1e-6:
+        raise ValueError(f"舌の先が z={b.min.Z:.2f}。溝の底 {FLOOR - REAR_TONGUE_H:.2f} に届かない")
     if len(p.part.solids()) != 1:
         raise ValueError(f"奥板が {len(p.part.solids())} 個に分かれている")
     return p.part, (px1 - px0, z_top_out - FLOOR)
