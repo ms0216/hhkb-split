@@ -554,13 +554,13 @@ REAR_PLATE_FRAME = 1.5   # 座ぐりを窓から広げる量（左右）＝板�
                          # 2.0 → 1.5（2026-09-06）: 電池箱をリード線の逃げ 2.0 だけ
                          # 内へ寄せたら、左の電源スイッチの窪みと座ぐりが 0.62
                          # 重なった。板はネジ 2 本で留まるので掛かり代は 1.5 で足りる
-# 奥板を外すときの爪の掛かり（2026-09-06・利用者「切り欠きを足しましょう」）。
-# 板は座ぐりに面一で沈み上縁は天井の下なので掴む所が無い。板の下縁の真下、床の
-# 奥面に窪みを掘り、爪を板の下縁の裏に掛けて下を手前へ倒す（上縁が天井の下から
-# 抜ける）。窪みの下に床を NAIL_NOTCH_FLOOR 残す
+# 奥板を外すときの爪の掛かり（2026-09-06・利用者）。板は座ぐりに面一で沈み上縁は
+# 天井の下なので掴む所が無い。**板の上縁に切り欠き**を入れ、天井の奥縁の下から
+# 爪をそこへ掛けて、下シェルの受け縁（床の座ぐりの縁）を支点に上を奥へ倒す。
+# 最初は床の奥面に窪みを掘ったが、利用者のイメージは板側の切り欠きだった
+# （両シェルは無傷。切り欠きは天井の奥縁の下に隠れる）
 NAIL_NOTCH_W = 15.0      # 幅（x。板の中央）
-NAIL_NOTCH_D = 1.0       # 板の内面より奥（手前側）へ掘る量
-NAIL_NOTCH_FLOOR = 1.2   # 窪みの下に残す床（0.4 の 3 倍）
+NAIL_NOTCH_H = 2.5       # 上縁から下へ切る深さ
 # 奥板の上縁は**天井の下**（2026-09-06）。以前は天井の奥縁を 1.6 座ぐって板の
 # リップを被せていたが、裏返して刷ると座ぐりの下の 0.8 が 3.2 の幅で宙に出て
 # 印刷が壊れた（利用者の試し刷り）。リップは上シェルの押さえにもなっていなかった
@@ -1126,12 +1126,6 @@ def build_case(keys, half):
             with Locations((bx, by, -1.0)):
                 Cylinder(SCREW_HEAD_D / 2 + 0.3, 1.0 + SCREW_HEAD_H + 0.2,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 爪の窪み（NAIL_NOTCH_* の注記）。奥板の下縁の真下、床の奥面。底縁の
-        # 丸め（R1.5）の中に入るので、丸めの後に切る（先に切ると丸めが失敗する）
-        _rx0, _rx1 = rear_plate_rebate(half, w)
-        with Locations(((_rx0 + _rx1) / 2, h_body / 2 + BUMP_DEPTH + 0.5, NAIL_NOTCH_FLOOR)):
-            Box(NAIL_NOTCH_W, REAR_PLATE_T + NAIL_NOTCH_D + 0.5, FLOOR - NAIL_NOTCH_FLOOR + 0.01,
-                align=(Align.CENTER, Align.MAX, Align.MIN))
     part = part - _fh.part
     if len(part.solids()) != 1:
         raise ValueError("バカ穴を切ったら下シェルが分かれた")
@@ -1773,8 +1767,10 @@ def build_rear_plate(half, keys):
       板   … 床の上面から**天井の下面 − CLEARANCE** まで一枚。奥壁の座ぐりに
               面一で沈み、上縁は天井が被う（2026-09-06。リップと足は廃止。
               REAR_PLATE_T の下の注記）
+      切り欠き … 上縁の中央に NAIL_NOTCH_W × NAIL_NOTCH_H（爪の掛かり）
       ネジ … M2×2 を上シェルの桟へ
-    外し方: ネジ 2 本を外す → 奥へ引く。付け方はその逆（真っ直ぐ差す）。
+    外し方: ネジ 2 本を外す → 天井の奥縁の下から切り欠きに爪を掛け、下縁を
+    支点に上を奥へ倒す。付け方は奥から真っ直ぐ差す。
     """
     _positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
@@ -1791,6 +1787,11 @@ def build_rear_plate(half, keys):
             Box(px1 - px0, REAR_PLATE_T, z_top_out + 5,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         add(cut_under_ceiling, mode=Mode.SUBTRACT)
+        # 上縁の爪の切り欠き（NAIL_NOTCH_* の注記）。天井の下面 − CLEARANCE から下へ
+        _z_top_in = (BEZEL_TOP_FRONT - WALL - CLEARANCE) + (y_out + h_body / 2) * tan(radians(TILT_DEG))
+        with Locations((cx, y_out, _z_top_in - NAIL_NOTCH_H)):
+            Box(NAIL_NOTCH_W, REAR_PLATE_T * 3, 10.0, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
         # ネジのバカ穴
         for sx, sz in rear_screw_positions(half, w, h_body):
             with Locations((sx, y_out - REAR_PLATE_T / 2, sz)):
