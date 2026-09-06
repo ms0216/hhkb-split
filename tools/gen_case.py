@@ -567,7 +567,12 @@ SKIRT_FIT = 0.0          # [暫定] クーポンで実測してから決める
 # **上シェルの側壁が角の丸み（CORNER_R）を回って奥面の接線まで続き**、下シェルの
 # 奥壁は角の丸みの間の平らな部分だけを全高で持つ。縦の継ぎ目は奥面の角の接線上
 # （x = ±(w/2 − CORNER_R)）。隙間は REAR_CORNER_GAP
-REAR_CORNER_GAP = 0.1    # 上シェルの角と下シェルの奥壁の間（x 方向・片側）
+# ⚠️ 外縁側は接線で切ると、電池窓の外側の枠（幅 1.1・座ぐりで厚み 0.8）が合わせ目
+# より上で 8.5mm の独立した細片になる（角の柱に繋がらない）。そこで**外縁側の
+# 境は窓の外側の縁**にし、枠ごと上シェルの角に持たせる。この縦の継ぎ目は奥板の
+# 座ぐりの中なので板に隠れる。内縁側は接線のまま（子基板ポケットまで 1.35 の壁が
+# 内へ続くので独立しない）
+REAR_CORNER_GAP = 0.1    # 上シェルの角と下シェルの奥壁の間（x 方向・内縁側）
 # 奥板（電池窓を塞ぐ板。旧・電池蓋のスライド＋ビードは全廃）
 REAR_PLATE_CLR = 0.3     # 窓を電池箱の断面からどれだけ広げるか（片側）
 REAR_PLATE_T = 1.6       # 板厚。奥壁の外面に面一で沈む（座ぐりも同じ深さ）
@@ -769,12 +774,13 @@ def build_case(keys, half):
     # 天井の下面（ベゼル上面 − WALL）から CLEARANCE 下げて切る。
     cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
     _y_out = h_body / 2 + BUMP_DEPTH
-    # コブの側壁（角の丸みを含む |x| > w/2 − CORNER_R）はリムで切る（2026-09-06。
-    # REAR_CORNER_GAP の注記）。リムより上は上シェルの側壁。奥壁の平らな部分は残す
+    # コブの側壁（角の丸みを含む）はリムで切る（2026-09-06。REAR_CORNER_GAP の注記）。
+    # リムより上は上シェルの側壁。奥壁は内縁側の接線から外縁側の窓の縁までを残す
+    _xk0, _xk1 = rear_wall_keep_x(half, w)
     with BuildPart() as _sb:
-        for sx in (-1, 1):
-            with Locations((sx * (w / 2 - CORNER_R + 10), (h_body / 2 - 1.0 + _y_out + 5.0) / 2, 0)):
-                Box(20.0, (_y_out + 5.0) - (h_body / 2 - 1.0), z_max * 3,
+        for cx_, ww_ in ((_xk0 - 10.0, 20.0), (_xk1 + 10.0, 20.0)):
+            with Locations((cx_, (h_body / 2 - 1.0 + _y_out + 5.0) / 2, 0)):
+                Box(ww_, (_y_out + 5.0) - (h_body / 2 - 1.0), z_max * 3,
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
     cutter_side_bump = _sb.part.intersect(tilted_cutter(w, h_body, rim_front))
     # 合わせ目より上の側壁の外側 SKIRT_T + SKIRT_FIT を削る（上シェルの
@@ -790,8 +796,8 @@ def build_case(keys, half):
                                  max(CORNER_R - SKIRT_T - SKIRT_FIT, 0.5),
                                  mode=Mode.SUBTRACT)
         extrude(amount=z_max)
-        with Locations((0, _y_out - CORNER_R + 100, 0)):
-            Box((w / 2 - CORNER_R) * 2, 200, z_max * 3, mode=Mode.SUBTRACT,
+        with Locations(((_xk0 + _xk1) / 2, _y_out - CORNER_R + 100, 0)):
+            Box(_xk1 - _xk0, 200, z_max * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 手前壁は触らない（相欠きにするとネジボスのインサートが外へ出る。
         # SEAM_Z の注記）。上シェルの手前はリム面で突き合わせ。
@@ -1567,9 +1573,12 @@ def build_topcase(keys, half):
               ).intersect(above_rim)
     # 奥壁の平らな部分（|x| < w/2 − CORNER_R + GAP）は下シェルが全高で持つ。上シェルは
     # そこでは天井だけ。角の丸みは上シェルの側壁が回る（REAR_CORNER_GAP の注記）
+    _xk0, _xk1 = rear_wall_keep_x(half, w)
+    _xg0 = _xk0 - (REAR_CORNER_GAP if inner_sign(half) < 0 else 0.0)   # 内縁側だけ隙間
+    _xg1 = _xk1 + (REAR_CORNER_GAP if inner_sign(half) > 0 else 0.0)
     with BuildPart() as _rc:
-        with Locations((0, y_out - WALL - CLEARANCE + 100, 0)):
-            Box((w / 2 - CORNER_R + REAR_CORNER_GAP) * 2, 200, z_max * 3,
+        with Locations(((_xg0 + _xg1) / 2, y_out - WALL - CLEARANCE + 100, 0)):
+            Box(_xg1 - _xg0, 200, z_max * 3,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     rear_corner_cut = _rc.part - under_ceiling
     # 奥板の座ぐりは角の丸みに 0.4 掛かる（外皮 1.0 まで広げてある）ので、上シェルの
@@ -1788,6 +1797,17 @@ def rear_window(half, w):
     x0 = max(bx - BATT_X / 2 - REAR_PLATE_CLR, -(w / 2 - WALL))
     x1 = min(bx + BATT_X / 2 + REAR_PLATE_CLR, w / 2 - WALL)
     return x0, FLOOR, x1, 1e3
+
+
+def rear_wall_keep_x(half, w):
+    """下シェルの奥壁が**全高で持つ x の範囲** (x0, x1)。内縁側は角の丸みの接線
+    （w/2 − CORNER_R）、外縁側は電池窓の外側の縁（REAR_CORNER_GAP の注記）。
+    その外は上シェルの角。**ケースと上シェルがこの 1 つから取る。**"""
+    s = inner_sign(half)
+    wx0, _, wx1, _ = rear_window(half, w)
+    x_in = s * (w / 2 - CORNER_R)
+    x_out = wx0 if s > 0 else wx1
+    return (min(x_in, x_out), max(x_in, x_out))
 
 
 def rear_plate_rebate(half, w):
