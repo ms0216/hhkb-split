@@ -553,9 +553,10 @@ REAR_CORNER_D = 6.0      # 奥の隅は下シェルが全高で持つ（奥壁�
 # 奥板（電池窓を塞ぐ板。旧・電池蓋のスライド＋ビードは全廃）
 REAR_PLATE_CLR = 0.3     # 窓を電池箱の断面からどれだけ広げるか（片側）
 REAR_PLATE_T = 1.6       # 板厚。奥壁の外面に面一で沈む（座ぐりも同じ深さ）
-REAR_PLATE_FRAME = 2.0   # 座ぐりを窓から広げる量（左右）＝板の掛かり代。
-                         # 2.5 にすると電源スイッチの指の窪みが 4.76mm に
-                         # 痩せる（検査 5.0 未満）。旧・蓋の掛かり代と同じ 2.0
+REAR_PLATE_FRAME = 1.5   # 座ぐりを窓から広げる量（左右）＝板の掛かり代。
+                         # 2.0 → 1.5（2026-09-06）: 電池箱をリード線の逃げ 2.0 だけ
+                         # 内へ寄せたら、左の電源スイッチの窪みと座ぐりが 0.62
+                         # 重なった。板はネジ 2 本で留まるので掛かり代は 1.5 で足りる
 REAR_PLATE_LIP = 3.0     # 上縁のリップがコブ天井の奥縁に被る量
 REAR_TONGUE_T = 1.2      # 板の下端の足（内側へ L 字に出る）の厚み
 REAR_TONGUE_H = 1.0      # 同・床の溝へ入る深さ
@@ -988,7 +989,10 @@ def build_case(keys, half):
                 SW_PWR_H * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.MAX, Align.MIN))
         # 指の逃げの窪み（外面から SW_DISH_D）。**スロットより先に掘る。**
-        with Locations((sw_x, y_rear_outer - SW_DISH_D / 2, sw_z)):
+        # 窪みの中心はスイッチの中心ではなく、**空きの中に収まる位置**
+        # （power_switch_dish_x）。スイッチは子基板のポケットで電池側へ寄せ
+        # られるので、中心を揃えると窪みが奥板の座ぐりへはみ出す（2026-09-06）
+        with Locations((power_switch_dish_x(half, w), y_rear_outer - SW_DISH_D / 2, sw_z)):
             Box(power_switch_dish_w(half, w), SW_DISH_D, SW_DISH_H,
                 mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.CENTER))
@@ -1168,7 +1172,12 @@ def power_switch_x_center(half, w):
     # 子基板の間に収まる中心の範囲を出し、窪みの中央をそこへ丸める。
     # 成立しない（範囲が空）なら例外で止める——黙って重ねない。
     hw = (SW_PWR_W + CLEARANCE + SW_RIB * 2) / 2   # 受け箱の半幅
-    h_lo, h_hi = lo + CLEARANCE + hw, hi - CLEARANCE - hw
+    # 両脇の逃げは CLEARANCE/2（2026-09-06）。電池箱をリード線の逃げ 2.0 だけ
+    # 内へ寄せた（BATT_WIRE_ROOM）ので左の帯は 6.76 で、0.2 では受け箱 6.5 が
+    # 0.14 入らない。⚠️ 箱の長辺は図面で 109±1.0——**現物の実測待ち**（BATT_X）。
+    # 現物が長ければここは成立しない（電源スイッチの移設が要る）
+    _sc = CLEARANCE / 2
+    h_lo, h_hi = lo + _sc + hw, hi - _sc - hw
     if h_lo > h_hi:
         raise RuntimeError(
             f"{half}: スイッチの受け箱が電池と子基板の間に収まらない "
@@ -1222,6 +1231,16 @@ def power_switch_dish_w(half, w):
     """指の窪みの幅。**空きから決める**（power_switch_free_span を見ること）。"""
     lo, hi = power_switch_free_span(half, w)
     return min(SW_DISH_W, (hi - lo) - SW_DISH_EDGE * 2)
+
+
+def power_switch_dish_x(half, w):
+    """指の窪みの中心 x。スイッチの中心に揃えつつ、**空き（奥板の座ぐりと
+    子基板のポケットの間）からはみ出さない**位置へ寄せる（2026-09-06）。
+    スロット（ツマミ）が窪みの中に入ることは test が見る。"""
+    lo, hi = power_switch_free_span(half, w)
+    half_w = power_switch_dish_w(half, w) / 2
+    c = power_switch_x_center(half, w)
+    return min(max(c, lo + SW_DISH_EDGE + half_w), hi - SW_DISH_EDGE - half_w)
 
 
 def battery_center_z():

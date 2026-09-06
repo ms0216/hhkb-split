@@ -1871,8 +1871,8 @@ def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
     窪みは操作のためのもので、**狭いと部品選択の前提（突出量 1.4mm で
     足りる）が崩れる**——窪みが無ければ壁 2.4mm を貫く必要に戻る。
     """
-    from gen_case import (power_switch_dish_w, power_switch_x_center,
-                          rear_plate_rebate)
+    from gen_case import (power_switch_dish_w, power_switch_dish_x,
+                          power_switch_x_center, rear_plate_rebate)
     from interface import plate_positions
     from matrix import keymap_order
 
@@ -1880,10 +1880,17 @@ def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
     sx = power_switch_x_center(half, w)
     rx0, rx1 = rear_plate_rebate(half, w)
     dw = power_switch_dish_w(half, w)      # **上限 SW_DISH_W ではなく実寸**
-    assert dw >= 5.0, (
+    # 2026-09-06: 下限 5.0 → 3.0。電池箱をリード線の逃げ（BATT_WIRE_ROOM 2.0）
+    # のぶん内へ寄せたので、左の帯は 6.56 になり窪みは 3.3。ツマミは壁から
+    # 2.6 出ているので爪・指先で動かせる（利用者が許容）
+    assert dw >= 3.0, (
         f"{half}: 指の窪みが {dw:.2f}mm しか取れない。指が入らない"
-        "（蓋の座ぐりと子基板ポケットに挟まれている）")
-    d0, d1 = sx - dw / 2, sx + dw / 2
+        "（奥板の座ぐりと子基板ポケットに挟まれている）")
+    # 窪みの中心はスイッチの中心ではなく power_switch_dish_x（空きの中に収める。
+    # 2026-09-06）。ケースと同じ出所から取る
+    cx = power_switch_dish_x(half, w)
+    d0, d1 = cx - dw / 2, cx + dw / 2
+    del sx
     overlap = min(d1, rx1) - max(d0, rx0)
     assert overlap <= 0, (
         f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が奥板の座ぐり "
