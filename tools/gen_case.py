@@ -199,8 +199,11 @@ assert BATT_X == _IF_BATT_X, (
 BATT_MARGIN_REAR = 1.0
 # 箱の床の取付穴（データシート: 2×φ2.4、内側から φ3.8×0.8 の座ぐり）。
 # 横倒しなので床は手前（−y）を向き、穴の軸は y。
-BATT_HOLE_Z_FROM_EDGE = 4.1      # [暫定] 図面「4.1±0.2」を箱の長辺の縁から
-                                 # の距離と読んだ。どちらの縁かは現物で確認
+# 床（箱が接する面）から穴の中心までの高さ。**利用者が現物で実測**（2026-09-06）:
+# 左 5.0 / 右 11.5（足すと 16.5 ≈ 箱の幅。左右で箱の上下が逆＝穴は箱の中心から
+# 外れている）。図面の「4.1」を一律に使っていたのが間違いだった。
+BATT_HOLE_Z_LEFT = 5.0           # [暫定] 利用者の実測
+BATT_HOLE_Z_RIGHT = 11.5         # [暫定] 同
 BATT_HOLE_X1_FROM_END = 75.9     # [暫定] 穴 1。黒線側の端から。図面 75.9±0.5
 BATT_HOLE_X2_FROM_END = 82.8     # [暫定] 穴 2。同 75.9 に隣の 6.9±0.2 を足した
 BATT_WIRE_NOTCH = 4.0            # 仕切り壁の両端に開ける、リード線の逃げ（幅・高さ）
@@ -570,7 +573,10 @@ REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
 # 奥板のリップは電池窓の幅（109）しか押さえず、子基板側の 35mm は隅の柱で
 # 受けるだけだった。奥壁を貫いて上シェルの天井裏のボスへ M2 を横に入れる。
 # 位置は子基板の中心から電池側へ REAR_SCREW3_DX（LED 窓と USB を避ける）。
-REAR_SCREW3_DX = 8.0
+REAR_SCREW3_DX = 7.5     # **LED 窓の反対側**（子基板中心 −x）。LED は子基板中心
+                         # +5.7 の側にあり、右では電池側になる。一度「電池側」に
+                         # 置いて右だけ LED 窓の薄肉と重なりボスが欠けた（利用者が
+                         # 試し刷りで発見・2026-09-06）
 REAR_SCREW3_BOSS_W = 6.0 # 天井裏のボス（角柱）の x 幅
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
@@ -911,13 +917,15 @@ def build_case(keys, half):
         # 電池箱の取付ボス（仕切り壁の手前側に横向きの柱）。箱の床の穴 2 個
         # （φ2.4・データシート）に M2 を通し、仕切り壁のインサートへ締める。
         # ドライバーは奥の窓から箱の中を通す（箱の座ぐりに頭が沈む）。
-        _bz = FLOOR + BATT_HOLE_Z_FROM_EDGE
-        _yd_front = y_div - WALL / 2
+        _bz = FLOOR + battery_hole_z(half)
         # **床から立てる**（2026-09-06・利用者の指摘「浮かせる理由がない。
-        # サポートが取れず見栄えが悪い」）。ブロックの下端が床から 1.3 浮いていた
+        # サポートが取れず見栄えが悪い」）。ブロックの下端が床から 1.3 浮いていた。
+        # 柱は仕切り壁の**奥面**（箱の床が当たる面）から手前へ WALL + 2.6。右は
+        # 穴（13.9）が壁の上端（11.9）より高いので、柱が壁の上まで伸びて奥面を作る
+        _yd_rear = y_div + WALL / 2
         for hx in battery_hole_xs(half, w):
-            with Locations((hx, _yd_front - 2.5, FLOOR - 0.5)):
-                Box(M2_BOSS_D, 5.5, (_bz + M2_BOSS_D / 2) - (FLOOR - 0.5),
+            with Locations((hx, _yd_rear - (WALL + 2.6) / 2, FLOOR - 0.5)):
+                Box(M2_BOSS_D, WALL + 2.6, (_bz + M2_BOSS_D / 2) - (FLOOR - 0.5),
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((hx, y_div + WALL / 2 - 2.25 + 0.01, _bz)):
                 Cylinder(M2_INSERT_D / 2, 4.5, rotation=(90, 0, 0),
@@ -1754,8 +1762,13 @@ def rear_screw_positions(half, w, h_body):
 def rear_screw3(half, w, h_body):
     """奥面 3 本目のネジ (x, z)。子基板の中心から電池側へ REAR_SCREW3_DX、
     高さは桟と同じ（天井の下 REAR_RAIL_H の中心）。"""
-    x = daughterboard_x_center(half, w) - inner_sign(half) * REAR_SCREW3_DX
+    x = daughterboard_x_center(half, w) - REAR_SCREW3_DX   # 左右とも −x 側（LED の反対）
     return x, rear_rail_z0(h_body) + REAR_RAIL_H / 2
+
+
+def battery_hole_z(half):
+    """電池箱の取付穴の、床（箱が接する面）からの高さ。左右で違う（実測）。"""
+    return BATT_HOLE_Z_LEFT if half == "left" else BATT_HOLE_Z_RIGHT
 
 
 def battery_hole_xs(half, w):
