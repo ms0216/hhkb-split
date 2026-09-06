@@ -1608,7 +1608,10 @@ def test_the_rear_plate_locks_the_top_shell(half):
       1. 据わった位置で奥板・上シェル・下シェルが互いに当たらない
       2. 奥板を上へ 0.3 動かすと天井に当たる（上縁が天井の下にある）
       3. 上シェルを上へ 3.0 動かしても下シェルに当たらない（外せる）
-    奥板そのものの着脱は INSERT_PATH（test_every_part_can_be_put_in_from_outside）。
+      4. 奥板は**上縁を軸に下を奥へ倒して**外せる（爪の窪み NAIL_NOTCH_* から
+         下縁を起こす。10°・35° で両シェルに当たらない。3° では下前の角が床に
+         0.43mm³ 食うが、天井との隙 0.2 の中で持ち上がる——0.15 上げれば 0）
+    奥板そのものの真っ直ぐな着脱は INSERT_PATH（test_every_part_can_be_put_in_from_outside）。
     """
     from build123d import Location
 
@@ -1631,6 +1634,15 @@ def test_the_rear_plate_locks_the_top_shell(half):
     assert hit(top, case, (0, 0, 3.0)) < 1e-6, (
         f"{half}: 上シェルを 3mm 上げると下シェルに "
         f"{hit(top, case, (0, 0, 3.0)):.2f}mm³ 当たる。**上シェルが外せない**")
+    b = plate.bounding_box()
+    pivot = (0, b.max.Y, b.max.Z)          # 上縁の外側の稜
+    for deg in (10, 35):
+        m = (Location(pivot) * Location((0, 0, 0), (deg, 0, 0))
+             * Location((-pivot[0], -pivot[1], -pivot[2])))
+        tilted = m * plate
+        for name, other in (("下シェル", case), ("上シェル", top)):
+            v = hit(tilted, other, (0, 0, 0))
+            assert v < 1e-6, f"{half}: 奥板を {deg}° 倒すと{name}に {v:.2f}mm³ 当たる。**倒して外せない**"
 
 
 # --------------------------------------------------------------------------
