@@ -1673,7 +1673,9 @@ def test_the_skirt_lap_is_uniform(half):
         return b.min.Z, b.max.Z
 
     x_out, x_in = bw / 2 - SKIRT_T / 2, bw / 2 - WALL + (WALL - SKIRT_T) / 2
-    for y in (-h_body / 2 + 10, 0.0, h_body / 2 - 12):
+    # コブ（y > h_body/2）も含める。2026-09-06 までは下シェルの帯が天井まで立ち、
+    # 奥で 7mm の相欠きになっていた（縦の継ぎ目を奥面へ移したときに揃えた）
+    for y in (-h_body / 2 + 10, 0.0, h_body / 2 - 12, h_body / 2 + 6):
         seam = rim(y) - SKIRT_LAP
         t_lo, _ = zrange(top, x_out, y)
         _, c_hi = zrange(case, x_out, y)
