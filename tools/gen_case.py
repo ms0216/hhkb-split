@@ -153,7 +153,7 @@ PLATE_TOP_FRONT = round(
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
 from interface import (FRONT_BOSS_W, FRONT_PIN_D, FRONT_PIN_DX,  # noqa: E402
-                       FRONT_PIN_H, FRONT_PIN_TIP, PCB_FRONT_EDGE_PLAN)
+                       FRONT_PIN_INTO_LOWER, FRONT_PIN_TIP, PCB_FRONT_EDGE_PLAN)
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -778,9 +778,15 @@ def build_case(keys, half):
     cutter_under_pcb = tilted_cutter(w, h_body, under_pcb_base(
         h_plate, rim_front, PLATE_TO_PCB + PCB_T + SOCKET_DROP))
     y_div = (battery_center(h_body) - BATT_W / 2 - BATT_DIVIDER_T / 2 - CLEARANCE)
+    # **幅は外壁から子基板の場所の手前まで**（2026-09-06・利用者「プレートの受けに
+    # なったので可能な限り伸ばす」）。以前は電池ぶん（BATT_X）だけだった。
+    # 子基板（DB_W・DB_D）はこの y を跨いで座るので、その内縁側だけ空ける
+    _s = inner_sign(half)
+    _x_outer = -_s * (w / 2 - WALL)
+    _x_inner = daughterboard_x_center(half, w) - _s * (DB_W / 2 + CLEARANCE)
     with BuildPart() as _d:
-        with Locations((battery_x_center(half, w), y_div, FLOOR)):
-            Box(BATT_X, BATT_DIVIDER_T, BATT_DIVIDER_H,
+        with Locations(((_x_outer + _x_inner) / 2, y_div, FLOOR)):
+            Box(abs(_x_inner - _x_outer), BATT_DIVIDER_T, BATT_DIVIDER_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
     # 上面は**リム面**（プレートの奥端を受ける）。基板の後ろなので基板の下面で
     # 切る理由は無くなった（2026-09-06）
@@ -1121,21 +1127,18 @@ def build_case(keys, half):
     part = part - _fh.part
     if len(part.solids()) != 1:
         raise ValueError("バカ穴を切ったら下シェルが分かれた")
-    # 手前の位置決めピン（interface.FRONT_PIN_* の注記）。ボス上面（リム面）から
-    # 上向き、先端に面取り。**コンテキストの外で作る**（面取り前の円柱が合体される）
-    from build123d import Solid
-    _pin_list = []
-    for bx, by in _boss_positions(half):
-        z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
-        for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-            c = Solid.make_cylinder(FRONT_PIN_D / 2, 0.5 + FRONT_PIN_H)       # z 0..h
-            c = c.chamfer(FRONT_PIN_TIP, None,
-                          [e for e in c.edges() if abs(e.center().Z - (0.5 + FRONT_PIN_H)) < 1e-6])
-            _pin_list.append(Location((bx + dx, by, z_rim - 0.5)) * c)
-    for _q in _pin_list:
-        part = part + _q
+    # 手前の位置決めピンの穴（interface.FRONT_PIN_* の注記）。ピンは**上シェルから
+    # 下向き**（2026-09-06）。ボス上面（リム面）から FRONT_PIN_INTO_LOWER + 逃げ
+    with BuildPart() as _ph:
+        for bx, by in _boss_positions(half):
+            z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
+            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+                with Locations((bx + dx, by, z_rim - FRONT_PIN_INTO_LOWER - CLEARANCE)):
+                    Cylinder(FRONT_PIN_D / 2 + CLEARANCE, FRONT_PIN_INTO_LOWER + CLEARANCE + 1.0,
+                             align=(Align.CENTER, Align.CENTER, Align.MIN))
+    part = part - _ph.part
     if len(part.solids()) != 1:
-        raise ValueError("位置決めピンが下シェルに融合していない")
+        raise ValueError("位置決めピンの穴で下シェルが分かれた")
     return part, (w, h_body), (z_front, z_rear)
 
 
@@ -1611,14 +1614,6 @@ def build_topcase(keys, half):
             with Locations((bx, by, z_seat - 0.5)):
                 Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.0, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-            # 位置決めピンの穴（ビスの左右）。ピンの上端 = リム + FRONT_PIN_H
-            z_pt = PLATE_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG))
-            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-                with Locations((bx + dx, by, z_pt - 0.5)):
-                    Cylinder(FRONT_PIN_D / 2 + CLEARANCE,
-                             (z_pt - PLATE_T + FRONT_PIN_H + CLEARANCE) - (z_pt - 0.5),
-                             mode=Mode.SUBTRACT,
-                             align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥板のネジ（桟へ横向きに。熱圧入インサートの下穴）
         for sx, sz in rear_screw_positions(half, w, h_body):
             with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):
@@ -1676,6 +1671,24 @@ def build_topcase(keys, half):
                 or abs(_b1.max.Z - _b0.max.Z) > 1e-3 or abs(_b1.max.Y - _b0.max.Y) > 1e-3):
             raise ValueError(f"開口の面取りで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
                              "**カーネルが別の面を失った**")
+    # 手前の位置決めピン（ビスの左右・interface.FRONT_PIN_* の注記）。インサートの
+    # 座（バーの裏）から**下向き**、プレートの切り欠きを通って下シェルのボスの穴へ。
+    # 先端に面取り。**コンテキストの外で作る**（面取り前の円柱が合体される）
+    from build123d import Solid
+    _pin_list = []
+    for bx, by in _boss_positions(half):
+        z_seat = front_insert_seat_z(by, h_body)
+        z_rim = z_seat - FRONT_INSERT_LIFT - PLATE_T
+        _len = (z_seat + 0.5) - (z_rim - FRONT_PIN_INTO_LOWER)
+        for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+            c = Solid.make_cylinder(FRONT_PIN_D / 2, _len)               # z 0.._len
+            c = c.chamfer(FRONT_PIN_TIP, None,
+                          [e for e in c.edges() if abs(e.center().Z) < 1e-6])
+            _pin_list.append(Location((bx + dx, by, z_rim - FRONT_PIN_INTO_LOWER)) * c)
+    for _q in _pin_list:
+        part = part + _q
+    if len(part.solids()) != 1:
+        raise ValueError("位置決めピンが上シェルに融合していない")
     if FRONT_EDGE_R > 0:
         if not front_edges:
             raise ValueError("手前の上縁が見つからない（丸める対象が無い）")
@@ -1918,8 +1931,16 @@ def main():
         z_top = (BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
                  - WALL - CLEARANCE)
         assert abs(bb.size.Z - z_top) < 0.05, f"高さが設計値と違う（{bb.size.Z:.2f} vs {z_top:.2f}）"
+        # 下端は合わせ目。ただし手前の位置決めピン（下向き・2026-09-06）は
+        # 合わせ目より FRONT_PIN_INTO_LOWER + 面取り分だけ下へ出るので、ピンを除いて見る
         tb = topc.bounding_box()
-        assert abs(tb.min.Z - SEAM_Z) < 0.05, f"上シェルの下端が合わせ目 {SEAM_Z} でない（{tb.min.Z:.2f}）"
+        _by = _boss_positions(name)[0][1]
+        _pin_tip = (front_insert_seat_z(_by, h) - FRONT_INSERT_LIFT - PLATE_T
+                    - FRONT_PIN_INTO_LOWER)   # ボスの位置のリム面（傾きぶん合わせ目より上）から
+        assert abs(tb.min.Z - _pin_tip) < 0.05, f"上シェルの最下点がピンの先端 {_pin_tip:.2f} でない（{tb.min.Z:.2f}）"
+        _no_pins = topc - Location((0, -h / 2, SEAM_Z - 5)) * Box(w + 2, 12.0, 10.0 - 0.01)
+        _tb2 = _no_pins.bounding_box()
+        assert abs(_tb2.min.Z - SEAM_Z) < 0.05, f"上シェルの下端が合わせ目 {SEAM_Z} でない（{_tb2.min.Z:.2f}）"
 
     # 前回の控えとの差を消す（消えた部品の STL と、その絵）。
     old = set(json.loads(manifest.read_text())) if manifest.exists() else set()
