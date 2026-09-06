@@ -152,7 +152,8 @@ PLATE_TOP_FRONT = round(
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
-from interface import FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN  # noqa: E402
+from interface import (FRONT_BOSS_W, FRONT_PIN_D, FRONT_PIN_DX,  # noqa: E402
+                       FRONT_PIN_H, PCB_FRONT_EDGE_PLAN)
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -1114,6 +1115,17 @@ def build_case(keys, half):
     part = part - _fh.part
     if len(part.solids()) != 1:
         raise ValueError("バカ穴を切ったら下シェルが分かれた")
+    # 手前の位置決めピン（interface.FRONT_PIN_* の注記）。ボス上面（リム面）から
+    with BuildPart() as _pins:
+        for bx, by in _boss_positions(half):
+            z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
+            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+                with Locations((bx + dx, by, z_rim - 0.5)):
+                    Cylinder(FRONT_PIN_D / 2, 0.5 + FRONT_PIN_H,
+                             align=(Align.CENTER, Align.CENTER, Align.MIN))
+    part = part + _pins.part
+    if len(part.solids()) != 1:
+        raise ValueError("位置決めピンが下シェルに融合していない")
     return part, (w, h_body), (z_front, z_rear)
 
 
@@ -1607,6 +1619,14 @@ def build_topcase(keys, half):
             with Locations((bx, by, z_seat - 0.5)):
                 Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.0, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
+            # 位置決めピンの穴（ビスの左右）。ピンの上端 = リム + FRONT_PIN_H
+            z_pt = PLATE_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG))
+            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+                with Locations((bx + dx, by, z_pt - 0.5)):
+                    Cylinder(FRONT_PIN_D / 2 + CLEARANCE,
+                             (z_pt - PLATE_T + FRONT_PIN_H + CLEARANCE) - (z_pt - 0.5),
+                             mode=Mode.SUBTRACT,
+                             align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 奥板のネジ（桟へ横向きに。熱圧入インサートの下穴）
         for sx, sz in rear_screw_positions(half, w, h_body):
             with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):

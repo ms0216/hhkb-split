@@ -231,7 +231,15 @@ from math import cos as _cos, radians as _radians  # noqa: E402
 _KEY_H_HALF = 5 * 19.05 / 2                       # HHKB は 5 段
 PCB_FRONT_EDGE_PLAN = (_KEY_H_HALF + PLATE_MARGIN_Y - 5.3) * _cos(_radians(TILT_DEG))
 FRONT_BOSS_WALL_IN = 0.8  # インサートの内側（基板側）に残す肉
-FRONT_BOSS_W = 8.0        # 手前ボス（角柱）の x 幅
+FRONT_BOSS_W = 10.0       # 手前ボス（角柱）の x 幅（位置決めピン 2 本を載せる）
+# 手前の位置決めピン（2026-09-06・利用者の提案「ビスの左右に突起や穴を増やして
+# 上下ケースとプレートの位置合わせを」）。下シェルのボス上面（リム面）から
+# ビスの左右 FRONT_PIN_DX に φ FRONT_PIN_D のピンを立て、プレートの切り欠きと
+# 上シェルのベゼル手前バーの裏の穴に入る。手前は突き合わせで横方向の位置決めが
+# 無かった。
+FRONT_PIN_DX = 3.0        # ビス中心からの x
+FRONT_PIN_D = 2.0         # ピンの直径。穴は + CLEARANCE×2
+FRONT_PIN_H = 3.0         # リム面からの高さ（プレート 1.5 を貫いてバーへ 1.5）
 # MOUNT_Y は M2_INSERT_D の定義の後（下）で計算する
 
 PCB_INSET = 3.0        # 左右。これ以上詰めるとキー領域が基板からはみ出す
