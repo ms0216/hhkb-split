@@ -50,13 +50,15 @@ def test_holes_fit_inside_the_pcb(name):
     上ケース方式では基板に穴を開けない。以前はここが「穴が基板の中に
     収まること」で、向きが逆だった。
     """
-    from gen_plate import halves
-    from interface import PCB_INSET_Y, plate_positions
-    _, (_, case_h) = plate_positions(halves()[name])
-    pcb_half = case_h / 2 - PCB_INSET_Y
+    # 2026-09-05: 手前のボスは円柱ではなく角柱で、内面は基板の縁（平面図）+
+    # CLEARANCE に置く。インサートの内側の肉 FRONT_BOSS_WALL_IN を残して
+    # ネジの中心を決めている（interface.MOUNT_Y の注記）。**平面図の座標**で見る
+    from interface import (CLEARANCE, FRONT_BOSS_WALL_IN, M2_INSERT_D,
+                           PCB_FRONT_EDGE_PLAN)
     for x, y in boss_positions(name):
-        assert abs(y) - M2_BOSS_D / 2 >= pcb_half - 1e-6, \
-            f"{name}: ボス({x},{y}) が基板（半深 {pcb_half:.2f}）に掛かる"
+        boss_inner = abs(y) - M2_INSERT_D / 2 - FRONT_BOSS_WALL_IN
+        assert boss_inner >= PCB_FRONT_EDGE_PLAN + CLEARANCE - 1e-6, \
+            f"{name}: ボス({x},{y}) の内面 {boss_inner:.2f} が基板（平面図の縁 {PCB_FRONT_EDGE_PLAN:.2f}）に掛かる"
 
 
 @pytest.mark.parametrize("name", NAMES)

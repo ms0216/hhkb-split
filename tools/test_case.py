@@ -38,14 +38,14 @@ def test_outer_size_matches_the_tilted_plate(name):
 def test_rim_height_gives_the_intended_plate_top(name):
     """リムの高さ + 板厚 = 狙ったプレート上面高さ。"""
     from math import radians, tan
-    from gen_case import BEZEL_TOP_FRONT, BUMP_DEPTH
+    from gen_case import BEZEL_TOP_FRONT, BUMP_DEPTH, CLEARANCE, WALL
     from interface import plan_depth
     from gen_plate import plate_positions
     part, (_, h_body), (z_front, z_rear) = build_case(HALVES[name], name)
-    # **最も高いのはコブの後端（ベゼル上面）。**
-    # 以前はプレートのリムが最高点だったが、上ケース方式でコブがベゼル面まで
-    # 上がったので基準が変わった。
-    z_top = BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
+    # **最も高いのはコブの後端の奥壁の上端。**天井は上シェルの物（案 A・
+    # 2026-09-05）なので、下シェルは天井の下面 − CLEARANCE で終わる。
+    z_top = (BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
+             - WALL - CLEARANCE)
     assert part.bounding_box().size.Z == pytest.approx(z_top, abs=0.05)
     assert z_front == pytest.approx(PLATE_TOP_FRONT)
 
@@ -259,10 +259,10 @@ def test_wall_thicknesses_are_multiples_of_the_nozzle():
     半端な厚みにすると、スライサが埋めきれず隙間が残る。
     **上ケースの壁 1.6mm はノズル 4 本ぶん**で、これは意図した値。
     """
-    from gen_case import FLOOR, REAR_LID_T, WALL
+    from gen_case import FLOOR, REAR_PLATE_T, WALL
     from interface import BEZEL_WALL
-    # 底面の蓋は廃止した（2026-08-12）。見るのは奥面の蓋の厚み。
-    for label, t in (("側壁", WALL), ("床", FLOOR), ("奥面の蓋", REAR_LID_T),
+    # 底面の蓋は廃止した（2026-08-12）。見るのは奥板の厚み。
+    for label, t in (("側壁", WALL), ("床", FLOOR), ("奥板", REAR_PLATE_T),
                      ("上ケースの壁", BEZEL_WALL)):
         n = t / NOZZLE
         assert abs(n - round(n)) < 1e-6, \
@@ -298,13 +298,17 @@ def test_the_battery_bump_has_a_lid(name):
     内側のくり抜きを奥まで通していたため、コブが上に開いたままだった。
     本体側はプレートと上ケースが覆うが、コブの上には何も載らない。
     干渉検査も水密検査もこれを見つけられなかった。
+
+    2026-09-05（案 A）: 天井は**上シェル**の物になった。下シェル単体では
+    コブは上に開いていて正しい。見るのは組んだ状態（下シェル＋上シェル）。
     """
     from build123d import Align, Box, BuildPart, Locations
-    from gen_case import battery_center, battery_x_center, build_case
+    from gen_case import battery_center, battery_x_center, build_case, build_topcase
     from gen_plate import plate_positions
     from verify import intersection_volume
 
     case, (w, h_body), _ = build_case(HALVES[name], name)
+    top, _ = build_topcase(HALVES[name], name)
     bx = battery_x_center(name, w)
     by = battery_center(h_body)
     found = False
@@ -312,10 +316,11 @@ def test_the_battery_bump_has_a_lid(name):
         with BuildPart() as probe:
             with Locations((bx, by, float(z))):
                 Box(60.0, 8.0, 1.0, align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        if intersection_volume(probe.part, case) > 1.0:
+        if (intersection_volume(probe.part, case) > 1.0
+                or intersection_volume(probe.part, top) > 1.0):
             found = True
             break
-    assert found, f"{name}: 電池の真上にケースの材料が無い（コブが開いている）"
+    assert found, f"{name}: 電池の真上に材料が無い（コブが開いている。上シェルの天井を見ること）"
 
 
 def test_the_bosses_take_heat_set_inserts():
@@ -391,9 +396,14 @@ def test_a_real_cable_can_reach_the_socket(name):
     v = probe(USB_SHELL_W, USB_SHELL_H, g.USB_PLUG_ENTRY)
     assert v < 1.0, f"{name}: プラグの金属が壁に {v:.1f}mm^3 当たる"
 
-    # 2. 樹脂は座ぐりのぶんだけ入れること（露出の短いケーブルへの保険）
-    v = probe(USB_PLUG_W, USB_PLUG_H, g.USB_COUNTERBORE)
-    assert v < 1.0, f"{name}: 樹脂が座ぐりに {v:.1f}mm^3 当たる"
+    # 2. **メスの面が外面より外にある**こと（2026-09-06）。樹脂用の座ぐりは
+    #    廃止した（利用者「穴が大きすぎる」）。座ぐり無しで足りる根拠は、
+    #    メスの面が壁の外に出ていて樹脂が壁に入らないこと。引っ込んでも
+    #    金属の露出（USB_SHELL_EXPOSED）から印刷公差を引いた分まで
+    recept_face = (y_out - g.WALL - g.DB_FROM_REAR) + g._RECEPT[2]
+    assert recept_face - y_out >= -(USB_SHELL_EXPOSED - g.CLEARANCE), (
+        f"{name}: メスの面が外面より {y_out - recept_face:.2f} 引っ込んでいる。"
+        f"金属の露出 {USB_SHELL_EXPOSED} のケーブルが届かない（座ぐりは廃止）")
 
     # 3. **穴が大きすぎないこと。**樹脂が壁を貫通できてはいけない
     #    （貫通できる＝実機と違う大きな口が開いている）。
@@ -402,10 +412,7 @@ def test_a_real_cable_can_reach_the_socket(name):
         f"{name}: 樹脂が壁を素通りする。穴が大きすぎる"
         f"（外から見える口が {g.USB_W:.1f}x{g.USB_H:.1f}mm を超えている）")
 
-    # 4. 実測したケーブルが挿さること
-    need = g.USB_PLUG_ENTRY - g.USB_COUNTERBORE
-    assert need <= USB_SHELL_EXPOSED, (
-        f"金属の露出が {USB_SHELL_EXPOSED}mm のケーブルでは {need:.2f}mm 足りない")
+    # 4. （2 に統合。座ぐり廃止・2026-09-06）
 
     # 5. 高さ方向の余裕（XIAO の積み上げに対して）
     assert DB_STACK_H >= XIAO_H_WITH_USB

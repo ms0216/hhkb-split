@@ -58,7 +58,7 @@ def _require_kicad(what):
 
 # 組み立てに含まれていなければならない部品。
 # 名前を書いておくことで、あとから足した部品が検査から漏れるのを防ぐ。
-REQUIRED = {"case", "plate", "pcb", "rear_lid", "batt", "db", "topcase",
+REQUIRED = {"case", "plate", "pcb", "rear_plate", "batt", "db", "topcase",
             "foot0", "foot1", "xiao",
             # open-gaps #29: 製品として存在する実物
             "sockets", "pcb_parts", "db_parts", "switches", "keycaps",
@@ -216,6 +216,19 @@ def _case_stl(half):
     assert stl.exists(), f"{stl} を作れなかった"
     assert stl.stat().st_mtime >= newest, (
         f"{stl} が tools/*.py より古いまま。作り直しが効いていない")
+    return stl
+
+
+def _topcase_stl(half):
+    """上シェルの STL のパス。_case_stl と同じ門（古ければ作り直す）。"""
+    root = Path(__file__).resolve().parent.parent
+    stl = root / f"build/topcase_{half}.stl"
+    newest = max((q.stat().st_mtime for q in (root / "tools").glob("*.py")
+                  if not q.name.startswith("test_")), default=0.0)
+    if not stl.exists() or stl.stat().st_mtime < newest:
+        import gen_case
+        gen_case.main()
+    assert stl.exists(), f"{stl} を作れなかった"
     return stl
 
 
@@ -999,10 +1012,17 @@ def test_the_screws_engage_enough_of_the_insert(half):
         best = 0.0
         for scr in parts["screws"].solids():
             sb = scr.bounding_box()
-            if (abs(sb.center().X - ib.center().X) > 1.0
-                    or abs(sb.center().Y - ib.center().Y) > 1.0):
+            if abs(sb.center().X - ib.center().X) > 1.0:
                 continue
-            best = max(best, min(sb.max.Z, ib.max.Z) - max(sb.min.Z, ib.min.Z))
+            if ib.size.Y <= ib.size.Z and abs(sb.center().Y - ib.center().Y) > 1.0:
+                continue
+            # 軸の向きで測る。奥面のネジ（案 A・2026-09-05）は y 軸
+            if ib.size.Y > ib.size.Z:
+                if abs(sb.center().Z - ib.center().Z) > 1.0:
+                    continue
+                best = max(best, min(sb.max.Y, ib.max.Y) - max(sb.min.Y, ib.min.Y))
+            else:
+                best = max(best, min(sb.max.Z, ib.max.Z) - max(sb.min.Z, ib.min.Z))
         if best < need:
             short.append(f"({ib.center().X:+.1f},{ib.center().Y:+.1f}) 噛み合い {best:.2f}mm")
     assert not short, (
@@ -1537,132 +1557,132 @@ def test_the_pcb_is_actually_fastened_to_the_plate(half):
 
 
 # --------------------------------------------------------------------------
-# 電池蓋（コブの奥面）の着脱（open-gaps #35・2026-08-12）
+# 奥板（案 A・2026-09-05）: 上シェルの奥を押さえ、外せば上シェルが抜ける
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_rear_battery_lid_can_be_taken_off(half):
-    """奥面の電池蓋が、**外から着脱でき、かつ勝手に外れない**こと。
+def test_the_plate_can_be_put_into_the_shells(half):
+    """プレート（＋基板）が**真上から**入り、上シェルの縁に押さえられること。
 
-    **底面の蓋は外から開かなかった**（座ぐりが床の内側にあり、蓋は貫通穴より
-    3.8mm 大きい。#35）。**同じ失敗を繰り返さないために、最初から入れる。**
+    ⚠️ 案 A の最初の版は、受ける段（下）と押さえる縁（上）を両方とも上シェルに
+    持たせてプレートが入らなかった（利用者が .blend で指摘）。次に上シェルの棚と
+    溝へ傾けて差し込む形にしたが、棚は裏返して刷ると庇になり印刷が壊れた
+    （利用者の試し刷り）。2026-09-06 に受けを下シェルの仕切り壁へ移し、
+    プレートは**真上から下シェルに載せ、上シェルを被せるだけ**になった。
 
-    方式は**下へスライドして庇の裏へ差し込む**。動作を 4 つとも見る:
-
-      1. 据わった位置で**干渉が無い**（嵌まる）
-      2. そのまま手前へ引くと**引っ掛かる**（勝手に外れない）
-      3. **上へ SLIDE ずらすと**、引っ掛かりが消える（外せる）
-      4. 上へずらす途中で**ビードに当たる**（勝手に上がらない）
-
-    ⚠️ **片持ちばね案は 2 と 3 を同時に満たせず不成立だった。**腕が壁の裏に
-    立っていて、どう撓ませても抜けない。**「留まる」だけを見る検査では
-    通ってしまった**ので、3 を必ず一緒に見る。
+    見るのは: 据わった位置で上シェルと当たらない／上へ 0.3 動かすと縁に当たる
+    （押さえている）／上シェルを 5 上げた状態ではプレートと当たらない
+    （＝被せる動きの途中で引っ掛からない）。
     """
     from build123d import Location
-    from gen_case import REAR_LID_SLIDE
 
     parts, _ = build_assembly(HALVES[half], half)
-    lid, case = parts["rear_lid"], parts["case"]
+    plate, top = parts["plate"], parts["topcase"]
 
-    def hit(dy, dz):
+    def hit(loc_plate, loc_top=Location((0, 0, 0))):
         v = 0.0
-        for a in (Location((0, dy, dz)) * lid).solids():
-            for b in case.solids():
-                s = a & b
-                if s is not None and s.volume > 1e-6:
-                    v += s.volume
+        for a in (loc_plate * plate).solids():
+            for b in (loc_top * top).solids():
+                s_ = a & b
+                if s_ is not None and s_.volume > 1e-6:
+                    v += s_.volume
         return v
 
-    assert hit(0.0, 0.0) < 1e-6, f"据わった位置で {hit(0.0, 0.0):.2f}mm³ 当たる"
-    assert hit(2.0, 0.0) > 1.0, (
-        "手前へ 2mm 引いても何も引っ掛からない。**抜け止めが効いていない**"
-        "（蓋が自重で落ちる）")
-    assert hit(2.0, REAR_LID_SLIDE) < 1e-6, (
-        f"上へ {REAR_LID_SLIDE}mm ずらしてから手前へ引くと "
-        f"{hit(2.0, REAR_LID_SLIDE):.2f}mm³ 当たる。**外せない蓋**")
-    assert hit(0.0, REAR_LID_SLIDE) > 1.0, (
-        "上へずらす途中で何にも当たらない。**抜け止めのビードが効いていない**"
-        "（振動で勝手に上がって外れる）")
+    assert hit(Location((0, 0, 0))) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
+    assert hit(Location((0, 0, 0.3))) > 1.0, (
+        f"{half}: プレートを 0.3 上げてもベゼルに当たらない＝押さえていない")
+    for dz in (5.0, 2.0, 0.6):
+        v = hit(Location((0, 0, 0)), Location((0, 0, dz)))
+        assert v < 1e-6, (
+            f"{half}: 上シェルを {dz} 上げた位置でプレートに {v:.2f}mm³ 当たる。"
+            "**真上から被せられない**")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_rear_lid_slide_survives_pla(half):
-    """電池蓋を外すときの**板の反り**が、PLA で割れない量であること。
+def test_the_rear_plate_locks_the_top_shell(half):
+    """奥板の上縁を**上シェルの天井が被い**、上シェルは**上へ抜ける**こと。
 
-    片持ち爪をやめたので撓むのは**板そのもの**。上端をビード（0.4mm）へ
-    乗り上げさせるとき、板は下端を支点に反る。
-
-        ε = 1.5 · t · y / L²        …… PLA は繰り返し使用なら ε ≤ 1.0%
-
-    **爪案は ε = 0.94% で綱渡りだった**（L=9・t=1.0・y=0.6）。板で受けると
-    L が桁で大きくなるので、同じ掛かり量でもひずみが桁で小さい。
+    #12（上ケースの奥の留め）。2026-09-06 まで「奥板のリップが天井の奥縁に被って
+    上シェルを押さえる」としていたが、板は上シェルの桟にネジ留めで足は溝から
+    上へ抜けるので押さえになっておらず、リップの座ぐりは裏返して刷ると宙に出て
+    印刷が壊れた。今は天井を奥面まで通し、板はその下。奥の留めは奥面 3 本目のネジ。
+      1. 据わった位置で奥板・上シェル・下シェルが互いに当たらない
+      2. 奥板を上へ 0.3 動かすと天井に当たる（上縁が天井の下にある）
+      3. 上シェルを上へ 3.0 動かしても下シェルに当たらない（外せる）
+      4. 奥板は**舌の外下の角を支点に上を奥へ倒し、舌を溝から持ち上げて**外せる
+         （上縁の切り欠き NAIL_NOTCH_* に爪を掛ける。gen_assembly.rear_plate_path の
+         姿勢で両シェルに当たらない。下シェルとの当たりは put_in_from_outside も見る
+         が、天井は上シェルなのでここで見る）
+    奥板そのものの真っ直ぐな着脱は INSERT_PATH（test_every_part_can_be_put_in_from_outside）。
     """
-    from gen_case import (REAR_LID_DETENT, REAR_LID_LIP_ENG, REAR_LID_SLIDE,
-                          REAR_LID_T, rear_lid_plate_z, rear_lid_rebate)
-    from gen_plate import halves, plate_positions
+    from build123d import Location
 
-    _pos, (w, _h) = plate_positions(halves()[half])
-    z_bot, z_top = rear_lid_plate_z(half, w)
-    L = z_top - z_bot                            # 反る長さ＝板の高さ
-    eps = 1.5 * REAR_LID_T * (REAR_LID_DETENT + 0.1) / L ** 2
-    assert eps <= 0.010, (
-        f"板の反りのひずみが {eps*100:.2f}%。**PLA は 1.0% まで。**"
-        f"L={L:.1f} t={REAR_LID_T} 反り={REAR_LID_DETENT + 0.1:.1f}mm。"
-        "ビードを浅くするか、板を薄くすること")
+    parts, _ = build_assembly(HALVES[half], half)
+    plate, top, case = parts["rear_plate"], parts["topcase"], parts["case"]
 
-    # 差し込みしろは掛かり代より大きくなければ、ずらしても抜けない。
-    assert REAR_LID_SLIDE > REAR_LID_LIP_ENG, (
-        f"差し込みしろ {REAR_LID_SLIDE} が掛かり代 {REAR_LID_LIP_ENG} 以下。"
-        "**ずらしきっても舌が庇から抜けない＝外せない**")
-    # 上に残る隙間は**差し込みしろ**（蓋が上へ逃げる場所）。
-    # **ここは指掛かりではない。**蓋を上へずらすには蓋の下向きの面を
-    # 押す必要があるが、隙間は蓋の上にあるので押せるのは下向きだけ。
-    # （2026-08-12・利用者の指摘。それまで指掛かりだと書いていた）
-    _rx0, _rz0, _rx1, rz1 = rear_lid_rebate(half, w)
-    assert rz1 - z_top >= REAR_LID_SLIDE, (
-        f"上に残る隙間が {rz1 - z_top:.1f}mm。差し込みしろ "
-        f"{REAR_LID_SLIDE}mm に足りない＝**ずらしきれない**")
+    def hit(a_, b_, d):
+        v = 0.0
+        for a in (Location(d) * a_).solids():
+            for b in b_.solids():
+                s_ = a & b
+                if s_ is not None and s_.volume > 1e-6:
+                    v += s_.volume
+        return v
 
-    # **手を掛けるところは蓋の表面の溝。**親指で押して滑らせる。
-    from gen_case import (REAR_LID_GRIP_D, REAR_LID_GRIP_N, REAR_LID_GRIP_P,
-                          REAR_LID_GRIP_W, build_rear_battery_lid)
-    from gen_plate import halves as _halves
+    assert hit(top, plate, (0, 0, 0)) < 1e-6, f"{half}: 上シェルと奥板が据わった位置で当たる"
+    assert hit(top, case, (0, 0, 0)) < 1e-6, f"{half}: 上シェルと下シェルが据わった位置で当たる"
+    assert hit(plate, top, (0, 0, 0.3)) > 1.0, (
+        f"{half}: 奥板を 0.3 上げても天井に当たらない。**上縁が天井の下にない**")
+    assert hit(top, case, (0, 0, 3.0)) < 1e-6, (
+        f"{half}: 上シェルを 3mm 上げると下シェルに "
+        f"{hit(top, case, (0, 0, 3.0)):.2f}mm³ 当たる。**上シェルが外せない**")
+    from gen_assembly import rear_plate_path
+    for step, m in enumerate(rear_plate_path(case.bounding_box().max.Y), start=1):
+        moved = m * plate
+        for name, other in (("下シェル", case), ("上シェル", top)):
+            v = hit(moved, other, (0, 0, 0))
+            assert v < 1e-6, (
+                f"{half}: 奥板の着脱 {step} 手目で{name}に {v:.2f}mm³ 当たる。**倒して外せない**")
 
-    assert REAR_LID_GRIP_N >= 3 and REAR_LID_GRIP_W >= 20.0, (
-        f"滑り止めが {REAR_LID_GRIP_N} 本 × {REAR_LID_GRIP_W}mm。"
-        "親指の腹が掛からない")
-    assert 0.3 <= REAR_LID_GRIP_D <= REAR_LID_T / 3, (
-        f"溝の深さ {REAR_LID_GRIP_D}mm。浅いと滑り、深いと板が薄くなる"
-        f"（板 {REAR_LID_T}mm の 1/3 まで）")
 
-    # **溝が本当に彫られていること。**定数だけ足して彫り忘れる型を塞ぐ。
-    # 溝の高さで蓋の外面を薄く切り取り、**溝の無い高さより体積が減る**
-    # ことを見る。深さも一緒に測れる。
-    from build123d import Align, Box, Location
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_skirt_lap_is_uniform(half):
+    """上下シェルの相欠きが**全周 SKIRT_LAP**で、リム面と平行なこと（2026-09-06）。
 
-    from gen_case import REAR_LID_GRIP_H, REAR_LID_GRIP_P
+    側壁を外側 1.2（上シェルのスカート）と内側 1.2（下シェルの帯）の柱で探り、
+    手前・中央・奥の 3 点で
+      外側: 上シェルの最下点 = 下シェルの肩 = リム − SKIRT_LAP
+      内側: 下シェルの帯の上端 = リム（プレートの座）
+    を見る。合わせ目を水平に戻すと奥で落ちる（重なり 13.8）。
+    """
+    from math import radians, tan
+    from build123d import Box, Compound, Location
+    from gen_case import (PLATE_T, PLATE_TOP_FRONT, SKIRT_LAP, SKIRT_T, TILT_DEG,
+                          WALL)
 
-    lid_part, _ = build_rear_battery_lid(half, _halves()[half])
-    _b = lid_part.bounding_box()
-    y_out = _b.max.Y
-    cx = (_b.min.X + _b.max.X) / 2          # **蓋の中心は原点ではない**
-    z_g0 = z_bot + 3.0                      # gen_case と同じ起点
+    parts, _ = build_assembly(HALVES[half], half)
+    case, top = parts["case"], parts["topcase"]
+    bw = case.bounding_box().size.X
+    h_body = 2 * abs(case.bounding_box().min.Y)     # 手前の外面 = −h_body/2
+    rim = lambda y: PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
 
-    def skin(zc):
-        # z=zc で、外面から GRIP_D ぶんの薄皮に残っている体積
-        probe = Location((cx, y_out - REAR_LID_GRIP_D / 2, zc)) * Box(
-            REAR_LID_GRIP_W, REAR_LID_GRIP_D, REAR_LID_GRIP_H * 0.6,
-            align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        r = lid_part.intersect(probe)
-        return 0.0 if r is None else sum(x.volume for x in r.solids())
+    def zrange(part, x, y):
+        r = part.intersect(Location((x, y, 25)) * Box(0.3, 0.3, 50))
+        sol = [] if r is None else (list(r.solids()) if hasattr(r, "solids") else list(r))
+        assert sol, f"{half}: x={x:.1f} y={y:.1f} に実体が無い"
+        b = Compound(sol).bounding_box()
+        return b.min.Z, b.max.Z
 
-    on = skin(z_g0)                                    # 溝のところ
-    off = skin(z_g0 + REAR_LID_GRIP_P / 2)             # 溝と溝のあいだ
-    assert off > 0, "溝と溝のあいだに板が無い。溝が繋がっている"
-    assert on < off * 0.05, (
-        f"溝の高さで外面が {on:.2f}mm³ 残っている（溝の無いところは "
-        f"{off:.2f}mm³）。**溝が彫られていない**")
-    assert REAR_LID_GRIP_N * REAR_LID_GRIP_P < z_top - z_bot - 4.0, (
-        "溝の並びが蓋の高さに収まらない")
+    x_out, x_in = bw / 2 - SKIRT_T / 2, bw / 2 - WALL + (WALL - SKIRT_T) / 2
+    # コブ（y > h_body/2）も含める。2026-09-06 までは下シェルの帯が天井まで立ち、
+    # 奥で 7mm の相欠きになっていた（縦の継ぎ目を奥面へ移したときに揃えた）
+    for y in (-h_body / 2 + 10, 0.0, h_body / 2 - 12, h_body / 2 + 6):
+        seam = rim(y) - SKIRT_LAP
+        t_lo, _ = zrange(top, x_out, y)
+        _, c_hi = zrange(case, x_out, y)
+        _, b_hi = zrange(case, x_in, y)
+        assert abs(t_lo - seam) < 0.1, f"{half}: y={y:.0f} スカートの下端 {t_lo:.2f} ≠ 合わせ目 {seam:.2f}"
+        assert abs(c_hi - seam) < 0.1, f"{half}: y={y:.0f} 下シェルの肩 {c_hi:.2f} ≠ 合わせ目 {seam:.2f}"
+        assert abs(b_hi - rim(y)) < 0.1, f"{half}: y={y:.0f} 帯の上端 {b_hi:.2f} ≠ リム {rim(y):.2f}"
 
 
 # --------------------------------------------------------------------------
@@ -1707,7 +1727,7 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
                           plan_depth, power_switch_slot_z,
                           daughterboard_x_center,
                           power_switch_center_z, power_switch_x_center,
-                          rear_lid_opening, usb_center_z)
+                          rear_window, usb_center_z)
     from interface import plate_positions
     from matrix import keymap_order
 
@@ -1717,17 +1737,22 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
 
     # 申告した窓（x0, z0, x1, z1）。**余白 0.6mm を足して縁の量子化を吸収。**
     m = 0.6
-    ox0, oz0, ox1, oz1 = rear_lid_opening(half, w)
+    ox0, oz0, ox1, oz1 = rear_window(half, w)
     sx, sz = power_switch_x_center(half, w), power_switch_center_z()
     db_x = daughterboard_x_center(half, w)
     windows = [
-        ("電池蓋の口", ox0 - m, oz0 - m, ox1 + m, oz1 + m),
+        ("奥の窓", ox0 - m, oz0 - m, ox1 + m, oz1 + m),
         ("電源スイッチのスロット", sx - SW_SLOT_W / 2 - m,
          power_switch_slot_z(half, w)[0] - m, sx + SW_SLOT_W / 2 + m,
          power_switch_slot_z(half, w)[1] + m),
         ("USB-C の口", db_x - USB_W / 2 - m, usb_center_z() - USB_H / 2 - m,
          db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
     ]
+    # 奥面 3 本目のネジのバカ穴（案 A・2026-09-05）
+    from gen_case import M2_CLEAR_D, rear_screw3
+    _x3, _z3 = rear_screw3(half, w, plan_depth(h_plate))
+    windows.append(("奥の 3 本目のネジ", _x3 - M2_CLEAR_D / 2 - m, _z3 - M2_CLEAR_D / 2 - m,
+                    _x3 + M2_CLEAR_D / 2 + m, _z3 + M2_CLEAR_D / 2 + m))
 
     # ⚠️ **2026-08-30 に判定を入れ替えた。**それまでは「奥面から WALL の
     # 範囲を 6 つの深さで掃いて、どこにも材料が無ければ穴」としていた。
@@ -1777,7 +1802,10 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_plate_rear_edge_rests_on_the_case(half):
-    """プレートの**奥端の下に、ケースの材料がある**こと（PLATE_SHELF_*）。
+    """プレートの**奥端の下に、下シェルの仕切り壁がある**こと（2026-09-06）。
+
+    2026-09-05（案 A）: 棚は下シェルの「コブの天井から垂らしたフランジ」から
+    **上シェルのベゼル奥バーの下**へ移った。見るのは上シェルの STL。
 
     利用者の指摘（2026-08-29・現物）: プレートは手前のネジ 3 本だけで
     留まり、奥端の下には何も無かった（基板は y=48.7 で終わり、その奥は
@@ -1787,7 +1815,8 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     やり方: 奥端の 1mm 手前で、リム面のすぐ上から真下へ光線を飛ばし、
     最初に当たるケースの面がリム面から 0.3mm 以内にあることを、
     側壁の内側の全幅（子基板の切り欠きを除く）で 1mm 刻みに要求する。
-    **見逃し 0 が合格**。PLATE_SHELF_D を 0 にすると左右とも全点で落ちる
+    **見逃し 0 が合格**。受けは電池の仕切り壁（x は電池の幅、ケーブル受けの
+    切り欠き 3 か所を除く）
     ことを確認済み（2026-09-02）。
     """
     import numpy as np
@@ -1800,15 +1829,21 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
                            switch_plate_size)
     from matrix import keymap_order
 
+    from gen_case import (BATT_GUIDE_W, BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END,
+                          BATT_GUIDE_X3_FROM_END, BATT_X, battery_center, battery_x_center)
     mesh = trimesh.load(_case_stl(half))
     _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
     h_body = plan_depth(h_plate)
-    _pw, ph = switch_plate_size(w - PLATE_MARGIN_X * 2, h_body - PLATE_MARGIN_Y * 2)
-    y = ph * cos(radians(TILT_DEG)) / 2 - 1.0          # 奥端の 1mm 手前（平面図）
+    # 仕切り壁の上（y はその中心）。奥端の 1mm 手前ではなく壁の位置で見る
+    from gen_case import BATT_DIVIDER_T, BATT_W
+    y = battery_center(h_body) - BATT_W / 2 - BATT_DIVIDER_T / 2 - CLEARANCE
     rim = PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
-    db_x = daughterboard_x_center(half, w)
-    xs = np.arange(-w / 2 + WALL + CORNER_R, w / 2 - WALL - CORNER_R, 1.0)
-    xs = xs[np.abs(xs - db_x) > XIAO_W / 2 + 3.0 + 0.5]   # 子基板の切り欠きは除く
+    bx = battery_x_center(half, w)
+    xs = np.arange(bx - BATT_X / 2 + 5.0, bx + BATT_X / 2 - 5.0, 1.0)
+    sgn = 1 if half == "left" else -1
+    x_end = bx - sgn * BATT_X / 2
+    for d in (BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END, BATT_GUIDE_X3_FROM_END):
+        xs = xs[np.abs(xs - (x_end + sgn * d)) > BATT_GUIDE_W / 2 + 1.0 + 0.5]   # ケーブル受けの切り欠き
     _idx, ray, loc = mesh.ray.intersects_id(
         np.column_stack([xs, np.full_like(xs, y), np.full_like(xs, rim + 0.5)]),
         np.tile([0, 0, -1], (len(xs), 1)),
@@ -1820,7 +1855,7 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     assert not unsupported, (
         f"{half}: プレートの奥端（y={y:.1f}）の下にケースの材料が無い点が "
         f"{len(unsupported)}/{len(xs)}。x = {unsupported[:6]}…\n"
-        "  奥端が宙吊りになる（片持ち）。gen_case の棚（PLATE_SHELF_*）を見ること")
+        "  奥端が宙吊りになる（片持ち）。gen_case の仕切り壁（BATT_DIVIDER_H）を見ること")
 
 
 def test_the_blender_script_only_imports_what_blender_has():
@@ -1872,22 +1907,29 @@ def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
     窪みは操作のためのもので、**狭いと部品選択の前提（突出量 1.4mm で
     足りる）が崩れる**——窪みが無ければ壁 2.4mm を貫く必要に戻る。
     """
-    from gen_case import (power_switch_dish_w, power_switch_x_center,
-                          rear_lid_rebate)
+    from gen_case import (power_switch_dish_w, power_switch_dish_x,
+                          power_switch_x_center, rear_plate_rebate)
     from interface import plate_positions
     from matrix import keymap_order
 
     _, (w, _h) = plate_positions(keymap_order(halves()[half]))
     sx = power_switch_x_center(half, w)
-    rx0, _rz0, rx1, _rz1 = rear_lid_rebate(half, w)
+    rx0, rx1 = rear_plate_rebate(half, w)
     dw = power_switch_dish_w(half, w)      # **上限 SW_DISH_W ではなく実寸**
-    assert dw >= 5.0, (
+    # 2026-09-06: 下限 5.0 → 3.0。電池箱をリード線の逃げ（BATT_WIRE_ROOM 2.0）
+    # のぶん内へ寄せたので、左の帯は 6.56 になり窪みは 3.3。ツマミは壁から
+    # 2.6 出ているので爪・指先で動かせる（利用者が許容）
+    assert dw >= 3.0, (
         f"{half}: 指の窪みが {dw:.2f}mm しか取れない。指が入らない"
-        "（蓋の座ぐりと子基板ポケットに挟まれている）")
-    d0, d1 = sx - dw / 2, sx + dw / 2
+        "（奥板の座ぐりと子基板ポケットに挟まれている）")
+    # 窪みの中心はスイッチの中心ではなく power_switch_dish_x（空きの中に収める。
+    # 2026-09-06）。ケースと同じ出所から取る
+    cx = power_switch_dish_x(half, w)
+    d0, d1 = cx - dw / 2, cx + dw / 2
+    del sx
     overlap = min(d1, rx1) - max(d0, rx0)
     assert overlap <= 0, (
-        f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が電池蓋の座ぐり "
+        f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が奥板の座ぐり "
         f"({rx0:.1f}..{rx1:.1f}) に {overlap:.2f}mm 重なる。"
         "**窪みの一部が蓋に覆われて指が入らない**")
 
@@ -1913,7 +1955,8 @@ def test_every_part_can_be_put_in_from_outside(half):
 
     def hit(part, d):
         v = 0.0
-        for a in (Location(d) * part).solids():
+        loc = d if isinstance(d, Location) else Location(d)
+        for a in (loc * part).solids():
             for b in case.solids():
                 s_ = a & b
                 if s_ is not None and s_.volume > 1e-6:
@@ -1925,6 +1968,9 @@ def test_every_part_can_be_put_in_from_outside(half):
 
     for name, path in sorted(INSERT_PATH.items()):
         part = parts[name]
+        if isinstance(path, str):          # 姿勢を作る関数の名前（奥板の回転）
+            import gen_assembly
+            path = getattr(gen_assembly, path)(case.bounding_box().max.Y)
         assert hit(part, (0, 0, 0)) < 1e-6, (
             f"{half}: {name} が据わった位置で当たっている")
         for step, d in enumerate(path, start=1):
@@ -1934,7 +1980,8 @@ def test_every_part_can_be_put_in_from_outside(half):
                 f"（{step}/{len(path)} 手目）。**入れられない＝組み立てできない**")
         # 最後は本当に外へ出ていること（当たらないだけでは中に居るかもしれない）
         b_case = case.bounding_box()
-        b_end = (Location(path[-1]) * part).bounding_box()
+        _last = path[-1] if isinstance(path[-1], Location) else Location(path[-1])
+        b_end = (_last * part).bounding_box()
         outside = (b_end.min.Z > b_case.max.Z - 1e-6
                    or b_end.min.Y > b_case.max.Y - 1e-6
                    or b_end.max.Y < b_case.min.Y + 1e-6)
@@ -2046,27 +2093,14 @@ def test_the_constants_that_slipped_through_mutation_are_guarded():
     **5 個が素通りした**（うち 1 個は無害）。幾何の検査は「組んだ形」しか
     見ないので、**使い勝手と印刷の都合は素通りする。**
     """
-    from gen_case import (CLEARANCE, REAR_LID_CLR, REAR_LID_DETENT,
-                          REAR_LID_DETENT_R, REAR_LID_DETENT_W, SW_DISH_H,
-                          SW_SLOT_LEN)
+    from gen_case import CLEARANCE, REAR_PLATE_CLR, SW_DISH_H, SW_SLOT_LEN
 
     # ① 窪みは、スロットの上下に指が回る高さが要る（4.0mm では入らない）
     assert SW_DISH_H >= SW_SLOT_LEN + 2.0, (
         f"窪みの高さ {SW_DISH_H} が、スロット {SW_SLOT_LEN} ＋ 指の余地 2.0 "
         "に足りない。**ツマミの上下に指が回らない**")
 
-    # ② ビードが細いと、蓋を点で押さえることになる（4mm では効かない）
-    assert REAR_LID_DETENT_W >= 15.0, (
-        f"抜け止めのビードが {REAR_LID_DETENT_W}mm。細いと蓋を点で押さえ、"
-        "板がその場だけ反って乗り越える（保持にならない）")
-
-    # ③ 口の逃げは、印刷の公差より大きいこと
-    assert REAR_LID_CLR >= CLEARANCE, (
-        f"口の逃げが片側 {REAR_LID_CLR}mm。印刷の公差 {CLEARANCE}mm 以下では、"
-        "**電池ボックスが口を通らない**（通販ページ値 109mm に対し余裕が無い）")
-
-    # ④ ビードは壁へ沈めること。半径＝出っ張り量だと**接するだけ**になり、
-    #    境界が縮退して STL が水密でなくなる（2026-08-12 に実際に起きた）
-    assert REAR_LID_DETENT_R > REAR_LID_DETENT, (
-        f"ビードの半径 {REAR_LID_DETENT_R} が出っ張り量 {REAR_LID_DETENT} 以下。"
-        "**壁に接するだけになり、境界が縮退する**（沈めること）")
+    # ② 窓の逃げは、印刷の公差より大きいこと
+    assert REAR_PLATE_CLR >= CLEARANCE, (
+        f"窓の逃げが片側 {REAR_PLATE_CLR}mm。印刷の公差 {CLEARANCE}mm 以下では、"
+        "**電池ボックスが窓を通らない**（通販ページ値 109mm に対し余裕が無い）")

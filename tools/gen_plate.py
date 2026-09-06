@@ -151,6 +151,20 @@ def build_plate(keys, half):
             # 穴ではなく開いた切り欠きとして抜ける（設計どおり）。
             with Locations(*boss_positions(half)):
                 Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
+            # **縁まで開けて切り欠きにする**（2026-09-05）。ネジを 0.59 内へ寄せた
+            # （interface.MOUNT_Y）ので、円だけだと縁から 0.48 の閉じた穴になり、
+            # 縁の細い帯が割れる。以前と同じ「開いた切り欠き」にする。
+            for bx, by in boss_positions(half):
+                with Locations((bx, by - 5.0 if by < 0 else by + 5.0)):
+                    Rectangle(M2_CLEAR_D, 10.0, mode=Mode.SUBTRACT)
+            # 位置決めピンの逃げ（ビスの左右。縁まで開けた切り欠き。2026-09-06）
+            from interface import CLEARANCE, FRONT_PIN_D, FRONT_PIN_DX
+            for bx, by in boss_positions(half):
+                for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+                    with Locations((bx + dx, by)):
+                        Circle(FRONT_PIN_D / 2 + CLEARANCE, mode=Mode.SUBTRACT)
+                    with Locations((bx + dx, by - 5.0 if by < 0 else by + 5.0)):
+                        Rectangle(FRONT_PIN_D + CLEARANCE * 2, 10.0, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)
         # 本体基板を締める柱（open-gaps #36・2026-08-12）。
         #

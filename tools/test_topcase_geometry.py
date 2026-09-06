@@ -65,13 +65,18 @@ def test_the_bezel_opening_clears_the_keycaps():
 
 
 def test_the_screw_head_fits_inside_the_bezel():
-    """ネジ頭がベゼルの幅に収まること。
+    """ネジ頭の座ぐりが**底のボス柱の足元**に収まること（2026-09-06・裏からネジ）。
 
-    はみ出すと開口に掛かるか、ケースの外へ出る。
+    表に頭は無い。座ぐり（φ3.8+0.6）は角柱ボスの y 範囲（外面 〜 基板の縁 +
+    CLEARANCE）の中に無ければ、床の外へはみ出すか基板の下へ食い込む。
     """
-    lo, hi = MOUNT_Y - M2_HEAD_D / 2, MOUNT_Y + M2_HEAD_D / 2
-    assert BEZEL_IN <= lo, f"ネジ頭が開口に掛かる（{lo:.2f} < {BEZEL_IN:.3f}）"
-    assert hi <= CASE_HALF, f"ネジ頭がケースの外へ出る（{hi:.2f} > {CASE_HALF:.2f}）"
+    from math import cos, radians
+    from interface import CLEARANCE, PCB_FRONT_EDGE_PLAN, TILT_DEG
+    lo, hi = MOUNT_Y - M2_HEAD_D / 2 - 0.3, MOUNT_Y + M2_HEAD_D / 2 + 0.3
+    case_half_plan = CASE_HALF * cos(radians(TILT_DEG))
+    assert hi <= case_half_plan, f"座ぐりがケースの外へ出る（{hi:.2f} > {case_half_plan:.2f}）"
+    assert lo >= PCB_FRONT_EDGE_PLAN + CLEARANCE - 1e-9, \
+        f"座ぐりがボス柱の内端を越える（{lo:.2f} < {PCB_FRONT_EDGE_PLAN + CLEARANCE:.2f}）"
 
 
 def test_a_screwdriver_reaches_the_screw():
@@ -80,8 +85,14 @@ def test_a_screwdriver_reaches_the_screw():
     **これが今回の作り直しの主目的。** 以前は 14 本中 9 本がキャップの下にあり、
     開けるのに 5〜9 個のキャップを外す必要があった。
     """
-    clear = (MOUNT_Y - M2_HEAD_D / 2) - CAP_EDGE
-    assert clear >= 2.0, f"キャップからネジ頭まで {clear:.2f}mm しかない"
+    # 2026-09-06: ネジは裏から。ドライバーは底面から入るので、キャップは
+    # 関係ない。邪魔になり得るのは底面のゴム足の座ぐり（縁から RUBBER_INSET）
+    from gen_case import RUBBER_D, RUBBER_INSET
+    from math import cos, radians
+    from interface import TILT_DEG
+    rubber_edge = (CASE_HALF * cos(radians(TILT_DEG)) - RUBBER_INSET) + RUBBER_D / 2
+    clear = (MOUNT_Y - M2_HEAD_D / 2 - 0.3) - rubber_edge
+    assert clear >= 1.0, f"ネジ頭の座ぐりとゴム足の座ぐりが {clear:.2f}mm しか離れていない"
 
 
 def test_the_pcb_needs_no_notch():
@@ -92,11 +103,25 @@ def test_the_pcb_needs_no_notch():
     # **基板の実寸から取る。** 以前ここを CASE_HALF - PCB_INSET - 2.0 と
     # 適当な式で書いており、実際の 51.0 ではなく 49.0 として通っていた
     # （＝基板が 2mm 重なるのに合格していた）。
-    from interface import PCB_INSET_Y
-    pcb_half = (KEYS_HALF_H + PLATE_MARGIN_Y) - PCB_INSET_Y
-    boss_inner = MOUNT_Y - M2_BOSS_D / 2
-    assert pcb_half <= boss_inner + 1e-9, \
-        f"基板の縁 {pcb_half:.2f} がボスの内端 {boss_inner:.2f} に掛かる"
+    from interface import (CLEARANCE, FRONT_BOSS_WALL_IN, M2_INSERT_D,
+                           PCB_FRONT_EDGE_PLAN)
+    # **平面図の座標で見る**（2026-09-06）。MOUNT_Y はプレート座標で、ボスは
+    # boss_positions_plan で cos(7.3°) 倍された位置に立つ（50.91 → 50.50、51.16 →
+    # 50.75）。以前は MOUNT_Y をそのまま平面図の外面 53.56 と比べていて、外側の肉を
+    # 0.44 少なく見積もっていた（STL の実測 1.47 に対し 1.05）。ボスの内面は
+    # gen_case の角柱と同じ −PCB_FRONT_EDGE_PLAN + CLEARANCE
+    from gen_case import boss_positions_plan
+    mount_plan = abs(boss_positions_plan("left")[0][1])
+    insert_inner = mount_plan - M2_INSERT_D / 2
+    boss_inner = PCB_FRONT_EDGE_PLAN - CLEARANCE
+    assert insert_inner - boss_inner >= FRONT_BOSS_WALL_IN - 0.02, \
+        f"インサートの内側の肉が {insert_inner - boss_inner:.2f}mm（要 {FRONT_BOSS_WALL_IN}）"
+    from gen_plate import halves, plate_positions
+    from interface import plan_depth
+    _, (_w, _h_plate) = plate_positions(halves()["left"])
+    case_half_plan = plan_depth(_h_plate) / 2                 # 外面（53.56）
+    assert case_half_plan - (mount_plan + M2_INSERT_D / 2) >= 1.0, \
+        f"インサートの外側の肉が {case_half_plan - (mount_plan + M2_INSERT_D / 2):.2f}mm しかない"
 
 
 def test_the_plate_notch_is_expected():
