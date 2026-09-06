@@ -627,6 +627,9 @@ REAR_SCREW3_FROM_LED = 9.0  # LED 窓の中心から、**内壁と反対の方�
 REAR_SCREW3_BOSS_W = 7.0 # 天井裏のボス（角柱）の x 幅。6 → 7（2026-09-06）: 左右の肉 1.4 → 1.9
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
+SW_KEEPER_ROOT = 1.0     # 柱の根元の台座（左右・手前に広げる量）
+SW_KEEPER_ROOT_REAR = 0.3  # 同・奥側（奥壁の内面まで 0.45 しか無い）
+SW_KEEPER_ROOT_H = 1.5   # 台座の高さ（天井の下面から）
 
 # 手前面の造作（実機再現・dimensions.md §4 の 1・2。2026-09-05）
 #
@@ -1622,9 +1625,19 @@ def build_topcase(keys, half):
     sw_x = power_switch_x_center(half, w)
     sw_bot = power_switch_center_z() - SW_PWR_H / 2 - CLEARANCE / 2
     holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB
+    _yk = y_out - WALL - holder_d / 2
     with BuildPart() as _kp:
-        with Locations((sw_x, y_out - WALL - holder_d / 2, sw_bot + SW_PWR_H + 0.3)):
+        with Locations((sw_x, _yk, sw_bot + SW_PWR_H + 0.3)):
             Box(SW_KEEPER, SW_KEEPER, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 根元の台座（2026-09-06 根元の強化・利用者の指摘）: 4×4 で 15mm 垂れる柱の
+        # 付け根を広げる。裏返して刷ると台座が下で柱が上なので支え不要。奥側だけ
+        # SW_KEEPER_ROOT_REAR に抑える（柱の奥面は下シェルの奥壁の内面から 0.45。
+        # 一律 +0.5 にしたら奥壁に 0.5mm³ 当たった）
+        _z_ceil = (BEZEL_TOP_FRONT - WALL) + (_yk + h_body / 2) * tan(radians(TILT_DEG))
+        with Locations((sw_x, _yk + (SW_KEEPER_ROOT_REAR - SW_KEEPER_ROOT) / 2,
+                        _z_ceil - 0.4 - SW_KEEPER_ROOT_H)):
+            Box(SW_KEEPER + SW_KEEPER_ROOT * 2, SW_KEEPER + SW_KEEPER_ROOT + SW_KEEPER_ROOT_REAR,
+                z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
     keeper = _kp.part - cut_above_top
     # プレートの奥端の受けは下シェルの仕切り壁（2026-09-06。上シェルの棚は
     # 裏返して刷ると庇になって刷れなかった）。上シェルは奥のバー（座ぐりの壁）
