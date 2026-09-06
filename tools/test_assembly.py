@@ -1561,64 +1561,40 @@ def test_the_pcb_is_actually_fastened_to_the_plate(half):
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_plate_can_be_put_into_the_shells(half):
-    """プレート（＋基板）が**上シェルに入れられる**こと（2026-09-05）。
+    """プレート（＋基板）が**真上から**入り、上シェルの縁に押さえられること。
 
-    ⚠️ 案 A の最初の版は、プレートを受ける段（下）と押さえるベゼルの縁（上）
-    を両方とも上シェルに持たせたので、**プレートが上からも下からも入らなかった**
-    （利用者が .blend で指摘。「留まる」だけ見て「入れられる」を見ていない、
-    CLAUDE.md の教訓 9 そのもの）。
+    ⚠️ 案 A の最初の版は、受ける段（下）と押さえる縁（上）を両方とも上シェルに
+    持たせてプレートが入らなかった（利用者が .blend で指摘）。次に上シェルの棚と
+    溝へ傾けて差し込む形にしたが、棚は裏返して刷ると庇になり印刷が壊れた
+    （利用者の試し刷り）。2026-09-06 に受けを下シェルの仕切り壁へ移し、
+    プレートは**真上から下シェルに載せ、上シェルを被せるだけ**になった。
 
-    入れ方: 上シェルを裏返し、プレートの手前を PLATE_REAR_GAP 相当だけ
-    下げて（傾けて）、奥端を棚とベゼルの縁の溝へ差し込み、手前を上げる。
-    ここでは「据わった位置」「奥へ引いた傾き」「傾けたまま手前を下げた」の
-    3 姿勢で上シェルと当たらないことと、据わった位置から上へ 0.3 動かすと
-    ベゼルの縁に当たる（＝押さえている）ことを見る。
+    見るのは: 据わった位置で上シェルと当たらない／上へ 0.3 動かすと縁に当たる
+    （押さえている）／上シェルを 5 上げた状態ではプレートと当たらない
+    （＝被せる動きの途中で引っ掛からない）。
     """
-    from math import atan2, degrees, radians
     from build123d import Location
-    from gen_case import PLATE_SHELF_D
-    from interface import PLATE_T
 
-    parts, (_w, h_case) = build_assembly(HALVES[half], half)
+    parts, _ = build_assembly(HALVES[half], half)
     plate, top = parts["plate"], parts["topcase"]
 
-    def hit(loc):
+    def hit(loc_plate, loc_top=Location((0, 0, 0))):
         v = 0.0
-        for a in (loc * plate).solids():
-            for b in top.solids():
+        for a in (loc_plate * plate).solids():
+            for b in (loc_top * top).solids():
                 s_ = a & b
                 if s_ is not None and s_.volume > 1e-6:
                     v += s_.volume
         return v
 
-    seated = Location((0, 0, 0))
-    assert hit(seated) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
+    assert hit(Location((0, 0, 0))) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
     assert hit(Location((0, 0, 0.3))) > 1.0, (
         f"{half}: プレートを 0.3 上げてもベゼルに当たらない＝押さえていない")
-    # 奥端の下の縁を支点に手前を下げる（傾き）。手前の縁が**板厚＋0.5**
-    # だけ下がる角度——手前の縁がリム面より下に出て、手前のベゼルの壁を
-    # くぐれるように。奥端の角の持ち上がりは 2.7·sin(1.1°) ≈ 0.05
-    bb = plate.bounding_box()
-    y_rear = bb.max.Y
-    tilt = degrees(atan2(PLATE_T + 0.5, bb.max.Y - bb.min.Y))
-    tilted = Location((0, y_rear, bb.min.Z)) * Location((0, 0, 0), (tilt, 0, 0)) \
-        * Location((0, -y_rear, -bb.min.Z))
-    # 傾けたまま手前へ PLATE_SHELF_D 引いた姿勢（溝に入る前）。**座ぐりの面
-    # （7.3°）に沿って引く。**水平に引くと、傾いた座ぐりの天井が手前ほど
-    # 低いので 4.5·tan7.3° = 0.58 だけ相対的に上がり、縁に当たる（2026-09-05
-    # に 56mm³ の偽の赤）。実際も上シェルを裏返して面に沿って滑らせる
-    from math import cos, sin
-    from gen_case import TILT_DEG
-    _d = PLATE_SHELF_D + 0.5
-    pulled = Location((0, -_d * cos(radians(TILT_DEG)), -_d * sin(radians(TILT_DEG)))) * tilted
-    v = hit(pulled)
-    assert v < 1e-6, (
-        f"{half}: 傾けて（{tilt:.2f}°）手前へ引いた姿勢で上シェルに {v:.2f}mm³ 当たる。"
-        "**プレートを上シェルに入れられない**")
-    v = hit(tilted)
-    assert v < 1e-6, (
-        f"{half}: 奥端を溝に入れた傾き姿勢で上シェルに {v:.2f}mm³ 当たる。"
-        "**差し込んだ後に手前を上げられない**")
+    for dz in (5.0, 2.0, 0.6):
+        v = hit(Location((0, 0, 0)), Location((0, 0, dz)))
+        assert v < 1e-6, (
+            f"{half}: 上シェルを {dz} 上げた位置でプレートに {v:.2f}mm³ 当たる。"
+            "**真上から被せられない**")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -1773,7 +1749,7 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
 
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_plate_rear_edge_rests_on_the_case(half):
-    """プレートの**奥端の下に、上シェルの棚がある**こと（PLATE_SHELF_*）。
+    """プレートの**奥端の下に、下シェルの仕切り壁がある**こと（2026-09-06）。
 
     2026-09-05（案 A）: 棚は下シェルの「コブの天井から垂らしたフランジ」から
     **上シェルのベゼル奥バーの下**へ移った。見るのは上シェルの STL。
@@ -1786,7 +1762,8 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     やり方: 奥端の 1mm 手前で、リム面のすぐ上から真下へ光線を飛ばし、
     最初に当たるケースの面がリム面から 0.3mm 以内にあることを、
     側壁の内側の全幅（子基板の切り欠きを除く）で 1mm 刻みに要求する。
-    **見逃し 0 が合格**。PLATE_SHELF_D を 0 にすると左右とも全点で落ちる
+    **見逃し 0 が合格**。受けは電池の仕切り壁（x は電池の幅、ケーブル受けの
+    切り欠き 3 か所を除く）
     ことを確認済み（2026-09-02）。
     """
     import numpy as np
@@ -1799,15 +1776,21 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
                            switch_plate_size)
     from matrix import keymap_order
 
-    mesh = trimesh.load(_topcase_stl(half))
+    from gen_case import (BATT_GUIDE_W, BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END,
+                          BATT_GUIDE_X3_FROM_END, BATT_X, battery_center, battery_x_center)
+    mesh = trimesh.load(_case_stl(half))
     _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
     h_body = plan_depth(h_plate)
-    _pw, ph = switch_plate_size(w - PLATE_MARGIN_X * 2, h_body - PLATE_MARGIN_Y * 2)
-    y = ph * cos(radians(TILT_DEG)) / 2 - 1.0          # 奥端の 1mm 手前（平面図）
+    # 仕切り壁の上（y はその中心）。奥端の 1mm 手前ではなく壁の位置で見る
+    from gen_case import BATT_DIVIDER_T, BATT_W
+    y = battery_center(h_body) - BATT_W / 2 - BATT_DIVIDER_T / 2 - CLEARANCE
     rim = PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
-    db_x = daughterboard_x_center(half, w)
-    xs = np.arange(-w / 2 + WALL + CORNER_R, w / 2 - WALL - CORNER_R, 1.0)
-    xs = xs[np.abs(xs - db_x) > XIAO_W / 2 + 3.0 + 0.5]   # 子基板の切り欠きは除く
+    bx = battery_x_center(half, w)
+    xs = np.arange(bx - BATT_X / 2 + 5.0, bx + BATT_X / 2 - 5.0, 1.0)
+    sgn = 1 if half == "left" else -1
+    x_end = bx - sgn * BATT_X / 2
+    for d in (BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END, BATT_GUIDE_X3_FROM_END):
+        xs = xs[np.abs(xs - (x_end + sgn * d)) > BATT_GUIDE_W / 2 + 1.0 + 0.5]   # ケーブル受けの切り欠き
     _idx, ray, loc = mesh.ray.intersects_id(
         np.column_stack([xs, np.full_like(xs, y), np.full_like(xs, rim + 0.5)]),
         np.tile([0, 0, -1], (len(xs), 1)),
@@ -1819,7 +1802,7 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     assert not unsupported, (
         f"{half}: プレートの奥端（y={y:.1f}）の下にケースの材料が無い点が "
         f"{len(unsupported)}/{len(xs)}。x = {unsupported[:6]}…\n"
-        "  奥端が宙吊りになる（片持ち）。gen_case.build_topcase の棚（PLATE_SHELF_*）を見ること")
+        "  奥端が宙吊りになる（片持ち）。gen_case の仕切り壁（BATT_DIVIDER_H）を見ること")
 
 
 def test_the_blender_script_only_imports_what_blender_has():

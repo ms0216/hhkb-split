@@ -236,19 +236,18 @@ BATT_GUIDE_H = 5.5                            # [暫定] 同。床からこの�
 # では突起のある面が仕切り壁（締結面）を向く。突起の高さは図面に無く、
 # 締めたとき箱が壁から浮くか・突起が壁に当たるかは**現物で確認**
 # （provisional-values.md の BATT_HOLE_* の行）。
-BATT_DIVIDER_H = 9.5
-# プレートの奥端を受ける棚（利用者の指摘 2026-08-29: 奥端が宙吊りで撓む）。
-#
-# プレートはネジ 3 本（手前 y=−51）にしか留まっておらず、奥端（y=+51.7）の
-# 下には何も無い（基板は y=48.7 で終わり、その奥は電池と子基板）。床から
-# 柱を立てる場所は無い（幅いっぱいが電池箱と子基板）ので、**コブの天井の
-# 前縁から垂らした帯（フランジ）の下に棚を出し、リム面で受ける**。
-# 棚の下は電池箱の上面（FLOOR+16.8=19.2）。厚み 2.4 で底は 20.1〜20.7。
-PLATE_SHELF_D = 4.0      # 棚が本体側へ出る量（プレートとの掛かりは 2.2mm）
-PLATE_SHELF_T = 2.4      # 棚の厚み。リム面に平行
-# 子基板の上（XIAO_W/2 + 3 の幅）は**棚を切り欠く**（XIAO 一式の予約
-# 21.7〜22.9 とリム面 22.6〜23.1 の隙が 1mm 無い）。棚は 2026-09-05 に
-# 上シェルの物になった（build_topcase）。
+# **2026-09-06: 仕切り壁をリム面まで伸ばしてプレートの奥端の受けにする**（利用者の
+# 提案）。上シェルの棚は裏返して刷ると空中の庇になり、印刷が壊れた。仕切り壁は
+# y=48.8〜51.2 で基板の奥縁（48.3）の後ろにあり、プレートの奥縁（52.3）の 1.1〜
+# 3.5 内側を受ける。ここは「上限」で、実際の上面はリム面（cutter）で切る。
+BATT_DIVIDER_H = 40.0
+# 仕切り壁の厚み。リム面まで上げたら基板の奥縁（平面図で 48.95。傾きで奥へ
+# 0.65 ずれる）と 0.19 重なったので、**手前側を 0.4 削って 2.0**（5 周）。
+# 奥面（箱の床が当たる面）は動かさない（2026-09-06）
+BATT_DIVIDER_T = 2.0
+# プレートの奥端の受けは**下シェルの仕切り壁**（BATT_DIVIDER_H の注記）。
+# 2026-08-29 に天井から垂らした棚で受け、9/5 に上シェルへ移し、9/6 に仕切り壁へ
+# （上シェルの棚は裏返して刷ると庇になり印刷が壊れた）。棚の定数は消した。
 # **コブは要る。実機と同じ理由で。**
 #
 # 一度「コブは不要になった」として 0 にしていた。だが実際には、
@@ -547,11 +546,6 @@ SKIRT_T = 1.2            # スカートの厚み（0.4 ノズル 3 周）。下�
 # 1.0（2.5 周）に痩せ、横に ±0.2 の遊びが出る。0 で刷って被さらなければ
 # 帯（平らで外から手が届く）をやすりで削る。クーポン（#11）で確定させる。
 SKIRT_FIT = 0.0          # [暫定] クーポンで実測してから決める
-# プレートの奥端の上の隙間（座ぐりの天井をプレート上面からこれだけ上げる）。
-# 奥端は上シェルの棚（下）とベゼルの縁（上）の**溝**に入るので、プレートを
-# 少し傾けて奥から差し込む（手前が板厚＋0.5 下がる ≈ 1.1°。奥端の角の
-# 持ち上がりは 0.05 程度）。0.1 のままだと傾けた瞬間に溝に当たる。
-PLATE_REAR_GAP = 0.5
 REAR_CORNER_D = 6.0      # 奥の隅は下シェルが全高で持つ（奥壁と一体の柱）。
                          # スカートはここで止まる
 # 奥板（電池窓を塞ぐ板。旧・電池蓋のスライド＋ビードは全廃）
@@ -783,12 +777,14 @@ def build_case(keys, half):
     # 切り取りは残す——下げても、手前ほど低い打鍵面では効く場所がある。
     cutter_under_pcb = tilted_cutter(w, h_body, under_pcb_base(
         h_plate, rim_front, PLATE_TO_PCB + PCB_T + SOCKET_DROP))
-    y_div = (battery_center(h_body) - BATT_W / 2 - WALL / 2 - CLEARANCE)
+    y_div = (battery_center(h_body) - BATT_W / 2 - BATT_DIVIDER_T / 2 - CLEARANCE)
     with BuildPart() as _d:
         with Locations((battery_x_center(half, w), y_div, FLOOR)):
-            Box(BATT_X, WALL, BATT_DIVIDER_H,
+            Box(BATT_X, BATT_DIVIDER_T, BATT_DIVIDER_H,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-    divider = _d.part - cutter_under_pcb
+    # 上面は**リム面**（プレートの奥端を受ける）。基板の後ろなので基板の下面で
+    # 切る理由は無くなった（2026-09-06）
+    divider = _d.part - cutter
     # ケーブル受けの突起（BATT_GUIDE_*）が当たる所だけ BATT_GUIDE_H まで切り下げる
     _bx0 = battery_x_center(half, w)
     _sgn = 1 if half == "left" else -1
@@ -924,12 +920,12 @@ def build_case(keys, half):
         # サポートが取れず見栄えが悪い」）。ブロックの下端が床から 1.3 浮いていた。
         # 柱は仕切り壁の**奥面**（箱の床が当たる面）から手前へ WALL + 2.6。右は
         # 穴（13.9）が壁の上端（11.9）より高いので、柱が壁の上まで伸びて奥面を作る
-        _yd_rear = y_div + WALL / 2
+        _yd_rear = y_div + BATT_DIVIDER_T / 2
         for hx in battery_hole_xs(half, w):
             with Locations((hx, _yd_rear - (WALL + 2.6) / 2, FLOOR - 0.5)):
                 Box(M2_BOSS_D, WALL + 2.6, (_bz + M2_BOSS_D / 2) - (FLOOR - 0.5),
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
-            with Locations((hx, y_div + WALL / 2 - 2.25 + 0.01, _bz)):
+            with Locations((hx, y_div + BATT_DIVIDER_T / 2 - 2.25 + 0.01, _bz)):
                 Cylinder(M2_INSERT_D / 2, 4.5, rotation=(90, 0, 0),
                          mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.CENTER))
@@ -1497,13 +1493,6 @@ def build_topcase(keys, half):
     # 棚の無い上シェルを利用者が刷り始めていた）。引いてから intersect。
     rebate = (_inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
               ).intersect(above_rim)
-    # 奥端の上だけ隙間を PLATE_REAR_GAP に広げる（傾けて差し込むため）
-    with BuildPart() as _rg:
-        with Locations((0, h_body / 2 - BEZEL_WALL - (PLATE_SHELF_D + 2.0) / 2, 0)):
-            Box(w - BEZEL_WALL * 2, PLATE_SHELF_D + 2.0, z_max,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    rear_gap = (_rg.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + PLATE_REAR_GAP)
-                ).intersect(above_rim)                # 引いてから intersect（上の注記）
     # 奥の隅は下シェルの柱。天井より下のスカートをそこで止める
     with BuildPart() as _rc:
         with Locations((0, y_out - REAR_CORNER_D - CLEARANCE + 100, 0)):
@@ -1558,19 +1547,9 @@ def build_topcase(keys, half):
         with Locations((sw_x, y_out - WALL - holder_d / 2, sw_bot + SW_PWR_H + 0.3)):
             Box(SW_KEEPER, SW_KEEPER, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
     keeper = _kp.part - cut_above_top
-    # プレートの奥端を受ける棚（2026-08-29 の指摘「奥端が宙吊り」）。ベゼルの
-    # 奥のバーの下に、リム面から PLATE_SHELF_T の厚みで出す。XIAO の上は切り欠く。
-    _sy0, _sy1 = h_body / 2 - PLATE_SHELF_D, h_body / 2
-    with BuildPart() as _sh:
-        with Locations((0, (_sy0 + _sy1) / 2, 0)):
-            # 幅は下シェルの側壁の帯（内面 ±(w/2 − WALL)）に触れない所まで
-            Box(w - WALL * 2 - CLEARANCE * 2, _sy1 - _sy0, z_max,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        _dbx = daughterboard_x_center(half, w)
-        with Locations((_dbx, (_sy0 + _sy1) / 2, 0)):
-            Box(XIAO_W + 6.0, (_sy1 - _sy0) + 2.0, z_max, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    shelf = (_sh.part - above_rim).intersect(tilted_cutter(w, h_body, rim - PLATE_SHELF_T))
+    # プレートの奥端の受けは下シェルの仕切り壁（2026-09-06。上シェルの棚は
+    # 裏返して刷ると庇になって刷れなかった）。上シェルは奥のバー（座ぐりの壁）
+    # で y 方向の位置を決めるだけ
     # LED の窓（#43）。XIAO の真上の天井を、外面から LED_WIN_SKIN だけ残して
     # 内側から薄くする。奥壁の内面より奥へは食い込ませない（#43 の注記）。
     _led_x = daughterboard_x_center(half, w) + XIAO_LED_DX
@@ -1613,10 +1592,8 @@ def build_topcase(keys, half):
         add(rail, mode=Mode.ADD)
         add(boss3, mode=Mode.ADD)
         add(keeper, mode=Mode.ADD)
-        add(shelf, mode=Mode.ADD)
         add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
         add(rebate, mode=Mode.SUBTRACT)              # プレートが入る座ぐり
-        add(rear_gap, mode=Mode.SUBTRACT)
         add(lip_rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
         # キーの開口（プレートと同じ姿勢。上の opening_cut の注記）
