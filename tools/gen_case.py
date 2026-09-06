@@ -39,9 +39,11 @@ from build123d import (
     add,
     Plane,
     Polygon,
+    Rectangle,
     RectangleRounded,
     RegularPolygon,
     extrude,
+    loft,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -627,9 +629,8 @@ REAR_SCREW3_FROM_LED = 9.0  # LED 窓の中心から、**内壁と反対の方�
 REAR_SCREW3_BOSS_W = 7.0 # 天井裏のボス（角柱）の x 幅。6 → 7（2026-09-06）: 左右の肉 1.4 → 1.9
 SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
                          # スイッチが溝から浮き上がるのを止める
-SW_KEEPER_ROOT = 1.0     # 柱の根元の台座（左右・手前に広げる量）
+SW_KEEPER_ROOT = 1.0     # 柱の根元（天井）で左右・手前に広げる量。先端 4×4 → 根元 6×5.3
 SW_KEEPER_ROOT_REAR = 0.3  # 同・奥側（奥壁の内面まで 0.45 しか無い）
-SW_KEEPER_ROOT_H = 1.5   # 台座の高さ（天井の下面から）
 
 # 手前面の造作（実機再現・dimensions.md §4 の 1・2。2026-09-05）
 #
@@ -1626,18 +1627,23 @@ def build_topcase(keys, half):
     sw_bot = power_switch_center_z() - SW_PWR_H / 2 - CLEARANCE / 2
     holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB
     _yk = y_out - WALL - holder_d / 2
+    _z_tip = sw_bot + SW_PWR_H + 0.3
+    _z_ceil = (BEZEL_TOP_FRONT - WALL) + (_yk + h_body / 2) * tan(radians(TILT_DEG))
+    # **先細りの柱**（2026-09-06 根元の強化・利用者「その直し方で強度は上がったか」）。
+    # 最初は根元に 1.5 の台座を足したが、柱そのものは 4×4 のままで、曲げの最大は
+    # 台座のすぐ上に移るだけだった。根元へ向かって断面を広げると、曲げモーメントが
+    # 大きい所ほど断面も大きく、根元の応力は 4×4 の柱の 1/2.6。先端は 4×4 のまま
+    # （スイッチの上面に当たる所）。奥側は下シェルの奥壁の内面まで 0.45 しか無いので
+    # SW_KEEPER_ROOT_REAR に抑える。裏返して刷ると根元（広い方）が下なので支え不要
     with BuildPart() as _kp:
-        with Locations((sw_x, _yk, sw_bot + SW_PWR_H + 0.3)):
-            Box(SW_KEEPER, SW_KEEPER, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 根元の台座（2026-09-06 根元の強化・利用者の指摘）: 4×4 で 15mm 垂れる柱の
-        # 付け根を広げる。裏返して刷ると台座が下で柱が上なので支え不要。奥側だけ
-        # SW_KEEPER_ROOT_REAR に抑える（柱の奥面は下シェルの奥壁の内面から 0.45。
-        # 一律 +0.5 にしたら奥壁に 0.5mm³ 当たった）
-        _z_ceil = (BEZEL_TOP_FRONT - WALL) + (_yk + h_body / 2) * tan(radians(TILT_DEG))
-        with Locations((sw_x, _yk + (SW_KEEPER_ROOT_REAR - SW_KEEPER_ROOT) / 2,
-                        _z_ceil - 0.4 - SW_KEEPER_ROOT_H)):
-            Box(SW_KEEPER + SW_KEEPER_ROOT * 2, SW_KEEPER + SW_KEEPER_ROOT + SW_KEEPER_ROOT_REAR,
-                z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with BuildSketch(Plane.XY.offset(_z_tip)):
+            with Locations((sw_x, _yk)):
+                Rectangle(SW_KEEPER, SW_KEEPER)
+        with BuildSketch(Plane.XY.offset(_z_ceil + 1.0)):
+            with Locations((sw_x, _yk + (SW_KEEPER_ROOT_REAR - SW_KEEPER_ROOT) / 2)):
+                Rectangle(SW_KEEPER + SW_KEEPER_ROOT * 2,
+                          SW_KEEPER + SW_KEEPER_ROOT + SW_KEEPER_ROOT_REAR)
+        loft()
     keeper = _kp.part - cut_above_top
     # プレートの奥端の受けは下シェルの仕切り壁（2026-09-06。上シェルの棚は
     # 裏返して刷ると庇になって刷れなかった）。上シェルは奥のバー（座ぐりの壁）
