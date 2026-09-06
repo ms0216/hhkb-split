@@ -153,7 +153,7 @@ PLATE_TOP_FRONT = round(
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
 from interface import (FRONT_BOSS_W, FRONT_PIN_D, FRONT_PIN_DX,  # noqa: E402
-                       FRONT_PIN_H, PCB_FRONT_EDGE_PLAN)
+                       FRONT_PIN_H, FRONT_PIN_TIP, PCB_FRONT_EDGE_PLAN)
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -1126,14 +1126,18 @@ def build_case(keys, half):
     if len(part.solids()) != 1:
         raise ValueError("バカ穴を切ったら下シェルが分かれた")
     # 手前の位置決めピン（interface.FRONT_PIN_* の注記）。ボス上面（リム面）から
-    with BuildPart() as _pins:
-        for bx, by in _boss_positions(half):
-            z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
-            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-                with Locations((bx + dx, by, z_rim - 0.5)):
-                    Cylinder(FRONT_PIN_D / 2, 0.5 + FRONT_PIN_H,
-                             align=(Align.CENTER, Align.CENTER, Align.MIN))
-    part = part + _pins.part
+    # 上向き、先端に面取り。**コンテキストの外で作る**（面取り前の円柱が合体される）
+    from build123d import Solid
+    _pin_list = []
+    for bx, by in _boss_positions(half):
+        z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
+        for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
+            c = Solid.make_cylinder(FRONT_PIN_D / 2, 0.5 + FRONT_PIN_H)       # z 0..h
+            c = c.chamfer(FRONT_PIN_TIP, None,
+                          [e for e in c.edges() if abs(e.center().Z - (0.5 + FRONT_PIN_H)) < 1e-6])
+            _pin_list.append(Location((bx + dx, by, z_rim - 0.5)) * c)
+    for _q in _pin_list:
+        part = part + _q
     if len(part.solids()) != 1:
         raise ValueError("位置決めピンが下シェルに融合していない")
     return part, (w, h_body), (z_front, z_rear)
@@ -1580,6 +1584,7 @@ def build_topcase(keys, half):
     led_window_void = _lw.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT - LED_WIN_SKIN)
     pose = plate_placement(w, h_plate)
     blank_covers = _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max, pose)
+
     # キーの開口。**プレートと同じ 7.3° に傾けて切る**（2026-09-05）。
     # 垂直に切ると開口の壁とキャップの面が 7.3° ずれ、手前段ではキャップが
     # 上へ行くほど縁に近づく（箱モードで 0.03mm³ 触れた。旧・隙間 0.9 でも
