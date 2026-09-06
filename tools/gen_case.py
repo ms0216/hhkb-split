@@ -542,6 +542,17 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 # すると熱圧入インサートが外へ出る）ので、合わせ目をリムに揃えると
 # 手前と側面の合わせ目が一直線になる。
 SEAM_Z = PLATE_TOP_FRONT - PLATE_T
+# **2026-09-06: 合わせ目をリム面と平行にし、相欠きを全周 SKIRT_LAP に**（利用者
+# 「はめ合わせはプレートの厚み分あれば足りるのでは」）。水平な合わせ目だと相欠きは
+# 手前 0・奥 13.8 で、1.2 厚の壁が両シェルに 14mm 立ち（反る・撓む）、隙間 0 で
+# 14mm こすりながら被せることになる。剛性は 2 枚に割ると落ちるので、重なりに
+# 構造上の意味は無い（位置決めと目隠しだけ）。3.0 は「印刷の段差と削り合わせで
+# 0.2〜0.4 は当てにならない」「横から押されて乗り上げない掛かり」から。
+# 合わせ目の面は z = SEAM_Z − SKIRT_LAP + (y + h/2)·tan(7.3°)。手前では 3mm
+# 下がる（9.4 → 6.4）。上シェルは裏返して刷るので、この面はベッドと平行になり
+# 層の段が出ない（水平だった前は上シェル側に段が出ていた。段は下シェルの肩へ移る）。
+# 手前壁の突き合わせ（リム面）・奥の隅の柱は変えない
+SKIRT_LAP = 3.0          # 相欠きの高さ（リム面からの深さ・全周一定）
 SKIRT_T = 1.2            # スカートの厚み（0.4 ノズル 3 周）。下シェル側の
                          # 帯は WALL − SKIRT_T − SKIRT_FIT = 1.2（同じく 3 周）
 # スカートの内面と帯の外面の隙間。**0 ＝ 接触**（2026-09-05・利用者の判断:
@@ -757,7 +768,7 @@ def build_case(keys, half):
     # スカートが被る）。内側 1.2 の帯はリム面（コブでは天井の下）まで残り、
     # プレートを受ける。奥の隅（y > 奥面 − REAR_CORNER_D）は柱として全厚で残す。
     with BuildPart() as _sk:
-        with BuildSketch(Plane.XY.offset(SEAM_Z)):
+        with BuildSketch():
             with Locations((0, y_off)):
                 RectangleRounded(w + 2.0, h + 2.0, CORNER_R + 1.0)
                 RectangleRounded(w - (SKIRT_T + SKIRT_FIT) * 2,
@@ -773,7 +784,8 @@ def build_case(keys, half):
         with Locations((0, -h_body / 2 + WALL - 100, 0)):
             Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-    skirt_cut = _sk.part
+    # 合わせ目はリム面と平行・リムの SKIRT_LAP 下（SKIRT_LAP の注記）。**最後に交差**
+    skirt_cut = _sk.part.intersect(tilted_cutter(w, h_body, rim_front - SKIRT_LAP))
     # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
     # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
     from envelopes import under_pcb_base
@@ -1487,6 +1499,7 @@ def build_topcase(keys, half):
     # 切削・保持用の立体はコンテキストの外で作る（中で作ると即座に合体される）。
     cut_above_top = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     above_rim = tilted_cutter(w, h_body, rim)
+    above_seam = tilted_cutter(w, h_body, rim - SKIRT_LAP)    # 合わせ目（SKIRT_LAP の注記）
     under_ceiling = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)
     # 空洞 1: スカート SKIRT_T の内側、リム面より下（本体・コブとも。ここに
     # 下シェルの側壁の帯と中身——基板・電池・子基板——が入る。**プレートを
@@ -1602,9 +1615,7 @@ def build_topcase(keys, half):
             with Locations((0, y_off)):
                 RectangleRounded(w, h, CORNER_R)
         extrude(amount=z_max)
-        with Locations((0, 0, SEAM_Z)):                      # 合わせ目より下は無い
-            Box(w * 3, h * 6, z_max * 3, mode=Mode.INTERSECT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        add(above_seam, mode=Mode.INTERSECT)                 # 合わせ目より下は無い
         add(cav_below_rim, mode=Mode.SUBTRACT)
         add(cav_bump, mode=Mode.SUBTRACT)
         add(rear_corner_cut, mode=Mode.SUBTRACT)
@@ -1951,16 +1962,16 @@ def main():
         z_top = (BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
                  - WALL - CLEARANCE)
         assert abs(bb.size.Z - z_top) < 0.05, f"高さが設計値と違う（{bb.size.Z:.2f} vs {z_top:.2f}）"
-        # 下端は合わせ目。ただし手前の位置決めピン（下向き・2026-09-06）は
-        # 合わせ目より FRONT_PIN_INTO_LOWER + 面取り分だけ下へ出るので、ピンを除いて見る
+        # 最下点はスカートの手前端（合わせ目 = リム − SKIRT_LAP の、y = −h/2 + WALL +
+        # CLEARANCE での高さ）。手前のピンの先端（リム − 2.6）はこれより上
         tb = topc.bounding_box()
-        _by = _boss_positions(name)[0][1]
-        _pin_tip = (front_insert_seat_z(_by, h) - FRONT_INSERT_LIFT - PLATE_T
-                    - FRONT_PIN_INTO_LOWER)   # ボスの位置のリム面（傾きぶん合わせ目より上）から
-        assert abs(tb.min.Z - _pin_tip) < 0.05, f"上シェルの最下点がピンの先端 {_pin_tip:.2f} でない（{tb.min.Z:.2f}）"
-        _no_pins = topc - Location((0, -h / 2, SEAM_Z - 5)) * Box(w + 2, 12.0, 10.0 - 0.01)
+        _skirt_front = SEAM_Z - SKIRT_LAP + (WALL + CLEARANCE) * tan(radians(TILT_DEG))
+        assert abs(tb.min.Z - _skirt_front) < 0.05, f"上シェルの最下点がスカートの手前端 {_skirt_front:.2f} でない（{tb.min.Z:.2f}）"
+        # 手前 8mm（ピンのある帯）を除いた最下点は、y = −h/2 + 8 の合わせ目の高さ
+        _no_pins = topc - Location((0, -h / 2, 0)) * Box(w + 2, 16.0, 200)
         _tb2 = _no_pins.bounding_box()
-        assert abs(_tb2.min.Z - SEAM_Z) < 0.05, f"上シェルの下端が合わせ目 {SEAM_Z} でない（{_tb2.min.Z:.2f}）"
+        _seam8 = SEAM_Z - SKIRT_LAP + 8.0 * tan(radians(TILT_DEG))
+        assert abs(_tb2.min.Z - _seam8) < 0.05, f"上シェルの下端が合わせ目 {_seam8:.2f} でない（{_tb2.min.Z:.2f}）"
 
     # 前回の控えとの差を消す（消えた部品の STL と、その絵）。
     old = set(json.loads(manifest.read_text())) if manifest.exists() else set()

@@ -1644,6 +1644,45 @@ def test_the_rear_plate_locks_the_top_shell(half):
                 f"{half}: 奥板の着脱 {step} 手目で{name}に {v:.2f}mm³ 当たる。**倒して外せない**")
 
 
+@pytest.mark.parametrize("half", ["left", "right"])
+def test_the_skirt_lap_is_uniform(half):
+    """上下シェルの相欠きが**全周 SKIRT_LAP**で、リム面と平行なこと（2026-09-06）。
+
+    側壁を外側 1.2（上シェルのスカート）と内側 1.2（下シェルの帯）の柱で探り、
+    手前・中央・奥の 3 点で
+      外側: 上シェルの最下点 = 下シェルの肩 = リム − SKIRT_LAP
+      内側: 下シェルの帯の上端 = リム（プレートの座）
+    を見る。合わせ目を水平に戻すと奥で落ちる（重なり 13.8）。
+    """
+    from math import radians, tan
+    from build123d import Box, Compound, Location
+    from gen_case import (PLATE_T, PLATE_TOP_FRONT, SKIRT_LAP, SKIRT_T, TILT_DEG,
+                          WALL)
+
+    parts, _ = build_assembly(HALVES[half], half)
+    case, top = parts["case"], parts["topcase"]
+    bw = case.bounding_box().size.X
+    h_body = 2 * abs(case.bounding_box().min.Y)     # 手前の外面 = −h_body/2
+    rim = lambda y: PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
+
+    def zrange(part, x, y):
+        r = part.intersect(Location((x, y, 25)) * Box(0.3, 0.3, 50))
+        sol = [] if r is None else (list(r.solids()) if hasattr(r, "solids") else list(r))
+        assert sol, f"{half}: x={x:.1f} y={y:.1f} に実体が無い"
+        b = Compound(sol).bounding_box()
+        return b.min.Z, b.max.Z
+
+    x_out, x_in = bw / 2 - SKIRT_T / 2, bw / 2 - WALL + (WALL - SKIRT_T) / 2
+    for y in (-h_body / 2 + 10, 0.0, h_body / 2 - 12):
+        seam = rim(y) - SKIRT_LAP
+        t_lo, _ = zrange(top, x_out, y)
+        _, c_hi = zrange(case, x_out, y)
+        _, b_hi = zrange(case, x_in, y)
+        assert abs(t_lo - seam) < 0.1, f"{half}: y={y:.0f} スカートの下端 {t_lo:.2f} ≠ 合わせ目 {seam:.2f}"
+        assert abs(c_hi - seam) < 0.1, f"{half}: y={y:.0f} 下シェルの肩 {c_hi:.2f} ≠ 合わせ目 {seam:.2f}"
+        assert abs(b_hi - rim(y)) < 0.1, f"{half}: y={y:.0f} 帯の上端 {b_hi:.2f} ≠ リム {rim(y):.2f}"
+
+
 # --------------------------------------------------------------------------
 # 奥の壁の穴（2026-08-12。**目で見て気づけなかったものを、数で捕まえる**）
 # --------------------------------------------------------------------------
