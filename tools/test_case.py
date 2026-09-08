@@ -21,32 +21,40 @@ def test_outer_size_matches_the_tilted_plate(name):
     **奥行はコブぶんだけプレートより長い。** 実機も同じで、本体 108mm に
     電池コブ 12mm が足されて全長 120mm になる。
     """
-    from gen_case import BUMP_DEPTH
+    from gen_case import BOTTOM_FIT, BOTTOM_SKIN, BUMP_DEPTH, build_topcase
     from gen_plate import plate_positions
     from interface import plan_depth
     part, (w, h_body), _ = build_case(HALVES[name], name)
     _, (pw, h_plate) = plate_positions(HALVES[name])
+    # 外形は上シェル（器）。底板はその外皮の内側（器の案・2026-09-06）
+    tb = build_topcase(HALVES[name], name)[0].bounding_box().size
     bb = part.bounding_box().size
-    assert bb.X == pytest.approx(pw, abs=0.01)
+    assert tb.X == pytest.approx(pw, abs=0.01)
     assert h_body == pytest.approx(plan_depth(h_plate), abs=0.01), \
         "プレートが載る範囲が、傾けたプレートの平面図と違う"
-    assert bb.Y == pytest.approx(h_body + BUMP_DEPTH, abs=0.01), \
+    assert tb.Y == pytest.approx(h_body + BUMP_DEPTH, abs=0.01), \
         "ケース全体の奥行が「プレートの範囲 ＋ コブ」になっていない"
+    _in = (BOTTOM_SKIN + BOTTOM_FIT) * 2
+    assert bb.X == pytest.approx(pw - _in, abs=0.01), "底板の幅が外皮の内側になっていない"
+    assert bb.Y == pytest.approx(h_body + BUMP_DEPTH - _in, abs=0.01), "底板の奥行が外皮の内側になっていない"
 
 
 @pytest.mark.parametrize("name", ["left", "right"])
 def test_rim_height_gives_the_intended_plate_top(name):
     """リムの高さ + 板厚 = 狙ったプレート上面高さ。"""
     from math import radians, tan
-    from gen_case import BEZEL_TOP_FRONT, BUMP_DEPTH, CLEARANCE, WALL
-    from interface import plan_depth
-    from gen_plate import plate_positions
+    from gen_case import (BATT_DIVIDER_T, BATT_W, BEZEL_TOP_FRONT, BUMP_DEPTH, CLEARANCE,
+                          PLATE_T, battery_center, build_topcase)
     part, (_, h_body), (z_front, z_rear) = build_case(HALVES[name], name)
-    # **最も高いのはコブの後端の奥壁の上端。**天井は上シェルの物（案 A・
-    # 2026-09-05）なので、下シェルは天井の下面 − CLEARANCE で終わる。
-    z_top = (BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
-             - WALL - CLEARANCE)
-    assert part.bounding_box().size.Z == pytest.approx(z_top, abs=0.05)
+    # **底板で最も高いのは外縁側のリブの奥端＝その y（コブの手前 − 2·CLEARANCE）の
+    # リム面**（器の案・2026-09-06。リブも受けの壁もリム面で切る）。上シェルの最高点は
+    # コブの後端のベゼル上面
+    del battery_center, BATT_W, BATT_DIVIDER_T
+    y_rib_end = h_body / 2 - CLEARANCE * 2
+    z_rim_rib = PLATE_TOP_FRONT - PLATE_T + (y_rib_end + h_body / 2) * tan(radians(TILT_DEG))
+    assert part.bounding_box().max.Z == pytest.approx(z_rim_rib, abs=0.05)
+    z_top = BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
+    assert build_topcase(HALVES[name], name)[0].bounding_box().max.Z == pytest.approx(z_top, abs=0.05)
     assert z_front == pytest.approx(PLATE_TOP_FRONT)
 
 
@@ -259,10 +267,10 @@ def test_wall_thicknesses_are_multiples_of_the_nozzle():
     半端な厚みにすると、スライサが埋めきれず隙間が残る。
     **上ケースの壁 1.6mm はノズル 4 本ぶん**で、これは意図した値。
     """
-    from gen_case import FLOOR, REAR_PLATE_T, WALL
+    from gen_case import BOTTOM_SKIN, FLOOR, WALL
     from interface import BEZEL_WALL
-    # 底面の蓋は廃止した（2026-08-12）。見るのは奥板の厚み。
-    for label, t in (("側壁", WALL), ("床", FLOOR), ("奥板", REAR_PLATE_T),
+    # 奥板は廃止した（2026-09-06・器の案）。見るのは壁・底板・外皮の厚み。
+    for label, t in (("側壁", WALL), ("床", FLOOR), ("壁の下端の外皮", BOTTOM_SKIN),
                      ("上ケースの壁", BEZEL_WALL)):
         n = t / NOZZLE
         assert abs(n - round(n)) < 1e-6, \
@@ -372,7 +380,7 @@ def test_a_real_cable_can_reach_the_socket(name):
                            XIAO_H_WITH_USB)
     from gen_plate import plate_positions
 
-    part, (w, h_body), _ = build_case(HALVES[name], name)
+    part, (w, h_body) = g.build_topcase(HALVES[name], name)     # 奥壁は上シェル（器の案）
     _, (pw, _ph) = plate_positions(HALVES[name])
     y_out = h_body / 2 + g.BUMP_DEPTH
     x = g.daughterboard_x_center(name, pw)

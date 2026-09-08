@@ -46,6 +46,8 @@ def test_the_bezel_overlaps_the_plate_enough_to_hold_it():
     """ベゼルがプレートの縁に十分かぶること。**左右と前後の両方**で見る。"""
     for name, keys_half, margin in _axes():
         overlap = (keys_half + margin - BEZEL_WALL) - (keys_half + BEZEL_OPENING_GAP)
+        # 器の案（2026-09-06）: プレートの通り道の壁は 1.2（左右の余白 3.125 − 1.2 −
+        # 逃げ 0.1 − 開口の隙 0.725 = 1.1 の掛かり）。2.4 にすると −0.1 で押さえられない
         assert overlap >= 1.0, \
             f"{name}: ベゼルとプレートの重なりが {overlap:.2f}mm しかない"
 

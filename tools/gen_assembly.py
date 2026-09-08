@@ -84,43 +84,30 @@ from part_kinds import BOX_SHAPE, REAL_SHAPE  # noqa: F401,E402
 # #35 の電池蓋（外から開かない）と同じ型で、**3 度目**だった。
 #
 # 書いていない部品は「ケースに入らない物」か「はんだ・ねじ込み」。
+# **器の案（2026-09-06）: 器は上シェル。中身は全部、底板を外して下から出し入れする。**
+# 検査（test_every_part_can_be_put_in_from_outside）は上シェルに対して経路をたどる。
 INSERT_PATH = {
-    # 電池ボックスはコブの奥面の口から差し込む（上はコブの天井で塞がっている）
-    "batt":     [(0, 8, 0), (0, 20, 0), (0, 40, 0)],
-    # 子基板と XIAO は手前（ケースの内側）へ抜いてから上へ
-    "db":       [(0, -8, 0), (0, -8, 40)],
-    "xiao":     [(0, -8, 0), (0, -8, 40)],
-    # 電源スイッチ: 受けの上まで上げてから手前へ（ツマミがスロットを滑る）
-    "sw_pwr":   [(0, 0, 5.6), (0, -8, 5.6), (0, -8, 40)],
-    # 奥板: 舌の外下の角を支点に 15° 倒し、舌を溝から持ち上げ、奥へ（2026-09-06。
-    # 上縁は天井の下なので真っ直ぐには持ち上がらない。姿勢は rear_plate_path が作る）
-    "rear_plate": "rear_plate_path",
-    # 本体基板とソケットは真上（プレートを外した状態）。プレートも真上
-    # （2026-09-06 に上シェルの棚と溝を廃止したので、傾けて入れる必要は無い。
-    # 上シェルとの関係は test_the_plate_can_be_put_into_the_shells が見る）
-    "plate":    [(0, 0, 40)],
-    "pcb":      [(0, 0, 40)],
-    "sockets":  [(0, 0, 40)],
+    "case":     [(0, 0, -40)],                       # 底板そのもの（真下へ）
+    "batt_lid": [(0, 0, -40)],
+    "batt":     [(0, 0, -40)],                       # 電池箱は底板を外せば真下へ
+    # 子基板と XIAO は奥壁のポケットから手前へ抜いてから下へ
+    "db":       [(0, -8, 0), (0, -8, -40)],
+    "xiao":     [(0, -8, 0), (0, -8, -40)],
+    # 電源スイッチ: 受け箱から手前へ 4.4（ツマミ 4.0 が壁の内面を抜ける）、それから
+    # 下へ。奥の柱（y ≤ 55.1）は端子・線の先端（55.26）の手前
+    "sw_pwr":   [(0, -4.4, 0), (0, -4.4, -40)],
+    # プレート・本体基板・ソケットは真下（手前の角柱がプレートの切り欠きを通る）
+    "plate":    [(0, 0, -40)],
+    "pcb":      [(0, 0, -40)],
+    "sockets":  [(0, 0, -40)],
 }
-
-def rear_plate_path(y_out):
-    """奥板の着脱の姿勢（Location の列）。INSERT_PATH の "rear_plate_path" の実体。
-    支点は舌の外下の角（gen_case.REAR_TONGUE_* の注記）。y_out は奥面の y。"""
-    from build123d import Location
-    from gen_case import FLOOR, REAR_PLATE_T, REAR_TONGUE_H, REAR_TONGUE_T
-    pivot = (0, y_out - REAR_PLATE_T + REAR_TONGUE_T, FLOOR - REAR_TONGUE_H)
-    def pose(deg, lift=0.0, back=0.0):
-        return (Location((0, back, lift)) * Location(pivot)
-                * Location((0, 0, 0), (-deg, 0, 0))
-                * Location((-pivot[0], -pivot[1], -pivot[2])))
-    return [pose(5), pose(10), pose(15), pose(15, REAR_TONGUE_H + CLEARANCE),
-            pose(15, REAR_TONGUE_H + CLEARANCE, 40)]
 
 
 HELD_BY = {
-    "case":       "外殻そのもの（基準）",
-    "topcase":    "手前 M2×3（**裏から**。底の座ぐりに頭、ベゼル手前バーの裏のインサートへ。2026-09-06）＋スカートが側壁に被る＋奥面 3 本目（奥の留めはこれだけ。2026-09-06 に奥板のリップを廃止）",
-    "plate":      "下シェルの側壁の帯・手前壁・**電池の仕切り壁**が受け、上シェルのベゼルの縁が押さえる。手前 M2×3 は切り欠きを貫く（共締め）。位置決めは上シェルから下向きの手前のピン（2026-09-06）",
+    "topcase":    "器そのもの（基準。ベゼル＋四方の壁。器の案・2026-09-06）",
+    "case":       "底板。上シェルの壁の下端の斜面に載り、手前 M2×3（上シェルの角柱の下端のインサートへ）＋奥の柱の M2（左 1・右 2。1 本は電池蓋と共締め）で引き付ける",
+    "batt_lid":   "底板の段に半掛かり。外端は爪、内端は奥の柱の M2（底板と共締め）",
+    "plate":      "底板から立てた手前のリブ・受けの壁が下から支え、上シェルのベゼルの縁が押さえる。手前の角柱が切り欠きを通って位置を決める",
     "pcb":        "⚠️ 固定具なし。スイッチのピン 54 本の摩擦のみ（#36 で対応中）",
     "pcb_real":   "同上",
     "pcb_parts":  "基板に半田付け",
@@ -142,7 +129,6 @@ HELD_BY = {
     "rubber":     "座ぐり＋粘着",
     "foot":       "φ4×2.4mm のピン圧入 ＋ 先端の返しφ4.4／穴の奥の溝φ4.7（2026-08-12）",
     "usb_plug":   "利用者が挿すケーブル（留めるものではない）",
-    "rear_plate": "M2×2 で上シェルの桟へ。左右は奥壁の座ぐり、上縁は天井の下、下縁の舌は床の溝（2026-09-06）",
 }
 
 
@@ -180,11 +166,9 @@ def build_assembly(keys, half, real=False):
     from envelopes import socket_envelope
     parts["sockets"] = place_pcb(socket_envelope(half), h_plate, rim_front)
 
-    # 奥板（電池窓を塞ぐ板。2026-09-05・案 A。旧・電池蓋）。
-    # **ケース座標で作ってあるので動かさない**（回すと上下が入れ替わり、
-    # 同じ取り違えを 5 回繰り返した。2026-08-12）。
-    from gen_case import build_rear_plate
-    parts["rear_plate"] = build_rear_plate(half, keys)[0]
+    # 電池蓋（底板の開口を塞ぐ。器の案・2026-09-06）。ケース座標のまま
+    from gen_case import build_battery_lid
+    parts["batt_lid"] = build_battery_lid(half, keys)[0]
 
     # チルト脚は底面のピン穴に差す（ピンが上、脚が下）。
     for i, (fx, fy) in enumerate(_foot_positions(w, h_case)):
@@ -393,11 +377,16 @@ def build_assembly(keys, half, real=False):
     # 「食い込んでいる」ことになり、許容値でごまかす羽目になる。
     # 穴の径はネジの軸と同じにする（実物はここがネジ山で噛み合う）。
     with BuildPart() as _ins:
-        # 手前 3 本のインサートは**上シェルのベゼル手前バーの裏**に上向きに
-        # 入る（2026-09-06・裏からネジ）。座はプレートの座ぐりの天井
-        from gen_case import front_insert_seat_z
-        seats_up = [(bx, by, front_insert_seat_z(by, h_case))
-                    for bx, by in _boss_positions(half)]
+        # 上シェルから垂らした角柱・柱・ボスの下端のインサート（器の案・2026-09-06）。
+        # 手前 3・奥の柱は底板の上面 + BOTTOM_FIT から上へ、電池箱のボスは箱の上面から上へ
+        from gen_case import (BATT_H, BATT_STAND, BATT_W, BOTTOM_FIT, battery_hole_xs,
+                              battery_hole_z, rear_column_positions)
+        _z_hang = FLOOR + BOTTOM_FIT
+        seats_up = [(bx, by, _z_hang) for bx, by in _boss_positions(half)]
+        seats_up += [(cx, cy, _z_hang) for cx, cy in rear_column_positions(half, w, h_case)]
+        _bz_top = FLOOR + BATT_STAND + BATT_H + CLEARANCE / 2
+        _by_hole = battery_center(h_case) - BATT_W / 2 + battery_hole_z(half)
+        seats_up += [(hx, _by_hole, _bz_top) for hx in battery_hole_xs(half, w)]
         seats = [(db_x + dx_, db_center_y + dy_, FLOOR + DB_BOSS_H)
                  for dx_, dy_ in DB_BOSS_POS]
         for x_, y_, z_ in seats_up:
@@ -416,46 +405,28 @@ def build_assembly(keys, half, real=False):
             with Locations((x_, y_, z_)):
                 Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MAX))
-        # 奥面の横向きインサート（奥板 2 ＋ 3 本目。案 A・2026-09-05）。
-        # 軸は y。奥板の手前面（桟の奥面）から手前へ M2_INSERT_L 入る。
-        from gen_case import (REAR_PLATE_T, rear_rail_y, rear_screw3,
-                              rear_screw_positions)
-        _y_out_case = h_case / 2 + BUMP_DEPTH             # 奥面（外）
-        _y_face = rear_rail_y(h_case)[1]                  # 桟の奥面
-        _rear_seats = [(sx, _y_face, sz) for sx, sz in rear_screw_positions(half, w, h_case)]
-        _x3, _z3 = rear_screw3(half, w, h_case)
-        _rear_seats.append((_x3, _y_out_case - WALL - CLEARANCE, _z3))
-        _rear_screw_len = {(_x3, _z3): 8.0}                 # 3 本目だけ長い
-        for x_, y_, z_ in _rear_seats:
-            with Locations((x_, y_, z_)):
-                Cylinder(M2_INSERT_D / 2, M2_INSERT_L, rotation=(90, 0, 0),
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-        for x_, y_, z_ in _rear_seats:
-            with Locations((x_, y_, z_)):
-                Cylinder(SCREW_SHAFT_D / 2, M2_INSERT_L, rotation=(90, 0, 0),
-                         mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.MIN))
     parts["inserts"] = _ins.part
 
     # M2 ネジ（上ケースの 3 本＋子基板の 2 本）。
     # 上ケースの頭は座ぐり（ベゼル上面 −0.4 の深さ）に沈む。
     with BuildPart() as _scr:
-        # 手前 3 本は**裏から**（2026-09-06）。頭は底の座ぐり（底面から 0.2 沈む）、
-        # 軸は床・ボス柱・プレートの切り欠きを貫いて上シェルのインサートへ
-        for bx, by in _boss_positions(half):
+        # 底からの M2（手前 3・奥の柱）: 頭は底板の座ぐり（底面から 0.2 沈む）、軸は
+        # 底板を貫いて角柱・柱の下端のインサートへ（器の案・2026-09-06）
+        for bx, by in list(_boss_positions(half)) + list(rear_column_positions(half, w, h_case)):
             with Locations((bx, by, 0.2)):
                 Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
             with Locations((bx, by, 0.2 + SCREW_HEAD_H)):
                 Cylinder(SCREW_SHAFT_D / 2, SCREW_L_MAIN,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥面の横向き M2（奥板 2 本は板の外面から、3 本目は奥壁の外面から）
-        from envelopes import SCREW_L_DB, SCREW_L_REAR3
-        for x_, y_, z_ in _rear_seats:
-            _len = SCREW_L_REAR3 if (x_, z_) in _rear_screw_len else SCREW_L_DB
-            with Locations((x_, _y_out_case, z_)):    # 頭は奥面（外）に座る
-                Cylinder(SCREW_HEAD_D / 2, SCREW_HEAD_H, rotation=(90, 0, 0),
-                         align=(Align.CENTER, Align.CENTER, Align.MAX))
-                Cylinder(SCREW_SHAFT_D / 2, _len, rotation=(90, 0, 0),
+        # 電池箱の M2×2: 箱の中から上へ。頭と床を通る分は箱の占有空間の中（箱の床の
+        # 座ぐりに頭が沈む）なので置かず、**箱の上面から上に出る軸だけ**を置く
+        # （長さ = SCREW_L_MAIN − 頭の下の床 BATT_BOX_FLOOR_T + 座ぐり BATT_BOX_CBORE）
+        from envelopes import BATT_BOX_CBORE, BATT_BOX_FLOOR_T, SCREW_L_BATT, SCREW_L_DB
+        _box_top = FLOOR + BATT_STAND + BATT_H
+        for hx in battery_hole_xs(half, w):
+            with Locations((hx, _by_hole, _box_top)):
+                Cylinder(SCREW_SHAFT_D / 2, SCREW_L_BATT - (BATT_BOX_FLOOR_T - BATT_BOX_CBORE),
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
         for dx_, dy_ in DB_BOSS_POS:
             with Locations((db_x + dx_, db_center_y + dy_,

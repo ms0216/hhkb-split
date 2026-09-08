@@ -20,7 +20,7 @@ from gen_plate import halves  # noqa: E402
 from verify import BUILD, assert_watertight, to_mesh  # noqa: E402
 
 FRONT_D = 25.0     # 手前の帯: 外面からこの奥行（ネジボス y=−50.9、ベゼル手前バー）
-REAR_FROM = 12.0   # 奥の帯: 本体奥端のこの手前から奥面まで（仕切り壁 y≈47.6 を含む）
+REAR_FROM = 12.0   # 奥の帯: 本体奥端のこの手前から奥面まで（受けの壁 y≈50 を含む）
 
 
 def main(half):

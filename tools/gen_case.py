@@ -155,9 +155,7 @@ PLATE_TOP_FRONT = round(
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
-from interface import (FRONT_BOSS_W, FRONT_PIN_D, FRONT_PIN_DX,  # noqa: E402
-                       FRONT_PIN_INTO_LOWER, FRONT_PIN_ROOT, FRONT_PIN_TIP,
-                       PCB_FRONT_EDGE_PLAN)
+from interface import FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN  # noqa: E402
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -190,8 +188,14 @@ AA_D, AA_L = 14.5, 50.5
 # 出所は envelopes.py の 1 か所だけ。ここで足し引きしない。
 # **箱は横倒し**（2026-09-05・案 A。envelopes.battery_envelope の注記）。
 # 開口（箱の上面）を奥へ向けるので、箱の「高さ」が奥行に、「幅」が高さになる。
-BATT_H = BATT_BOX_W              # 占有高さ（z）＝箱の幅 16.6
-BATT_W = BATT_BOX_H              # 占有奥行（y）＝箱の高さ 16.8
+# **2026-09-06（器の案）: 箱は開口を下にして立てる。**電池は底板の蓋から出し入れ。
+# 高さは箱の高さ、奥行は箱の幅。床の穴（2 個）は上を向き、天井から垂らした
+# ボスへ箱の中からネジ。
+BATT_H = BATT_BOX_H              # 占有高さ（z）＝箱の高さ 16.8
+BATT_W = BATT_BOX_W              # 占有奥行（y）＝箱の幅 16.6
+BATT_STAND = 0.2                 # 箱の下端と底板の上面の隙（蓋が閉じる側）
+BATT_BOX_WALL = 1.0              # [暫定] 箱の壁厚（開口＝内側の寸法に使う。実測で確認）
+BATT_BOSS_D = 6.4                # 天井から垂らす箱のボスの径（肉 1.6）
 BATT_X = BATT_BOX_L              # 占有幅（長辺。裸の電池 2 本＋電極と同じ 109mm）
 # interface.py は build123d を読めないので envelopes から取れず、同じ値を
 # 持っている。**黙ってずれないよう、ここで突き合わせる。**
@@ -213,11 +217,9 @@ BATT_WIRE_NOTCH = 4.0            # 仕切り壁の両端に開ける、リード
 # 箱の裏面（横倒しでは仕切り壁を向く面）のケーブル受けの突起。**利用者が現物を
 # 実測**（2026-09-06）: 黒線側の端から 14 / 53.5 / 93、幅 4、高さ 5.5。仕切り壁を
 # そこだけ切り下げる（利用者「他は下げなくてよい」）
-BATT_GUIDE_X1_FROM_END = 14.0   # [暫定] 利用者の実測（現物）
-BATT_GUIDE_X2_FROM_END = 53.5   # [暫定] 同
-BATT_GUIDE_X3_FROM_END = 93.0   # [暫定] 同
-BATT_GUIDE_W = 4.0                            # [暫定] 同
-BATT_GUIDE_H = 5.5                            # [暫定] 同。床からこの高さまで壁を残す
+# （箱の裏面のケーブル受けの突起 14 / 53.5 / 93・幅 4・高さ 5.5 は、器の案では
+#   天井を向く面に来る。ボスの位置 75.9 / 82.8 と重ならないことを確認済み。
+#   突起の高さ 5.5 < ボスの長さ 10.5 なので天井には届かない）
 # 電池室の仕切り壁の高さ（床から）。
 #
 # ⚠️ **2026-08-29 に 16.8（＝BATT_H）→ 6.0 へ下げた。利用者が刷って触った指摘。**
@@ -243,7 +245,6 @@ BATT_GUIDE_H = 5.5                            # [暫定] 同。床からこの�
 # 提案）。上シェルの棚は裏返して刷ると空中の庇になり、印刷が壊れた。仕切り壁は
 # y=48.8〜51.2 で基板の奥縁（48.3）の後ろにあり、プレートの奥縁（52.3）の 1.1〜
 # 3.5 内側を受ける。ここは「上限」で、実際の上面はリム面（cutter）で切る。
-BATT_DIVIDER_H = 40.0
 # 仕切り壁の厚み。リム面まで上げたら基板の奥縁（平面図で 48.95。傾きで奥へ
 # 0.65 ずれる）と 0.19 重なったので、**手前側を 0.4 削って 2.0**（5 周）。
 # 奥面（箱の床が当たる面）は動かさない（2026-09-06）
@@ -523,144 +524,41 @@ XIAO_POCKET_D = XIAO_OVERHANG - DB_FROM_REAR
 
 
 # --------------------------------------------------------------------------
-# 上下シェルの合わせ目とスカート（2026-09-05・案 A）
+# 器の案（2026-09-06・利用者「底面以外にネジと継ぎ目を見せたくない」）
 #
-# 上シェル（ベゼル＋コブ天井）は**側壁を外側から被るスカート**（厚み SKIRT_T）
-# を持つ。下シェルの側壁は合わせ目（SEAM_Z）より上で外側 SKIRT_T + SKIRT_FIT
-# を削り、内側の帯（1.2）が**リム面までプレートを受ける**。
-#
-# ⚠️ 一度「合わせ目より上の側壁は丸ごと上シェルの物」にした（2026-09-05 の
-# 最初の版）。すると**プレートを受ける段と押さえるベゼルの縁が同じ部品に
-# 入り、プレートが上からも下からも入らなかった**（利用者が .blend を見て
-# 指摘。CLAUDE.md の教訓 9 を、検査を足さずに踏んだ）。受けるのは下、押さえる
-# のは上——元の分担に戻し、`test_the_plate_can_be_put_into_the_shells` が
-# 入れられることを見張る。実機の「側面の中ほどに上下シェルの合わせ目」
-# （dimensions.md §4 の 3）を再現し、#12（上ケースの奥の留め）の原因だった
-# 「同一外形の落とし込み（平面方向の逃げ 0）」をやめる。
-# 経緯は docs/hardware/decisions/2026-09-05-case-redesign-plan-a.md。
-# 合わせ目の高さ（底面から）＝**手前のリム面**。実機写真は「側面の中ほど」
-# （目測 9mm 前後）で、手前のリム 9.49 はその範囲。手前壁は上下シェルが
-# リム面で突き合わせになる（手前のネジボスが外面に接していて、相欠きに
-# すると熱圧入インサートが外へ出る）ので、合わせ目をリムに揃えると
-# 手前と側面の合わせ目が一直線になる。
-SEAM_Z = PLATE_TOP_FRONT - PLATE_T
-# **2026-09-06: 合わせ目をリム面と平行にし、相欠きを全周 SKIRT_LAP に**（利用者
-# 「はめ合わせはプレートの厚み分あれば足りるのでは」）。水平な合わせ目だと相欠きは
-# 手前 0・奥 13.8 で、1.2 厚の壁が両シェルに 14mm 立ち（反る・撓む）、隙間 0 で
-# 14mm こすりながら被せることになる。剛性は 2 枚に割ると落ちるので、重なりに
-# 構造上の意味は無い（位置決めと目隠しだけ）。3.0 は「印刷の段差と削り合わせで
-# 0.2〜0.4 は当てにならない」「横から押されて乗り上げない掛かり」から。
-# 合わせ目の面は z = SEAM_Z − SKIRT_LAP + (y + h/2)·tan(7.3°)。手前では 3mm
-# 下がる（9.4 → 6.4）。上シェルは裏返して刷るので、この面はベッドと平行になり
-# 層の段が出ない（水平だった前は上シェル側に段が出ていた。段は下シェルの肩へ移る）。
-# 手前壁の突き合わせ（リム面）・奥の隅の柱は変えない
-SKIRT_LAP = 3.0          # 相欠きの高さ（リム面からの深さ・全周一定）
-SKIRT_T = 1.2            # スカートの厚み（0.4 ノズル 3 周）。下シェル側の
-                         # 帯は WALL − SKIRT_T − SKIRT_FIT = 1.2（同じく 3 周）
-# スカートの内面と帯の外面の隙間。**0 ＝ 接触**（2026-09-05・利用者の判断:
-# 「隙間があるとガタつく。合わなければ削る」。電池蓋のビードを大きい側に
-# 振ったのと同じ方針）。印刷の公差 CLEARANCE(0.2) をここに入れると帯が
-# 1.0（2.5 周）に痩せ、横に ±0.2 の遊びが出る。0 で刷って被さらなければ
-# 帯（平らで外から手が届く）をやすりで削る。クーポン（#11）で確定させる。
-SKIRT_FIT = 0.0          # [暫定] クーポンで実測してから決める
-# 奥の隅（2026-09-06・利用者「上下シェルがぶつかる縦の継ぎ目が側面の奥から 5mm に
-# ある。手前・左右から見せたくない。奥面なら良い」）。以前は奥面から 6.0 の柱を
-# 下シェルが全高で持ち、スカートがそこで止まっていた（側面に縦の継ぎ目）。今は
-# **上シェルの側壁が角の丸み（CORNER_R）を回って奥面の接線まで続き**、下シェルの
-# 奥壁は角の丸みの間の平らな部分だけを全高で持つ。縦の継ぎ目は奥面の角の接線上
-# （x = ±(w/2 − CORNER_R)）。隙間は REAR_CORNER_GAP
-# ⚠️ 外縁側は接線で切ると、電池窓の外側の枠（幅 1.1・座ぐりで厚み 0.8）が合わせ目
-# より上で 8.5mm の独立した細片になる（角の柱に繋がらない）。そこで**外縁側の
-# 境は窓の外側の縁**にし、枠ごと上シェルの角に持たせる。この縦の継ぎ目は奥板の
-# 座ぐりの中なので板に隠れる。内縁側は接線のまま（子基板ポケットまで 1.35 の壁が
-# 内へ続くので独立しない）
-REAR_CORNER_GAP = 0.1    # 上シェルの角と下シェルの奥壁の間（x 方向・内縁側）
-# 奥板（電池窓を塞ぐ板。旧・電池蓋のスライド＋ビードは全廃）
-REAR_PLATE_CLR = 0.3     # 窓を電池箱の断面からどれだけ広げるか（片側）
-REAR_PLATE_T = 1.6       # 板厚。奥壁の外面に面一で沈む（座ぐりも同じ深さ）
-REAR_PLATE_FRAME = 1.5   # 座ぐりを窓から広げる量（左右）＝板の掛かり代。
-                         # 2.0 → 1.5（2026-09-06）: 電池箱をリード線の逃げ 2.0 だけ
-                         # 内へ寄せたら、左の電源スイッチの窪みと座ぐりが 0.62
-                         # 重なった。板はネジ 2 本で留まるので掛かり代は 1.5 で足りる
-# 奥板を外すときの爪の掛かり（2026-09-06・利用者）。板は座ぐりに面一で沈み上縁は
-# 天井の下なので掴む所が無い。**板の上縁に切り欠き**を入れ、天井の奥縁の下から
-# 爪をそこへ掛けて、下シェルの受け縁（床の座ぐりの縁）を支点に上を奥へ倒す。
-# 最初は床の奥面に窪みを掘ったが、利用者のイメージは板側の切り欠きだった
-# （両シェルは無傷。切り欠きは天井の奥縁の下に隠れる）
-NAIL_NOTCH_W = 15.0      # 幅（x。板の中央）
-NAIL_NOTCH_H = 2.5       # 上縁から下へ切る深さ
-# 奥板の下縁の舌と床の溝（2026-09-06・利用者「蓋の下と、それを受ける下シェルの溝は？」）。
-# 倒すときの支点。**舌は板の内側の肉をそのまま下へ伸ばしたもの**（旧・L 字の足は
-# 溝にはまる部分だけ宙に浮いて刷れなかった——利用者）。板は**内面を下**にして刷る
-# ので舌はベッドに着く。溝は床の奥縁に、外側の縁（受け縁）を REAR_LIP_T 残して掘る。
-# 外し方: **舌の外下の角**（溝の外下の隅に座る）を支点に上を奥へ倒す。回ると
-# 舌の外面は受け縁の内面へ寄るので、外面を上へ向かって REAR_TONGUE_RELIEF だけ
-# 内へ傾けておく（≈17° まで回る）。板の下縁の外側は受け縁の上面に食い込むので
-# 45° に面取り（内面を下に刷るので上側の斜面＝支え要らず）。上縁が天井の下から
-# 出たら持ち上げて舌を溝から抜く。実形状で 5〜15° の回転・持ち上げ・引き出しを
-# 検査する（test_the_rear_plate_locks_the_top_shell）
-REAR_TONGUE_T = 0.8      # 舌の厚み（先端。板の内面から。0.4 の 2 倍）
-REAR_TONGUE_RELIEF = 0.3 # 舌の外面の逃げ（根元で薄くなる量）
-REAR_TONGUE_H = 1.0      # 舌が溝へ入る深さ
-REAR_LIP_T = 0.8         # 溝の外側に残す床の縁（受け縁。0.4 の 2 倍）
-REAR_GROOVE_W = REAR_TONGUE_T + CLEARANCE   # 溝の幅（内側に 0.2）
-REAR_GROOVE_D = 1.0      # 溝の深さ（床 2.4 に 1.4 残る）
-# 奥板の上縁は**天井の下**（2026-09-06）。以前は天井の奥縁を 1.6 座ぐって板の
-# リップを被せていたが、裏返して刷ると座ぐりの下の 0.8 が 3.2 の幅で宙に出て
-# 印刷が壊れた（利用者の試し刷り）。リップは上シェルの押さえにもなっていなかった
-# （板は上シェルの桟にネジ留めで、足は床の溝から上へ自由に抜ける）。天井を奥面まで
-# 通常の厚みで通し、板は床から天井の下面までにした。足と溝も廃止（y を止める役は
-# ネジが担う）。奥の留めは奥面 3 本目のネジ
-REAR_RAIL_H = 7.0        # 上シェルの奥縁の裏に付ける桟（奥板のネジを受ける）。
-                         # 6 → 7（2026-09-06 根元の強化）: インサート 3.2 の上下の肉 1.4 → 1.9。
-                         # 下端は電池箱の上面から 1mm 以上（生成時に確認）
-REAR_RAIL_D = 6.0        # 同・奥行
-REAR_SCREW_DX = 40.0     # 奥板のネジ 2 本の、電池箱中心からの x
-# 奥面 3 本目のネジ（2026-09-05・利用者「見えない所ならネジを増やしてよい」）。
-# 奥板のリップは電池窓の幅（109）しか押さえず、子基板側の 35mm は隅の柱で
-# 受けるだけだった。奥壁を貫いて上シェルの天井裏のボスへ M2 を横に入れる。
-# 位置は子基板の中心から電池側へ REAR_SCREW3_DX（LED 窓と USB を避ける）。
-REAR_SCREW3_FROM_LED = 9.0  # LED 窓の中心から、**内壁と反対の方向**へ。窓 r2.5 ＋
-                            # ボス半幅 3 ＋ 余裕 3.5。一度「子基板中心から電池側 8」に
-                            # 置いて右だけ LED 窓の薄肉と重なりボスが欠け（利用者が
-                            # 試し刷りで発見）、次に「−x 側 7.5」にしたら右が内壁から
-                            # 3.8 の隅に寄った（利用者の指摘）。右は LED 窓と電源
-                            # スイッチの窪みの間に 16mm 空いている（2026-09-06）
-REAR_SCREW3_BOSS_W = 7.0 # 天井裏のボス（角柱）の x 幅。6 → 7（2026-09-06）: 左右の肉 1.4 → 1.9
-SW_KEEPER = 4.0          # 電源スイッチの上に上シェルから垂らす柱の一辺。
-                         # スイッチが溝から浮き上がるのを止める
-SW_KEEPER_ROOT = 1.0     # 柱の根元（天井）で左右・手前に広げる量。先端 4×4 → 根元 6×5.3
-SW_KEEPER_ROOT_REAR = 0.3  # 同・奥側（奥壁の内面まで 0.45 しか無い）
-
-# 手前面の造作（実機再現・dimensions.md §4 の 1・2。2026-09-05）
-#
-# 実機は手前面が下へ行くほど奥へ傾き（目測 12°）、ベゼル上面から手前面へ
-# 大きな R（目測 R6）で移る。**どちらも丸ごとは再現できない**:
-#   * 傾け: 手前の M2 ボス（φ5.6・中心 y=−51.5）は外面から 0.74 はみ出す位置に
-#     あり、内側の端は基板の手前縁まで 0.44。面を傾けるとボスが削れて
-#     インサートが露出する。基板は発注済みで、ボスを内へ動かせない
-#   * R6: ベゼルの手前バーは高さ 6.5 しか無く、R6 だと座ぐりの壁まで消える
-# できるのは**ベゼルのバーの範囲だけ**: 上端から FRONT_FACET_H の高さだけ
-# 12° で内側へ傾け（上端が最前点。下端で 1.2 内側）、上端の縁を R2 で丸める。
-# R は CAD カーネルが左右の縁では拒否した（隅の小さな面）ので手前だけ。
-FRONT_FACET_DEG = 12.0   # [目測] 実機写真から
-FRONT_FACET_H = 0.0      # 傾ける高さ（上端から）。**0 ＝ 無効。**5.5 で試すと
-                         # 下端（z=12）に幅 1.2 の水平な段ができた——その下は
-                         # プレートの座ぐりの壁で、面を内側へ入れられない。
-                         # 実機に無い線が 1 本増えるので、R2 だけにした
-                         # （2026-09-05）。手前のボスを内へ動かせる基板改版が
-                         # あれば、下まで通して復活させる
+# 上シェル＝ベゼル面＋四方の壁（机まで）。下シェル＝壁の下端の内側に嵌まる底板。
+# 壁の下端 FLOOR は外皮 BOTTOM_SKIN だけを残し、内側を 45° に落とす。底板の上の
+# 外周も 45° に落とし、斜面どうしで載る（打鍵の力は底板 → 斜面 → 壁へ。ネジは
+# 底板を斜面へ引き付けるだけ）。裏返して刷る上シェルでは斜面は 45° の張り出し、
+# 底板では上向きの斜面なので、どちらも支え無しで刷れる。継ぎ目は底面の外皮の
+# 下端の線だけ。
+# 案 A（二枚貝＋奥板・相欠き）は 2026-09-06 に廃止。経緯は
+# docs/hardware/decisions/2026-09-06-cup-case.md
+BOTTOM_SKIN = 1.2        # 壁の下端に残す外皮（0.4 の 3 倍）。手前と左右の壁はプレートより
+                         # 下がこの厚み（BEZEL_WALL）で、底板のリブが内側を埋める
+BOTTOM_FIT = 0.1         # 底板の縁と外皮の内面の隙（片側）
+BOTTOM_CHAMFER = WALL - BOTTOM_SKIN   # 斜面の高さ＝横幅（45°）。1.2。**斜面は底板の上**
+                         # （z = FLOOR〜FLOOR + 1.2）。底板は平板のまま入り、上の外周の角が
+                         # 斜面に当たって止まる（BOTTOM_FIT ぶん上がった所）。底板側にも
+                         # 斜面を付けると、手前のネジの頭（縁から 0.05）が斜面と重なった
+HEAD_RECESS_CLR = 0.1    # 底のネジ頭の座ぐりの逃げ（片側）。手前は底板の縁まで 0.05
+FRONT_RIB_T = 2.0        # 底板から立てる手前のリブ（プレートの手前縁を受ける）の厚み
+REAR_COL_D = 5.6         # 奥の柱（天井から垂らす・底からネジ）の径。左の空き 6.76 に入る
+REAR_COL_Y = 52.3        # 同・y。基板の奥縁 48.95 の奥（柱 φ5.6 の手前 49.5）。プレートと
+                         # 受けの壁には柱の切り欠きを開ける。電源スイッチを外す動き（手前へ
+                         # 4.4: ツマミ 4.0 が壁の内面を抜ける）で端子・線の先端が 55.26 まで来る
+                         # ので、柱の奥面 55.1 はその手前。56.5 だと 0.04 当たった
+SW_STOP_T = 2.4          # 電源スイッチの手前の止めブロック（底板から）の厚み
+SW_STOP_H = 10.7         # 同・高さ（スイッチの中心まで）
+LID_OPEN_CLR = 0.3       # 電池蓋の開口の逃げ（箱の内側から片側）
+LID_LAP = 0.8            # 蓋の縁が底板の段に掛かる幅
+LID_FIT = 0.1            # 蓋と開口・段の隙（片側）
+LID_TAB = 2.0            # 蓋の外端の爪が段の下へ入る長さ
 OPENING_CHAMFER = 0.8    # 開口（キーの窪み）の上縁の面取り（2026-09-06・利用者
                          # 「角が丸くなっておらず当たると痛い」）。丸めは
                          # カーネルが不安定だが、直線の辺の面取りは通る。
                          # 最下段の覆いの縁も同じ
-FRONT_EDGE_R = 0.0       # 上端の丸め。**0 ＝ 無効。**R2 は手前の辺だけなら
-                         # カーネルが通したが、**通した結果が奥の天井の一部を
-                         # 黙って失っていた**（max Z 33.53 → 33.26。x=60, y=71 の
-                         # 天井が消えた。2026-09-05 に is_inside で検出）。
-                         # OCC のフィレットは失敗を例外で言わないことがある。
-                         # 丸めは試作後に手やすり、または別の作り方で
-BOTTOM_EDGE_R = 1.5      # 下シェルの底縁の丸め（実機の「合わせ目より下は
+BOTTOM_EDGE_R = 1.0      # 上シェルの底縁（外皮 1.2）の丸め。2026-09-06 に 1.5 → 1.0（実機の「合わせ目より下は
                          # 一回り小さい」の代用。dimensions.md §5「R1〜2 から試作」）
 
 # ゴム足（市販品）
@@ -739,474 +637,270 @@ def case_heights(depth):
 
 
 def build_case(keys, half):
-    """トレイ型ボトムケースを作る。
+    """**底板**（下シェル。2026-09-06・器の案）。
 
-    奥行はプレートの平面図での長さ（傾けたぶん cos(TILT) 倍に縮む）に合わせる。
-    プレートの平らな寸法をそのまま使うと、リムがプレートより 0.84mm 長くなり
-    覆いきれない（組み立て検査で検出）。
+    上シェルが四方の壁を持つ器になったので、下シェルは壁の下端の内側に嵌まる
+    平板。継ぎ目とネジは底面だけ。**床面をベッドに付けて刷る。**底板から立つ物:
+      * 手前のリブ（プレートの手前縁を受ける。ネジ受けの角柱の間）
+      * プレート受けの壁（基板の奥縁と電池箱の間。旧・仕切り壁と同じ場所）
+      * 子基板の柱 2 本（今までどおり）
+      * 電源スイッチの台と止めブロック（受け箱は上シェル。口が下と手前に開く）
+      * チルト脚のボス・三脚ナットのボス
+    穴: 手前 3 本・奥の柱のネジ（頭は座ぐり）、電池蓋の開口（半掛かりの段付き）、
+    ゴム足の座ぐり。
+    縁: 外形から BOTTOM_SKIN + BOTTOM_FIT 内側。上の外周は 45° に落とし、
+    上シェルの壁の下端の斜面に載る（BOTTOM_CHAMFER の注記）。
     """
-    positions, (w, h_plate) = plate_positions(keys)
-    h_body = plan_depth(h_plate)          # プレートが載る範囲
-    h = h_body + BUMP_DEPTH               # 後部のコブを足した全体の奥行
-    # 座標の基準は**本体部分の中心**（＝プレートの中心＝原点）に固定する。
-    # コブは後ろへ張り出すだけなので、外形の矩形は BUMP/2 だけ後ろへずらす。
-    # 外形の中心を原点にするとプレートと基板が前へずれる（実際にずらして
-    # 2,680mm^3 の食い込みを出した）。
+    from build123d import Solid
+    _positions, (w, h_plate) = plate_positions(keys)
+    h_body = plan_depth(h_plate)
+    h = h_body + BUMP_DEPTH
     y_off = BUMP_DEPTH / 2
+    y_out = h_body / 2 + BUMP_DEPTH
     z_front, z_rear = case_heights(h)
-    rim_front = z_front - PLATE_T          # プレートを載せるリムの高さ（前縁）
-    rim_rear = z_rear - PLATE_T
-    # **コブの上面はベゼル面まで上がる**ので、そこまで立ち上げておく。
-    # rim_rear + 5.0 のままだと 31.31mm までしか無く、ベゼル面（33.53mm）に
-    # 届かず切れない。
+    rim_front = z_front - PLATE_T
     z_max = BEZEL_TOP_FRONT + h * tan(radians(TILT_DEG)) + 5.0
+    inset = BOTTOM_SKIN + BOTTOM_FIT
+    s = inner_sign(half)
+    cutter = tilted_cutter(w, h_body, rim_front)                 # リム面より上
 
-    # 切削用の立体は BuildPart に入る前に作る。
-    # コンテキストの中で Box() を作ると、その時点で部品に合体されてしまい、
-    # 「原点で合体 → 傾けた位置で減算」という食い違いが起きる。
-    # 上面の切り方は**本体とコブで違う**。
-    #   本体   … リム（プレートの下面）で切る。上にプレートと上ケースが載る
-    #   コブ   … ベゼル上面で切る。ここには上ケースが載らないので、
-    #             低く切ると奥に 5.7mm の段ができ、上ケースの舌を受ける
-    #             材料も無くなる（噛み合いの検査が「舌の上に材料が無い」と検出）
-    with BuildPart() as _body:
-        with BuildSketch():
-            RectangleRounded(w + 20, h_body, CORNER_R)
-        extrude(amount=z_max + 50, both=True)
-    cutter = tilted_cutter(w, h_body, rim_front).intersect(_body.part)
-    # コブの側壁・奥壁の上端。**天井は上シェルの物**（2026-09-05・案 A）。
-    # 天井の下面（ベゼル上面 − WALL）から CLEARANCE 下げて切る。
-    cutter_bump = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
-    _y_out = h_body / 2 + BUMP_DEPTH
-    # コブの側壁（角の丸みを含む）はリムで切る（2026-09-06。REAR_CORNER_GAP の注記）。
-    # リムより上は上シェルの側壁。奥壁は内縁側の接線から外縁側の窓の縁までを残す
-    _xk0, _xk1 = rear_wall_keep_x(half, w)
-    with BuildPart() as _sb:
-        for cx_, ww_ in ((_xk0 - 10.0, 20.0), (_xk1 + 10.0, 20.0)):
-            with Locations((cx_, (h_body / 2 - 1.0 + _y_out + 5.0) / 2, 0)):
-                Box(ww_, (_y_out + 5.0) - (h_body / 2 - 1.0), z_max * 3,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-    cutter_side_bump = _sb.part.intersect(tilted_cutter(w, h_body, rim_front))
-    # 合わせ目より上の側壁の外側 SKIRT_T + SKIRT_FIT を削る（上シェルの
-    # スカートが被る）。内側 1.2 の帯はリム面（コブでは天井の下）まで残り、
-    # プレートを受ける。奥壁の平らな部分（|x| < w/2 − CORNER_R）は全厚で残す
-    # （REAR_CORNER_GAP の注記）。角の丸みはスカートが回る。
-    with BuildPart() as _sk:
+    # 板そのもの（平板。上シェルの外皮の内側に入り、上の外周の角が斜面に当たる）
+    with BuildPart() as _pl:
         with BuildSketch():
             with Locations((0, y_off)):
-                RectangleRounded(w + 2.0, h + 2.0, CORNER_R + 1.0)
-                RectangleRounded(w - (SKIRT_T + SKIRT_FIT) * 2,
-                                 h - (SKIRT_T + SKIRT_FIT) * 2,
-                                 max(CORNER_R - SKIRT_T - SKIRT_FIT, 0.5),
-                                 mode=Mode.SUBTRACT)
-        extrude(amount=z_max)
-        with Locations(((_xk0 + _xk1) / 2, _y_out - CORNER_R + 100, 0)):
-            Box(_xk1 - _xk0, 200, z_max * 3, mode=Mode.SUBTRACT,
+                RectangleRounded(w - inset * 2, h - inset * 2, max(CORNER_R - inset, 0.5))
+        extrude(amount=FLOOR)
+    plate = _pl.part
+
+    # 立てる物（板の上面 FLOOR から）。上シェルの斜面（壁の内面から BOTTOM_CHAMFER・
+    # z = FLOOR〜FLOOR + 1.2）に掛からないよう、壁の内面から BOTTOM_CHAMFER + 逃げ 内側
+    bx = battery_x_center(half, w)
+    by = battery_center(h_body)
+    db_x = daughterboard_x_center(half, w)
+    db_y = y_out - WALL - DB_FROM_REAR - DB_D / 2
+    _edge = w / 2 - WALL - BOTTOM_CHAMFER - CLEARANCE
+    x_in_edge = s * _edge
+    x_out_edge = -s * _edge
+    with BuildPart() as _up:
+        # 手前のリブ。ネジ受けの角柱（上シェル、幅 FRONT_BOSS_W）の間だけ
+        # 内面は基板の手前縁 + 逃げ（上シェルの角柱と同じ）。ネジ中心（−50.75）に揃えると
+        # 壁に 0.6 食い込み、壁の内面基準にすると基板に 0.1 掛かった
+        _ry = (-PCB_FRONT_EDGE_PLAN + CLEARANCE) - FRONT_RIB_T / 2
+        _gaps = []
+        _xs = sorted(bx_ for bx_, _ in _boss_positions(half))
+        _lo = -_edge
+        for bx_ in _xs:
+            _gaps.append((_lo, bx_ - FRONT_BOSS_W / 2 - CLEARANCE))
+            _lo = bx_ + FRONT_BOSS_W / 2 + CLEARANCE
+        _gaps.append((_lo, _edge))
+        for g0, g1 in _gaps:
+            if g1 - g0 < 2.0:
+                continue
+            with Locations(((g0 + g1) / 2, _ry, FLOOR - 0.01)):
+                Box(g1 - g0, FRONT_RIB_T, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 左右のリブ（上シェルの薄い壁 1.2 の内側を埋め、プレートの左右の縁を受ける）。
+        # 手前の縁からコブの手前（壁が 2.4 に戻る所）まで。内縁側は子基板の手前で止める
+        _rib_x = w / 2 - inset - BOTTOM_SKIN / 2          # 外皮の内面から 1.2
+        _y_front = -h_body / 2 + inset + CORNER_R          # 手前の角の丸みを避ける
+        for sx_ in (-1, 1):
+            _y_end = h_body / 2 - CLEARANCE * 2
+            if sx_ == s:                                   # 内縁側: 子基板の手前
+                _y_end = min(_y_end, db_y - DB_D / 2 - CLEARANCE)
+            with Locations((sx_ * _rib_x, (_y_front + _y_end) / 2, FLOOR - 0.01)):
+                Box(BOTTOM_SKIN, _y_end - _y_front, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # プレート受けの壁（基板の奥縁 + 0.2 と電池箱 − 0.2 の間。旧・仕切り壁）。
+        # 奥の柱の周りと電池蓋の内端の張り出しの上は空ける
+        y_div = by - BATT_W / 2 - CLEARANCE - BATT_DIVIDER_T / 2
+        _x_inner = db_x - s * (DB_W / 2 + CLEARANCE)
+        with Locations(((x_out_edge + _x_inner) / 2, y_div, FLOOR - 0.01)):
+            Box(abs(_x_inner - x_out_edge), BATT_DIVIDER_T, z_max,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 手前壁は触らない（相欠きにするとネジボスのインサートが外へ出る。
-        # SEAM_Z の注記）。上シェルの手前はリム面で突き合わせ。
-        with Locations((0, -h_body / 2 + WALL - 100, 0)):
-            Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    # 合わせ目はリム面と平行・リムの SKIRT_LAP 下（SKIRT_LAP の注記）。**最後に交差**
-    skirt_cut = _sk.part.intersect(tilted_cutter(w, h_body, rim_front - SKIRT_LAP))
-    # ボスの頭を止める面（基板の下面）。これも**必ず**コンテキストの外で作る。
-    # 中で作ると即座に部品へ合体され、外形が 538x614mm に膨れる（実際にやった）。
-    from envelopes import under_pcb_base
-    cutter_pcb = tilted_cutter(w, h_body, under_pcb_base(
-        h_plate, rim_front, PLATE_TO_PCB + PCB_T))
-    # ボスも外で作って外で切る。**ネジは基板を通らない。**基板に取付穴は
-    # 無く（feec08b で廃止）、ボスは基板の外に立っている。切る高さは
-    # 20 行ほど下で「プレートの下面（リム）」に決めている。
-    with BuildPart() as _b:
-        # **角柱**（2026-09-05）。円柱 φ5.6 では中心 51.5 でインサートの外側の
-        # 肉が 0.46 だった。角柱にして外面（y=−h_body/2 − 1）から基板の縁 + 0.2
-        # まで一体で作り、インサートを内へ寄せる（interface.MOUNT_Y の注記）。
-        for bx, by in _boss_positions(half):
-            _y_in = -PCB_FRONT_EDGE_PLAN + CLEARANCE          # 基板の縁 + 0.2
-            _y_out_ = -h_body / 2 - 1.0                          # 外面より外（外形で切る）
-            with Locations((bx, (_y_in + _y_out_) / 2, FLOOR)):
-                Box(FRONT_BOSS_W, _y_in - _y_out_, z_max,
+        for cx, _cy in rear_column_positions(half, w, h_body):
+            with Locations((cx, y_div, FLOOR - 0.02)):
+                Box(REAR_COL_D + CLEARANCE * 2, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
-    # **ボスの頭はプレートの下面（リム）で止める。**
-    # 以前は基板の下面で止めていた（基板をボスに載せる設計だったため）。
-    # 上ケース方式ではネジは上ケースから入り、プレートはボスの上に載る。
-    bosses = _b.part - cutter
-    # コブの天井と LED 窓は**上シェル**（build_topcase）へ移した（2026-09-05）。
-    # 電池室の仕切り壁。**基板の下面（ソケットの先端）で頭を切る。**
-    #
-    # 電池を前へ動かしたぶん仕切りも前へ来る。前ほど打鍵面が低いので、
-    # 高く立てると傾いた基板を突き上げる（186mm^3 の食い込みとして
-    # 組み立て検査が検出）。ボスと同じく、コンテキストの外で作って外で切る。
-    # **高さは BATT_DIVIDER_H（9.5。定数の注記）。**箱の高さと同じ 16.8 で立てていたのを
-    # 2026-08-29 に下げた（挿入と裏面ガイドの干渉。定数の注記を見ること）。
-    # 切り取りは残す——下げても、手前ほど低い打鍵面では効く場所がある。
+        ex0, _ey0, ex1, _ey1 = battery_opening_ext(half, w, h_body)
+        with Locations(((ex0 + ex1) / 2, y_div, FLOOR - 0.02)):
+            Box((ex1 - ex0) + CLEARANCE * 2, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 子基板の柱（今までどおり床から 4）
+        for dx, dy in DB_BOSS_POS:
+            with Locations((db_x + dx, db_y + dy, FLOOR - 0.01)):
+                Cylinder(DB_BOSS_D / 2, DB_BOSS_H + 0.01, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 電源スイッチの台（受け箱の中に入る）と、手前の止めブロック
+        sw_x = power_switch_x_center(half, w)
+        sw_bot = power_switch_center_z() - SW_PWR_H / 2 - CLEARANCE / 2
+        y_in = y_out - WALL
+        holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB
+        # 台: 受け箱の中（本体の真下）。上面は本体の下面 − 0.1
+        with Locations((sw_x, y_in - (SW_PWR_BODY_D + CLEARANCE) / 2, FLOOR - 0.01)):
+            Box(SW_PWR_W - CLEARANCE, SW_PWR_BODY_D - CLEARANCE, (sw_bot - 0.1) - (FLOOR - 0.01),
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 止めブロック: 本体の手前面 + 逃げ から SW_STOP_T。受け箱の壁の内側に収まる幅。
+        # 端子（縦に 3 本）が通るスリットを中央に開ける
+        _y_stop1 = y_in - (SW_PWR_BODY_D + CLEARANCE) - CLEARANCE
+        with Locations((sw_x, _y_stop1 - SW_STOP_T / 2, FLOOR - 0.01)):
+            Box(SW_PWR_W, SW_STOP_T, SW_STOP_H - (FLOOR - 0.01),
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with Locations((sw_x, _y_stop1 - SW_STOP_T / 2, FLOOR - 0.02)):
+            Box(SW_PWR_PIN_W + CLEARANCE * 2, SW_STOP_T + 0.2, z_max, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # チルト脚の盲穴ボス
+        for fx, fy in _foot_positions(w, h_body):
+            with Locations((fx, fy, FLOOR - 0.01)):
+                Cylinder(FOOT_PEG_D / 2 + 2.0, (FOOT_PEG_H + FOOT_BOSS_CAP) - (FLOOR - 0.01),
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+    from envelopes import under_pcb_base
     cutter_under_pcb = tilted_cutter(w, h_body, under_pcb_base(
         h_plate, rim_front, PLATE_TO_PCB + PCB_T + SOCKET_DROP))
-    y_div = (battery_center(h_body) - BATT_W / 2 - BATT_DIVIDER_T / 2 - CLEARANCE)
-    # **幅は外壁から子基板の場所の手前まで**（2026-09-06・利用者「プレートの受けに
-    # なったので可能な限り伸ばす」）。以前は電池ぶん（BATT_X）だけだった。
-    # 子基板（DB_W・DB_D）はこの y を跨いで座るので、その内縁側だけ空ける
-    _s = inner_sign(half)
-    _x_outer = -_s * (w / 2 - WALL)
-    _x_inner = daughterboard_x_center(half, w) - _s * (DB_W / 2 + CLEARANCE)
-    with BuildPart() as _d:
-        with Locations(((_x_outer + _x_inner) / 2, y_div, FLOOR)):
-            Box(abs(_x_inner - _x_outer), BATT_DIVIDER_T, BATT_DIVIDER_H,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    # 上面は**リム面**（プレートの奥端を受ける）。基板の後ろなので基板の下面で
-    # 切る理由は無くなった（2026-09-06）
-    divider = _d.part - cutter
-    # ケーブル受けの突起（BATT_GUIDE_*）が当たる所だけ BATT_GUIDE_H まで切り下げる
-    _bx0 = battery_x_center(half, w)
-    _sgn = 1 if half == "left" else -1
-    _x_end = _bx0 - _sgn * BATT_X / 2
-    with BuildPart() as _gn:
-        for d in (BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END, BATT_GUIDE_X3_FROM_END):
-            with Locations((_x_end + _sgn * d, y_div, FLOOR + BATT_GUIDE_H)):
-                Box(BATT_GUIDE_W + 2.0, WALL * 2, 30.0,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-    divider = divider - _gn.part
-    # プレートの奥端の棚は上シェルの物になった（build_topcase・2026-09-05）。
+    ups = _up.part - cutter          # リブ・壁の頭はリム面（プレートの下面）
+    # ナットのボスは基板の下面（ソケットの先端）で切る（以前と同じ）
     with BuildPart() as _n:
-        with Locations((0, 0, FLOOR)):
-            Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H,
-                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with Locations((0, 0, FLOOR - 0.01)):
+            Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H + 0.01, align=(Align.CENTER, Align.CENTER, Align.MIN))
     nut_boss = _n.part - cutter_under_pcb
-
-    with BuildPart() as case:
-        # 1. 外形を最大高さまで立ち上げる（コブぶん後ろへずらす）
-        with BuildSketch():
-            with Locations((0, y_off)):
-                RectangleRounded(w, h, CORNER_R)
-        extrude(amount=z_max)
-
-        # 2. 上面を傾いた平面で切り落とす
-        add(cutter_bump, mode=Mode.SUBTRACT)      # 全体をベゼル上面で
-        add(cutter, mode=Mode.SUBTRACT)           # 本体部分はさらにリムまで
-        add(cutter_side_bump, mode=Mode.SUBTRACT)  # コブの側壁もリムまで
-
-        # 3. 内側をくり抜く
-        with BuildSketch(Plane.XY.offset(FLOOR)):
-            with Locations((0, y_off)):
-                RectangleRounded(w - WALL * 2, h - WALL * 2,
-                                 max(CORNER_R - WALL, 0.5))
-        extrude(amount=z_max, mode=Mode.SUBTRACT)
-
-        # 3-2. 合わせ目より上の側壁・手前壁を落とす（上シェルのスカートが
-        #      代わる）。天井・LED 窓・棚は上シェル側。
-        add(skirt_cut, mode=Mode.SUBTRACT)
-
-        # 4. 電池室。後壁ぎわ（コブの中）に置き、仕切り壁と天井を作る。
-        #    天井を張らないと、傾いた基板が電池室の上に落ちてきて衝突する。
-        # 仕切り壁は電池からわずかに離す。ちょうど接する位置に置くと
-        # 干渉として検出される（接触は 0 にならない）。
-        #
-        # **幅は電池ぶんだけ。** 以前は内寸いっぱいに張っていたが、
-        # 内縁側は子基板の場所として空けておく必要がある。
-        add(divider, mode=Mode.ADD)
-        # 天井は張らない。電池の上には基板が来るので、板を入れると
-        # 傾いた基板の下端を突き上げる（2,817mm^3 の食い込みとして検出）。
-        # 電池は 手前=仕切り壁 / 左右と奥=側壁 / 下=蓋 / 上=基板 で保持される。
-
-        # 5. ネジボス。ケースに合体する**前に**頭を基板の下面で切る。
-        #    ケースに合体してから切ると、平面がケース全体に効いてリムまで
-        #    5.1mm 下がる（プレートが沈む）。高さのテストで検出された。
-        add(bosses, mode=Mode.ADD)
-        # **手前のネジは裏から**（2026-09-06・利用者「表のネジは見栄えが悪い。
-        # 頭を底に埋める」）。ボス柱は M2 のバカ穴を床ごと貫き、底に頭の座ぐり。
-        # 雌ねじ（インサート）は上シェルのベゼル手前バーの裏（build_topcase）。
-        # 頭は底面より中に沈むので、振動吸収シートを貼っても平ら。
-        # （バカ穴と座ぐりは底縁の丸めの**後**に切る。関数の末尾。座ぐりは
-        #   底縁から 0.45 で、先に切るとフィレットが失敗する）
-
-        # 6. 電池蓋の開口とレール（底面）
-        #
-        # 順序が肝心。**狭い方を貫通させ、広い方を上側だけ削る**。
-        # 逆にすると（広い開口を先に貫通させてから狭い座ぐりを削ると）、
-        # 蓋を受ける段が一切できない。当初これを間違えており、組み立て検査で
-        # ケースと蓋が食い込むという形で発覚した。
-        # 6-0. 子基板の座（取付ボス 2 本）と、奥の壁の USB-C 切り欠き。
-        #
-        # 蓋の開口より**先に**置く。開口は床を貫通させる操作なので、
-        # あとから足すとボスの根元が削られる。
-        db_x = daughterboard_x_center(half, w)
-        # 子基板もコブの中。USB-C はコブの奥面から出る（実機の USB も同じ面）。
-        y_rear_outer = h_body / 2 + BUMP_DEPTH
-        db_y = y_rear_outer - WALL - DB_FROM_REAR - DB_D / 2
-        for dx, dy in DB_BOSS_POS:
-            with Locations((db_x + dx, db_y + dy, FLOOR)):
-                Cylinder(DB_BOSS_D / 2, DB_BOSS_H,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-            with Locations((db_x + dx, db_y + dy, FLOOR)):
-                Cylinder(M2_INSERT_D / 2, DB_BOSS_H + 1.0, mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥の壁の USB-C。**2 段に切る**（open-gaps #28）。
-        #
-        #   外側 USB_PLUG_ENTRY … ケーブルの樹脂の胴体が入るぶん（12.4x7.4mm）
-        #   内側 XIAO_POCKET_D  … XIAO の端を受けるポケット（外からは見えない）
-        #
-        # **1 段で貫くと、樹脂が入る大きさの穴が壁を貫通する。**外から見て
-        # 大きな口が開き、ほこりも入る。段にすれば、外に見えるのは
-        # 普通の機器と同じ大きさの穴だけで済む。
-        # **小判形（両端が半円）でメスの断面ぴったり**（2026-09-06・利用者の
-        # 指摘「穴が大きすぎる。四角も見栄えが悪い」）。メスの面は外面より
-        # 0.26 外に出る（#30）ので、ケーブルの樹脂は壁に入らない——樹脂用の
-        # 座ぐり（12.4×7.4）は不要で、外に見えるのはこの小判だけ。
-        with BuildSketch(Plane.XZ.offset(-(y_rear_outer + 1.0))):
-            with Locations((db_x, usb_center_z())):
-                RectangleRounded(USB_W, USB_H, USB_HOLE_R)
-        extrude(amount=USB_PLUG_ENTRY + 1.0, mode=Mode.SUBTRACT)
-        # 内側のポケット。**幅は XIAO の外形＋逃げ。**深さは残りの壁。
-        with Locations((db_x, y_rear_outer - WALL + XIAO_POCKET_D / 2,
-                        FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2)):
-            Box(XIAO_OUTLINE_W + CLEARANCE * 2, XIAO_POCKET_D,
-                DB_STACK_H + CLEARANCE * 2, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-
-        # 6-0a. 奥の窓（電池箱の出し入れ口。**案 A・2026-09-05**）
-        #
-        # 電池箱の断面（横倒し: 109 × 16.6）＋逃げを、**床から天井まで**抜く。
-        # 窓の上（箱〜天井）にも壁は残さない——そこは奥板が塞ぎ、板の上縁の
-        # リップが上シェルの天井を押さえる。左は内壁で止める（箱は内壁から
-        # 0.2 しか無い。旧・蓋の口と同じ）。
-        wx0, wz0, wx1, _wz1 = rear_window(half, w)
-        with Locations(((wx0 + wx1) / 2, y_rear_outer - WALL / 2, wz0)):
-            Box(wx1 - wx0, WALL * 3, z_max, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥板が面一で沈む座ぐり（外面から REAR_PLATE_T・左右に FRAME）。
-        # 下は床の上面まで（板は床の上に立つ）。
-        rx0, rx1 = rear_plate_rebate(half, w)
-        with Locations(((rx0 + rx1) / 2, y_rear_outer + 0.5, wz0)):
-            Box(rx1 - rx0, REAR_PLATE_T + 0.5, z_max, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.MAX, Align.MIN))
-        # 奥板の舌が入る床の溝（REAR_TONGUE_* の注記）。外側に受け縁 REAR_LIP_T
-        with Locations(((wx0 + wx1) / 2, y_rear_outer - REAR_LIP_T, FLOOR - REAR_GROOVE_D)):
-            Box((wx1 - wx0) - 2.0, REAR_GROOVE_W, REAR_GROOVE_D + 0.5,
-                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.MAX, Align.MIN))
-        # 電池箱の取付ボス（仕切り壁の手前側に横向きの柱）。箱の床の穴 2 個
-        # （φ2.4・データシート）に M2 を通し、仕切り壁のインサートへ締める。
-        # ドライバーは奥の窓から箱の中を通す（箱の座ぐりに頭が沈む）。
-        _bz = FLOOR + battery_hole_z(half)
-        # **床から立てる**（2026-09-06・利用者の指摘「浮かせる理由がない。
-        # サポートが取れず見栄えが悪い」）。ブロックの下端が床から 1.3 浮いていた。
-        # 柱は仕切り壁の**奥面**（箱の床が当たる面）から手前へ WALL + 2.6。右は
-        # 穴（13.9）が壁の上端（11.9）より高いので、柱が壁の上まで伸びて奥面を作る
-        _yd_rear = y_div + BATT_DIVIDER_T / 2
-        for hx in battery_hole_xs(half, w):
-            with Locations((hx, _yd_rear - (WALL + 2.6) / 2, FLOOR - 0.5)):
-                # 上端は穴の上 2.8（M2_BOSS_D/2 だと 6.4 で右の基板に 0.05 当たる）
-                Box(M2_BOSS_D, WALL + 2.6, (_bz + 2.8) - (FLOOR - 0.5),
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-            with Locations((hx, y_div + BATT_DIVIDER_T / 2 - 2.25 + 0.01, _bz)):
-                Cylinder(M2_INSERT_D / 2, 4.5, rotation=(90, 0, 0),
-                         mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 箱の両端から出るリード線の逃げ（仕切り壁の両端の切り欠き）。
-        _bx = battery_x_center(half, w)
-        for nx in (_bx - BATT_X / 2 + BATT_WIRE_NOTCH / 2,
-                   _bx + BATT_X / 2 - BATT_WIRE_NOTCH / 2):
+    # リード線の逃げ（受けの壁の両端・箱の端の真下）
+    with BuildPart() as _wn:
+        for nx in (bx - BATT_X / 2 + BATT_WIRE_NOTCH / 2, bx + BATT_X / 2 - BATT_WIRE_NOTCH / 2):
             with Locations((nx, y_div, FLOOR)):
-                Box(BATT_WIRE_NOTCH, WALL * 2, BATT_WIRE_NOTCH, mode=Mode.SUBTRACT,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+                Box(BATT_WIRE_NOTCH, WALL * 2, BATT_WIRE_NOTCH, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    ups = ups - _wn.part
 
-        # 6-0b. 電源スイッチのポケットとスロット（奥の壁）
-        #
-        # スイッチは基板に載らない。右アングルなので、壁の内側に掘った
-        # ポケットへ落とし込むと操作部が壁のスロットから外へ出る。
-        # 経緯は docs/hardware/decisions/2026-08-08-power-switch.md。
-        #
-        # **ここは「彫る」のではなく「足す」。**
-        #
-        # 奥の壁の内側は電池室の空洞で、もともと材料が無い。座ぐりを
-        # 掘っても空気を削るだけで、スイッチを受ける面ができない
-        # （最初そう書いて、故意に壊す検査が「壊しても落ちない」形で
-        # 見つけた）。**受けの箱を足してから、中身を抜く。**
-        #
-        # **上から落とし込む溝にする**（2026-08-12・#18 の抜け止め）。
-        #
-        # 以前は手前（ケースの内側）が開いた箱で、そこから押し込む形
-        # だった。**押し込む向きに留めが無い**（利用者の指摘）。
-        # ところが留めを足せない:
-        #   * 本体は壁に当たるまで **3.5mm** しか入らないのに、入口は
-        #     **11mm 奥**（端子 5.0 とリード線のぶん）。入口に爪を置いても
-        #     本体に届かない
-        #   * 奥（深さ 3.5）に爪を置くと、**入れるときに本体が通れない**
-        #   * 撓む爪にするとひずみが PLA の限界を超える（リブ 1.6mm を
-        #     0.5mm 撓ませると ε=3.3%。上限は 1.0%）
-        #
-        # → **爪をやめる。**上を開けた溝にして、スイッチを**上から
-        # 落とし込む。**奥はリブで塞ぐので、押し込む向きは**剛体で**
-        # 止まる。端子は奥のリブの真ん中に開けた縦スリットを通す。
-        # スリットは上まで抜けているので、落とし込むときに一緒に降りる。
-        sw_x = power_switch_x_center(half, w)
-        sw_z = power_switch_center_z()
-        y_rear_inner = y_rear_outer - WALL
-        holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB   # 本体ぶん＋奥のリブ
-        sw_bot = sw_z - SW_PWR_H / 2 - CLEARANCE / 2    # 溝の底（ここに座る）
-        # **床から立てる**（2026-09-06・利用者の指摘。床から 2.6 浮いていて
-        # サポートが要った）。溝の底（sw_bot）から上は変えない
-        with Locations((sw_x, y_rear_inner - holder_d / 2, FLOOR - 0.5)):
-            Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d,
-                (sw_bot + SW_HOLD_H) - (FLOOR - 0.5),
+    part = plate + ups + nut_boss
+    if len(part.solids()) != 1:
+        raise ValueError(f"底板に立てた物が板に付いていない（{len(part.solids())} 個）")
+
+    # 穴（下から）
+    with BuildPart() as _holes:
+        # 手前 3 本＋奥の柱: バカ穴と頭の座ぐり
+        for hx, hy in list(_boss_positions(half)) + list(rear_column_positions(half, w, h_body)):
+            with Locations((hx, hy, -1.0)):
+                Cylinder(M2_CLEAR_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((hx, hy, -1.0)):
+                Cylinder(SCREW_HEAD_D / 2 + HEAD_RECESS_CLR, 1.0 + SCREW_HEAD_H + 0.2,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 電池蓋の開口（貫通。本体＋内端の張り出し）と、蓋の縁が掛かる段（下から FLOOR/2）
+        ox0, oy0, ox1, oy1 = battery_opening(half, w, h_body)
+        for x0, y0, x1, y1 in (battery_opening(half, w, h_body), battery_opening_ext(half, w, h_body)):
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, -1.0)):
+                Box(x1 - x0, y1 - y0, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, -1.0)):
+                Box((x1 - x0) + (LID_LAP + LID_FIT) * 2, (y1 - y0) + (LID_LAP + LID_FIT) * 2,
+                    1.0 + FLOOR / 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 蓋の外端の爪が入るポケット（段を外へ LID_TAB 延ばす。蓋の爪の幅と同じ y 範囲）
+        _s = inner_sign(half)
+        _x_tab_edge = (ox0 if _s > 0 else ox1) - _s * (LID_LAP + LID_FIT)
+        with Locations((_x_tab_edge - _s * (LID_TAB + LID_FIT) / 2, (oy0 + oy1) / 2, -1.0)):
+            Box(LID_TAB + LID_FIT, (oy1 - oy0) * 0.5 + LID_FIT * 2, 1.0 + FLOOR / 2,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 本体の空所。**上へ突き抜けさせる**（落とし込む口）。
-        with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE) / 2,
-                        sw_bot)):
-            Box(SW_PWR_W + CLEARANCE, SW_PWR_BODY_D + CLEARANCE,
-                SW_PWR_H * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 端子の縦スリット（奥のリブを貫く）。**ここも上まで抜く。**
-        # 端子は 3 本・2.5 ピッチで**上下に並ぶ**（本体を縦向きに付けるため）
-        # ので、x 方向には 1 本ぶんの幅で足りる。
-        # ⚠️ **奥へ向かってだけ切る。**深さを 2 倍にして中心に置いたら、
-        # 手前側が**奥の壁を突き抜けて外に出た**（2026-08-12・利用者が
-        # Blender で見て発見。外から本体が見えていた）。
-        # 起点を本体の空所の奥の面に固定し、そこから奥へ抜く。
-        with Locations((sw_x, y_rear_inner - (SW_PWR_BODY_D + CLEARANCE),
-                        sw_bot)):
-            Box(SW_PWR_PIN_W + CLEARANCE, holder_d,
-                SW_PWR_H * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.MAX, Align.MIN))
-        # 指の逃げの窪み（外面から SW_DISH_D）。**スロットより先に掘る。**
-        # 窪みの中心はスイッチの中心ではなく、**空きの中に収まる位置**
-        # （power_switch_dish_x）。スイッチは子基板のポケットで電池側へ寄せ
-        # られるので、中心を揃えると窪みが奥板の座ぐりへはみ出す（2026-09-06）
-        with Locations((power_switch_dish_x(half, w), y_rear_outer - SW_DISH_D / 2, sw_z)):
-            Box(power_switch_dish_w(half, w), SW_DISH_D, SW_DISH_H,
-                mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        _sl0, _sl1 = power_switch_slot_z(half, w)
-        with Locations((sw_x, y_rear_outer, _sl0)):
-            Box(SW_SLOT_W, WALL * 4, _sl1 - _sl0,
-                mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 6-0c. 奥面 3 本目のネジのバカ穴（奥壁を貫いて上シェルのボスへ）
-        _x3, _z3 = rear_screw3(half, w, h_body)
-        with Locations((_x3, y_rear_outer - WALL / 2, _z3)):
-            Cylinder(M2_CLEAR_D / 2, WALL * 3, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.CENTER))
-
-
-
-        # 6-1〜3. **底面の電池蓋は廃止した**（2026-08-12・利用者の決定）。
-        #
-        # 電池の出し入れはコブの奥面の蓋（#35）に移した。底に 109 × 16.6mm の
-        # 貫通穴とレールと蓋が残っていたが、**用途はもう無い。**しかも
-        # それは #35 で「外から開かない」と判定した蓋そのもので、
-        # **裏面に振動吸収シートを貼れなくなる**（利用者が奥面を選んだ
-        # 理由の 1 つ）。**置き換えたのに古い方を消していなかった。**
-        # 床は塞がったままになる（剛性も上がる）。
-
-        # 7. 三脚ネジ穴（1/4-20 の六角ナットを底面から埋め込む）
-        #
-        # **床から立つものは、すべて基板の下面で頭を切る。**
-        # ここだけ切っていなかったため、プレートを実機の高さまで下げたときに
-        # ボスの頂点 11.40mm がソケット下端 8.84mm を突き上げ、
-        # 250mm^3 の食い込みとして検出された。ナット（厚 5.7mm）は
-        # 切ったあとの高さでも完全に収まる。
-        add(nut_boss, mode=Mode.ADD)
-        with Locations((0, 0, 0)):
-            Cylinder(NUT_THRU_D / 2, NUT_BOSS_H + FLOOR * 2, mode=Mode.SUBTRACT,
-                     align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # **ポケットは底面に開いている（下から入れる）。**逃げ 0.30mm では
-        # **持ち上げるとナットが落ちる**（2026-08-12 に発見。利用者の
-        # 「固定が弱いところは無いか」から）。締めれば天井に当たるので
-        # 機能はするが、使わないときに落ちるのは製品として成立しない。
-        #
-        # → **入口だけ狭めて、押し込んだら戻らないようにする。**
-        # 深さ NUT_LIP_H の帯だけ二面幅を NUT_LIP_UNDER 狭くする。
-        # **公差に依存しない**（#11 のクーポン待ちの CLEARANCE を使わない）。
-        # 噛んでいることは test_the_tenting_nut_is_captured が形で確かめる。
+        # 三脚ナット
+        with Locations((0, 0, -1.0)):
+            Cylinder(NUT_THRU_D / 2, NUT_BOSS_H + FLOOR * 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
         _hex_r = NUT_AF / 2 / __import__("math").cos(radians(30))
         with BuildSketch(Plane.XY.offset(NUT_LIP_H)):
             RegularPolygon(_hex_r, 6)
-        extrude(amount=NUT_T - NUT_LIP_H, mode=Mode.SUBTRACT)
-        with BuildSketch(Plane.XY):
-            RegularPolygon(
-                (NUT_AF - NUT_LIP_UNDER) / 2 / __import__("math").cos(radians(30)), 6)
-        extrude(amount=NUT_LIP_H, mode=Mode.SUBTRACT)
-
-        # 8. ゴム足の座ぐりと、チルト脚の差し込み穴（いずれも底面）
+        extrude(amount=NUT_T - NUT_LIP_H)
+        with BuildSketch(Plane.XY.offset(-1.0)):
+            RegularPolygon((NUT_AF - NUT_LIP_UNDER) / 2 / __import__("math").cos(radians(30)), 6)
+        extrude(amount=1.0 + NUT_LIP_H)
+        # ゴム足の座ぐり
         for fx, fy in _rubber_positions(w, h_body):
-            with Locations((fx, fy, 0)):
-                Cylinder(RUBBER_D / 2, RUBBER_RECESS, mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # ピン穴は床(2.4mm)と同深なので、そのまま開けると内部へ貫通する。
-        # メッシュの種数が 4 になって発覚した。内側にボスを立てて盲穴にする。
-        # キャップは FOOT_BOSS_CAP。**ボス頂は 3.6mm に抑える**（真上に
-        # J_MAIN コネクタが 4.31mm まで下がってくる。FOOT_PEG_H の注記）。
-        for fx, fy in _foot_positions(w, h_body):
-            with Locations((fx, fy, 0)):
-                Cylinder(FOOT_PEG_D / 2 + 2.0, FOOT_PEG_H + FOOT_BOSS_CAP,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 穴の奥の溝（返しが開いて噛む場所）。**穴より先に掘らない**
-        # ——順序を変えると、細い穴が太い溝を削り取る。
+            with Locations((fx, fy, -1.0)):
+                Cylinder(RUBBER_D / 2, 1.0 + RUBBER_RECESS, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # チルト脚: 穴の奥の溝、差し込み穴
         for fx, fy in _foot_positions(w, h_body):
             with Locations((fx, fy, FOOT_PEG_H - FOOT_BARB_H)):
-                Cylinder(FOOT_GROOVE_D / 2, FOOT_BARB_H, mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-        for fx, fy in _foot_positions(w, h_body):
-            with Locations((fx, fy, 0)):
-                Cylinder(FOOT_PEG_D / 2 + CLEARANCE / 2, FOOT_PEG_H,
-                         mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-
-        # 最後に外形で切り落とす。
-        # **ボスは壁と一体で、平面図では外形をわずかに越える**（手前のボスは
-        # 0.021mm 出る）。外形を保証するために最後に必ず通す。
-        with BuildSketch():
-            with Locations((0, y_off)):
-                RectangleRounded(w, h, CORNER_R)
-        extrude(amount=z_max, mode=Mode.INTERSECT)
-
-    # 底縁の丸め（BOTTOM_EDGE_R）。床の外周の辺だけ。
-    part = case.part
-    # **外周の辺だけ**（ゴム足の座ぐりの円やナットの穴の辺を含めるとカーネルが
-    # 拒否する。2026-09-05 に R0.5 まで全部失敗した）
-    bb = part.bounding_box()
-    bottom_edges = [e for e in part.edges()
-                    if e.center().Z < 0.01 and e.length > 5.0
-                    and (abs(abs(e.center().X) - bb.max.X) < 3.5
-                         or abs(e.center().Y - bb.min.Y) < 3.5
-                         or abs(e.center().Y - bb.max.Y) < 3.5)]
-    _v0, _b0 = part.volume, part.bounding_box()
-    part = part.fillet(BOTTOM_EDGE_R, bottom_edges)
-    # **フィレットは失敗を黙る**（上シェルの手前 R2 で奥の天井が消えた・
-    # 2026-09-05）。削れた体積が外周 × R² × (1−π/4) の見積りから 30% 以上
-    # ずれたら、どこか別の面を失っている
-    _per = 2 * ((_b0.max.X - _b0.min.X) + (_b0.max.Y - _b0.min.Y))
-    _est = _per * (1 - 3.14159265 / 4) * BOTTOM_EDGE_R ** 2
-    _got = _v0 - part.volume
-    if abs(_got - _est) > 0.3 * _est or len(part.solids()) != 1:
-        raise ValueError(f"底縁の丸めで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
-                         "**カーネルが別の面を失った**")
-    # 手前 3 本のバカ穴（φ2.4・床とボス柱を貫く）と、底の頭の座ぐり（裏からネジ・
-    # 2026-09-06）。丸めの後に切る（上の注記）
-    with BuildPart() as _fh:
-        for bx, by in _boss_positions(half):
-            with Locations((bx, by, -1.0)):
-                Cylinder(M2_CLEAR_D / 2, z_max,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-            with Locations((bx, by, -1.0)):
-                Cylinder(SCREW_HEAD_D / 2 + 0.3, 1.0 + SCREW_HEAD_H + 0.2,
-                         align=(Align.CENTER, Align.CENTER, Align.MIN))
-    part = part - _fh.part
+                Cylinder(FOOT_GROOVE_D / 2, FOOT_BARB_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((fx, fy, -1.0)):
+                Cylinder(FOOT_PEG_D / 2 + CLEARANCE / 2, 1.0 + FOOT_PEG_H, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 子基板の柱のインサート下穴
+        for dx, dy in DB_BOSS_POS:
+            with Locations((db_x + dx, db_y + dy, FLOOR + DB_BOSS_H - (M2_INSERT_L + 1.0))):
+                Cylinder(M2_INSERT_D / 2, M2_INSERT_L + 2.0, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    part = part - _holes.part
     if len(part.solids()) != 1:
-        raise ValueError("バカ穴を切ったら下シェルが分かれた")
-    # 手前の位置決めピンの穴（interface.FRONT_PIN_* の注記）。ピンは**上シェルから
-    # 下向き**（2026-09-06）。ボス上面（リム面）から FRONT_PIN_INTO_LOWER + 逃げ
-    with BuildPart() as _ph:
-        for bx, by in _boss_positions(half):
-            z_rim = rim_front + (by + h_body / 2) * tan(radians(TILT_DEG))
-            for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-                with Locations((bx + dx, by, z_rim - FRONT_PIN_INTO_LOWER - CLEARANCE)):
-                    Cylinder(FRONT_PIN_D / 2 + CLEARANCE, FRONT_PIN_INTO_LOWER + CLEARANCE + 1.0,
-                             align=(Align.CENTER, Align.CENTER, Align.MIN))
-    part = part - _ph.part
-    if len(part.solids()) != 1:
-        raise ValueError("位置決めピンの穴で下シェルが分かれた")
+        raise ValueError(f"底板が穴で分かれた（{len(part.solids())} 個）")
     return part, (w, h_body), (z_front, z_rear)
+
+
+def battery_opening(half, w, h_body):
+    """底板の電池蓋の開口の本体 (x0, y0, x1, y1)。箱の内側（電池が通る所）＋逃げ。
+    **底板・蓋・検査がこの 1 つから取る。**内端の張り出しは battery_opening_ext。"""
+    bx = battery_x_center(half, w)
+    by = battery_center(h_body)
+    x0 = bx - (BATT_X / 2 - BATT_BOX_WALL) - LID_OPEN_CLR
+    x1 = bx + (BATT_X / 2 - BATT_BOX_WALL) + LID_OPEN_CLR
+    y0 = by - (BATT_W / 2 - BATT_BOX_WALL) - LID_OPEN_CLR
+    y1 = by + (BATT_W / 2 - BATT_BOX_WALL) + LID_OPEN_CLR
+    return (x0, y0, x1, y1)
+
+
+def battery_opening_ext(half, w, h_body):
+    """開口の内端の張り出し (x0, y0, x1, y1)。**奥の柱の 1 本目の真下まで**広げ、柱の
+    ネジが蓋を貫いて底板と共締めになるようにする。x は開口の内端から柱の向こう側
+    まで、y は柱の周り（受けの壁とは y で重ならない）。"""
+    s = inner_sign(half)
+    ox0, _oy0, ox1, _oy1 = battery_opening(half, w, h_body)
+    cx, cy = rear_column_positions(half, w, h_body)[0]
+    x_in_open = ox1 if s > 0 else ox0
+    x_col = cx + s * (REAR_COL_D / 2 + LID_OPEN_CLR)
+    return (min(x_in_open, x_col), cy - REAR_COL_D / 2 - LID_OPEN_CLR,
+            max(x_in_open, x_col), cy + REAR_COL_D / 2 + LID_OPEN_CLR)
+
+
+def rear_column_positions(half, w, h_body):
+    """奥の柱（天井から垂らす・底からネジ）の (x, y)。電池箱と子基板の間。
+    左は幅 6.76 に 1 本、右は 40 に 2 本。**1 本目は電池箱に近い側**（電池蓋の
+    内端のネジを兼ねる）。プレートの奥縁より奥（y ≥ 52.5）・スイッチの受け箱の手前。"""
+    s = inner_sign(half)
+    bx = battery_x_center(half, w)
+    db_x = daughterboard_x_center(half, w)
+    x_batt = bx + s * BATT_X / 2            # 電池箱の内縁側の端
+    x_db = db_x - s * DB_W / 2              # 子基板の電池側の端
+    y = REAR_COL_Y
+    gap = abs(x_db - x_batt)
+    if gap < REAR_COL_D + CLEARANCE * 2:
+        raise ValueError(f"{half}: 電池箱と子基板の間 {gap:.2f} に柱 φ{REAR_COL_D} が入らない")
+    first = x_batt + s * (CLEARANCE + REAR_COL_D / 2)
+    if gap < REAR_COL_D * 2 + CLEARANCE * 3 + 4.0:
+        return [(first, y)]
+    return [(first, y), (x_db - s * (CLEARANCE + REAR_COL_D / 2 + 2.0), y)]
+
+
+def build_battery_lid(half, keys):
+    """底板の電池蓋。開口を塞ぐ板（厚み FLOOR）で、外周に幅 LID_LAP・厚み FLOOR/2 の
+    縁が付き、底板の段に半掛かりで嵌まって面一になる。内端は奥の柱の下まで伸び、
+    柱のネジ（底板と共締め）が貫く。外端は爪（LID_TAB）が底板の段の下へ入る。
+    **床面（外面）をベッドに付けて刷る。**"""
+    _positions, (w, h_plate) = plate_positions(keys)
+    h_body = plan_depth(h_plate)
+    s = inner_sign(half)
+    ox0, oy0, ox1, oy1 = battery_opening(half, w, h_body)
+    cx, cy = rear_column_positions(half, w, h_body)[0]
+    with BuildPart() as p:
+        for x0, y0, x1, y1 in (battery_opening(half, w, h_body), battery_opening_ext(half, w, h_body)):
+            # 本体（開口に入る部分。逃げ LID_FIT）
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, 0)):
+                Box((x1 - x0) - LID_FIT * 2, (y1 - y0) - LID_FIT * 2, FLOOR,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+            # 縁（段に掛かる）
+            with Locations(((x0 + x1) / 2, (y0 + y1) / 2, 0)):
+                Box((x1 - x0) + LID_LAP * 2, (y1 - y0) + LID_LAP * 2, FLOOR / 2,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 外端の爪: 縁の外側へ LID_TAB 伸ばす（底板の段の下へ差し込む）
+        x_tab = (ox0 if s > 0 else ox1) - s * LID_LAP
+        with Locations((x_tab, (oy0 + oy1) / 2, 0)):
+            Box(LID_TAB * 2, (oy1 - oy0) * 0.5, FLOOR / 2, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 柱のネジ: バカ穴と頭の座ぐり（下から）
+        with Locations((cx, cy, -1.0)):
+            Cylinder(M2_CLEAR_D / 2, FLOOR + 2.0, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        with Locations((cx, cy, -1.0)):
+            Cylinder(SCREW_HEAD_D / 2 + HEAD_RECESS_CLR, 1.0 + SCREW_HEAD_H + 0.2, mode=Mode.SUBTRACT,
+                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+    if len(p.part.solids()) != 1:
+        raise ValueError("電池蓋が分かれている")
+    return p.part, ((ox1 - ox0) + LID_LAP * 2, (oy1 - oy0) + LID_LAP * 2)
 
 
 def battery_center(h_body):
@@ -1310,12 +1004,12 @@ def power_switch_free_span(half, w):
     だから窪みの幅は定数ではなく、**ここで決まる。**
     """
     bx, dx = battery_x_center(half, w), daughterboard_x_center(half, w)
-    _rx0, rx1 = rear_plate_rebate(half, w)
-    lo = max(bx + BATT_X / 2, rx1)          # 電池と蓋の座ぐりの右端
+    # 2026-09-06（器の案）: 奥板と座ぐりは無くなった。空きは電池箱の端と
+    # 子基板のポケットの間
+    lo = bx + BATT_X / 2                    # 電池箱の右端
     hi = dx - DB_W / 2                      # 子基板のポケットの左端
     if half == "right":                     # 左右で並びが反転する
-        _rx0b = rear_plate_rebate(half, w)[0]
-        lo, hi = dx + DB_W / 2, min(bx - BATT_X / 2, _rx0b)
+        lo, hi = dx + DB_W / 2, bx - BATT_X / 2
     return (lo, hi) if lo < hi else (hi, lo)
 
 
@@ -1493,23 +1187,14 @@ def _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max, pose):
 
 
 def build_topcase(keys, half):
-    """上シェル（ベゼル＋コブ天井＋スカート）。**2026-09-05・案 A。**
+    """上シェル＝**ベゼル面＋四方の壁の器**（2026-09-06・器の案）。
 
-    合わせ目（SEAM_Z）より上の側壁・手前壁を持ち、下シェルの壁を外側から
-    被る。天井も持つので、奥板のリップに押さえられて奥が浮かない（#12）。
-    見せ面（ベゼル面＋コブ天井）は**一枚の 7.3° の平面**なので、裏返して
-    ベッドに置いて刷る。
-
-    断面（前縁）::
-
-        17.50 ┬─────┐                    ベゼル上面＝手前端（実機基準）
-              │     │
-        10.99 │     └────────┐           プレート上面（内側はここに載る）
-         9.49 │     ┌────────┘           リム（プレートを受ける 1.2 の段）
-         9.00 └─────┘                    スカートの下端＝合わせ目
-              ├2.4mm┤                    壁（相欠きの帯だけ 1.2）
-
-    **数字は PLATE_TOP_FRONT から導かれる。**
+    壁は机まで下り、下端の 2.4 は外皮 BOTTOM_SKIN だけを残して内側を 45° に
+    落とす。底板はその内側に嵌まり、斜面に載る。継ぎ目は底面だけ。
+    **ベゼル面をベッドに付けて裏返して刷る**ので、天井から垂らす物（手前の
+    ネジ受け・奥の柱・電池箱のボス・電源スイッチの受け箱）はベッドから立つ。
+    奥壁に USB-C・XIAO のポケット・スイッチのスロットと窪み、天井に LED 窓。
+    プレートは壁（WALL）の内側にリム面で入り、ベゼルの縁が押さえる。
     """
     positions, (w, h_plate) = plate_positions(keys)
     h_body = plan_depth(h_plate)
@@ -1520,234 +1205,180 @@ def build_topcase(keys, half):
     key_h = h_body - PLATE_MARGIN_Y * 2
     rim = PLATE_TOP_FRONT - PLATE_T
     z_max = BEZEL_TOP_FRONT + h * tan(radians(TILT_DEG)) + 5.0
+    z_hang = FLOOR + BOTTOM_FIT                 # 垂らす物の下端（底板の上面 + 逃げ）
 
-    # 切削・保持用の立体はコンテキストの外で作る（中で作ると即座に合体される）。
     cut_above_top = tilted_cutter(w, h_body, BEZEL_TOP_FRONT)
     above_rim = tilted_cutter(w, h_body, rim)
-    above_seam = tilted_cutter(w, h_body, rim - SKIRT_LAP)    # 合わせ目（SKIRT_LAP の注記）
     under_ceiling = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL)
-    # 空洞 1: スカート SKIRT_T の内側、リム面より下（本体・コブとも。ここに
-    # 下シェルの側壁の帯と中身——基板・電池・子基板——が入る。**プレートを
-    # 受ける段は作らない**（受けるのは下シェル。SKIRT_T の注記）。
-    # **本体とコブの境に壁を作らない**（子基板と電池箱が境をまたぐ）。
-    with BuildPart() as _cav:
-        with BuildSketch():
-            with Locations((0, y_off)):
-                RectangleRounded(w - SKIRT_T * 2, h - SKIRT_T * 2, max(CORNER_R - SKIRT_T, 0.5))
-        extrude(amount=z_max)
-    cav_below_rim = _cav.part - above_rim
-    # 空洞 2: コブ（y > 本体の奥端）は天井の下面まで。リムより上は壁 WALL の内側
-    # （上シェルの側壁が 2.4 で立つ）、リムより下はスカート SKIRT_T の内側（相欠き）。
-    # 2026-09-06 までは全高でスカートの内側だった（下シェルの帯が天井まで立ち、
-    # 相欠きが奥で 7mm になっていた。REAR_CORNER_GAP の注記）
-    with BuildPart() as _cavb:
-        with BuildSketch():
-            with Locations((0, y_off)):
-                RectangleRounded(w - SKIRT_T * 2, h - SKIRT_T * 2, max(CORNER_R - SKIRT_T, 0.5))
-        extrude(amount=z_max)
+
+    def _inset(d):
+        with BuildPart() as _c:
+            with BuildSketch():
+                with Locations((0, y_off)):
+                    RectangleRounded(w - d * 2, h - d * 2, max(CORNER_R - d, 0.5))
+            extrude(amount=z_max)
+        return _c.part
+    # 空洞: 壁 WALL の内側。本体はリム面まで、コブは天井の下面まで
+    cav_below_rim = _inset(WALL) - above_rim
+    # ⚠️ intersect は ShapeList を返すことがあり、その後の引き算が効かない（天井が
+    # 丸ごと消えた）。**引き算だけで作る**: 本体側（y < h_body/2）を引いてから天井を引く
+    with BuildPart() as _front_zone:
         with Locations((0, h_body / 2 - 100, 0)):
-            Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    with BuildPart() as _cavb2:
-        with BuildSketch():
+            Box(w * 3, 200, z_max * 3, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    cav_bump = (_inset(WALL) - _front_zone.part) - under_ceiling
+    def _front_zone_inv():                       # コブ側（y > h_body/2 − CLEARANCE）を引く箱
+        with BuildPart() as _bz:
+            with Locations((0, h_body / 2 - CLEARANCE + 100, 0)):
+                Box(w * 3, 200, z_max * 3, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        return _bz.part
+    # 壁の下端: 外皮 BOTTOM_SKIN だけ残し、内側を 45° に落とす（底板の斜面が載る）。
+    # 外皮の内側の空洞（z < BOTTOM_CHAMFER）＋斜面のロフト（BOTTOM_CHAMFER〜FLOOR）
+    with BuildPart() as _sk:
+        with BuildSketch(Plane.XY.offset(-1.0)):
+            with Locations((0, y_off)):
+                RectangleRounded(w - BOTTOM_SKIN * 2, h - BOTTOM_SKIN * 2, max(CORNER_R - BOTTOM_SKIN, 0.5))
+        extrude(amount=1.0 + FLOOR)
+    with BuildPart() as _ch:
+        with BuildSketch(Plane.XY.offset(FLOOR)):
+            with Locations((0, y_off)):
+                RectangleRounded(w - BOTTOM_SKIN * 2, h - BOTTOM_SKIN * 2, max(CORNER_R - BOTTOM_SKIN, 0.5))
+        with BuildSketch(Plane.XY.offset(FLOOR + BOTTOM_CHAMFER)):
             with Locations((0, y_off)):
                 RectangleRounded(w - WALL * 2, h - WALL * 2, max(CORNER_R - WALL, 0.5))
-        extrude(amount=z_max)
-        with Locations((0, h_body / 2 - 100, 0)):
-            Box(w * 3, 200, z_max * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    cav_bump = ((_cavb.part - above_rim) + _cavb2.part.intersect(above_rim)) - under_ceiling
-    # プレートの座ぐり: 壁 BEZEL_WALL の内側、リム面より上・プレート上面+0.1 より下。
-    # プレート上面から 0.1mm 逃がす。**当たりにはしない。**公差が未確定
-    # （#11）なので、押し付ける設計にすると個体差でプレートが反る。
-    with BuildPart() as _inner:
-        with BuildSketch():
-            RectangleRounded(w - BEZEL_WALL * 2, h_body - BEZEL_WALL * 2,
-                             max(CORNER_R - BEZEL_WALL, 0.5))
-        extrude(amount=z_max)
-    # ⚠️ **`.intersect(...)` の結果から `-` で引いてはいけない。**引き算が効かず、
-    # リム面より上の材料が丸ごと消えた（2026-09-05。ベゼルの縁が全周で無くなり、
-    # 利用者が .blend で「押さえられていない」と指摘。私は数字で確かめる前に
-    # 「押さえている」と 2 度言った）。**引いてから intersect** の順にする。
-    # ⚠️ **リム面より下まで引いてはいけない。**一度「リムより下は空洞だから
-    # intersect は要らない」と書いて、リムより下に**後から足す棚**まで削った
-    # （2026-09-05。test_the_plate_rear_edge_rests_on_the_case が捕まえた。
-    # 棚の無い上シェルを利用者が刷り始めていた）。引いてから intersect。
-    rebate = (_inner.part - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1)
-              ).intersect(above_rim)
-    # 奥壁の平らな部分（|x| < w/2 − CORNER_R + GAP）は下シェルが全高で持つ。上シェルは
-    # そこでは天井だけ。角の丸みは上シェルの側壁が回る（REAR_CORNER_GAP の注記）
-    _xk0, _xk1 = rear_wall_keep_x(half, w)
-    _xg0 = _xk0 - (REAR_CORNER_GAP if inner_sign(half) < 0 else 0.0)   # 内縁側だけ隙間
-    _xg1 = _xk1 + (REAR_CORNER_GAP if inner_sign(half) > 0 else 0.0)
-    with BuildPart() as _rc:
-        with Locations(((_xg0 + _xg1) / 2, y_out - WALL - CLEARANCE + 100, 0)):
-            Box(_xg1 - _xg0, 200, z_max * 3,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    rear_corner_cut = _rc.part - under_ceiling
-    # 奥板の座ぐりは角の丸みに 0.4 掛かる（外皮 1.0 まで広げてある）ので、上シェルの
-    # 角にも同じ座ぐりを切る（天井より下だけ）
-    _rx0, _rx1 = rear_plate_rebate(half, w)
-    with BuildPart() as _rb:
-        with Locations(((_rx0 + _rx1) / 2, y_out + 0.5, 0)):
-            Box(_rx1 - _rx0, REAR_PLATE_T + 0.5, z_max * 3,
-                align=(Align.CENTER, Align.MAX, Align.MIN))
-    rebate_top = _rb.part - under_ceiling
-    # 手前壁の帯（y < 手前の外面 + WALL）は下シェルが全高で持つ。上シェルは
-    # リム面より下を持たない（突き合わせ。SEAM_Z の注記）
-    with BuildPart() as _fc:
-        with Locations((0, -h_body / 2 + WALL + CLEARANCE - 100, 0)):
-            Box(w * 3, 200, z_max * 3, align=(Align.CENTER, Align.CENTER, Align.MIN))
-    front_cut = _fc.part - above_rim
-    # 天井は奥面まで通常の厚みで通す。奥板はその下に立つ（リップを
-    # 消した経緯は定数の所）。
-    # 奥の桟（奥板のネジ 2 本を受ける）。天井の下・窓の x 範囲・奥板の手前。
-    wx0, _, wx1, _ = rear_window(half, w)
-    rail_y0, rail_y1 = rear_rail_y(h_body)
-    rail_z0 = rear_rail_z0(h_body)
-    if rail_z0 < FLOOR + BATT_H + 1.0:
-        raise ValueError(f"{half}: 奥の桟の下端 {rail_z0:.2f} が電池箱の上面 "
-                         f"{FLOOR + BATT_H:.2f} に 1mm 以内。桟を薄くすること")
-    with BuildPart() as _rail:
-        with Locations(((wx0 + wx1) / 2, (rail_y0 + rail_y1) / 2, rail_z0)):
-            Box((wx1 - wx0) - 1.0, REAR_RAIL_D, REAR_RAIL_H + 8.0,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    rail = _rail.part - cut_above_top
-    # 奥面 3 本目のネジを受けるボス（桟と同じ高さ・奥壁の内面に接する）
-    _x3, _z3 = rear_screw3(half, w, h_body)
-    with BuildPart() as _b3:
-        with Locations((_x3, y_out - WALL - CLEARANCE - REAR_RAIL_D / 2, rail_z0)):
-            Box(REAR_SCREW3_BOSS_W, REAR_RAIL_D, REAR_RAIL_H + 8.0,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-    boss3 = _b3.part - cut_above_top
-    # 電源スイッチの押さえ柱（天井から溝の上 0.3mm まで）。溝は上が開いて
-    # いる（落とし込むため）ので、上シェルが上への抜けを塞ぐ。
-    from envelopes import SW_PWR_BODY_D, SW_PWR_H
-    sw_x = power_switch_x_center(half, w)
-    sw_bot = power_switch_center_z() - SW_PWR_H / 2 - CLEARANCE / 2
-    holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB
-    _yk = y_out - WALL - holder_d / 2
-    _z_tip = sw_bot + SW_PWR_H + 0.3
-    _z_ceil = (BEZEL_TOP_FRONT - WALL) + (_yk + h_body / 2) * tan(radians(TILT_DEG))
-    # **先細りの柱**（2026-09-06 根元の強化・利用者「その直し方で強度は上がったか」）。
-    # 最初は根元に 1.5 の台座を足したが、柱そのものは 4×4 のままで、曲げの最大は
-    # 台座のすぐ上に移るだけだった。根元へ向かって断面を広げると、曲げモーメントが
-    # 大きい所ほど断面も大きく、根元の応力は 4×4 の柱の 1/2.6。先端は 4×4 のまま
-    # （スイッチの上面に当たる所）。奥側は下シェルの奥壁の内面まで 0.45 しか無いので
-    # SW_KEEPER_ROOT_REAR に抑える。裏返して刷ると根元（広い方）が下なので支え不要
-    with BuildPart() as _kp:
-        with BuildSketch(Plane.XY.offset(_z_tip)):
-            with Locations((sw_x, _yk)):
-                Rectangle(SW_KEEPER, SW_KEEPER)
-        with BuildSketch(Plane.XY.offset(_z_ceil + 1.0)):
-            with Locations((sw_x, _yk + (SW_KEEPER_ROOT_REAR - SW_KEEPER_ROOT) / 2)):
-                Rectangle(SW_KEEPER + SW_KEEPER_ROOT * 2,
-                          SW_KEEPER + SW_KEEPER_ROOT + SW_KEEPER_ROOT_REAR)
         loft()
-    keeper = _kp.part - cut_above_top
-    # プレートの奥端の受けは下シェルの仕切り壁（2026-09-06。上シェルの棚は
-    # 裏返して刷ると庇になって刷れなかった）。上シェルは奥のバー（座ぐりの壁）
-    # で y 方向の位置を決めるだけ
-    # LED の窓（#43）。XIAO の真上の天井を、外面から LED_WIN_SKIN だけ残して
-    # 内側から薄くする。奥壁の内面より奥へは食い込ませない（#43 の注記）。
+    bottom_recess = _sk.part + _ch.part
+    # プレートの通り道（手前と左右の壁を BEZEL_WALL 1.2 に）: 本体側（y < h_body/2）の
+    # 壁の内側 1.2 を、底からプレート上面 + 0.1 まで抜く。ベゼルの縁（その上）と
+    # コブの壁は WALL のまま。内側の 1.2 は底板のリブが埋める（BEZEL_WALL の注記）。
+    # 裏返して刷ると壁はベッドから離れるほど薄くなるだけで、張り出しは無い
+    thin_cav = ((_inset(BEZEL_WALL) - _front_zone_inv()) - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1))
+    # プレートの座ぐり（リム面より上・プレート上面 + 0.1 より下）。thin_cav と重なるが、
+    # 上の定義を残す（ベゼルの縁の下端をここで決めている）
+    # **プレートのある y の範囲だけ**（奥縁 + 逃げまで）。コブの中まで切ると、天井から
+    # 垂らした柱・ボスがリム面〜プレート上面の帯で輪切りになる（最初そうなった）
+    with BuildPart() as _pz:                     # プレートより奥（引く側）
+        with Locations((0, (h_body / 2 - BEZEL_WALL + CLEARANCE) + 100, 0)):
+            Box(w * 3, 200, z_max * 3, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    rebate = ((_inset(BEZEL_WALL) - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1) - _pz.part)
+              .intersect(above_rim))
+
+    # 天井から垂らす物（すべて z_hang から上へ。ベゼル上面で切る）
+    with BuildPart() as _hang:
+        # 手前のネジ受け（壁と一体の角柱。プレートの切り欠きを通り、底板の上まで）
+        for bx, by in _boss_positions(half):
+            _y_in = -PCB_FRONT_EDGE_PLAN + CLEARANCE
+            _y_out_ = -h_body / 2 - 1.0
+            with Locations((bx, (_y_in + _y_out_) / 2, z_hang)):
+                Box(FRONT_BOSS_W, _y_in - _y_out_, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 奥の柱（電池箱と子基板の間）
+        for cx, cy in rear_column_positions(half, w, h_body):
+            with Locations((cx, cy, z_hang)):
+                Cylinder(REAR_COL_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 電池箱のボス（箱の床の穴の真上。箱の上面 + 逃げから天井まで）
+        _bz_top = FLOOR + BATT_STAND + BATT_H + CLEARANCE / 2
+        _by_hole = battery_center(h_body) - BATT_W / 2 + battery_hole_z(half)
+        for hx in battery_hole_xs(half, w):
+            with Locations((hx, _by_hole, _bz_top)):
+                Cylinder(BATT_BOSS_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 電源スイッチの受け箱（左右の壁＋天井。奥は壁の内面、手前と下は開く。
+        # 本体は壁の内面に当たり、手前は底板の止めブロック、下は底板の台）
+        sw_x = power_switch_x_center(half, w)
+        sw_bot = power_switch_center_z() - SW_PWR_H / 2 - CLEARANCE / 2
+        y_in = y_out - WALL
+        holder_d = SW_PWR_BODY_D + CLEARANCE + SW_RIB
+        with Locations((sw_x, y_in - holder_d / 2, sw_bot)):
+            Box(SW_PWR_W + CLEARANCE + SW_RIB * 2, holder_d, z_max,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+    hang = _hang.part - cut_above_top
+    # 受け箱の中身: 本体の空所。壁の内面から手前へ開く（**壁は切らない**）
+    # 手前へは受け箱の口を開けるだけ（20 まで伸ばしたら奥の柱を輪切りにした）
+    with BuildPart() as _sv:
+        with Locations((sw_x, y_in + 0.05, sw_bot - 1.0)):      # 壁の内面に 0.05 食い込ませる
+            Box(SW_PWR_W + CLEARANCE, holder_d + 0.55, 1.0 + SW_PWR_H + CLEARANCE,
+                align=(Align.CENTER, Align.MAX, Align.MIN))
+    sw_void = _sv.part
+
+    # LED の窓（#43）。XIAO の真上の天井を外面から LED_WIN_SKIN だけ残して薄くする
     _led_x = daughterboard_x_center(half, w) + XIAO_LED_DX
     _led_y = (y_out - WALL - DB_FROM_REAR - DB_D / 2 + XIAO_LED_DY)
     with BuildPart() as _lw:
         with Locations((_led_x, _led_y, FLOOR)):
             Cylinder(LED_WIN_D / 2, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
         with Locations((0, y_out - WALL + 50, 0)):
-            Box(w * 2, 100, z_max * 3, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+            Box(w * 2, 100, z_max * 3, mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.CENTER))
     led_window_void = _lw.part - tilted_cutter(w, h_body, BEZEL_TOP_FRONT - LED_WIN_SKIN)
     pose = plate_placement(w, h_plate)
     blank_covers = _bottom_blank_covers(positions, keys, key_w, key_h, w, h_body, z_max, pose)
-
-    # キーの開口。**プレートと同じ 7.3° に傾けて切る**（2026-09-05）。
-    # 垂直に切ると開口の壁とキャップの面が 7.3° ずれ、手前段ではキャップが
-    # 上へ行くほど縁に近づく（箱モードで 0.03mm³ 触れた。旧・隙間 0.9 でも
-    # 縁との余裕は 0.18 しか無く、奥の段は逆に広すぎた）。傾けて切れば
-    # 全段で隙間が BEZEL_OPENING_GAP になる（実機 §4 の 5「窪んだトレイ」）。
     with BuildPart() as _op:
         with BuildSketch():
-            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2,
-                             key_h + BEZEL_OPENING_GAP * 2, 1.5)
+            RectangleRounded(key_w + BEZEL_OPENING_GAP * 2, key_h + BEZEL_OPENING_GAP * 2, 1.5)
         extrude(amount=100.0, both=True)
     opening_cut = pose * _op.part
 
+    db_x = daughterboard_x_center(half, w)
     with BuildPart() as top:
         with BuildSketch():
             with Locations((0, y_off)):
                 RectangleRounded(w, h, CORNER_R)
         extrude(amount=z_max)
-        add(above_seam, mode=Mode.INTERSECT)                 # 合わせ目より下は無い
         add(cav_below_rim, mode=Mode.SUBTRACT)
         add(cav_bump, mode=Mode.SUBTRACT)
-        add(rear_corner_cut, mode=Mode.SUBTRACT)
-        add(rebate_top, mode=Mode.SUBTRACT)
-        add(front_cut, mode=Mode.SUBTRACT)
-        add(rail, mode=Mode.ADD)
-        add(boss3, mode=Mode.ADD)
-        add(keeper, mode=Mode.ADD)
-        add(cut_above_top, mode=Mode.SUBTRACT)       # ベゼル上面で切る
-        add(rebate, mode=Mode.SUBTRACT)              # プレートが入る座ぐり
+        add(bottom_recess, mode=Mode.SUBTRACT)
+        add(thin_cav, mode=Mode.SUBTRACT)
+        add(hang, mode=Mode.ADD)
+        add(sw_void, mode=Mode.SUBTRACT)
+        add(cut_above_top, mode=Mode.SUBTRACT)
+        add(rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
-        # キーの開口（プレートと同じ姿勢。上の opening_cut の注記）
         add(opening_cut, mode=Mode.SUBTRACT)
-        # 最下段の無キー帯を覆う（2026-08-24・利用者の指摘。実機は最下段の
-        # 左右の余白を筐体の面で覆っている）
         add(blank_covers, mode=Mode.ADD)
-        # 手前のネジ（3 箇所）は**裏から**（2026-09-06）。ベゼル手前バーの裏
-        # （プレートの座ぐりの天井）から上へインサートの下穴。表は無傷。
-        # バーの高さ 6.5 に対しインサート 4.0 で、上面までの肉は 2.5
-        # 座はプレート上面 + FRONT_INSERT_LIFT（0.1 だと傾きの端数でプレートに
-        # 0.18 食う）。下穴はインサートより 1.0 深く（M2×14 の先端の逃げ）
-        for bx, by in _boss_positions(half):
-            z_seat = front_insert_seat_z(by, h_body)
-            with Locations((bx, by, z_seat - 0.5)):
-                Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.0, mode=Mode.SUBTRACT,
+        # 奥壁: USB-C の小判穴と XIAO のポケット
+        with BuildSketch(Plane.XZ.offset(-(y_out + 1.0))):
+            with Locations((db_x, usb_center_z())):
+                RectangleRounded(USB_W, USB_H, USB_HOLE_R)
+        extrude(amount=USB_PLUG_ENTRY + 1.0, mode=Mode.SUBTRACT)
+        with Locations((db_x, y_out - WALL + XIAO_POCKET_D / 2, FLOOR + DB_BOSS_H + DB_T + DB_STACK_H / 2)):
+            Box(XIAO_OUTLINE_W + CLEARANCE * 2, XIAO_POCKET_D, DB_STACK_H + CLEARANCE * 2,
+                mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        # 奥壁: 電源スイッチの窪みとスロット
+        sw_z = power_switch_center_z()
+        with Locations((power_switch_dish_x(half, w), y_out - SW_DISH_D / 2, sw_z)):
+            Box(power_switch_dish_w(half, w), SW_DISH_D, SW_DISH_H, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.CENTER))
+        _sl0, _sl1 = power_switch_slot_z(half, w)
+        with Locations((sw_x, y_out, _sl0)):
+            Box(SW_SLOT_W, WALL * 4, _sl1 - _sl0, mode=Mode.SUBTRACT,
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 手前のネジの頭の座ぐりは底板の縁（外面から 1.3）を 0.39 越える（ネジ中心は
+        # 基板の縁で決まり動かせない）。**外皮の下端にも同じ座ぐりを切る**（外皮 1.2 の
+        # うち内側 0.3 を頭の高さぶんだけ。外からは見えない）
+        for hx, hy in _boss_positions(half):
+            with Locations((hx, hy, -1.0)):
+                Cylinder(SCREW_HEAD_D / 2 + HEAD_RECESS_CLR, 1.0 + SCREW_HEAD_H + 0.2, mode=Mode.SUBTRACT,
                          align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 奥板のネジ（桟へ横向きに。熱圧入インサートの下穴）
-        for sx, sz in rear_screw_positions(half, w, h_body):
-            with Locations((sx, rail_y1 - 2.5 + 0.01, sz)):
-                Cylinder(M2_INSERT_D / 2, 5.0, rotation=(90, 0, 0), mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
-        # 3 本目（奥壁の内面に接するボスへ）。**下穴はボスを貫く。**ネジは
-        # M2×8 で先端がボスの奥面から 7.4 入る。深さ 5.0 だと先端が底に
-        # 0.41 当たる（箱モードで 1.29mm³・2026-09-05）
-        with Locations((_x3, y_out - WALL - CLEARANCE - (REAR_RAIL_D + 1.0) / 2 + 0.01, _z3)):
-            Cylinder(M2_INSERT_D / 2, REAR_RAIL_D + 1.0, rotation=(90, 0, 0),
-                     mode=Mode.SUBTRACT, align=(Align.CENTER, Align.CENTER, Align.CENTER))
-    # 手前面の傾き（FRONT_FACET_*）: 上端から FRONT_FACET_H の帯を、上端を
-    # 支点に 12° 内側へ倒した平面で切る。外形は変わらない（上端が最前点）。
-    y_front = -h_body / 2
-    z_edge = BEZEL_TOP_FRONT
-    # X 軸まわり +θ: 面の下端（局所 z<0）が +y（内側）へ倒れる。−θ にすると
-    # 外へ倒れて何も切れない（2026-09-05 に実際にそうなった。z=14 で 0.0）
+        # 垂らした物の下端のインサート下穴（底からのネジ）: 手前 3・奥の柱
+        # 下穴はインサート + 1.5（M2×6 の先端: 底板 0.6 ＋ 逃げ 0.1 ＋ 5.3 → 1.3 余る）
+        for hx, hy in list(_boss_positions(half)) + list(rear_column_positions(half, w, h_body)):
+            with Locations((hx, hy, z_hang - 0.5)):
+                Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.5, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 電池箱のボスの下穴（箱の中から上へ）
+        for hx in battery_hole_xs(half, w):
+            with Locations((hx, _by_hole, _bz_top - 0.5)):
+                Cylinder(M2_INSERT_D / 2, 0.5 + M2_INSERT_L + 1.5, mode=Mode.SUBTRACT,
+                         align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 最後に外形で切り落とす（角柱は外形をわずかに越える）
+        with BuildSketch():
+            with Locations((0, y_off)):
+                RectangleRounded(w, h, CORNER_R)
+        extrude(amount=z_max, mode=Mode.INTERSECT)
     part = top.part
-    if FRONT_FACET_H > 0:
-        wedge = (Location((0, y_front, z_edge), (FRONT_FACET_DEG, 0, 0))
-                 * Box(w * 3, 20.0, FRONT_FACET_H * 3,
-                       align=(Align.CENTER, Align.MAX, Align.CENTER)))
-        # 帯の下端より下は切らない（垂直のまま）
-        with BuildPart() as _fw:
-            add(wedge)
-            with Locations((0, 0, z_edge - FRONT_FACET_H)):
-                Box(w * 3, 200, 100, mode=Mode.INTERSECT,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-        part = part - _fw.part
-    # 上端の縁を丸める（手前だけ。左右はカーネルが拒否する）
-    bb = part.bounding_box()
-    front_edges = [e for e in part.edges()
-                   if e.center().Z > z_edge - 1.0 and e.center().Y < bb.min.Y + 2.0
-                   and e.length > 20.0]
-    # 開口と覆いの上縁を面取り（OPENING_CHAMFER）。プレート座標でベゼル上面の
-    # 高さにあり、開口の内側にある辺を選ぶ。**削れた体積を見積りと突き合わせ、
-    # カーネルが別の面を失っていないことを確かめる**（フィレットの教訓）
+    if len(part.solids()) != 1:
+        raise ValueError(f"上シェルが {len(part.solids())} 個に分かれている")
+    # 開口と覆いの上縁の面取り（OPENING_CHAMFER。体積の門つき）
     if OPENING_CHAMFER > 0:
         _inv = pose.inverse()
         _z_top_local = BEZEL_TOP_FRONT - PLATE_TOP_FRONT + PLATE_T
-        # 手前の縁も含む。表のネジ頭の座ぐりが開口の縁から 0.36 しか無くて
-        # 面取りが失敗していたが、ネジを裏へ移して座ぐりが消えた（2026-09-06）
         _edges = [e for e in part.edges()
                   if abs((_inv * e).center().Z - _z_top_local) < 0.3
                   and abs((_inv * e).center().X) < key_w / 2 + 3.0
@@ -1763,106 +1394,21 @@ def build_topcase(keys, half):
                 or abs(_b1.max.Z - _b0.max.Z) > 1e-3 or abs(_b1.max.Y - _b0.max.Y) > 1e-3):
             raise ValueError(f"開口の面取りで {_got:.0f}mm³ 減った（見積り {_est:.0f}）。"
                              "**カーネルが別の面を失った**")
-    # 手前の位置決めピン（ビスの左右・interface.FRONT_PIN_* の注記）。インサートの
-    # 座（バーの裏）から**下向き**、プレートの切り欠きを通って下シェルのボスの穴へ。
-    # 先端に面取り。**コンテキストの外で作る**（面取り前の円柱が合体される）
-    from build123d import Solid
-    _pin_list = []
-    for bx, by in _boss_positions(half):
-        z_seat = front_insert_seat_z(by, h_body)
-        z_rim = z_seat - FRONT_INSERT_LIFT - PLATE_T
-        _len = (z_seat + 0.5) - (z_rim - FRONT_PIN_INTO_LOWER)
-        for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-            c = Solid.make_cylinder(FRONT_PIN_D / 2, _len)               # z 0.._len
-            c = c.chamfer(FRONT_PIN_TIP, None,
-                          [e for e in c.edges() if abs(e.center().Z) < 1e-6])
-            _pin_list.append(Location((bx + dx, by, z_rim - FRONT_PIN_INTO_LOWER)) * c)
-            # 根元の裾（2026-09-06 根元の強化）: バーの裏に φ2 で立つ柱の付け根に
-            # 円錐の裾。高さは座とプレート上面の隙（FRONT_INSERT_LIFT）の中
-            _root = Solid.make_cone(FRONT_PIN_D / 2, FRONT_PIN_D / 2 + FRONT_PIN_ROOT, FRONT_PIN_ROOT)
-            _pin_list.append(Location((bx + dx, by, z_seat - FRONT_PIN_ROOT)) * _root)
-    for _q in _pin_list:
-        part = part + _q
-    if len(part.solids()) != 1:
-        raise ValueError("位置決めピンが上シェルに融合していない")
-    if FRONT_EDGE_R > 0:
-        if not front_edges:
-            raise ValueError("手前の上縁が見つからない（丸める対象が無い）")
-        _before = part.bounding_box()
-        part = part.fillet(FRONT_EDGE_R, front_edges)
-        _after = part.bounding_box()
-        # **フィレットは失敗を黙る。**外形（丸めた辺以外）が動いたら止める
-        if abs(_after.max.Z - _before.max.Z) > 1e-3 or abs(_after.max.Y - _before.max.Y) > 1e-3:
-            raise ValueError("手前の丸めで奥の形が変わった（カーネルが面を失った）")
+    # 底の外周の丸め（外皮 BOTTOM_SKIN の外側の辺だけ。体積の門つき）
+    if BOTTOM_EDGE_R > 0:
+        bb = part.bounding_box()
+        _edges = [e for e in part.edges()
+                  if e.center().Z < 0.01 and e.length > 5.0
+                  and (abs(abs(e.center().X) - bb.max.X) < 0.5
+                       or abs(e.center().Y - bb.min.Y) < 0.5 or abs(e.center().Y - bb.max.Y) < 0.5)]
+        _v0 = part.volume
+        part = part.fillet(BOTTOM_EDGE_R, _edges)
+        _per = 2 * ((bb.max.X - bb.min.X) + (bb.max.Y - bb.min.Y))
+        _est = _per * (1 - 3.14159265 / 4) * BOTTOM_EDGE_R ** 2
+        _got = _v0 - part.volume
+        if abs(_got - _est) > 0.3 * _est or len(part.solids()) != 1:
+            raise ValueError(f"底縁の丸めで {_got:.0f}mm³ 減った（見積り {_est:.0f}）")
     return part, (w, h_body)
-
-
-FRONT_INSERT_LIFT = 0.4  # 手前のインサートの座を、プレート上面からどれだけ上げるか
-
-
-def front_insert_seat_z(by, h_body):
-    """手前のインサート（上シェルのベゼル手前バーの裏）の座の高さ。
-    **ケースと組み立てがこの 1 つから取る。**"""
-    return PLATE_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG)) + FRONT_INSERT_LIFT
-
-
-def rear_window(half, w):
-    """奥の窓 (x0, z0, x1, z1)。電池箱の断面＋逃げ。**上は天井まで開ける**
-    （z1 は「上限は無い」の意味の大きな値。奥板が塞ぐ）。
-
-    **ケース・奥板・検査がこの 1 つから取る。**
-    """
-    bx = battery_x_center(half, w)
-    x0 = max(bx - BATT_X / 2 - REAR_PLATE_CLR, -(w / 2 - WALL))
-    x1 = min(bx + BATT_X / 2 + REAR_PLATE_CLR, w / 2 - WALL)
-    return x0, FLOOR, x1, 1e3
-
-
-def rear_wall_keep_x(half, w):
-    """下シェルの奥壁が**全高で持つ x の範囲** (x0, x1)。内縁側は角の丸みの接線
-    （w/2 − CORNER_R）、外縁側は電池窓の外側の縁（REAR_CORNER_GAP の注記）。
-    その外は上シェルの角。**ケースと上シェルがこの 1 つから取る。**"""
-    s = inner_sign(half)
-    wx0, _, wx1, _ = rear_window(half, w)
-    x_in = s * (w / 2 - CORNER_R)
-    x_out = wx0 if s > 0 else wx1
-    return (min(x_in, x_out), max(x_in, x_out))
-
-
-def rear_plate_rebate(half, w):
-    """奥板が沈む座ぐりの x 範囲 (x0, x1)。外皮を 1.0 は残す。"""
-    x0, _, x1, _ = rear_window(half, w)
-    return (max(x0 - REAR_PLATE_FRAME, -(w / 2 - 1.0)),
-            min(x1 + REAR_PLATE_FRAME, w / 2 - 1.0))
-
-
-def rear_rail_y(h_body):
-    """上シェルの奥の桟の y 範囲 (手前, 奥)。奥板の手前に CLEARANCE 空ける。"""
-    y_out = h_body / 2 + BUMP_DEPTH
-    y1 = y_out - REAR_PLATE_T - CLEARANCE
-    return y1 - REAR_RAIL_D, y1
-
-
-def rear_rail_z0(h_body):
-    """桟の下端 z。天井の下面（桟の手前端での高さ）から REAR_RAIL_H 下。"""
-    y0, _ = rear_rail_y(h_body)
-    z_under = (BEZEL_TOP_FRONT - WALL) + (y0 + h_body / 2) * tan(radians(TILT_DEG))
-    return z_under - REAR_RAIL_H
-
-
-def rear_screw_positions(half, w, h_body):
-    """奥板のネジ 2 本 (x, z)。桟の中心高さ、電池箱中心 ± REAR_SCREW_DX。"""
-    bx = battery_x_center(half, w)
-    z = rear_rail_z0(h_body) + REAR_RAIL_H / 2
-    return [(bx - REAR_SCREW_DX, z), (bx + REAR_SCREW_DX, z)]
-
-
-def rear_screw3(half, w, h_body):
-    """奥面 3 本目のネジ (x, z)。子基板の中心から電池側へ REAR_SCREW3_DX、
-    高さは桟と同じ（天井の下 REAR_RAIL_H の中心）。"""
-    led_x = daughterboard_x_center(half, w) + XIAO_LED_DX
-    x = led_x - inner_sign(half) * REAR_SCREW3_FROM_LED    # 内壁と反対の方向へ
-    return x, rear_rail_z0(h_body) + REAR_RAIL_H / 2
 
 
 def battery_hole_z(half):
@@ -1877,70 +1423,6 @@ def battery_hole_xs(half, w):
     sign = 1 if half == "left" else -1
     x_end = bx - sign * BATT_X / 2
     return [x_end + sign * d for d in (BATT_HOLE_X1_FROM_END, BATT_HOLE_X2_FROM_END)]
-
-
-def build_rear_plate(half, keys):
-    """奥板（電池窓を塞ぐ板。2026-09-05・案 A。旧・スライド式の電池蓋の代わり）。
-
-    **ケース座標のまま作る**（旧・蓋で回して 5 回取り違えた教訓）。
-      板   … 床の上面から**天井の下面 − CLEARANCE** まで一枚。奥壁の座ぐりに
-              面一で沈み、上縁は天井が被う（2026-09-06。リップと足は廃止。
-              REAR_PLATE_T の下の注記）
-      舌   … 下縁の内側の肉（REAR_TONGUE_T）を REAR_TONGUE_H 下へ伸ばし、床の溝へ
-      切り欠き … 上縁の中央に NAIL_NOTCH_W × NAIL_NOTCH_H（爪の掛かり）
-      ネジ … M2×2 を上シェルの桟へ
-    外し方: ネジ 2 本を外す → 天井の奥縁の下から切り欠きに爪を掛け、舌を支点に
-    上を奥へ倒す → 上縁が天井の下から出たら持ち上げて舌を抜く。付け方はその逆。
-    印刷は**内面を下**（舌がベッドに着く）。
-    """
-    _positions, (w, h_plate) = plate_positions(keys)
-    h_body = plan_depth(h_plate)
-    y_out = h_body / 2 + BUMP_DEPTH
-    wx0, _wz0, wx1, _ = rear_window(half, w)
-    rx0, rx1 = rear_plate_rebate(half, w)
-    px0, px1 = rx0 + CLEARANCE / 2, rx1 - CLEARANCE / 2
-    cx = (px0 + px1) / 2
-    z_top_out = BEZEL_TOP_FRONT + (h_body + BUMP_DEPTH) * tan(radians(TILT_DEG))
-    # 上縁は天井の下面 − CLEARANCE（天井が板の上縁を被う）
-    cut_under_ceiling = tilted_cutter(w, h_body, BEZEL_TOP_FRONT - WALL - CLEARANCE)
-    with BuildPart() as p:
-        with Locations((cx, y_out - REAR_PLATE_T / 2, FLOOR)):
-            Box(px1 - px0, REAR_PLATE_T, z_top_out + 5,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        add(cut_under_ceiling, mode=Mode.SUBTRACT)
-        # 舌（板の内側の肉を下へ。断面は REAR_TONGUE_* の注記）。x は溝より CLEARANCE 狭く
-        _tw = (wx1 - wx0) - 2.0 - CLEARANCE
-        _yi = y_out - REAR_PLATE_T                       # 板の内面
-        with BuildSketch(Plane.YZ.offset(cx - _tw / 2)):
-            Polygon((_yi, FLOOR - REAR_TONGUE_H), (_yi + REAR_TONGUE_T, FLOOR - REAR_TONGUE_H),
-                    (_yi + REAR_TONGUE_T - REAR_TONGUE_RELIEF, FLOOR + 0.1), (_yi, FLOOR + 0.1),
-                    align=None)
-        extrude(amount=_tw)
-        # 板の下縁の外角の 45° 面取り（舌の根元の外面から外面の縁へ）
-        _ch = REAR_PLATE_T - (REAR_TONGUE_T - REAR_TONGUE_RELIEF)
-        with BuildSketch(Plane.YZ.offset(cx - (px1 - px0) / 2 - 1.0)):
-            Polygon((y_out - _ch, FLOOR - 0.01), (y_out + 1.0, FLOOR - 0.01),
-                    (y_out + 1.0, FLOOR + _ch + 1.0), align=None)
-        extrude(amount=(px1 - px0) + 2.0, mode=Mode.SUBTRACT)
-        # 上縁の爪の切り欠き（NAIL_NOTCH_* の注記）。天井の下面 − CLEARANCE から下へ
-        _z_top_in = (BEZEL_TOP_FRONT - WALL - CLEARANCE) + (y_out + h_body / 2) * tan(radians(TILT_DEG))
-        with Locations((cx, y_out, _z_top_in - NAIL_NOTCH_H)):
-            Box(NAIL_NOTCH_W, REAR_PLATE_T * 3, 10.0, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # ネジのバカ穴
-        for sx, sz in rear_screw_positions(half, w, h_body):
-            with Locations((sx, y_out - REAR_PLATE_T / 2, sz)):
-                Cylinder(M2_CLEAR_D / 2, REAR_PLATE_T * 3, rotation=(90, 0, 0),
-                         mode=Mode.SUBTRACT,
-                         align=(Align.CENTER, Align.CENTER, Align.CENTER))
-    b = p.part.bounding_box()
-    if abs(b.max.Y - y_out) > 1e-6:
-        raise ValueError(f"奥板の外面が y={b.max.Y:.2f}。奥面 {y_out:.2f} と一致しない")
-    if abs(b.min.Z - (FLOOR - REAR_TONGUE_H)) > 1e-6:
-        raise ValueError(f"舌の先が z={b.min.Z:.2f}。溝の底 {FLOOR - REAR_TONGUE_H:.2f} に届かない")
-    if len(p.part.solids()) != 1:
-        raise ValueError(f"奥板が {len(p.part.solids())} 個に分かれている")
-    return p.part, (px1 - px0, z_top_out - FLOOR)
 
 
 def build_tilt_foot(add_deg, h):
@@ -2019,11 +1501,11 @@ def main():
         assert_watertight(tmesh, tstl.name)
         print(f"      上ケース {tw:.2f} x {th:.2f} x "
               f"{topc.bounding_box().size.Z:.2f}mm -> {tstl.name}")
-        rp, (rw, rh) = build_rear_plate(name, keys)
-        rmesh, rstl = to_mesh(rp, f"rear_plate_{name}")
-        written.append(rstl.name)
-        assert_watertight(rmesh, rstl.name)
-        print(f"      奥板 {rw:.2f} x {rh:.2f}mm -> {rstl.name}")
+        lid, (lw_, lh_) = build_battery_lid(name, keys)
+        lmesh, lstl = to_mesh(lid, f"battery_lid_{name}")
+        written.append(lstl.name)
+        assert_watertight(lmesh, lstl.name)
+        print(f"      電池蓋 {lw_:.2f} x {lh_:.2f}mm -> {lstl.name}")
         render_outline_2d(part, BUILD / f"case_{name}_section.png", axis="X",
                           title=f"case {name} - side section", annotate_count=False)
         bb = part.bounding_box()
@@ -2031,23 +1513,18 @@ def main():
               f"プレート上面 前 {z_front:.1f} / 奥 {z_rear:.1f}mm  傾斜 {TILT_DEG}°")
         print(f"      実測値 {bb.size.X:6.2f} x {bb.size.Y:6.2f} x {bb.size.Z:6.2f}mm  "
               f"水密={mesh.is_watertight}")
-        # 奥行はコブぶん長い（実機も本体 108 ＋ コブ 12 ＝ 120mm）
-        assert abs(bb.size.X - w) < 0.01, "幅が設計値と違う"
-        assert abs(bb.size.Y - (h + BUMP_DEPTH)) < 0.01, "奥行が設計値と違う"
-        # 最も高いのはコブの後端の奥壁の上端＝天井（上シェル）の下面 − CLEARANCE
-        z_top = (BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
-                 - WALL - CLEARANCE)
-        assert abs(bb.size.Z - z_top) < 0.05, f"高さが設計値と違う（{bb.size.Z:.2f} vs {z_top:.2f}）"
-        # 最下点はスカートの手前端（合わせ目 = リム − SKIRT_LAP の、y = −h/2 + WALL +
-        # CLEARANCE での高さ）。手前のピンの先端（リム − 2.6）はこれより上
+        # 底板は外形から BOTTOM_SKIN + BOTTOM_FIT 内側（器の案・2026-09-06）
+        _in = (BOTTOM_SKIN + BOTTOM_FIT) * 2
+        assert abs(bb.size.X - (w - _in)) < 0.01, f"底板の幅が設計値と違う（{bb.size.X:.2f} vs {w - _in:.2f}）"
+        assert abs(bb.size.Y - (h + BUMP_DEPTH - _in)) < 0.01, "底板の奥行が設計値と違う"
+        assert abs(bb.min.Z) < 1e-6, "底板の下面が z=0 でない"
+        # 上シェル: 外形は w × (h + コブ)、机（z=0）からベゼル上面まで
         tb = topc.bounding_box()
-        _skirt_front = SEAM_Z - SKIRT_LAP + (WALL + CLEARANCE) * tan(radians(TILT_DEG))
-        assert abs(tb.min.Z - _skirt_front) < 0.05, f"上シェルの最下点がスカートの手前端 {_skirt_front:.2f} でない（{tb.min.Z:.2f}）"
-        # 手前 8mm（ピンのある帯）を除いた最下点は、y = −h/2 + 8 の合わせ目の高さ
-        _no_pins = topc - Location((0, -h / 2, 0)) * Box(w + 2, 16.0, 200)
-        _tb2 = _no_pins.bounding_box()
-        _seam8 = SEAM_Z - SKIRT_LAP + 8.0 * tan(radians(TILT_DEG))
-        assert abs(_tb2.min.Z - _seam8) < 0.05, f"上シェルの下端が合わせ目 {_seam8:.2f} でない（{_tb2.min.Z:.2f}）"
+        assert abs(tb.size.X - w) < 0.01, "上シェルの幅が設計値と違う"
+        assert abs(tb.size.Y - (h + BUMP_DEPTH)) < 0.01, "上シェルの奥行が設計値と違う"
+        assert abs(tb.min.Z) < 1e-6, f"上シェルの下端が机（0）でない（{tb.min.Z:.2f}）"
+        _z_top = BEZEL_TOP_FRONT + (h + BUMP_DEPTH) * tan(radians(TILT_DEG))
+        assert abs(tb.max.Z - _z_top) < 0.05, f"上シェルの高さが設計値と違う（{tb.max.Z:.2f} vs {_z_top:.2f}）"
 
     # 前回の控えとの差を消す（消えた部品の STL と、その絵）。
     old = set(json.loads(manifest.read_text())) if manifest.exists() else set()

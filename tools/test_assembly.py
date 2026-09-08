@@ -58,7 +58,7 @@ def _require_kicad(what):
 
 # 組み立てに含まれていなければならない部品。
 # 名前を書いておくことで、あとから足した部品が検査から漏れるのを防ぐ。
-REQUIRED = {"case", "plate", "pcb", "rear_plate", "batt", "db", "topcase",
+REQUIRED = {"case", "plate", "pcb", "batt_lid", "batt", "db", "topcase",
             "foot0", "foot1", "xiao",
             # open-gaps #29: 製品として存在する実物
             "sockets", "pcb_parts", "db_parts", "switches", "keycaps",
@@ -316,9 +316,11 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     # ここは「彫るのをやめても落ちなかった」ことで足した検査なのに、
     # `build/` は .gitignore なので **CI では毎回黙って飛んでいた**
     # （2026-08-10 に発覚）。10 秒で作れるものを、無いからと飛ばしていた。
+    # 受け箱の壁は上シェル、座る面（台）は底板（器の案・2026-09-06）
     stl = _case_stl(half)
     _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
-    mesh = trimesh.load(stl)
+    mesh = trimesh.load(stl.with_name(f"topcase_{half}.stl"))
+    mesh_floor = trimesh.load(stl)
     x, z = power_switch_x_center(half, w), power_switch_center_z()
     # **plan_depth を通す。**plate_positions が返すのはプレートの奥行で、
     # ケースは傾けたぶん縮んだ値を使う（0.44mm ずれる）。
@@ -337,24 +339,26 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
     # 受けの箱の壁（左右と上下）。**ここに材料が無ければスイッチは宙に浮く。**
     off_w = SW_PWR_W / 2 + CLEARANCE_HALF + SW_RIB / 2
     off_h = SW_PWR_H / 2 + CLEARANCE_HALF + SW_RIB / 2
-    walls = ([(x + s_ * off_w, y_mid, z) for s_ in (-1, 1)]
-             + [(x, y_mid, z - off_h)])          # 下は溝の底（座る面）
+    walls = [(x + s_ * off_w, y_mid, z) for s_ in (-1, 1)]
+    floor_pts = [(x, y_mid, z - off_h)]          # 下は底板の台（座る面）
+    assert float(np.mean(mesh_floor.contains(np.array(floor_pts)))) == 1.0, (
+        f"{half}: スイッチの台（底板）が本体の真下に無い")
     slot = [(x + dx, y_out - WALL / 2, z + dz)
             for dx in np.linspace(-0.6, 0.6, 3)
             for dz in np.linspace(-1.0, 1.0, 3)]
-    # 奥のリブ。**端子のスリットを外して**左右の残りを見る。
-    rib_y = y_in - depth - SW_RIB / 2
-    # **リブの高さの中だけを見る。**受けは本体より低い（SW_HOLD_H。
-    # 高くすると入れられなくなる。test_every_part_can_be_put_in_from_outside）。
+    # 手前の止めブロック（器の案・2026-09-06: 底板に立つ。旧・受け箱の奥のリブ）。
+    # **端子のスリットを外して**左右の残りを見る。高さはブロックの中（SW_STOP_H）
+    from gen_case import FLOOR, SW_STOP_H, SW_STOP_T
+    rib_y = y_in - depth - CLEARANCE - SW_STOP_T / 2
     z_bot = z - SW_PWR_H / 2 - CLEARANCE / 2
-    zs_rib = np.linspace(z_bot + 0.6, z_bot + SW_HOLD_H - 0.6, 3)
+    zs_rib = np.linspace(FLOOR + 0.6, SW_STOP_H - 0.6, 3)
     rib = [(x + s_ * (SW_PWR_PIN_W + CLEARANCE + SW_PWR_W) / 4, rib_y, zz)
            for s_ in (-1, 1) for zz in zs_rib]
     # 端子のスリット（真ん中）。ここは抜けていなければ端子が入らない。
     slit = [(x, rib_y, zz) for zz in zs_rib]
-    # 入れ口（溝の上）。
-    mouth = [(x + dx, y_mid, z + SW_PWR_H / 2 + CLEARANCE_HALF + 1.0)
-             for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)]
+    # 入れ口: 受け箱は手前と下が開いている（中から奥へ押し込み、底板が蓋）
+    mouth = ([(x + dx, y_in - depth - 0.3, z) for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)]
+             + [(x + dx, y_mid, z_bot - 0.5) for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)])
 
     assert solid(walls) == 1.0, (
         f"{half}: スイッチの受けの壁が無い（材料 {solid(walls):.0%}）。"
@@ -363,16 +367,19 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
         f"{half}: スイッチの空所に材料が残っている"
     assert solid(slot) == 0.0, \
         f"{half}: 操作部のスロットが壁を貫通していない"
-    assert solid(rib) == 1.0, (
-        f"{half}: 奥のリブが無い（材料 {solid(rib):.0%}）。"
-        "**押し込む向きの抜け止めが効かない**——指で押し込むと"
-        "スイッチがケースの中へ落ちる（#18）")
-    assert solid(slit) == 0.0, (
-        f"{half}: 奥のリブに端子のスリットが無い（材料 {solid(slit):.0%}）。"
+    def solid_floor(pts):
+        return float(np.mean(mesh_floor.contains(np.array(pts))))
+
+    assert solid_floor(rib) == 1.0, (
+        f"{half}: 手前の止めブロック（底板）が無い（材料 {solid_floor(rib):.0%}）。"
+        "**手前へ戻る向きの抜け止めが効かない**——スイッチが手前へ滑って"
+        "ツマミが壁から引っ込む（#18）")
+    assert solid_floor(slit) == 0.0, (
+        f"{half}: 止めブロックに端子のスリットが無い（材料 {solid_floor(slit):.0%}）。"
         "端子 3 本が通らない＝**スイッチが奥まで入らない**")
     assert solid(mouth) == 0.0, (
-        f"{half}: 溝の上が塞がっている（材料 {solid(mouth):.0%}）。"
-        "**上から落とし込めない＝スイッチを入れられない**")
+        f"{half}: 受け箱の手前か下が塞がっている（材料 {solid(mouth):.0%}）。"
+        "**中から押し込めない＝スイッチを入れられない**")
 
 
 # --------------------------------------------------------------------------
@@ -1561,63 +1568,51 @@ def test_the_pcb_is_actually_fastened_to_the_plate(half):
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize("half", ["left", "right"])
 def test_the_plate_can_be_put_into_the_shells(half):
-    """プレート（＋基板）が**真上から**入り、上シェルの縁に押さえられること。
+    """プレート（＋基板）が**真下から**上シェルへ入り、ベゼルの縁に押さえられること
+    （器の案・2026-09-06）。
 
-    ⚠️ 案 A の最初の版は、受ける段（下）と押さえる縁（上）を両方とも上シェルに
-    持たせてプレートが入らなかった（利用者が .blend で指摘）。次に上シェルの棚と
-    溝へ傾けて差し込む形にしたが、棚は裏返して刷ると庇になり印刷が壊れた
-    （利用者の試し刷り）。2026-09-06 に受けを下シェルの仕切り壁へ移し、
-    プレートは**真上から下シェルに載せ、上シェルを被せるだけ**になった。
-
+    手前の角柱がプレートの切り欠きを通り、真っ直ぐ上げるだけで入る。
     見るのは: 据わった位置で上シェルと当たらない／上へ 0.3 動かすと縁に当たる
-    （押さえている）／上シェルを 5 上げた状態ではプレートと当たらない
-    （＝被せる動きの途中で引っ掛からない）。
+    （押さえている）／下へ 0.6・2・5・40 動かしても上シェルに当たらない（＝入れる
+    途中で引っ掛からない）／据わった位置で底板と当たらない。
     """
     from build123d import Location
 
     parts, _ = build_assembly(HALVES[half], half)
-    plate, top = parts["plate"], parts["topcase"]
+    plate, top, bottom = parts["plate"], parts["topcase"], parts["case"]
 
-    def hit(loc_plate, loc_top=Location((0, 0, 0))):
+    def hit(loc_plate, other):
         v = 0.0
         for a in (loc_plate * plate).solids():
-            for b in (loc_top * top).solids():
+            for b in other.solids():
                 s_ = a & b
                 if s_ is not None and s_.volume > 1e-6:
                     v += s_.volume
         return v
 
-    assert hit(Location((0, 0, 0))) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
-    assert hit(Location((0, 0, 0.3))) > 1.0, (
+    assert hit(Location((0, 0, 0)), top) < 1e-6, f"{half}: 据わった位置でプレートが上シェルに当たる"
+    assert hit(Location((0, 0, 0)), bottom) < 1e-6, f"{half}: 据わった位置でプレートが底板に当たる"
+    assert hit(Location((0, 0, 0.3)), top) > 1.0, (
         f"{half}: プレートを 0.3 上げてもベゼルに当たらない＝押さえていない")
-    for dz in (5.0, 2.0, 0.6):
-        v = hit(Location((0, 0, 0)), Location((0, 0, dz)))
+    for dz in (0.6, 2.0, 5.0, 40.0):
+        v = hit(Location((0, 0, -dz)), top)
         assert v < 1e-6, (
-            f"{half}: 上シェルを {dz} 上げた位置でプレートに {v:.2f}mm³ 当たる。"
-            "**真上から被せられない**")
+            f"{half}: プレートを {dz} 下げた位置で上シェルに {v:.2f}mm³ 当たる。"
+            "**真下から入れられない**")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_rear_plate_locks_the_top_shell(half):
-    """奥板の上縁を**上シェルの天井が被い**、上シェルは**上へ抜ける**こと。
+def test_the_battery_lid_closes_the_box(half):
+    """底板の電池蓋が**開口に真下から入り、電池箱の口を塞ぐ**こと（器の案・2026-09-06）。
 
-    #12（上ケースの奥の留め）。2026-09-06 まで「奥板のリップが天井の奥縁に被って
-    上シェルを押さえる」としていたが、板は上シェルの桟にネジ留めで足は溝から
-    上へ抜けるので押さえになっておらず、リップの座ぐりは裏返して刷ると宙に出て
-    印刷が壊れた。今は天井を奥面まで通し、板はその下。奥の留めは奥面 3 本目のネジ。
-      1. 据わった位置で奥板・上シェル・下シェルが互いに当たらない
-      2. 奥板を上へ 0.3 動かすと天井に当たる（上縁が天井の下にある）
-      3. 上シェルを上へ 3.0 動かしても下シェルに当たらない（外せる）
-      4. 奥板は**舌の外下の角を支点に上を奥へ倒し、舌を溝から持ち上げて**外せる
-         （上縁の切り欠き NAIL_NOTCH_* に爪を掛ける。gen_assembly.rear_plate_path の
-         姿勢で両シェルに当たらない。下シェルとの当たりは put_in_from_outside も見る
-         が、天井は上シェルなのでここで見る）
-    奥板そのものの真っ直ぐな着脱は INSERT_PATH（test_every_part_can_be_put_in_from_outside）。
+      1. 据わった位置で蓋は底板・上シェル・電池箱に当たらない
+      2. 蓋を上へ 0.3 動かすと電池箱に当たる（蓋が箱の口を塞いでいる＝電池が落ちない）
+      3. 蓋を下へ 40 動かしても底板・上シェルに当たらない（外せる）
     """
     from build123d import Location
 
     parts, _ = build_assembly(HALVES[half], half)
-    plate, top, case = parts["rear_plate"], parts["topcase"], parts["case"]
+    lid, bottom, top, batt = parts["batt_lid"], parts["case"], parts["topcase"], parts["batt"]
 
     def hit(a_, b_, d):
         v = 0.0
@@ -1628,61 +1623,41 @@ def test_the_rear_plate_locks_the_top_shell(half):
                     v += s_.volume
         return v
 
-    assert hit(top, plate, (0, 0, 0)) < 1e-6, f"{half}: 上シェルと奥板が据わった位置で当たる"
-    assert hit(top, case, (0, 0, 0)) < 1e-6, f"{half}: 上シェルと下シェルが据わった位置で当たる"
-    assert hit(plate, top, (0, 0, 0.3)) > 1.0, (
-        f"{half}: 奥板を 0.3 上げても天井に当たらない。**上縁が天井の下にない**")
-    assert hit(top, case, (0, 0, 3.0)) < 1e-6, (
-        f"{half}: 上シェルを 3mm 上げると下シェルに "
-        f"{hit(top, case, (0, 0, 3.0)):.2f}mm³ 当たる。**上シェルが外せない**")
-    from gen_assembly import rear_plate_path
-    for step, m in enumerate(rear_plate_path(case.bounding_box().max.Y), start=1):
-        moved = m * plate
-        for name, other in (("下シェル", case), ("上シェル", top)):
-            v = hit(moved, other, (0, 0, 0))
-            assert v < 1e-6, (
-                f"{half}: 奥板の着脱 {step} 手目で{name}に {v:.2f}mm³ 当たる。**倒して外せない**")
+    for name, other in (("底板", bottom), ("上シェル", top), ("電池箱", batt)):
+        assert hit(lid, other, (0, 0, 0)) < 1e-6, f"{half}: 据わった位置で電池蓋が{name}に当たる"
+    assert hit(lid, batt, (0, 0, 0.3)) > 1.0, f"{half}: 電池蓋を 0.3 上げても電池箱に当たらない。**口を塞いでいない**"
+    for name, other in (("底板", bottom), ("上シェル", top)):
+        v = hit(lid, other, (0, 0, -40.0))
+        assert v < 1e-6, f"{half}: 電池蓋を 40 下げると{name}に {v:.2f}mm³ 当たる。**外せない**"
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
-def test_the_skirt_lap_is_uniform(half):
-    """上下シェルの相欠きが**全周 SKIRT_LAP**で、リム面と平行なこと（2026-09-06）。
+def test_the_bottom_plate_is_caught_by_the_chamfer(half):
+    """底板が**上シェルの壁の下端の斜面に止まる**こと（器の案・2026-09-06）。
 
-    側壁を外側 1.2（上シェルのスカート）と内側 1.2（下シェルの帯）の柱で探り、
-    手前・中央・奥の 3 点で
-      外側: 上シェルの最下点 = 下シェルの肩 = リム − SKIRT_LAP
-      内側: 下シェルの帯の上端 = リム（プレートの座）
-    を見る。合わせ目を水平に戻すと奥で落ちる（重なり 13.8）。
+    底板は外皮の内側に真下から入る。据わった位置（z=0）で当たらず、上へ
+    BOTTOM_FIT + 0.3 動かすと斜面（壁の内面から BOTTOM_CHAMFER・z = FLOOR〜）に
+    当たり、下へ 40 動かせば外れる。斜面は打鍵の力を底板から壁へ渡す面でもある。
     """
-    from math import radians, tan
-    from build123d import Box, Compound, Location
-    from gen_case import (PLATE_T, PLATE_TOP_FRONT, SKIRT_LAP, SKIRT_T, TILT_DEG,
-                          WALL)
+    from build123d import Location
+    from gen_case import BOTTOM_FIT
 
     parts, _ = build_assembly(HALVES[half], half)
-    case, top = parts["case"], parts["topcase"]
-    bw = case.bounding_box().size.X
-    h_body = 2 * abs(case.bounding_box().min.Y)     # 手前の外面 = −h_body/2
-    rim = lambda y: PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
+    bottom, top = parts["case"], parts["topcase"]
 
-    def zrange(part, x, y):
-        r = part.intersect(Location((x, y, 25)) * Box(0.3, 0.3, 50))
-        sol = [] if r is None else (list(r.solids()) if hasattr(r, "solids") else list(r))
-        assert sol, f"{half}: x={x:.1f} y={y:.1f} に実体が無い"
-        b = Compound(sol).bounding_box()
-        return b.min.Z, b.max.Z
+    def hit(d):
+        v = 0.0
+        for a in (Location(d) * bottom).solids():
+            for b in top.solids():
+                s_ = a & b
+                if s_ is not None and s_.volume > 1e-6:
+                    v += s_.volume
+        return v
 
-    x_out, x_in = bw / 2 - SKIRT_T / 2, bw / 2 - WALL + (WALL - SKIRT_T) / 2
-    # コブ（y > h_body/2）も含める。2026-09-06 までは下シェルの帯が天井まで立ち、
-    # 奥で 7mm の相欠きになっていた（縦の継ぎ目を奥面へ移したときに揃えた）
-    for y in (-h_body / 2 + 10, 0.0, h_body / 2 - 12, h_body / 2 + 6):
-        seam = rim(y) - SKIRT_LAP
-        t_lo, _ = zrange(top, x_out, y)
-        _, c_hi = zrange(case, x_out, y)
-        _, b_hi = zrange(case, x_in, y)
-        assert abs(t_lo - seam) < 0.1, f"{half}: y={y:.0f} スカートの下端 {t_lo:.2f} ≠ 合わせ目 {seam:.2f}"
-        assert abs(c_hi - seam) < 0.1, f"{half}: y={y:.0f} 下シェルの肩 {c_hi:.2f} ≠ 合わせ目 {seam:.2f}"
-        assert abs(b_hi - rim(y)) < 0.1, f"{half}: y={y:.0f} 帯の上端 {b_hi:.2f} ≠ リム {rim(y):.2f}"
+    assert hit((0, 0, 0)) < 1e-6, f"{half}: 据わった位置で底板が上シェルに当たる"
+    assert hit((0, 0, BOTTOM_FIT + 0.3)) > 1.0, f"{half}: 底板を {BOTTOM_FIT + 0.3} 上げても斜面に当たらない。**止まらない**"
+    v = hit((0, 0, -40.0))
+    assert v < 1e-6, f"{half}: 底板を 40 下げると上シェルに {v:.2f}mm³ 当たる。**外せない**"
 
 
 # --------------------------------------------------------------------------
@@ -1727,32 +1702,27 @@ def test_the_rear_wall_has_no_undeclared_holes(half):
                           plan_depth, power_switch_slot_z,
                           daughterboard_x_center,
                           power_switch_center_z, power_switch_x_center,
-                          rear_window, usb_center_z)
+                          usb_center_z)
     from interface import plate_positions
     from matrix import keymap_order
 
-    mesh = trimesh.load(_case_stl(half))
+    # **奥壁は上シェル**（器の案・2026-09-06）。窓と奥板は無くなり、穴は USB-C と
+    # 電源スイッチのスロットだけ
+    mesh = trimesh.load(_case_stl(half).with_name(f"topcase_{half}.stl"))
     _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
     y_out = plan_depth(h_plate) / 2 + BUMP_DEPTH   # **plan_depth を通す**
 
     # 申告した窓（x0, z0, x1, z1）。**余白 0.6mm を足して縁の量子化を吸収。**
     m = 0.6
-    ox0, oz0, ox1, oz1 = rear_window(half, w)
     sx, sz = power_switch_x_center(half, w), power_switch_center_z()
     db_x = daughterboard_x_center(half, w)
     windows = [
-        ("奥の窓", ox0 - m, oz0 - m, ox1 + m, oz1 + m),
         ("電源スイッチのスロット", sx - SW_SLOT_W / 2 - m,
          power_switch_slot_z(half, w)[0] - m, sx + SW_SLOT_W / 2 + m,
          power_switch_slot_z(half, w)[1] + m),
         ("USB-C の口", db_x - USB_W / 2 - m, usb_center_z() - USB_H / 2 - m,
          db_x + USB_W / 2 + m, usb_center_z() + USB_H / 2 + m),
     ]
-    # 奥面 3 本目のネジのバカ穴（案 A・2026-09-05）
-    from gen_case import M2_CLEAR_D, rear_screw3
-    _x3, _z3 = rear_screw3(half, w, plan_depth(h_plate))
-    windows.append(("奥の 3 本目のネジ", _x3 - M2_CLEAR_D / 2 - m, _z3 - M2_CLEAR_D / 2 - m,
-                    _x3 + M2_CLEAR_D / 2 + m, _z3 + M2_CLEAR_D / 2 + m))
 
     # ⚠️ **2026-08-30 に判定を入れ替えた。**それまでは「奥面から WALL の
     # 範囲を 6 つの深さで掃いて、どこにも材料が無ければ穴」としていた。
@@ -1829,9 +1799,8 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
                            switch_plate_size)
     from matrix import keymap_order
 
-    from gen_case import (BATT_GUIDE_W, BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END,
-                          BATT_GUIDE_X3_FROM_END, BATT_X, battery_center, battery_x_center)
-    mesh = trimesh.load(_case_stl(half))
+    from gen_case import BATT_X, battery_center, battery_x_center
+    mesh = trimesh.load(_case_stl(half))           # 受けの壁は底板（器の案・2026-09-06）
     _, (w, h_plate) = plate_positions(keymap_order(halves()[half]))
     h_body = plan_depth(h_plate)
     # 仕切り壁の上（y はその中心）。奥端の 1mm 手前ではなく壁の位置で見る
@@ -1840,10 +1809,6 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     rim = PLATE_TOP_FRONT - PLATE_T + (y + h_body / 2) * tan(radians(TILT_DEG))
     bx = battery_x_center(half, w)
     xs = np.arange(bx - BATT_X / 2 + 5.0, bx + BATT_X / 2 - 5.0, 1.0)
-    sgn = 1 if half == "left" else -1
-    x_end = bx - sgn * BATT_X / 2
-    for d in (BATT_GUIDE_X1_FROM_END, BATT_GUIDE_X2_FROM_END, BATT_GUIDE_X3_FROM_END):
-        xs = xs[np.abs(xs - (x_end + sgn * d)) > BATT_GUIDE_W / 2 + 1.0 + 0.5]   # ケーブル受けの切り欠き
     _idx, ray, loc = mesh.ray.intersects_id(
         np.column_stack([xs, np.full_like(xs, y), np.full_like(xs, rim + 0.5)]),
         np.tile([0, 0, -1], (len(xs), 1)),
@@ -1855,7 +1820,7 @@ def test_the_plate_rear_edge_rests_on_the_case(half):
     assert not unsupported, (
         f"{half}: プレートの奥端（y={y:.1f}）の下にケースの材料が無い点が "
         f"{len(unsupported)}/{len(xs)}。x = {unsupported[:6]}…\n"
-        "  奥端が宙吊りになる（片持ち）。gen_case の仕切り壁（BATT_DIVIDER_H）を見ること")
+        "  奥端が宙吊りになる（片持ち）。gen_case.build_case の受けの壁を見ること")
 
 
 def test_the_blender_script_only_imports_what_blender_has():
@@ -1908,13 +1873,13 @@ def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
     足りる）が崩れる**——窪みが無ければ壁 2.4mm を貫く必要に戻る。
     """
     from gen_case import (power_switch_dish_w, power_switch_dish_x,
-                          power_switch_x_center, rear_plate_rebate)
+                          power_switch_free_span, power_switch_x_center)
     from interface import plate_positions
     from matrix import keymap_order
 
     _, (w, _h) = plate_positions(keymap_order(halves()[half]))
     sx = power_switch_x_center(half, w)
-    rx0, rx1 = rear_plate_rebate(half, w)
+    lo, hi = power_switch_free_span(half, w)   # 電池箱の端と子基板のポケットの間
     dw = power_switch_dish_w(half, w)      # **上限 SW_DISH_W ではなく実寸**
     # 2026-09-06: 下限 5.0 → 3.0。電池箱をリード線の逃げ（BATT_WIRE_ROOM 2.0）
     # のぶん内へ寄せたので、左の帯は 6.56 になり窪みは 3.3。ツマミは壁から
@@ -1927,11 +1892,9 @@ def test_the_power_switch_dish_is_not_covered_by_the_battery_lid(half):
     cx = power_switch_dish_x(half, w)
     d0, d1 = cx - dw / 2, cx + dw / 2
     del sx
-    overlap = min(d1, rx1) - max(d0, rx0)
-    assert overlap <= 0, (
-        f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が奥板の座ぐり "
-        f"({rx0:.1f}..{rx1:.1f}) に {overlap:.2f}mm 重なる。"
-        "**窪みの一部が蓋に覆われて指が入らない**")
+    assert lo <= d0 and d1 <= hi, (
+        f"{half}: 指の窪み ({d0:.1f}..{d1:.1f}) が空き ({lo:.1f}..{hi:.1f}) からはみ出す。"
+        "**電池箱か子基板のポケットに掛かる**")
 
 
 @pytest.mark.parametrize("half", ["left", "right"])
@@ -1951,7 +1914,8 @@ def test_every_part_can_be_put_in_from_outside(half):
     from gen_assembly import INSERT_PATH
 
     parts, _ = build_assembly(HALVES[half], half)
-    case = parts["case"]
+    # **器は上シェル**（2026-09-06・器の案）。中身は底板を外して下から出し入れする
+    case = parts["topcase"]
 
     def hit(part, d):
         v = 0.0
@@ -1983,6 +1947,7 @@ def test_every_part_can_be_put_in_from_outside(half):
         _last = path[-1] if isinstance(path[-1], Location) else Location(path[-1])
         b_end = (_last * part).bounding_box()
         outside = (b_end.min.Z > b_case.max.Z - 1e-6
+                   or b_end.max.Z < b_case.min.Z + 1e-6
                    or b_end.min.Y > b_case.max.Y - 1e-6
                    or b_end.max.Y < b_case.min.Y + 1e-6)
         assert outside, (
@@ -2093,14 +2058,14 @@ def test_the_constants_that_slipped_through_mutation_are_guarded():
     **5 個が素通りした**（うち 1 個は無害）。幾何の検査は「組んだ形」しか
     見ないので、**使い勝手と印刷の都合は素通りする。**
     """
-    from gen_case import CLEARANCE, REAR_PLATE_CLR, SW_DISH_H, SW_SLOT_LEN
+    from gen_case import CLEARANCE, LID_OPEN_CLR, SW_DISH_H, SW_SLOT_LEN
 
     # ① 窪みは、スロットの上下に指が回る高さが要る（4.0mm では入らない）
     assert SW_DISH_H >= SW_SLOT_LEN + 2.0, (
         f"窪みの高さ {SW_DISH_H} が、スロット {SW_SLOT_LEN} ＋ 指の余地 2.0 "
         "に足りない。**ツマミの上下に指が回らない**")
 
-    # ② 窓の逃げは、印刷の公差より大きいこと
-    assert REAR_PLATE_CLR >= CLEARANCE, (
-        f"窓の逃げが片側 {REAR_PLATE_CLR}mm。印刷の公差 {CLEARANCE}mm 以下では、"
-        "**電池ボックスが窓を通らない**（通販ページ値 109mm に対し余裕が無い）")
+    # ② 電池蓋の開口の逃げは、印刷の公差より大きいこと
+    assert LID_OPEN_CLR >= CLEARANCE, (
+        f"開口の逃げが片側 {LID_OPEN_CLR}mm。印刷の公差 {CLEARANCE}mm 以下では、"
+        "**電池が開口を通らない**")

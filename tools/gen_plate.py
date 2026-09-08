@@ -149,22 +149,26 @@ def build_plate(keys, half):
             # 取付ネジの逃げ。**手前の 3 箇所は縁を跨ぐので切り欠きになる。**
             # プレートの縁 y=±52.40 に対して逃げが 50.30〜52.70 なので、
             # 穴ではなく開いた切り欠きとして抜ける（設計どおり）。
-            with Locations(*boss_positions(half)):
-                Circle(M2_CLEAR_D / 2, mode=Mode.SUBTRACT)
-            # **縁まで開けて切り欠きにする**（2026-09-05）。ネジを 0.59 内へ寄せた
-            # （interface.MOUNT_Y）ので、円だけだと縁から 0.48 の閉じた穴になり、
-            # 縁の細い帯が割れる。以前と同じ「開いた切り欠き」にする。
-            for bx, by in boss_positions(half):
-                with Locations((bx, by - 5.0 if by < 0 else by + 5.0)):
-                    Rectangle(M2_CLEAR_D, 10.0, mode=Mode.SUBTRACT)
-            # 位置決めピンの逃げ（ビスの左右。縁まで開けた切り欠き。2026-09-06）
-            from interface import CLEARANCE, FRONT_PIN_D, FRONT_PIN_DX
-            for bx, by in boss_positions(half):
-                for dx in (-FRONT_PIN_DX, FRONT_PIN_DX):
-                    with Locations((bx + dx, by)):
-                        Circle(FRONT_PIN_D / 2 + CLEARANCE, mode=Mode.SUBTRACT)
-                    with Locations((bx + dx, by - 5.0 if by < 0 else by + 5.0)):
-                        Rectangle(FRONT_PIN_D + CLEARANCE * 2, 10.0, mode=Mode.SUBTRACT)
+            # **手前のネジ受けの角柱が通る切り欠き**（器の案・2026-09-06）。角柱は
+            # 上シェルの手前壁から基板の手前縁 + 0.2 まで（平面図）で、底板の上まで
+            # 垂れる。プレートはその上に真下から入るので、角柱の平面形＋逃げを
+            # 縁まで開けて抜く。ネジのバカ穴もピンの逃げもこの中に入る
+            from math import cos, radians
+            from interface import CLEARANCE, FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN, TILT_DEG
+            # 角柱の内面（平面図）は −PCB_FRONT_EDGE_PLAN + CLEARANCE。プレート座標へは
+            # cos で割る（平面図 → 平らな板）。**符号を間違えて 0.2 浅く切り、真下から
+            # 入れると角柱に 6.5mm³ 当たった**（2026-09-06）
+            _y_in = (-PCB_FRONT_EDGE_PLAN + CLEARANCE) / cos(radians(TILT_DEG)) + CLEARANCE
+            for bx, _by in boss_positions(half):
+                with Locations((bx, _y_in - 30.0)):
+                    Rectangle(FRONT_BOSS_W + CLEARANCE * 2, 60.0, mode=Mode.SUBTRACT)
+            # 奥の柱（天井から底板へ。器の案）が通る切り欠き。奥縁から柱の手前まで
+            from gen_case import REAR_COL_D, rear_column_positions
+            from interface import plan_depth
+            for cx, cy in rear_column_positions(half, case_w, plan_depth(case_h)):
+                _y0 = (cy - REAR_COL_D / 2) / cos(radians(TILT_DEG)) - CLEARANCE
+                with Locations((cx, _y0 + 30.0)):
+                    Rectangle(REAR_COL_D + CLEARANCE * 2, 60.0, mode=Mode.SUBTRACT)
         extrude(amount=PLATE_T)
         # 本体基板を締める柱（open-gaps #36・2026-08-12）。
         #
