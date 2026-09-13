@@ -162,13 +162,8 @@ def build_plate(keys, half):
             for bx, _by in boss_positions(half):
                 with Locations((bx, _y_in - 30.0)):
                     Rectangle(FRONT_BOSS_W + NOTCH_FIT * 2, 60.0, mode=Mode.SUBTRACT)
-            # 奥の柱（天井から底板へ。器の案）が通る切り欠き。奥縁から柱の手前まで
-            from gen_case import REAR_COL_D, rear_column_positions
-            from interface import plan_depth
-            for cx, cy in rear_column_positions(half, case_w, plan_depth(case_h)):
-                _y0 = (cy - REAR_COL_D / 2) / cos(radians(TILT_DEG)) - CLEARANCE
-                with Locations((cx, _y0 + 30.0)):
-                    Rectangle(REAR_COL_D + NOTCH_FIT * 2, 60.0, mode=Mode.SUBTRACT)
+            # （奥の柱はプレートの奥縁より奥（y 55.3 − 2.8 = 52.5 > 52.3 + 0.2）なので
+            #   切り欠きは要らない。2026-09-13）
         extrude(amount=PLATE_T)
         # 本体基板を締める柱（open-gaps #36・2026-08-12）。
         #

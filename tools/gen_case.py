@@ -544,10 +544,11 @@ BOTTOM_CHAMFER = WALL - BOTTOM_SKIN   # 斜面の高さ＝横幅（45°）。1.2
 HEAD_RECESS_CLR = 0.1    # 底のネジ頭の座ぐりの逃げ（片側）。手前は底板の縁まで 0.05
 FRONT_RIB_T = 2.0        # 底板から立てる手前のリブ（プレートの手前縁を受ける）の厚み
 REAR_COL_D = 5.6         # 奥の柱（天井から垂らす・底からネジ）の径。左の空き 6.76 に入る
-REAR_COL_Y = 52.3        # 同・y。基板の奥縁 48.95 の奥（柱 φ5.6 の手前 49.5）。プレートと
-                         # 受けの壁には柱の切り欠きを開ける。電源スイッチを外す動き（手前へ
-                         # 4.4: ツマミ 4.0 が壁の内面を抜ける）で端子・線の先端が 55.26 まで来る
-                         # ので、柱の奥面 55.1 はその手前。56.5 だと 0.04 当たった
+REAR_COL_Y = 55.3        # 同・y。柱の手前 52.5 はプレートの奥縁 52.3 ＋ 逃げの奥（切り欠き不要）、
+                         # 奥面 58.1 は電源スイッチを外す動き（手前へ 4.4: ツマミ 4.0 が壁の内面を
+                         # 抜ける）で端子（切って 2.0）の先端が来る 58.26 の手前。端子が 5.0 の
+                         # ままだと 52.3 まで前に置くしかなく、プレート・受けの壁に切り欠きが要り、
+                         # 電池蓋が L 字になった（2026-09-13 に利用者の提案で端子を切ることに）
 SW_STOP_T = 2.4          # 電源スイッチの手前の止めブロック（底板から）の厚み
 SW_STOP_H = 7.8          # 同・高さ。**いちばん下の端子（中心 − 2.5、厚み 0.3 → 下端 8.05）の
                          # 手前まで**。本体の下 1.5mm を受ければ手前へは滑らない。2026-09-13 まで
@@ -712,29 +713,14 @@ def build_case(keys, half):
                 _y_end = min(_y_end, db_y - DB_D / 2 - CLEARANCE)
             with Locations((sx_ * _rib_x, (_y_front + _y_end) / 2, FLOOR - 0.01)):
                 Box(BOTTOM_SKIN, _y_end - _y_front, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # プレート受けの壁（基板の奥縁 + 0.2 と電池箱 − 0.2 の間。旧・仕切り壁）。
-        # 奥の柱の周りと電池蓋の内端の張り出しの上は空ける
+        # プレート受けの壁（基板の奥縁 + 0.2 と電池箱 − 0.2 の間。旧・仕切り壁）
         y_div = by - BATT_W / 2 - CLEARANCE - BATT_DIVIDER_T / 2
         _x_inner = db_x - s * (DB_W / 2 + CLEARANCE)
         with Locations(((x_out_edge + _x_inner) / 2, y_div, FLOOR - 0.01)):
             Box(abs(_x_inner - x_out_edge), BATT_DIVIDER_T, z_max,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
-        for cx, _cy in rear_column_positions(half, w, h_body):
-            with Locations((cx, y_div, FLOOR - 0.02)):
-                Box(REAR_COL_D + CLEARANCE * 2, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
-                    align=(Align.CENTER, Align.CENTER, Align.MIN))
-        # 張り出しの内縁側から壁の内端までは全部空ける（張り出しの縁と壁の内端の間に
-        # 幅 0.26 × 高さ 20 の細片が残っていた。利用者が .blend で指摘・2026-09-13）
-        ex0, _ey0, ex1, _ey1 = battery_opening_ext(half, w, h_body)
-        _nx0 = min(ex0 - CLEARANCE, _x_inner - s * 1.0)
-        _nx1 = max(ex1 + CLEARANCE, _x_inner - s * 1.0)
-        if s > 0:
-            _nx0, _nx1 = ex0 - CLEARANCE, max(ex1 + CLEARANCE, _x_inner + 1.0)
-        else:
-            _nx0, _nx1 = min(ex0 - CLEARANCE, _x_inner - 1.0), ex1 + CLEARANCE
-        with Locations(((_nx0 + _nx1) / 2, y_div, FLOOR - 0.02)):
-            Box(_nx1 - _nx0, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # （奥の柱は y 55.3 で壁（〜51.2）より奥、蓋の張り出しも柱の周りだけなので、壁に
+        #   切り欠きは要らない。2026-09-13）
         # 子基板の柱（今までどおり床から 4）
         for dx, dy in DB_BOSS_POS:
             with Locations((db_x + dx, db_y + dy, FLOOR - 0.01)):
