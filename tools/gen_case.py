@@ -707,10 +707,11 @@ def build_case(keys, half):
         # 手前の縁からコブの手前（壁が 2.4 に戻る所）まで。内縁側は子基板の手前で止める
         _rib_x = w / 2 - inset - BOTTOM_SKIN / 2          # 外皮の内面から 1.2
         _y_front = -h_body / 2 + inset + CORNER_R          # 手前の角の丸みを避ける
+        # 内縁側も子基板の横を通してコブの手前まで（子基板の外形 x ≤ 68.98 に対し
+        # リブの内面 69.68。2026-09-13 に「子基板の手前で止める」をやめた: 受けの壁の
+        # 梁を繋ぐ相手が無かった）
         for sx_ in (-1, 1):
             _y_end = h_body / 2 - CLEARANCE * 2
-            if sx_ == s:                                   # 内縁側: 子基板の手前
-                _y_end = min(_y_end, db_y - DB_D / 2 - CLEARANCE)
             with Locations((sx_ * _rib_x, (_y_front + _y_end) / 2, FLOOR - 0.01)):
                 Box(BOTTOM_SKIN, _y_end - _y_front, z_max, align=(Align.CENTER, Align.CENTER, Align.MIN))
         # プレート受けの壁（基板の奥縁 + 0.2 と電池箱 − 0.2 の間。旧・仕切り壁）
@@ -722,8 +723,9 @@ def build_case(keys, half):
         # 子基板の下をくぐる低い梁で、受けの壁を内縁側のリブまで繋ぐ（2026-09-13・利用者
         # 「繋げた方が強度が上がるのでは」）。高さは子基板の下面 − 逃げ。この帯の下に
         # 子基板の裏面の部品は無い（実測）
-        with Locations(((_x_inner + x_in_edge) / 2, y_div, FLOOR - 0.01)):
-            Box(abs(x_in_edge - _x_inner) + 0.02, BATT_DIVIDER_T,
+        _x_rib_in = s * (_rib_x - BOTTOM_SKIN / 2)         # 内縁側のリブの内面
+        with Locations(((_x_inner + _x_rib_in) / 2, y_div, FLOOR - 0.01)):
+            Box(abs(_x_rib_in - _x_inner) + 0.4, BATT_DIVIDER_T,
                 (FLOOR + DB_BOSS_H - CLEARANCE) - (FLOOR - 0.01),
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # （奥の柱は y 55.3 で壁（〜51.2）より奥、蓋の張り出しも柱の周りだけなので、壁に
