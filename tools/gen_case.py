@@ -723,9 +723,17 @@ def build_case(keys, half):
             with Locations((cx, y_div, FLOOR - 0.02)):
                 Box(REAR_COL_D + CLEARANCE * 2, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
                     align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 張り出しの内縁側から壁の内端までは全部空ける（張り出しの縁と壁の内端の間に
+        # 幅 0.26 × 高さ 20 の細片が残っていた。利用者が .blend で指摘・2026-09-13）
         ex0, _ey0, ex1, _ey1 = battery_opening_ext(half, w, h_body)
-        with Locations(((ex0 + ex1) / 2, y_div, FLOOR - 0.02)):
-            Box((ex1 - ex0) + CLEARANCE * 2, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
+        _nx0 = min(ex0 - CLEARANCE, _x_inner - s * 1.0)
+        _nx1 = max(ex1 + CLEARANCE, _x_inner - s * 1.0)
+        if s > 0:
+            _nx0, _nx1 = ex0 - CLEARANCE, max(ex1 + CLEARANCE, _x_inner + 1.0)
+        else:
+            _nx0, _nx1 = min(ex0 - CLEARANCE, _x_inner - 1.0), ex1 + CLEARANCE
+        with Locations(((_nx0 + _nx1) / 2, y_div, FLOOR - 0.02)):
+            Box(_nx1 - _nx0, BATT_DIVIDER_T + 0.2, z_max, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 子基板の柱（今までどおり床から 4）
         for dx, dy in DB_BOSS_POS:
