@@ -684,8 +684,6 @@ def build_case(keys, half):
     db_x = daughterboard_x_center(half, w)
     db_y = y_out - WALL - DB_FROM_REAR - DB_D / 2
     _edge = w / 2 - WALL - BOTTOM_CHAMFER - CLEARANCE
-    x_in_edge = s * _edge
-    x_out_edge = -s * _edge
     with BuildPart() as _up:
         # 手前のリブ。ネジ受けの角柱（上シェル、幅 FRONT_BOSS_W）の間だけ
         # 内面は基板の手前縁 + 逃げ（上シェルの角柱と同じ）。ネジ中心（−50.75）に揃えると
@@ -717,8 +715,13 @@ def build_case(keys, half):
         # プレート受けの壁（基板の奥縁 + 0.2 と電池箱 − 0.2 の間。旧・仕切り壁）
         y_div = by - BATT_W / 2 - CLEARANCE - BATT_DIVIDER_T / 2
         _x_inner = db_x - s * (DB_W / 2 + CLEARANCE)
-        with Locations(((x_out_edge + _x_inner) / 2, y_div, FLOOR - 0.01)):
-            Box(abs(_x_inner - x_out_edge), BATT_DIVIDER_T, z_max,
+        # 外縁側は _edge（斜面を避ける線）ではなく外縁側のリブの内面まで。_edge で
+        # 止めると、その先 1.3 が宙に浮いて壁がリブに繋がらない（2026-09-13・利用者
+        # 「つなげて欲しいのに、いつまで経ってもつながらない」。前の 2 つの直しは
+        # 内縁側だけを見ていた）。リブがその x を埋めているので斜面には当たらない
+        _x_out_rib_in = -s * (_rib_x - BOTTOM_SKIN / 2)
+        with Locations(((_x_out_rib_in + _x_inner) / 2, y_div, FLOOR - 0.01)):
+            Box(abs(_x_inner - _x_out_rib_in), BATT_DIVIDER_T, z_max,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 子基板の下をくぐる低い梁で、受けの壁を内縁側のリブまで繋ぐ（2026-09-13・利用者
         # 「繋げた方が強度が上がるのでは」）。高さは子基板の下面 − 逃げ。この帯の下に
