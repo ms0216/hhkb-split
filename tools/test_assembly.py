@@ -347,15 +347,14 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
             for dx in np.linspace(-0.6, 0.6, 3)
             for dz in np.linspace(-1.0, 1.0, 3)]
     # 手前の止めブロック（器の案・2026-09-06: 底板に立つ。旧・受け箱の奥のリブ）。
-    # **端子のスリットを外して**左右の残りを見る。高さはブロックの中（SW_STOP_H）
+    # 高さは端子の下まで（SW_STOP_H）。端子（中心 ± 2.5・厚み 0.3）はブロックの上を通る
     from gen_case import FLOOR, SW_STOP_H, SW_STOP_T
     rib_y = y_in - depth - CLEARANCE - SW_STOP_T / 2
     z_bot = z - SW_PWR_H / 2 - CLEARANCE / 2
     zs_rib = np.linspace(FLOOR + 0.6, SW_STOP_H - 0.6, 3)
-    rib = [(x + s_ * (SW_PWR_PIN_W + CLEARANCE + SW_PWR_W) / 4, rib_y, zz)
-           for s_ in (-1, 1) for zz in zs_rib]
-    # 端子のスリット（真ん中）。ここは抜けていなければ端子が入らない。
-    slit = [(x, rib_y, zz) for zz in zs_rib]
+    rib = [(x + dx, rib_y, zz) for dx in (-SW_PWR_W * 0.3, 0.0, SW_PWR_W * 0.3) for zz in zs_rib]
+    # 端子の通り道（いちばん下の端子の高さ）。ここに材料があると端子が当たる
+    slit = [(x, rib_y, z - 2.5), (x, rib_y, z), (x, rib_y, z + 2.5)]
     # 入れ口: 受け箱は手前と下が開いている（中から奥へ押し込み、底板が蓋）
     mouth = ([(x + dx, y_in - depth - 0.3, z) for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)]
              + [(x + dx, y_mid, z_bot - 0.5) for dx in np.linspace(-SW_PWR_W * 0.35, SW_PWR_W * 0.35, 3)])
@@ -375,8 +374,8 @@ def test_the_power_switch_holder_exists_and_is_hollow(half):
         "**手前へ戻る向きの抜け止めが効かない**——スイッチが手前へ滑って"
         "ツマミが壁から引っ込む（#18）")
     assert solid_floor(slit) == 0.0, (
-        f"{half}: 止めブロックに端子のスリットが無い（材料 {solid_floor(slit):.0%}）。"
-        "端子 3 本が通らない＝**スイッチが奥まで入らない**")
+        f"{half}: 止めブロックが端子の高さまで来ている（材料 {solid_floor(slit):.0%}）。"
+        "端子 3 本が当たる＝**スイッチが奥まで入らない**")
     assert solid(mouth) == 0.0, (
         f"{half}: 受け箱の手前か下が塞がっている（材料 {solid(mouth):.0%}）。"
         "**中から押し込めない＝スイッチを入れられない**")

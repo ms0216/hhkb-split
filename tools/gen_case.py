@@ -549,7 +549,11 @@ REAR_COL_Y = 52.3        # 同・y。基板の奥縁 48.95 の奥（柱 φ5.6 �
                          # 4.4: ツマミ 4.0 が壁の内面を抜ける）で端子・線の先端が 55.26 まで来る
                          # ので、柱の奥面 55.1 はその手前。56.5 だと 0.04 当たった
 SW_STOP_T = 2.4          # 電源スイッチの手前の止めブロック（底板から）の厚み
-SW_STOP_H = 10.7         # 同・高さ（スイッチの中心まで）
+SW_STOP_H = 7.8          # 同・高さ。**いちばん下の端子（中心 − 2.5、厚み 0.3 → 下端 8.05）の
+                         # 手前まで**。本体の下 1.5mm を受ければ手前へは滑らない。2026-09-13 まで
+                         # 10.7 で端子のスリットを入れていたが、幅 1.5 × 高さ 8.3 の細い板 2 枚に
+                         # なっていた（利用者「細くて狭い板は必要？」）。端子の下で止めれば
+                         # スリットも要らない
 LID_OPEN_CLR = 0.3       # 電池蓋の開口の逃げ（箱の内側から片側）
 LID_LAP = 0.8            # 蓋の縁が底板の段に掛かる幅
 LID_FIT = 0.1            # 蓋と開口・段の隙（片側）
@@ -737,13 +741,10 @@ def build_case(keys, half):
             Box(SW_PWR_W - CLEARANCE, SW_PWR_BODY_D - CLEARANCE, (sw_bot - 0.1) - (FLOOR - 0.01),
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # 止めブロック: 本体の手前面 + 逃げ から SW_STOP_T。受け箱の壁の内側に収まる幅。
-        # 端子（縦に 3 本）が通るスリットを中央に開ける
+        # 高さは端子の下まで（SW_STOP_H の注記）。端子はブロックの上を通る
         _y_stop1 = y_in - (SW_PWR_BODY_D + CLEARANCE) - CLEARANCE
         with Locations((sw_x, _y_stop1 - SW_STOP_T / 2, FLOOR - 0.01)):
             Box(SW_PWR_W, SW_STOP_T, SW_STOP_H - (FLOOR - 0.01),
-                align=(Align.CENTER, Align.CENTER, Align.MIN))
-        with Locations((sw_x, _y_stop1 - SW_STOP_T / 2, FLOOR - 0.02)):
-            Box(SW_PWR_PIN_W + CLEARANCE * 2, SW_STOP_T + 0.2, z_max, mode=Mode.SUBTRACT,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
         # チルト脚の盲穴ボス
         for fx, fy in _foot_positions(w, h_body):
