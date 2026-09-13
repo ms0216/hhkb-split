@@ -213,7 +213,10 @@ BATT_HOLE_Z_LEFT = 5.0           # [暫定] 利用者の実測
 BATT_HOLE_Z_RIGHT = 11.5         # [暫定] 同
 BATT_HOLE_X1_FROM_END = 75.9     # [暫定] 穴 1。黒線側の端から。図面 75.9±0.5
 BATT_HOLE_X2_FROM_END = 82.8     # [暫定] 穴 2。同 75.9 に隣の 6.9±0.2 を足した
-BATT_WIRE_NOTCH = 4.0            # 仕切り壁の両端に開ける、リード線の逃げ（幅・高さ）
+# リード線の逃げ（幅・深さ）。受けの壁の**両端**に、**箱の上面から下へ**切る。
+# 黒線・赤線が両端から 1 本ずつ出る（図面 3251A-0410・端面から 5.0±1.0）ので
+# 両端に要る。出口が上寄りなのは利用者の実測（2026-09-13）
+BATT_WIRE_NOTCH = 4.0
 # 箱の裏面（横倒しでは仕切り壁を向く面）のケーブル受けの突起。**利用者が現物を
 # 実測**（2026-09-06）: 黒線側の端から 14 / 53.5 / 93、幅 4、高さ 5.5。仕切り壁を
 # そこだけ切り下げる（利用者「他は下げなくてよい」）
@@ -766,11 +769,18 @@ def build_case(keys, half):
         with Locations((0, 0, FLOOR - 0.01)):
             Cylinder(NUT_BOSS_D / 2, NUT_BOSS_H + 0.01, align=(Align.CENTER, Align.CENTER, Align.MIN))
     nut_boss = _n.part - cutter_under_pcb
-    # リード線の逃げ（受けの壁の両端・箱の端の真下）
+    # リード線の逃げ（受けの壁の両端）。**箱の上面から下へ切る。**
+    # 黒線は片端・赤線はもう片端から 1 本ずつ出る（データシート 3251A-0410 の
+    # BLACK / RED。端面から 5.0±1.0）ので、逃げは両端に要る。器の案では箱は
+    # 開口を下にして据わり、**利用者の実測（2026-09-13）でリード線の出口は上寄り**。
+    # 以前は床から 4（z 2.4〜6.4）を切っていたが、そこは線が通らず、線の通る
+    # z 6.4〜19.2 は壁が 100% 塞がっていた（実測。案 A の横倒しの名残）
+    _wire_z_top = battery_center_z() + BATT_H / 2                # 箱の上面 19.2
     with BuildPart() as _wn:
         for nx in (bx - BATT_X / 2 + BATT_WIRE_NOTCH / 2, bx + BATT_X / 2 - BATT_WIRE_NOTCH / 2):
-            with Locations((nx, y_div, FLOOR)):
-                Box(BATT_WIRE_NOTCH, WALL * 2, BATT_WIRE_NOTCH, align=(Align.CENTER, Align.CENTER, Align.MIN))
+            with Locations((nx, y_div, _wire_z_top - BATT_WIRE_NOTCH)):
+                Box(BATT_WIRE_NOTCH, WALL * 2, BATT_WIRE_NOTCH * 2,
+                    align=(Align.CENTER, Align.CENTER, Align.MIN))
     ups = ups - _wn.part
 
     part = plate + ups + nut_boss
