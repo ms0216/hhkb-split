@@ -719,6 +719,13 @@ def build_case(keys, half):
         with Locations(((x_out_edge + _x_inner) / 2, y_div, FLOOR - 0.01)):
             Box(abs(_x_inner - x_out_edge), BATT_DIVIDER_T, z_max,
                 align=(Align.CENTER, Align.CENTER, Align.MIN))
+        # 子基板の下をくぐる低い梁で、受けの壁を内縁側のリブまで繋ぐ（2026-09-13・利用者
+        # 「繋げた方が強度が上がるのでは」）。高さは子基板の下面 − 逃げ。この帯の下に
+        # 子基板の裏面の部品は無い（実測）
+        with Locations(((_x_inner + x_in_edge) / 2, y_div, FLOOR - 0.01)):
+            Box(abs(x_in_edge - _x_inner) + 0.02, BATT_DIVIDER_T,
+                (FLOOR + DB_BOSS_H - CLEARANCE) - (FLOOR - 0.01),
+                align=(Align.CENTER, Align.CENTER, Align.MIN))
         # （奥の柱は y 55.3 で壁（〜51.2）より奥、蓋の張り出しも柱の周りだけなので、壁に
         #   切り欠きは要らない。2026-09-13）
         # 子基板の柱（今までどおり床から 4）
