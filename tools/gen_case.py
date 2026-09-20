@@ -1342,10 +1342,14 @@ def build_topcase(keys, half):
         add(cav_bump, mode=Mode.SUBTRACT)
         add(bottom_recess, mode=Mode.SUBTRACT)
         add(thin_cav, mode=Mode.SUBTRACT)
+        # 座ぐりは**垂らす物を足す前**に引く。後で引くと手前のネジ受けがプレートの帯
+        # （1.6）で輪切りになり、インサートの入る下半分が壁 1.2 だけでぶら下がる
+        # （2026-09-20・利用者「なんで宙に浮かせてるのですか」。プレートは切り欠きで
+        # 角柱を避けているので、通しても当たらない）
+        add(rebate, mode=Mode.SUBTRACT)
         add(hang, mode=Mode.ADD)
         add(sw_void, mode=Mode.SUBTRACT)
         add(cut_above_top, mode=Mode.SUBTRACT)
-        add(rebate, mode=Mode.SUBTRACT)
         add(led_window_void, mode=Mode.SUBTRACT)
         add(opening_cut, mode=Mode.SUBTRACT)
         add(blank_covers, mode=Mode.ADD)

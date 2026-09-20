@@ -563,3 +563,34 @@ def test_the_usb_receptacle_sticks_out_until_23_is_solved(name):
         f"{USB_RECESS}mm 引っ込めるのに要る {need:.3f}mm に**足りている**。"
         "**もう #23 を待たなくてよい。**子基板を前へ出して、この検査を "
         "test_the_usb_receptacle_does_not_stick_out_of_the_case へ戻すこと")
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_front_screw_bosses_are_not_sliced_by_the_plate_rebate(name):
+    """手前のネジ受けが、**プレートの帯で輪切りになっていない**こと（2026-09-20）。
+
+    利用者の指摘（.blend・試し刷り）「なんで宙に浮かせてるのですか」。座ぐり
+    （リム面〜プレート上面 + 0.1）を角柱を足した**後**に全面へ引いていたので、
+    インサートの入る下半分が壁 1.2 だけでぶら下がっていた。solid 数 1 の検査は
+    壁で繋がっているので通る。プレートは切り欠きで角柱を避けている。
+
+    やり方: 角柱の中（インサートの穴を避けた x の端寄り）に細い柱を立て、
+    インサートの穴の上からベゼルの裏までが**全部材料**であること。
+    """
+    from math import radians, tan
+    from gen_case import BEZEL_TOP_FRONT, _boss_positions, build_topcase, plan_depth
+    from interface import FRONT_BOSS_W, plate_positions
+
+    top = build_topcase(HALVES[name], name)[0]
+    _, (_, h_plate) = plate_positions(HALVES[name])
+    h_body = plan_depth(h_plate)
+    for bx, by in _boss_positions(name):
+        x = bx + FRONT_BOSS_W / 2 - 1.5
+        z0 = PLATE_TOP_FRONT - PLATE_T - 1.0          # リム面の少し下から
+        z1 = BEZEL_TOP_FRONT + (by + h_body / 2) * tan(radians(TILT_DEG)) - 0.5
+        probe = Location((x, by, z0)) * Box(0.6, 0.6, z1 - z0,
+                                            align=(Align.CENTER, Align.CENTER, Align.MIN))
+        filled = intersection_volume(top, probe) / probe.volume
+        assert filled > 0.99, (
+            f"{name}: 手前のネジ受け x={bx:.1f} が z {z0:.1f}〜{z1:.1f} のうち "
+            f"{filled:.0%} しか埋まっていない。**プレートの帯で輪切り**")
