@@ -23,7 +23,7 @@
 """
 
 import sys
-from math import degrees, radians, tan
+from math import cos, degrees, radians, tan
 from pathlib import Path
 
 from build123d import (
@@ -155,7 +155,7 @@ PLATE_TOP_FRONT = round(
 # --------------------------------------------------------------------------
 WALL = 2.4               # 側壁。0.4mm の 6 倍
 from interface import CASE_WALL as _IF_CASE_WALL  # noqa: E402
-from interface import FRONT_BOSS_W, PCB_FRONT_EDGE_PLAN  # noqa: E402
+from interface import FRONT_BOSS_W, NOTCH_FIT, PCB_FRONT_EDGE_PLAN, switch_plate_size  # noqa: E402
 from envelopes import M2_INSERT_L  # noqa: E402
 assert WALL == _IF_CASE_WALL, (
     f"interface.CASE_WALL({_IF_CASE_WALL}) が gen_case.WALL({WALL}) とずれている")
@@ -1279,6 +1279,21 @@ def build_topcase(keys, half):
     rebate = ((_inset(BEZEL_WALL) - tilted_cutter(w, h_body, PLATE_TOP_FRONT + 0.1) - _pz.part)
               .intersect(above_rim))
 
+    # プレートの奥端を止める段の材料（下の top の中で足す。注記もそこ）。**引き算だけで作る**
+    # 奥端＝平らな板の奥行（interface.switch_plate_size）の半分を傾けた、下面の奥の角
+    _plate_d = switch_plate_size(w - PLATE_MARGIN_X * 2, h_plate - PLATE_MARGIN_Y * 2)[1]
+    _y_stop = _plate_d / 2 * cos(radians(TILT_DEG)) + NOTCH_FIT
+    _above_stop = tilted_cutter(w, h_body, rim + CLEARANCE)
+
+    def _stop_box(width):
+        return (Location((0, (_y_stop + h_body / 2) / 2, -1.0))
+                * Box(width, h_body / 2 - _y_stop + 0.02, z_max,
+                      align=(Align.CENTER, Align.CENTER, Align.MIN)))
+    # 段: 薄い側壁（BEZEL_WALL）の内面の間いっぱい（壁へ 0.1 ずつ食い込ませて一体に）
+    _b = _stop_box(w - BEZEL_WALL * 2 + 0.2)
+    stop_lip = _b - (_b - _above_stop)                   # 段の下端（リム面 + CLEARANCE）より上
+    stop_under = _stop_box(w - WALL * 2) - _above_stop   # それより下
+
     # 天井から垂らす物（すべて z_hang から上へ。ベゼル上面で切る）
     with BuildPart() as _hang:
         # 手前のネジ受け（壁と一体の角柱。プレートの切り欠きを通り、底板の上まで）
@@ -1347,6 +1362,15 @@ def build_topcase(keys, half):
         # （2026-09-20・利用者「なんで宙に浮かせてるのですか」。プレートは切り欠きで
         # 角柱を避けているので、通しても当たらない）
         add(rebate, mode=Mode.SUBTRACT)
+        # プレートの奥端を止める段（奥のバーの下・2026-09-20）。利用者の試し刷り 2 回:
+        # 「奥側の壁が無い」。座ぐりの奥端（h_body/2 − CLEARANCE）とコブの空洞の始まり
+        # （h_body/2）の間に厚さ 0.2 の膜が残っていただけで、ノズル 0.4 では出ない
+        # （.blend では壁に見える）。プレートは奥へ 0.4 遊んでいた。
+        # 奥端（傾けた下面の奥の角）＋ NOTCH_FIT から h_body/2 まで（1.29）を、リム面 +
+        # CLEARANCE（底板を締めるとリブが BOTTOM_FIT 上がる）からバーの下面まで埋める。
+        # コブの空洞へは出ない。膜の下半分も一緒に消える
+        add(stop_lip, mode=Mode.ADD)
+        add(stop_under, mode=Mode.SUBTRACT)      # 段より下に残る膜（コブの内幅）を消す
         add(hang, mode=Mode.ADD)
         add(sw_void, mode=Mode.SUBTRACT)
         add(cut_above_top, mode=Mode.SUBTRACT)

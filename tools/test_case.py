@@ -594,3 +594,36 @@ def test_the_front_screw_bosses_are_not_sliced_by_the_plate_rebate(name):
         assert filled > 0.99, (
             f"{name}: 手前のネジ受け x={bx:.1f} が z {z0:.1f}〜{z1:.1f} のうち "
             f"{filled:.0%} しか埋まっていない。**プレートの帯で輪切り**")
+
+
+@pytest.mark.parametrize("name", ["left", "right"])
+def test_the_topcase_has_a_printable_stop_behind_the_plate_rear_edge(name):
+    """上シェルに、**プレートの奥端を止める壁が、印刷できる厚みで**あること（2026-09-20）。
+
+    利用者の試し刷り（2 回）: プレートが前後にガタつく。「奥側の壁が無い」。
+    設計には厚さ **0.2** の膜（座ぐりの奥端 h_body/2 − CLEARANCE と、コブの空洞の
+    始まり h_body/2 の削り残し）しか無く、ノズル 0.4 では出ない。.blend では壁に
+    見えるので、利用者にも私にも見抜けなかった。干渉検査は「当たらない」しか見ない。
+
+    やり方: プレートの奥端（傾けた後の最後端）の NOTCH_FIT + 0.05 後ろから、奥行 1.2・
+    板厚の帯の中ほどに箱を置き、**上シェルの材料で埋まっている**ことを全幅の 5 点で見る。
+    """
+    from math import cos, radians, tan
+    from gen_case import build_topcase, plan_depth
+    from interface import (NOTCH_FIT, PLATE_MARGIN_X, PLATE_MARGIN_Y, plate_positions,
+                           switch_plate_size)
+
+    top = build_topcase(HALVES[name], name)[0]
+    _, (w, h_plate) = plate_positions(HALVES[name])
+    h_body = plan_depth(h_plate)
+    plate_d = switch_plate_size(w - PLATE_MARGIN_X * 2, h_plate - PLATE_MARGIN_Y * 2)[1]
+    y_rear = plate_d / 2 * cos(radians(TILT_DEG))                 # 下面の奥の角
+    y0 = y_rear + NOTCH_FIT + 0.05
+    for fx in (-0.45, -0.2, 0.0, 0.2, 0.45):
+        rim = PLATE_TOP_FRONT - PLATE_T + (y0 + 0.6 + h_body / 2) * tan(radians(TILT_DEG))
+        probe = Location((fx * w, y0, rim + 0.5)) * Box(
+            4.0, 1.2, 0.6, align=(Align.CENTER, Align.MIN, Align.MIN))
+        filled = intersection_volume(top, probe) / probe.volume
+        assert filled > 0.95, (
+            f"{name}: プレートの奥端の後ろ（x={fx * w:.0f}・y {y0:.2f}〜{y0 + 1.2:.2f}）が "
+            f"{filled:.0%} しか埋まっていない。**奥を止める壁が無い／薄くて刷れない**")
