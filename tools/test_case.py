@@ -627,3 +627,15 @@ def test_the_topcase_has_a_printable_stop_behind_the_plate_rear_edge(name):
         assert filled > 0.95, (
             f"{name}: プレートの奥端の後ろ（x={fx * w:.0f}・y {y0:.2f}〜{y0 + 1.2:.2f}）が "
             f"{filled:.0%} しか埋まっていない。**奥を止める壁が無い／薄くて刷れない**")
+
+
+def test_the_battery_box_holes_sit_rearward_on_the_left():
+    """電池箱の取付穴は、**左手では奥寄り**（2026-09-21・利用者が現物で確認）。
+
+    開口を下・黒線を外壁側にして箱を置くと穴は奥寄り。右手は同じ箱を 180° 回して置くので
+    手前寄りで、左右の値を足すと箱の幅になる。2026-09-20 までは逆で、上シェルを刷ってから
+    箱の穴とボスが 6.5 ずれていると分かった。**善意で「元に戻す」のを止める検査。**
+    """
+    from gen_case import BATT_HOLE_Z_LEFT, BATT_HOLE_Z_RIGHT
+    assert BATT_HOLE_Z_LEFT > BATT_W / 2 > BATT_HOLE_Z_RIGHT
+    assert BATT_HOLE_Z_LEFT + BATT_HOLE_Z_RIGHT == pytest.approx(BATT_W, abs=0.2)
