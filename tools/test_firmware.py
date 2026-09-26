@@ -291,6 +291,33 @@ def test_an_unusable_transport_counts_as_disconnected():
             f"{i + 1} 箇所目が未接続へ倒していない")
 
 
+def test_the_advertised_name_carries_the_profile_number():
+    """広告名が「<名前>_n」になること（実機の HHKB-Hybrid_n の再現）。
+
+    1. profile_name.c が積まれる（Kconfig・CMake・左の conf）
+    2. 最初の起動の名前（CONFIG_BT_DEVICE_NAME）が「<名前>_1」と一致する。
+       ずれると、初回だけ番号の無い名前で広告する
+    3. 名前に "HHKB" を使わない（PFU の商標）
+    """
+    shield = ROOT / "config/boards/shields/hhkb_split"
+    left = (shield / "hhkb_split_left.conf").read_text()
+    right = (shield / "hhkb_split_right.conf").read_text()
+    assert "CONFIG_HHKB_PROFILE_NAME=y" in left
+    assert "config HHKB_PROFILE_NAME" in (ROOT / "firmware/Kconfig").read_text()
+    assert "src/profile_name.c" in (ROOT / "firmware/CMakeLists.txt").read_text()
+
+    kb = re.search(r'^CONFIG_ZMK_KEYBOARD_NAME="([^"]*)"', left, re.M).group(1)
+    bt = re.search(r'^CONFIG_BT_DEVICE_NAME="([^"]*)"', left, re.M).group(1)
+    assert bt == f"{kb}_1", (kb, bt)
+    for conf in (left, right):
+        name = re.search(r'^CONFIG_ZMK_KEYBOARD_NAME="([^"]*)"', conf, re.M).group(1)
+        assert "HHKB" not in name.upper(), name
+
+    src = (ROOT / "firmware/src/profile_name.c").read_text()
+    assert '"%s_%d", CONFIG_ZMK_KEYBOARD_NAME, ev->index + 1' in src, \
+        "番号は 1 始まり（ZMK の枠は 0 始まり）"
+
+
 def test_the_zmk_config_validator_passes():
     """ZMK 設定の静的検査（check_zmk_config.py）が通ること。
 

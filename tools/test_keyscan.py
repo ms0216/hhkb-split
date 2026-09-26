@@ -166,9 +166,16 @@ def test_right_half_local_columns_fit_its_own_shift_register():
     assert max(local) == RIGHT_COLS - 1
 
 
-def test_bindings_match_the_transform_in_every_layer():
+def _layers():
+    """keymap ノードの中のレイヤーだけ。**マクロも bindings を持つ**ので、
+    ファイル全体を走査するとマクロをレイヤーと数えてしまう。"""
     text = _strip(KEYMAP.read_text())
-    layers = re.findall(r"(\w+)\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S)
+    text = text[text.index('"zmk,keymap"'):]
+    return re.findall(r"(\w+)\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S)
+
+
+def test_bindings_match_the_transform_in_every_layer():
+    layers = _layers()
     assert layers, "キーマップからレイヤーを読めなかった"
     for name, body in layers:
         assert len(re.findall(r"&\w+", body)) == len(_map_entries()), name
@@ -286,3 +293,52 @@ def test_the_bootloader_is_reachable_from_the_keymap():
             f"{side}半分にブートローダへ入るキーが無い"
         assert any(b.startswith("&sys_reset") for b in part), \
             f"{side}半分に再起動のキーが無い"
+
+
+def test_pairing_follows_the_hhkb_manual():
+    """ペアリングの打ち方が実機（PFU P3PC-6641-05 p.8/15）と同じであること。
+
+    実機は 4 台まで登録でき、キーボード単体で登録・切替・削除ができる。
+    消す操作は **Fn+Q（待機）を経たときだけ**効く。1 打で消えないこと。
+    Delete→BS の設定では Delete の代わりに ` を使う（取説 p.15 注記）。
+    """
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).resolve().parent))
+    from layout import load_layout, split_halves
+    from matrix import keymap_order
+
+    left, right = split_halves(load_layout(
+        str(_P(__file__).resolve().parent.parent / "layout/hhkb_split.json")))
+    labels = ([k.label for k in keymap_order(left)]
+              + [k.label for k in keymap_order(right)])
+    at = {lab: labels.index(lab) for lab in ("1", "2", "3", "4", "Q", "X", "Z", "`")}
+
+    layers = _layers()
+    names = [n for n, _ in layers]
+    L = {n: [b.strip() for b in re.findall(r"&\w+(?:\s+\w+)*", body)]
+         for n, body in layers}
+
+    # #define の番号が定義順と一致すること（ずれると別のレイヤーが開く）
+    text = _strip(KEYMAP.read_text())
+    for name in ("pair", "pair_fn", "pair_sys", "pair_z"):
+        m = re.search(rf"#define\s+{name.upper()}\s+(\d+)", text)
+        assert m and int(m.group(1)) == names.index(name), name
+
+    digits = [at[d] for d in "1234"]
+    assert L["fn"][at["Q"]] == "&tog_on PAIR", "Fn+Q で待機へ入らない"
+    assert L["fn"][at["X"]] == "&tog_off PAIR", "Fn+X で待機を抜けない"
+    assert [L["sys"][i] for i in digits] == [f"&bt_to {n}" for n in range(4)]
+    assert [L["pair_sys"][i] for i in digits] == [f"&bt_pair {n}" for n in range(4)]
+    assert L["pair_fn"][at["Z"]] == "&mo PAIR_Z"
+    assert L["pair_z"][at["`"]] == "&bt_clr_all"
+
+    # 消去は待機を経た層（pair_sys / pair_z）の中だけ
+    erasers = {n for n, bs in L.items()
+               if any(b.startswith(("&bt BT_CLR", "&bt_pair", "&bt_clr_all")) for b in bs)}
+    assert erasers == {"pair_sys", "pair_z"}, erasers
+
+    # 条件レイヤー: 待機中の Fn / Fn+Ctrl が pair_fn / pair_sys を開くこと
+    cond = re.findall(r"if-layers\s*=\s*<(.*?)>\s*;\s*then-layer\s*=\s*<(\w+)>", text)
+    assert sorted((tuple(a.split()), b) for a, b in cond) == [
+        (("FN", "PAIR"), "PAIR_FN"), (("SYS", "PAIR"), "PAIR_SYS")], cond

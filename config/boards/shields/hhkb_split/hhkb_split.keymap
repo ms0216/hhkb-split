@@ -34,8 +34,84 @@
 #define BASE_WIN 1
 #define FN       2
 #define SYS      3
+#define PAIR     4  /* ペアリング待機モード（Fn+Q）の印。中身は全部 &trans */
+#define PAIR_FN  5  /* FN かつ PAIR のとき（条件レイヤー） */
+#define PAIR_SYS 6  /* SYS かつ PAIR のとき（条件レイヤー） */
+#define PAIR_Z   7  /* 待機中に Fn+Z を押している間（全削除の入口） */
+
+/*
+ * ペアリング（PFU 取扱説明書 P3PC-6641-05 p.8/15「キー操作」表に合わせた）
+ *
+ *   Fn+Ctrl+1〜4                … その機器へ切り替え（USB 中なら BLE へ戻る）
+ *   Fn+Q → Fn+Ctrl+1〜4         … その番号に登録（既に登録済みなら上書き）
+ *   Fn+Q → Fn+Z+`               … 全削除
+ *   Fn+Q → Fn+Ctrl+`+1〜4       … 個別削除
+ *   Fn+X                        … 待機モードを抜ける
+ *   Fn+Ctrl+0                   … USB へ
+ *
+ * 実機は Delete で消すが、Delete→BS（DIP SW3 ON）の設定では
+ * 「Delete のすぐ上の `/~ を使う」と取説 p.15 の注記にある。本機は常にその設定。
+ *
+ * **実機との違い（ZMK の仕組みから来る）:**
+ *   - ZMK の「上書き登録」は「その枠の結合を消して広告し直す」なので、
+ *     個別削除と登録は同じ動作になる。消したあとは OFF にならず、
+ *     その番号で相手を待つ（青の速い点滅）。**電源スイッチが無いので OFF にしない。**
+ *   - 全削除のあとも OFF にならず、1 番で相手を待つ。
+ *   - Fn+X は「待機を抜ける」だけ。番号を選んで広告を始めたあとの
+ *     取り消しは、Fn+Ctrl+（元の番号）で戻る。
+ *   - 全削除はホストとの結合だけを消す。左右間の結合は消えない（ZMK の
+ *     zmk_ble_clear_all_bonds はプロファイルの枠だけを回る）。
+ */
 
 / {
+	behaviors {
+		tog_on: tog_on {
+			compatible = "zmk,behavior-toggle-layer";
+			#binding-cells = <1>;
+			toggle-mode = "on";
+		};
+		tog_off: tog_off {
+			compatible = "zmk,behavior-toggle-layer";
+			#binding-cells = <1>;
+			toggle-mode = "off";
+		};
+	};
+
+	macros {
+		/* 機器の切り替え。実機は USB 接続中でも Fn+Ctrl+1〜4 で BT へ移る。 */
+		bt_to: bt_to {
+			compatible = "zmk,behavior-macro-one-param";
+			#binding-cells = <1>;
+			bindings = <&out OUT_BLE>,
+			           <&macro_param_1to2>, <&bt BT_SEL MACRO_PLACEHOLDER>;
+		};
+		/* 登録（上書き）／個別削除。選んだ枠の結合を消し、待機を抜ける。 */
+		bt_pair: bt_pair {
+			compatible = "zmk,behavior-macro-one-param";
+			#binding-cells = <1>;
+			bindings = <&out OUT_BLE>,
+			           <&macro_param_1to2>, <&bt BT_SEL MACRO_PLACEHOLDER>,
+			           <&bt BT_CLR>, <&tog_off PAIR>;
+		};
+		bt_clr_all: bt_clr_all {
+			compatible = "zmk,behavior-macro";
+			#binding-cells = <0>;
+			bindings = <&out OUT_BLE>, <&bt BT_CLR_ALL>, <&tog_off PAIR>;
+		};
+	};
+
+	conditional_layers {
+		compatible = "zmk,conditional-layers";
+		fn_in_pairing {
+			if-layers = <FN PAIR>;
+			then-layer = <PAIR_FN>;
+		};
+		sys_in_pairing {
+			if-layers = <SYS PAIR>;
+			then-layer = <PAIR_SYS>;
+		};
+	};
+
 	keymap {
 		compatible = "zmk,keymap";
 
@@ -92,9 +168,9 @@
 			bindings = <
 			/* --- 左 27 --- */
 			&kp K_POWER &kp F1 &kp F2 &kp F3 &kp F4 &kp F5
-			&kp CAPS    &trans &trans &trans &trans &trans
+			&kp CAPS    &tog_on PAIR &trans &trans &trans &trans
 			&mo SYS     &kp C_VOL_DN &kp C_VOL_UP &kp C_MUTE &kp C_EJECT &trans
-			&trans      &trans &trans &trans &trans &trans
+			&trans      &trans &tog_off PAIR &trans &trans &trans
 			&trans      &trans &trans
 			/* --- 右 34 --- */
 			&kp F6 &kp F7 &kp F8 &kp F9 &kp F10 &kp F11 &kp F12 &kp INS &kp DEL
@@ -108,12 +184,11 @@
 		/* ------------------------------------------------------------
 		 * 3: SYS（Fn + Ctrl を押している間だけ）
 		 *    実機と同じ打ち方で BT と OS モードを切り替える。
-		 *      Fn+Ctrl+1〜4 : Bluetooth プロファイル 1〜4
+		 *      Fn+Ctrl+1〜4 : Bluetooth の機器 1〜4 へ切り替え
+		 *                     （Fn+Q の後なら登録。上の「ペアリング」参照）
 		 *      Fn+Ctrl+0    : USB 接続へ
 		 *      Fn+Ctrl+M    : Mac モード
 		 *      Fn+Ctrl+W    : Windows モード
-		 *      Fn+Ctrl+`    : 現在のプロファイルのペアリング情報を消去
-		 *                     （実機には無いが、無線機の復旧手段として必要）
 		 *      Fn+Ctrl+Esc  : ブートローダへ入る（左）
 		 *      Fn+Ctrl+6    : ブートローダへ入る（右）
 		 *      Fn+Ctrl+5    : 再起動（左）  Fn+Ctrl+7 : 再起動（右）
@@ -130,16 +205,98 @@
 		sys {
 			bindings = <
 			/* --- 左 27 --- */
-			&bootloader &bt BT_SEL 0 &bt BT_SEL 1 &bt BT_SEL 2 &bt BT_SEL 3 &sys_reset
+			&bootloader &bt_to 0 &bt_to 1 &bt_to 2 &bt_to 3 &sys_reset
 			&none  &none  &to BASE_WIN &none &none &none
 			&trans &none  &none  &none  &none  &none
 			&none  &none  &none  &none  &none  &none
 			&none  &none  &none
 			/* --- 右 34 --- */
-			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &bt BT_CLR
+			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &none
 			&none &none &none &none &none &none &none &none
 			&none &none &none &none &none &none &none
 			&none &to BASE_MAC &none &none &none &none &trans
+			&none &none &none
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 4: ペアリング待機モード（Fn+Q で入る）。印だけで中身は素通し。
+		 *    打鍵はそのまま使える（実機の待機モードも入力できる）。
+		 * ------------------------------------------------------------ */
+		pair {
+			bindings = <
+			/* --- 左 27 --- */
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			/* --- 右 34 --- */
+			&trans &trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 5: 待機中の Fn。Z を押している間だけ全削除の入口が開く。
+		 * ------------------------------------------------------------ */
+		pair_fn {
+			bindings = <
+			/* --- 左 27 --- */
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &mo PAIR_Z &trans &trans &trans &trans
+			&trans &trans &trans
+			/* --- 右 34 --- */
+			&trans &trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 6: 待機中の Fn+Ctrl。1〜4 で登録（個別削除も同じ）。
+		 *    ` は個別削除の手順（Fn+Ctrl+`+番号）で押されるので何もしない。
+		 * ------------------------------------------------------------ */
+		pair_sys {
+			bindings = <
+			/* --- 左 27 --- */
+			&trans &bt_pair 0 &bt_pair 1 &bt_pair 2 &bt_pair 3 &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &none &trans &trans &trans &trans
+			&trans &trans &trans
+			/* --- 右 34 --- */
+			&trans &trans &trans &trans &trans &trans &trans &trans &none
+			&trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			>;
+		};
+
+		/* ------------------------------------------------------------
+		 * 7: 待機中の Fn+Z。` で全削除。他のキーは何もしない。
+		 * ------------------------------------------------------------ */
+		pair_z {
+			bindings = <
+			/* --- 左 27 --- */
+			&none &none &none &none &none &none
+			&none &none &none &none &none &none
+			&none &none &none &none &none &none
+			&none &none &none &none &none &none
+			&none &none &none
+			/* --- 右 34 --- */
+			&none &none &none &none &none &none &none &none &bt_clr_all
+			&none &none &none &none &none &none &none &none
+			&none &none &none &none &none &none &none
+			&none &none &none &none &none &none &none
 			&none &none &none
 			>;
 		};

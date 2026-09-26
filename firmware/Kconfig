@@ -58,6 +58,15 @@ config HHKB_STATUS_LED
 	  ⚠️ led0/led1/led2 のエイリアスがある基板でしか積めない。
 	  無ければ BUILD_ASSERT で落ちる（黙って無効にはしない）。
 
+config HHKB_PROFILE_NAME
+	bool "広告するデバイス名に登録先の番号を付ける（<名前>_1〜_4）"
+	default n
+	depends on ZMK_BLE && (ZMK_SPLIT_ROLE_CENTRAL || !ZMK_SPLIT)
+	help
+	  実機は「HHKB-Hybrid_n」（n = 登録先の数字キー）で広告し、
+	  ホストの一覧で番号が見える（PFU 取扱説明書 P3PC-6641-05）。
+	  ホストと話すのは左（セントラル）だけなので、右では積まない。
+
 config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
 	int "何回続けて下回ったら止まるか"
 	default 2
