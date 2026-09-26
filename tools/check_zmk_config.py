@@ -97,6 +97,8 @@ def count_bindings(keymap):
     """キーマップの各レイヤーのバインディング数を [(名前, 個数), ...] で返す。"""
     text = keymap.read_text(encoding="utf-8")
     text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)      # コメントを除く
+    # keymap ノードより前のマクロも bindings を持つ。レイヤーと数えない
+    text = text[max(text.find('"zmk,keymap"'), 0):]
     out = []
     for m in re.finditer(r"(\w+)\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S):
         out.append((m.group(1), len(re.findall(r"&\w+", m.group(2)))))

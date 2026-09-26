@@ -16,7 +16,7 @@
 zephyr_include_directories(${CMAKE_SOURCE_DIR}/include)
 
 if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
-   OR CONFIG_HHKB_STATUS_LED)
+   OR CONFIG_HHKB_STATUS_LED OR CONFIG_HHKB_PROFILE_NAME)
   zephyr_library()
   zephyr_library_sources_ifdef(CONFIG_HHKB_BATTERY_ALKALINE
                                drivers/battery_alkaline.c)
@@ -24,4 +24,6 @@ if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
                                src/low_battery_off.c)
   zephyr_library_sources_ifdef(CONFIG_HHKB_STATUS_LED
                                src/status_led.c)
+  zephyr_library_sources_ifdef(CONFIG_HHKB_PROFILE_NAME
+                               src/profile_name.c)
 endif()
