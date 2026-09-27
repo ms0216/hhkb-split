@@ -29,6 +29,8 @@
 #include <dt-bindings/zmk/bt.h>
 #include <dt-bindings/zmk/keys.h>
 #include <dt-bindings/zmk/outputs.h>
+/* 最高速（ZMK 既定 600 は遅すぎた）。好みで詰める値。 */
+#define ZMK_POINTING_DEFAULT_MOVE_VAL 1800
 #include <dt-bindings/zmk/pointing.h>
 
 #define BASE_MAC 0
@@ -195,10 +197,11 @@
 		 *      Fn+Ctrl+5    : 再起動（左）  Fn+Ctrl+7 : 再起動（右）
 		 *
 		 *    **検討用（実機に無い）: マウス（2026-09-27〜・mouse-keys-trial）**
-		 *      Fn+Ctrl+I/J/K/L : カーソル 上/左/下/右
-		 *      Fn+Ctrl+U/O     : スクロール 上/下
-		 *      Fn+Ctrl+右Space : 左クリック   Fn+Ctrl+右◇ : 右クリック
-		 *    右手をホームから離さずに指せれば視線の往復が消えるか、を試すため。
+		 *      Fn+Ctrl+[ ; ' / : カーソル 上/左/右/下（Fn の矢印と同じ位置）
+		 *      Fn+Ctrl+左Space : 左クリック   Fn+Ctrl+右Space : 右クリック
+		 *    加速なしで最初から一定の速さ（利用者の指定）。スクロールは
+		 *    Fn の PgUp/PgDn で足りるとして置かない。
+		 *    手をキーボードから離さずに指せれば視線の往復が消えるか、を試すため。
 		 *    SYS の空き（&none）だけを使い、HHKB の Fn 面は 1 つも潰していない。
 		 *    CONFIG_ZMK_POINTING（左の .conf）と対。外すときは両方消す。
 		 *
@@ -218,13 +221,13 @@
 			&none  &none  &to BASE_WIN &none &none &none
 			&trans &none  &none  &none  &none  &none
 			&none  &none  &none  &none  &none  &none
-			&none  &none  &none
+			&none  &none  &mkp LCLK
 			/* --- 右 34 --- */
 			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &none
-			&none &msc SCRL_UP &mmv MOVE_UP &msc SCRL_DOWN &none &none &none &none
-			&none &mmv MOVE_LEFT &mmv MOVE_DOWN &mmv MOVE_RIGHT &none &none &none
-			&none &to BASE_MAC &none &none &none &none &trans
-			&mkp LCLK &mkp RCLK &none
+			&none &none &none &none &none &mmv MOVE_UP &none &none
+			&none &none &none &none &mmv MOVE_LEFT &mmv MOVE_RIGHT &none
+			&none &to BASE_MAC &none &none &mmv MOVE_DOWN &none &trans
+			&mkp RCLK &none &none
 			>;
 		};
 
@@ -310,4 +313,10 @@
 			>;
 		};
 	};
+};
+
+/* 検討用マウス: 加速なし（指数 0 で押した瞬間から最高速。ZMK の
+ * behavior_input_two_axis.c は accel_exp == 0 なら max_speed を返す）。 */
+&mmv {
+	acceleration-exponent = <0>;
 };
