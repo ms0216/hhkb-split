@@ -29,9 +29,11 @@
 #include <dt-bindings/zmk/bt.h>
 #include <dt-bindings/zmk/keys.h>
 #include <dt-bindings/zmk/outputs.h>
-/* 最高速（ZMK 既定 600 は遅すぎた）。好みで詰める値。 */
+/* 最高速（ZMK 既定は 600 / 10 で遅すぎた）。好みで詰める値。 */
 #define ZMK_POINTING_DEFAULT_MOVE_VAL 1800
+#define ZMK_POINTING_DEFAULT_SCRL_VAL 30
 #include <dt-bindings/zmk/pointing.h>
+#include <input/processors.dtsi>
 
 #define BASE_MAC 0
 #define BASE_WIN 1
@@ -41,6 +43,7 @@
 #define PAIR_FN  5  /* FN かつ PAIR のとき（条件レイヤー） */
 #define PAIR_SYS 6  /* SYS かつ PAIR のとき（条件レイヤー） */
 #define PAIR_Z   7  /* 待機中に Fn+Z を押している間（全削除の入口） */
+#define SLOW     8  /* 検討用マウス: Fn+Ctrl+Shift の間だけ 1/4 の速さ */
 
 /*
  * ペアリング（PFU 取扱説明書 P3PC-6641-05 p.8/15「キー操作」表に合わせた）
@@ -200,7 +203,10 @@
 		 *      Fn+Ctrl+[ ; ' / : カーソル 上/左/右/下（Fn の矢印と同じ位置）
 		 *      Fn+Ctrl+左Space : 左クリック   Fn+Ctrl+右Space : 右クリック
 		 *      Fn+Ctrl+L / .  : ホイール 上/下（Fn の PgUp/PgDn と同じ位置）
+		 *      上に加えて Shift : 移動もホイールも 1/4（細かい操作用）
 		 *    移動は加速なしで最初から一定の速さ（利用者の指定）。
+		 *    Shift を「遅く」にしたのは、普段の移動を 3 キーで済ませるため
+		 *    （「速く」にすると大半が 4 キー同時押しになる）。
 		 *    ホイールは PgUp/PgDn と別物（少しずつ・カーソルの下に効く・
 		 *    文字カーソルを動かさない）なので両方置く。
 		 *    手をキーボードから離さずに指せれば視線の往復が消えるか、を試すため。
@@ -222,13 +228,13 @@
 			&bootloader &bt_to 0 &bt_to 1 &bt_to 2 &bt_to 3 &sys_reset
 			&none  &none  &to BASE_WIN &none &none &none
 			&trans &none  &none  &none  &none  &none
-			&none  &none  &none  &none  &none  &none
+			&mo SLOW &none &none &none &none &none
 			&none  &none  &mkp LCLK
 			/* --- 右 34 --- */
 			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &none
 			&none &none &none &none &none &mmv MOVE_UP &none &none
 			&none &none &none &msc SCRL_UP &mmv MOVE_LEFT &mmv MOVE_RIGHT &none
-			&none &to BASE_MAC &none &msc SCRL_DOWN &mmv MOVE_DOWN &none &trans
+			&none &to BASE_MAC &none &msc SCRL_DOWN &mmv MOVE_DOWN &mo SLOW &trans
 			&mkp RCLK &none &none
 			>;
 		};
@@ -314,6 +320,27 @@
 			&none &none &none
 			>;
 		};
+
+		/* ------------------------------------------------------------
+		 * 8: 検討用マウスの低速（Fn+Ctrl+Shift の間だけ）。印だけで中身は
+		 *    素通し。縮めるのは末尾の listener の上書き。
+		 * ------------------------------------------------------------ */
+		slow {
+			bindings = <
+			/* --- 左 27 --- */
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			/* --- 右 34 --- */
+			&trans &trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans &trans &trans &trans &trans
+			&trans &trans &trans
+			>;
+		};
 	};
 };
 
@@ -321,4 +348,19 @@
  * behavior_input_two_axis.c は accel_exp == 0 なら max_speed を返す）。 */
 &mmv {
 	acceleration-exponent = <0>;
+};
+
+/* SLOW の間だけ 1/4。scaler は余りを持ち越すので小さな値でも 0 に潰れない。 */
+&mmv_input_listener {
+	slow {
+		layers = <SLOW>;
+		input-processors = <&zip_xy_scaler 1 4>;
+	};
+};
+
+&msc_input_listener {
+	slow {
+		layers = <SLOW>;
+		input-processors = <&zip_scroll_scaler 1 4>;
+	};
 };
