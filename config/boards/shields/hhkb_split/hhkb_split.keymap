@@ -199,8 +199,10 @@
 		 *    **検討用（実機に無い）: マウス（2026-09-27〜・mouse-keys-trial）**
 		 *      Fn+Ctrl+[ ; ' / : カーソル 上/左/右/下（Fn の矢印と同じ位置）
 		 *      Fn+Ctrl+左Space : 左クリック   Fn+Ctrl+右Space : 右クリック
-		 *    加速なしで最初から一定の速さ（利用者の指定）。スクロールは
-		 *    Fn の PgUp/PgDn で足りるとして置かない。
+		 *      Fn+Ctrl+L / .  : ホイール 上/下（Fn の PgUp/PgDn と同じ位置）
+		 *    移動は加速なしで最初から一定の速さ（利用者の指定）。
+		 *    ホイールは PgUp/PgDn と別物（少しずつ・カーソルの下に効く・
+		 *    文字カーソルを動かさない）なので両方置く。
 		 *    手をキーボードから離さずに指せれば視線の往復が消えるか、を試すため。
 		 *    SYS の空き（&none）だけを使い、HHKB の Fn 面は 1 つも潰していない。
 		 *    CONFIG_ZMK_POINTING（左の .conf）と対。外すときは両方消す。
@@ -225,8 +227,8 @@
 			/* --- 右 34 --- */
 			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &none
 			&none &none &none &none &none &mmv MOVE_UP &none &none
-			&none &none &none &none &mmv MOVE_LEFT &mmv MOVE_RIGHT &none
-			&none &to BASE_MAC &none &none &mmv MOVE_DOWN &none &trans
+			&none &none &none &msc SCRL_UP &mmv MOVE_LEFT &mmv MOVE_RIGHT &none
+			&none &to BASE_MAC &none &msc SCRL_DOWN &mmv MOVE_DOWN &none &trans
 			&mkp RCLK &none &none
 			>;
 		};
