@@ -56,3 +56,25 @@
 &left_encoder {
 	status = "okay";
 };
+
+/*
+ * D9（P1.14）を SPI の MISO から外す（左だけ）。board 定義のままだと spi2 が
+ * MISO として握り、sleep 状態では入力バッファを切る。エンコーダの B 相を
+ * GPIO として読むので渡さない。（#41 より前に共通の dtsi にあった上書きと同じ形）
+ */
+#include <dt-bindings/pinctrl/nrf-pinctrl.h>
+
+&spi2_default {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+	};
+};
+
+&spi2_sleep {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+		low-power-enable;
+	};
+};

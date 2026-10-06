@@ -26,7 +26,8 @@
  *   D2..D6    行 0..4。MCU に直結した「入力」。**5 本とも左列**
  *   D7        シフトレジスタの CS（ラッチ）
  *   D8        SPI SCK   ─┐ xiao_spi (= spi2) が使う
- *   D9        予備（**元は SPI MISO**。board 定義のまま触らない）
+ *   D9        予備（**元は SPI MISO**。右は board 定義のまま。左は encoder-trial で
+ *             エンコーダの B 相に使い、left.overlay で MISO から外す）
  *   D10       SPI MOSI  ─┘
  *
  * **2026-08-14 に行を D1..D4+D9 から D2..D6 へ移した**（#41）。

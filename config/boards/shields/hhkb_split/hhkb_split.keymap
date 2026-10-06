@@ -32,6 +32,8 @@
 /* 最高速（ZMK 既定は 600 / 10 で遅すぎた）。好みで詰める値。 */
 #define ZMK_POINTING_DEFAULT_MOVE_VAL 1800
 #define ZMK_POINTING_DEFAULT_SCRL_VAL 30
+/* エンコーダ 1 刻みぶんの速さ。16ms × ENC_SCRL / 1000 ≧ 1 でなければ何も出ない。 */
+#define ENC_SCRL 70
 #include <dt-bindings/zmk/pointing.h>
 #include <input/processors.dtsi>
 
@@ -89,15 +91,18 @@
 		 *   押す          : 左クリック     Fn + 押す : 右クリック
 		 *
 		 * sensor-rotate は「割り当てを押す → tap-ms 待つ → 離す」。&msc は
-		 * 押している間 16ms ごとに「速さ × 16ms」ぶん流す作りなので、
-		 * **1 刻みで流れる量は 速さ(30) × tap-ms で決まる。**35ms なら 2 回ぶんで
-		 * 約 1 段。合わなければ tap-ms を実機で詰める。
+		 * 押している間 16ms ごとに「速さ × 16 / 1000」を出し、**整数に満たない
+		 * 端数は離した瞬間に捨てる**（behavior_input_two_axis.c の
+		 * update_work_scheduling）。だから 1 回めの 16ms で 1 以上にならない速さ
+		 * では何も出ない: キー用の 30 は 0.48 × 2 回 = 0.96 → 0（最初の版の誤り）。
+		 * **ENC_SCRL 70 なら 16ms で 1.12 → 1 段。tap-ms 24 は「1 回めは過ぎ、
+		 * 2 回め（32ms）は来ない」長さ。**1 刻み = ホイール 1 段。
 		 */
 		scroll_enc: scroll_enc {
 			compatible = "zmk,behavior-sensor-rotate";
 			#sensor-binding-cells = <0>;
-			bindings = <&msc SCRL_UP>, <&msc SCRL_DOWN>;
-			tap-ms = <35>;
+			bindings = <&msc MOVE_Y(ENC_SCRL)>, <&msc MOVE_Y(-ENC_SCRL)>;
+			tap-ms = <24>;
 		};
 		ctrl_scroll_enc: ctrl_scroll_enc {
 			compatible = "zmk,behavior-sensor-rotate";
@@ -128,16 +133,16 @@
 			compatible = "zmk,behavior-macro";
 			#binding-cells = <0>;
 			wait-ms = <0>;
-			tap-ms = <35>;
-			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc SCRL_UP>,
+			tap-ms = <24>;
+			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc MOVE_Y(ENC_SCRL)>,
 			           <&macro_release &kp LCTRL>;
 		};
 		ctrl_scrl_dn: ctrl_scrl_dn {
 			compatible = "zmk,behavior-macro";
 			#binding-cells = <0>;
 			wait-ms = <0>;
-			tap-ms = <35>;
-			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc SCRL_DOWN>,
+			tap-ms = <24>;
+			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc MOVE_Y(-ENC_SCRL)>,
 			           <&macro_release &kp LCTRL>;
 		};
 		bt_clr_all: bt_clr_all {
