@@ -81,6 +81,30 @@
 			#binding-cells = <1>;
 			toggle-mode = "off";
 		};
+
+		/*
+		 * 検討用: 左のロータリーエンコーダ（encoder-trial・2026-10-06）
+		 *   回す          : マウスホイール
+		 *   Fn + 回す     : Ctrl + ホイール（拡大縮小。Ctrl がつまみから遠いため）
+		 *   押す          : 左クリック     Fn + 押す : 右クリック
+		 *
+		 * sensor-rotate は「割り当てを押す → tap-ms 待つ → 離す」。&msc は
+		 * 押している間 16ms ごとに「速さ × 16ms」ぶん流す作りなので、
+		 * **1 刻みで流れる量は 速さ(30) × tap-ms で決まる。**35ms なら 2 回ぶんで
+		 * 約 1 段。合わなければ tap-ms を実機で詰める。
+		 */
+		scroll_enc: scroll_enc {
+			compatible = "zmk,behavior-sensor-rotate";
+			#sensor-binding-cells = <0>;
+			bindings = <&msc SCRL_UP>, <&msc SCRL_DOWN>;
+			tap-ms = <35>;
+		};
+		ctrl_scroll_enc: ctrl_scroll_enc {
+			compatible = "zmk,behavior-sensor-rotate";
+			#sensor-binding-cells = <0>;
+			bindings = <&ctrl_scrl_up>, <&ctrl_scrl_dn>;
+			tap-ms = <5>;
+		};
 	};
 
 	macros {
@@ -98,6 +122,23 @@
 			bindings = <&out OUT_BLE>,
 			           <&macro_param_1to2>, <&bt BT_SEL MACRO_PLACEHOLDER>,
 			           <&bt BT_CLR>, <&tog_off PAIR>;
+		};
+		/* Ctrl を押したままホイール 1 刻み（エンコーダの Fn 面）。 */
+		ctrl_scrl_up: ctrl_scrl_up {
+			compatible = "zmk,behavior-macro";
+			#binding-cells = <0>;
+			wait-ms = <0>;
+			tap-ms = <35>;
+			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc SCRL_UP>,
+			           <&macro_release &kp LCTRL>;
+		};
+		ctrl_scrl_dn: ctrl_scrl_dn {
+			compatible = "zmk,behavior-macro";
+			#binding-cells = <0>;
+			wait-ms = <0>;
+			tap-ms = <35>;
+			bindings = <&macro_press &kp LCTRL>, <&macro_tap &msc SCRL_DOWN>,
+			           <&macro_release &kp LCTRL>;
 		};
 		bt_clr_all: bt_clr_all {
 			compatible = "zmk,behavior-macro";
@@ -139,7 +180,10 @@
 			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
 			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
 			&kp SPACE  &kp RGUI  &kp RALT
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&mkp LCLK
 			>;
+			sensor-bindings = <&scroll_enc>;
 		};
 
 		/* ------------------------------------------------------------
@@ -162,7 +206,10 @@
 			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
 			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
 			&kp SPACE  &kp RALT  &kp RGUI
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&mkp LCLK
 			>;
+			sensor-bindings = <&scroll_enc>;
 		};
 
 		/* ------------------------------------------------------------
@@ -184,7 +231,10 @@
 			&kp KP_MULTIPLY &kp KP_DIVIDE &kp HOME &kp PG_UP &kp LEFT  &kp RIGHT &trans
 			&kp KP_PLUS &kp KP_MINUS &kp END &kp PG_DN &kp DOWN &trans &trans
 			&trans &kp C_STOP &trans
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&mkp RCLK
 			>;
+			sensor-bindings = <&ctrl_scroll_enc>;
 		};
 
 		/* ------------------------------------------------------------
@@ -236,6 +286,8 @@
 			&none &none &none &msc SCRL_UP &mmv MOVE_LEFT &mmv MOVE_RIGHT &none
 			&none &to BASE_MAC &none &msc SCRL_DOWN &mmv MOVE_DOWN &mo SLOW &trans
 			&mkp RCLK &none &none
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&none
 			>;
 		};
 
@@ -257,6 +309,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
 			>;
 		};
 
@@ -277,6 +331,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
 			>;
 		};
 
@@ -298,6 +354,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
 			>;
 		};
 
@@ -318,6 +376,8 @@
 			&none &none &none &none &none &none &none
 			&none &none &none &none &none &none &none
 			&none &none &none
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&none
 			>;
 		};
 
@@ -339,6 +399,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
+			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
 			>;
 		};
 	};

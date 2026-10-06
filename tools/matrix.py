@@ -23,6 +23,12 @@ RIGHT_OVERLAY = ROOT / "config/boards/shields/hhkb_split/hhkb_split_right.overla
 LEFT_KEYS = 27
 RIGHT_KEYS = 34
 
+# **基板に載っていないキー（手で配線する）。**transform の map の**末尾**に並べる。
+# (row, col) は map に書いたままの番号。基板の生成・検査はこれを数えない。
+# 2026-10-06（encoder-trial）: 左のロータリーエンコーダの押し込み。列 5 と行 4 の
+# 空いた交点に、スイッチ＋ダイオードを手で入れる。
+OFFBOARD = [(4, 5)]
+
 
 def _strip(text):
     return re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
@@ -88,9 +94,15 @@ def transform_map():
     body = re.search(r"map\s*=\s*<(.*?)>\s*;", DTSI.read_text(), re.S).group(1)
     rc = [(int(r), int(c))
           for r, c in re.findall(r"RC\(\s*(\d+)\s*,\s*(\d+)\s*\)", _strip(body))]
-    if len(rc) != LEFT_KEYS + RIGHT_KEYS:
-        raise RuntimeError(f"map の要素が {len(rc)} 個（期待 {LEFT_KEYS + RIGHT_KEYS}）")
-    return rc
+    n = LEFT_KEYS + RIGHT_KEYS
+    if len(rc) != n + len(OFFBOARD):
+        raise RuntimeError(f"map の要素が {len(rc)} 個（期待 {n} ＋ 手配線 {len(OFFBOARD)}）")
+    board, extra = rc[:n], rc[n:]
+    if extra != OFFBOARD:
+        raise RuntimeError(f"map の末尾 {extra} が、手配線のキーの宣言 {OFFBOARD} と違う")
+    if set(extra) & set(board):
+        raise RuntimeError(f"手配線のキー {extra} が、基板のキーと同じ交点を使っている")
+    return board
 
 
 def assignments(half):

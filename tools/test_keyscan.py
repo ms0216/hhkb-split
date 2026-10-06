@@ -21,6 +21,12 @@ LEFT = SHIELD / "hhkb_split_left.overlay"
 RIGHT = SHIELD / "hhkb_split_right.overlay"
 
 LEFT_KEYS, RIGHT_KEYS = 27, 34
+# 基板に載っていない手配線のキー（map とキーマップの末尾に並ぶ）。出どころは matrix.OFFBOARD。
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent))
+from matrix import OFFBOARD  # noqa: E402
+BOARD_KEYS = LEFT_KEYS + RIGHT_KEYS
 LEFT_COLS, RIGHT_COLS = 6, 9
 ROWS = 5
 
@@ -29,10 +35,30 @@ def _strip(text):
     return re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
 
 
-def _map_entries():
+def _map_entries_all():
+    """map に書かれた全部（基板のキー ＋ 末尾の手配線のキー）。"""
     body = re.search(r"map\s*=\s*<(.*?)>\s*;", DTSI.read_text(), re.S).group(1)
     return [(int(r), int(c))
             for r, c in re.findall(r"RC\(\s*(\d+)\s*,\s*(\d+)\s*\)", _strip(body))]
+
+
+def _map_entries():
+    """**基板に載っているキーだけ**（左 27 ＋ 右 34）。末尾の手配線は別に確かめる。"""
+    return _map_entries_all()[:BOARD_KEYS]
+
+
+def test_offboard_keys_are_declared_at_the_tail_and_use_free_intersections():
+    """手配線のキーは、map の末尾に、宣言どおり、基板が使っていない交点で並ぶこと。
+
+    基板に無いキーを map の途中に入れると、右 34 個の位置が全レイヤーでずれる。
+    基板のキーと同じ交点を使うと、2 つのキーが区別できなくなる。
+    """
+    entries = _map_entries_all()
+    board, extra = entries[:BOARD_KEYS], entries[BOARD_KEYS:]
+    assert extra == OFFBOARD
+    assert not set(extra) & set(board)
+    for r, c in extra:
+        assert 0 <= r < ROWS and 0 <= c < LEFT_COLS + RIGHT_COLS
 
 
 def _gpio_count(path, prop):
@@ -178,7 +204,7 @@ def test_bindings_match_the_transform_in_every_layer():
     layers = _layers()
     assert layers, "キーマップからレイヤーを読めなかった"
     for name, body in layers:
-        assert len(re.findall(r"&\w+", body)) == len(_map_entries()), name
+        assert len(re.findall(r"&\w+", body)) == len(_map_entries_all()), name
 
 
 def test_matrix_rows_follow_the_physical_rows():
@@ -215,7 +241,9 @@ def _base_bindings():
     body = re.search(r"base_mac\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;",
                      text, re.S).group(1)
     found = re.findall(r"&kp (\w+)|&(\w+)\s+(\w+)", body)
-    return [a or f"{b} {c}" for a, b, c in found]
+    binds = [a or f"{b} {c}" for a, b, c in found]
+    assert len(binds) == BOARD_KEYS + len(OFFBOARD)
+    return binds[:BOARD_KEYS]            # 基板のキーだけ。手配線のキーは配列 JSON に無い
 
 
 def test_keymap_bindings_match_the_physical_layout():
@@ -286,8 +314,8 @@ def test_the_bootloader_is_reachable_from_the_keymap():
     text = _strip(KEYMAP.read_text())
     body = re.search(r"\bsys\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;", text, re.S).group(1)
     binds = re.findall(r"&\w+(?:\s+\w+)*", body)
-    assert len(binds) == LEFT_KEYS + RIGHT_KEYS
-    left, right = binds[:LEFT_KEYS], binds[LEFT_KEYS:]
+    assert len(binds) == BOARD_KEYS + len(OFFBOARD)
+    left, right = binds[:LEFT_KEYS], binds[LEFT_KEYS:BOARD_KEYS]
     for side, part in (("左", left), ("右", right)):
         assert any(b.startswith("&bootloader") for b in part), \
             f"{side}半分にブートローダへ入るキーが無い"

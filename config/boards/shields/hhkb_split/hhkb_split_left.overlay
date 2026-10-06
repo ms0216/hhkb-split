@@ -51,3 +51,8 @@
 		, <&xiao_d 5 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
 		;
 };
+
+/* 検討用: 左のロータリーエンコーダ（encoder-trial）。定義は hhkb_split.dtsi。 */
+&left_encoder {
+	status = "okay";
+};

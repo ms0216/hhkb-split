@@ -131,6 +131,16 @@
 		/* H J K L ; ' Enter                  */ RC(2,6) RC(2,7) RC(2,8) RC(2,9) RC(2,10) RC(2,11) RC(2,12)
 		/* N M , . / Shift Fn                 */ RC(3,6) RC(3,7) RC(3,8) RC(3,9) RC(3,10) RC(3,11) RC(3,12)
 		/* R-Space Meta Alt                   */ RC(4,6) RC(4,9) RC(4,10)
+
+		/* --- 検討用: 左のロータリーエンコーダの押し込み（encoder-trial・2026-10-06）--- */
+		/*
+		 * **左の最下段の空いた交点 (4,5) に、キー 1 個として足す。**
+		 * 配線: 列 5（5/T/G/B のどれかのソケットのパッド）→ 押し込みスイッチ →
+		 * ダイオード → 行 4（左の XIAO の D5）。3 本目のピンは要らない。
+		 * **並びの最後（62 個目）に置く**——左 27 の直後に入れると、右 34 の
+		 * 位置が全レイヤーで 1 つずつずれる。
+		 */
+		/* EncPush                            */ RC(4,5)
 		>;
 	};
 
@@ -141,6 +151,32 @@
 	 *
 	 * col2row はダイオードのアノードが列側、カソードが行側という意味。
 	 */
+	/*
+	 * 検討用: 左のロータリーエンコーダ（encoder-trial・2026-10-06）。
+	 * 秋月 105770（EC12PL・24 クリック / 24 パルス）。A=D4(SPARE)、B=D9(SPARE2)。
+	 *
+	 * **内蔵のプルアップは使わない。外に 100kΩ を 2 本付ける。**この品は
+	 * 止まっているとき B 相が開閉の境目にあり（規格書の波形図）、閉じて
+	 * 止まると内蔵の約 13kΩ では約 0.19mA が流れ続ける（左の平均 0.235mA に
+	 * 対して無視できない）。100kΩ なら約 0.025mA。
+	 * 抵抗を付けずに試すときは両方に GPIO_PULL_UP を足す。
+	 *
+	 * steps は 1 回転のパルス × 4。右半分では status を okay にしない。
+	 */
+	left_encoder: left_encoder {
+		compatible = "alps,ec11";
+		a-gpios = <&xiao_d 4 GPIO_ACTIVE_HIGH>;
+		b-gpios = <&xiao_d 9 GPIO_ACTIVE_HIGH>;
+		steps = <96>;
+		status = "disabled";
+	};
+
+	sensors: sensors {
+		compatible = "zmk,keymap-sensors";
+		sensors = <&left_encoder>;
+		triggers-per-rotation = <24>;
+	};
+
 	kscan0: kscan_0 {
 		compatible = "zmk,kscan-gpio-matrix";
 		wakeup-source;
