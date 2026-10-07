@@ -14,6 +14,8 @@
  *     同じなら途中まで回して戻しただけなので数えない
  * 止まっている間の電流は 0（a は開いている・b は切り離し）。外付けの抵抗も要らない。
  * b では割り込まないので、境目でばたついても ZMK を起こさない（スリープを妨げない）。
+ * 標準の alps,ec11 は、どちらの相が動いても（数が進まなくても）ZMK に知らせ、それが
+ * 「活動」と数えられる。電源管理も持たないので、寝ている間も外付けの抵抗に電流が流れる。
  *
  * 割り込みは「レベル」を使う。nRF ではエッジ割り込みが GPIOTE のチャネルを使い、
  * レベルは SENSE（キー走査と同じ仕組み）で済む。レベルなら「読んでから構え直すまでの間に
@@ -41,14 +43,13 @@ struct eg_config {
     struct gpio_dt_spec b;
     uint16_t steps;      /* 1 回転の刻みの数 */
     uint16_t settle_us;  /* b をプルアップしてから読むまで */
-    uint16_t debounce_ms;
     bool invert;
 };
 
 struct eg_data {
     const struct device *dev;
     struct gpio_callback a_cb;
-    struct k_work_delayable work;
+    struct k_work work;
     sensor_trigger_handler_t handler;
     const struct sensor_trigger *trigger;
     int8_t pulses;
@@ -75,27 +76,27 @@ static void eg_arm(const struct device *dev) {
                                                             : GPIO_INT_LEVEL_ACTIVE);
 }
 
+/*
+ * **a が変わったその場（割り込みの中）で b を読む。**待ってから読むと、速く回したとき b がもう
+ * 次の状態へ進んでいて、取りこぼすか逆向きに数える（規格書の位相差は 360°/s で 3.5ms 以上。
+ * 1 秒に 2 回転で 2ms を切る。最初の版は 2ms 待っていた・2026-10-07 の粗探しで発覚）。
+ * チャタリングは待たずに全部数える: a がばたついても、その間 b が変わらなければ
+ * 「閉じたときの b = 開いたときの b」で差し引き 0 になる。
+ * 割り込みの中の仕事は、ピンの設定 3 回と settle-us の待ち（既定 50µs）だけ。
+ */
 static void eg_a_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins) {
     struct eg_data *data = CONTAINER_OF(cb, struct eg_data, a_cb);
-    const struct eg_config *cfg = data->dev->config;
-
-    /* レベル割り込みなので、止めないと鳴り続ける。チャタリングが収まってから読む。 */
-    gpio_pin_interrupt_configure_dt(&cfg->a, GPIO_INT_DISABLE);
-    k_work_schedule(&data->work, K_MSEC(cfg->debounce_ms));
-}
-
-static void eg_work(struct k_work *work) {
-    struct k_work_delayable *dwork = k_work_delayable_from_work(work);
-    struct eg_data *data = CONTAINER_OF(dwork, struct eg_data, work);
     const struct device *dev = data->dev;
     const struct eg_config *cfg = dev->config;
-    bool stepped = false;
 
+    /* レベル割り込みなので、まず止める（止めないと鳴り続ける）。最後に反対のレベルで構え直す。 */
+    gpio_pin_interrupt_configure_dt(&cfg->a, GPIO_INT_DISABLE);
     if (!data->running) {
         return;
     }
 
     bool closed = gpio_pin_get_dt(&cfg->a) > 0;
+    bool stepped = false;
     if (closed != data->a_closed) {
         bool b = eg_read_b(cfg);
         if (closed) {
@@ -108,8 +109,16 @@ static void eg_work(struct k_work *work) {
     }
     eg_arm(dev);
 
-    if (stepped && data->handler != NULL) {
-        data->handler(dev, data->trigger);
+    if (stepped) {
+        k_work_submit(&data->work); /* ZMK への知らせは割り込みの外で */
+    }
+}
+
+static void eg_work(struct k_work *work) {
+    struct eg_data *data = CONTAINER_OF(work, struct eg_data, work);
+
+    if (data->running && data->handler != NULL) {
+        data->handler(data->dev, data->trigger);
     }
 }
 
@@ -128,8 +137,10 @@ static int eg_channel_get(const struct device *dev, enum sensor_channel chan,
         return -ENOTSUP;
     }
 
+    unsigned int key = irq_lock(); /* 割り込みの中で足している */
     int32_t pulses = data->pulses;
     data->pulses = 0;
+    irq_unlock(key);
 
     /* alps,ec11 と同じ単位（度）で返す。ZMK は triggers-per-rotation で刻みに戻す。 */
     val->val1 = (pulses * FULL_ROTATION) / cfg->steps;
@@ -178,7 +189,7 @@ static void eg_stop(const struct device *dev) {
 
     data->running = false;
     gpio_pin_interrupt_configure_dt(&cfg->a, GPIO_INT_DISABLE);
-    k_work_cancel_delayable(&data->work);
+    k_work_cancel(&data->work);
     gpio_pin_configure(cfg->a.port, cfg->a.pin, GPIO_DISCONNECTED);
     gpio_pin_configure(cfg->b.port, cfg->b.pin, GPIO_DISCONNECTED);
 }
@@ -206,7 +217,7 @@ static int eg_init(const struct device *dev) {
         return -ENODEV;
     }
     data->dev = dev;
-    k_work_init_delayable(&data->work, eg_work);
+    k_work_init(&data->work, eg_work);
     gpio_init_callback(&data->a_cb, eg_a_isr, BIT(cfg->a.pin));
     if (gpio_add_callback(cfg->a.port, &data->a_cb) < 0) {
         return -EIO;
@@ -222,7 +233,6 @@ static int eg_init(const struct device *dev) {
         .b = GPIO_DT_SPEC_INST_GET(n, b_gpios),                                                    \
         .steps = DT_INST_PROP(n, steps),                                                           \
         .settle_us = DT_INST_PROP(n, settle_us),                                                   \
-        .debounce_ms = DT_INST_PROP(n, debounce_ms),                                               \
         .invert = DT_INST_PROP(n, invert),                                                         \
     };                                                                                             \
     PM_DEVICE_DT_INST_DEFINE(n, eg_pm_action);                                                     \

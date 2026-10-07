@@ -1,5 +1,10 @@
 # 左のロータリーエンコーダを「止まっている間は電流ゼロ」の読み方に替える追加シールド（B 案）。
 # 左のファームに重ねる: shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
-# 抵抗 100kΩ ×2 は付けない（付いていても動く）。配線は A 案と同じ。
+# 配線は A 案と同じ。**b の側（D9）の抵抗 100kΩ は外す**（残すと b が閉じて止まったとき約 29µA 流れ続ける）。
+# a の側（D4）の抵抗は付いていても外してもよい。
+#
+# ⚠️ このビルドでは Kconfig の警告が 2 件出る（EC11 / EC11_TRIGGER_GLOBAL_THREAD が「y を指定されたが n」）。
+#    本体の hhkb_split_left.conf が標準ドライバ（A 案）向けに指定しているが、この版ではそのノードを
+#    止めているため。動作には関係しない。
 config SHIELD_HHKB_ENC_GATED
 	def_bool $(shields_list_contains,hhkb_enc_gated)

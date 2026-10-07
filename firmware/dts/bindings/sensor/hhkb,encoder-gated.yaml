@@ -1,6 +1,7 @@
 description: |
   止まっている間に電流を流さないロータリーエンコーダ（firmware/drivers/encoder_gated.c）。
   a-gpios には「クリックで止まった位置で必ず開いている相」を、b-gpios には「境目の相」を置く。
+  **b の側に外付けのプルアップ抵抗を残さない**（残すと、b が閉じて止まったとき電流が流れ続ける）。
   どちらも共通端子は GND。a-gpios には GPIO_ACTIVE_LOW | GPIO_PULL_UP を、b-gpios には
   GPIO_ACTIVE_LOW を付ける（b のプルアップはドライバが読む瞬間だけ掛ける）。
 
@@ -23,8 +24,6 @@ properties:
   settle-us:
     type: int
     default: 50
-    description: b をプルアップしてから読むまでの待ち。内蔵 13kΩ × 配線 数十 pF なら 1µs 未満で足りる
-  debounce-ms:
-    type: int
-    default: 2
-    description: a が変わってから読むまでの待ち。規格書のチャタリングは初期 3ms・寿命後 5ms 以下
+    description: |
+      b をプルアップしてから読むまでの待ち（割り込みの中で待つ）。内蔵 13kΩ × 配線 数十 pF なら 1µs 未満で足りる。
+      b に雑音よけのコンデンサ（1000pF）を足したら 13µs の時定数になるので、50 のままでよい
