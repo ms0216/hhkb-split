@@ -83,6 +83,13 @@
 			#binding-cells = <1>;
 			toggle-mode = "off";
 		};
+		/* スティックの中心を取り直す（firmware/src/behavior_stick_recal.c）。
+		 * **左右共通のキーマップに置く**: 右のポッドに届くには、右の
+		 * devicetree にも同じ名前のノードが要る。名前は 15 文字以内。 */
+		stick_recal: stick_recal {
+			compatible = "hhkb,behavior-stick-recal";
+			#binding-cells = <0>;
+		};
 
 		/*
 		 * 検討用: 左のロータリーエンコーダ（encoder-trial・2026-10-06）
@@ -283,7 +290,7 @@
 			&bootloader &bt_to 0 &bt_to 1 &bt_to 2 &bt_to 3 &sys_reset
 			&none  &none  &to BASE_WIN &none &none &none
 			&trans &none  &none  &none  &none  &none
-			&mo SLOW &none &none &none &none &none
+			&mo SLOW &none &none &stick_recal &none &none
 			&none  &none  &mkp LCLK
 			/* --- 右 34 --- */
 			&bootloader &sys_reset &none &none &out OUT_USB &none &none &none &none

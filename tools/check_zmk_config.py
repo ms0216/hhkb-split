@@ -146,33 +146,36 @@ def main():
                 problems.append(
                     f"ボード名 {board!r} に {ZMK_VARIANT} が付いていない。"
                     "Zephyr 4.1 以降の ZMK は zmk バリアント必須")
-            # 分割シールドは 1 つのディレクトリに左右 2 つのシールド名を置く慣例。
-            # ディレクトリ名 = シールド名とは限らないので、<name>.overlay が
-            # あるディレクトリを探す。
-            if name in UPSTREAM_SHIELDS:
-                notes.append(f"  {board} / {name}  (ZMK 本体のシールド)")
-                continue
-            d = find_shield_dir(name)
-            if d is None:
-                problems.append(f"シールド '{name}': {name}.overlay が見つからない")
-                continue
-            if not (d / "Kconfig.shield").exists():
-                problems.append(f"{name}: Kconfig.shield が無い（{d.name}/）")
-            if not list(d.glob("*.keymap")):
-                problems.append(f"{name}: キーマップが無い（{d.name}/）")
-            # Kconfig.shield が **このシールド名** を宣言しているか。
-            # 綴りがずれるとビルド時に無言で無視される。
-            kc = d / "Kconfig.shield"
-            if kc.exists():
-                declared = set(re.findall(r"shields_list_contains,\s*([A-Za-z0-9_]+)\s*\)",
-                                          kc.read_text(encoding="utf-8")))
-                if not declared:
-                    problems.append(f"{name}: Kconfig.shield に shields_list_contains が無い")
-                elif name not in declared:
-                    problems.append(
-                        f"{name}: Kconfig.shield が宣言しているのは {sorted(declared)} で、"
-                        f"'{name}' が無い（ビルド時に無言で無視される）")
-            notes.append(f"  {board} / {name}  ({d.name}/)")
+            # **shield は空白区切りで複数並べられる**（本体 + 追加シールド。ZMK のワークフローは
+            # -DSHIELD="a b" として渡す）。1 つずつ検査する。キーマップは先頭（本体）だけが持つ。
+            for i, name in enumerate((name or "").split()):
+                # 分割シールドは 1 つのディレクトリに左右 2 つのシールド名を置く慣例。
+                # ディレクトリ名 = シールド名とは限らないので、<name>.overlay が
+                # あるディレクトリを探す。
+                if name in UPSTREAM_SHIELDS:
+                    notes.append(f"  {board} / {name}  (ZMK 本体のシールド)")
+                    continue
+                d = find_shield_dir(name)
+                if d is None:
+                    problems.append(f"シールド '{name}': {name}.overlay が見つからない")
+                    continue
+                if not (d / "Kconfig.shield").exists():
+                    problems.append(f"{name}: Kconfig.shield が無い（{d.name}/）")
+                if i == 0 and not list(d.glob("*.keymap")):
+                    problems.append(f"{name}: キーマップが無い（{d.name}/）")
+                # Kconfig.shield が **このシールド名** を宣言しているか。
+                # 綴りがずれるとビルド時に無言で無視される。
+                kc = d / "Kconfig.shield"
+                if kc.exists():
+                    declared = set(re.findall(r"shields_list_contains,\s*([A-Za-z0-9_]+)\s*\)",
+                                              kc.read_text(encoding="utf-8")))
+                    if not declared:
+                        problems.append(f"{name}: Kconfig.shield に shields_list_contains が無い")
+                    elif name not in declared:
+                        problems.append(
+                            f"{name}: Kconfig.shield が宣言しているのは {sorted(declared)} で、"
+                            f"'{name}' が無い（ビルド時に無言で無視される）")
+                notes.append(f"  {board} / {name}  ({d.name}/)")
 
     # キーマップのバインディング個数
     #

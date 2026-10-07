@@ -77,3 +77,68 @@ config HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES
 	  一時的に下がることがあり、そこで落ちると誤動作に見える。
 	  ZMK の測定間隔（ZMK_BATTERY_REPORT_INTERVAL・既定 60 秒）× この回数
 	  だけ続いたら本物とみなす。
+
+config HHKB_STICK_POD
+	bool "スティックポッド（K 案・I2C で読むアナログスティック）"
+	default y
+	depends on DT_HAS_HHKB_STICK_POD_ENABLED
+	depends on !PM_DEVICE_RUNTIME
+	select PM_DEVICE
+	select I2C
+	select ZMK_POINTING
+	help
+	  devicetree に hhkb,stick-pod があれば積む（ポッドを付ける側だけ）。
+
+	  **I2C と ZMK_POINTING は select で引く。**.conf に書き忘れると
+	  「ノードはあるのにドライバが入らない／右の入力が左へ届かない」が
+	  ビルドは緑のまま起きるため（ZMK_INPUT_SPLIT は ZMK_POINTING の内側にある）。
+
+	  PM_DEVICE も select で引く: ドライバが TWIM を自分で suspend/resume する
+	  （pm_device_action_run は subsys/pm/device.c にあり、PM_DEVICE が無いと
+	  リンクできない）。この案件は左右とも ZMK_SLEEP と ZMK_PM_SOFT_OFF で
+	  すでに y。
+	  PM_DEVICE_RUNTIME とは併用しない（ZMK の pm.c がリンクできなくなる）。
+
+	  ⚠️ 左（セントラル）で ZMK_POINTING が新しく y になると **HID レポート
+	  記述子が変わり、各ホストで登録し直しが要る。**いまは検討用マウスで
+	  すでに y なので変わらない。
+
+if HHKB_STICK_POD
+
+# **既定の 500ms のままだと、SCL が Low に固定されたとき読み出しごとに
+# 0.5 秒止まる。**モジュールの Kconfig は drivers/Kconfig より先に読まれるので
+# （Kconfig.zephyr: modules/Kconfig → drivers/Kconfig）、ここの default が勝つ。
+# 効いていなければ stick_pod.c の BUILD_ASSERT が落とす。
+config I2C_NRFX_TRANSFER_TIMEOUT
+	default 10
+
+config HHKB_STICK_POD_STACK_SIZE
+	int "ポーリングスレッドのスタック"
+	default 2048
+	help
+	  **多めに取ってある（F15・未実測）。**I2C の読み出し、タイムアウト時の
+	  バス復旧とそのログ、input_report、引数 8 個のログが同じスタックに乗る。
+	  実機で CONFIG_THREAD_ANALYZER の最高水位を見てから削ること
+	  （ボードは HW_STACK_PROTECTION=y なので、足りなければ壊れずに落ちる）。
+	  このスレッドは I2C の読み出し・input_report・ログしかしない。
+	  **settings への保存はシステムワークキューに回している**（NVS の
+	  書き込みはスタックを食う）。
+
+config HHKB_STICK_POD_THREAD_PRIORITY
+	int "ポーリングスレッドの優先度（プリエンプティブ）"
+	default 8
+	range 0 14
+	help
+	  BLE のホスト／コントローラのスレッド（協調）とキースキャン
+	  （システムワークキュー・協調 -1）、入力スレッド（ZMK は 0）より低く。
+	  読み出しは 1.5ms ほどで、数 ms 遅れても困らない。
+
+endif # HHKB_STICK_POD
+
+config HHKB_BEHAVIOR_STICK_RECAL
+	bool "スティックの中心を取り直すキー（&stick_recal）"
+	default y
+	depends on DT_HAS_HHKB_BEHAVIOR_STICK_RECAL_ENABLED
+	help
+	  **ポッドの無い側にも入る**（左右どちらのポッドにも 1 つのキーで
+	  届かせるため。firmware/src/behavior_stick_recal.c の冒頭）。

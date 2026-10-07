@@ -298,3 +298,16 @@
 &adc {
 	status = "okay";
 };
+
+/*
+ * **i2c1 は既定で止めておく。**
+ *
+ * xiao_ble のボード定義は i2c1 を「旧 TWI・status = okay・SDA = P0.04 /
+ * SCL = P0.05」で持っている。**P0.05 は D5 で、この基板では行。**
+ * CONFIG_I2C が立つと旧 TWI が起動時に P0.05 を取り、行が 1 本読めなくなる
+ * （ビルドは緑）。スティックポッドを付ける側は、追加シールド
+ * （hhkb_stick_pod/）がピンを付け替えたうえで okay に戻す。
+ */
+&i2c1 {
+	status = "disabled";
+};

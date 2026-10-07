@@ -1,0 +1,83 @@
+description: |
+  スティックポッド（K 案）。ATtiny1616 が I2C で読まれた瞬間だけ起きて、
+  スティックの傾きとクリックを 11 バイトで返す。アドレスは 0x2A。
+
+  親の I2C は nordic,nrf-twim・100kHz（K_SPEC §4）。ドライバが I2C を自分で
+  suspend/resume するので、**CONFIG_PM_DEVICE_RUNTIME とは併用しない**。
+
+  ⚠️ 下の値のうち「仮」と書いたものは、**スティックの実物を測っていない**
+  （可動範囲・ポットの値が未実測）。docs/hardware/provisional-values.md に載せること。
+
+compatible: "hhkb,stick-pod"
+
+include: i2c-device.yaml
+
+properties:
+  rest-period-ms:
+    type: int
+    default: 250
+    description: |
+      「静止」の読み出し周期。4Hz。電力は周期に比例する（8Hz で 2 倍）。
+      **延ばすなら stick_pod_proto.h の SP_GAP_MS（3 倍＋50ms）も直す**（ビルドで落ちる）。
+
+  active-period-ms:
+    type: int
+    default: 12
+    description: |
+      「動作」の読み出し周期。仕様は 10〜16ms としか言っていないので 12 を既定にした（仮）。
+      右では 1 回の読み出しが BLE の通知を最大 2 個作る。
+
+  absent-period-ms:
+    type: int
+    default: 2000
+    description: 「不在」の読み出し周期。分割リンクが切れている間の周期にも使う
+
+  stuck-period-ms:
+    type: int
+    default: 2000
+    description: 「固着」の読み出し周期
+
+  active-hold-ms:
+    type: int
+    default: 300
+    description: 中心かつ非押下がこれだけ続いたら「動作」から「静止」へ
+
+  stuck-after-seconds:
+    type: int
+    default: 300
+    description: |
+      「動作」のままこれだけ続き、傾きが不変（±3LSB）かボタンが押されたままなら「固着」。
+      **押したまま 5 分を超えるドラッグはここで切れる**。
+      CONFIG_ZMK_IDLE_SLEEP_TIMEOUT より短いこと（規則 6。ビルドで落ちる）。
+      ⚠️「不変 ±3LSB」は仮の規則（揺れが 3LSB を超えると固着に入らない。実測待ち）。
+
+  replay-gap-ms:
+    type: int
+    default: 16
+    description: |
+      まとめて届いた押し/離しを出す間隔。仕様（規則 5）は 16ms 以上。16 未満はビルドで落ちる。
+      ホストとの接続間隔はこちらからは分からないので、決め打ち。
+
+  dead-zone-permille:
+    type: int
+    default: 40
+    description: 不感帯の半径。X/T の差を 1/1000 単位で（仮・未実測）
+
+  full-scale-permille:
+    type: int
+    default: 300
+    description: |
+      これ以上倒しても速くならない半径（仮・未実測）。**スティックの可動範囲を
+      測って決める。**中心採用の窓（0.5±0.2 = 200）より大きくないと、
+      いっぱいに倒したまま起動したときに倒した位置を中心として採用しうる。
+
+  max-speed:
+    type: int
+    default: 1200
+    description: いっぱいに倒したときの速さ [カウント/秒]（仮）
+
+  curve-exponent:
+    type: int
+    default: 2
+    enum: [1, 2, 3]
+    description: 曲線の指数。1 = 直線、2 = 二乗（小さく倒すと細かく動く）

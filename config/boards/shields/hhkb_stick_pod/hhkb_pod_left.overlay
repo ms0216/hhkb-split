@@ -1,0 +1,15 @@
+/*
+ * 左（セントラル）にポッドを付ける。左のファームに重ねる。
+ *
+ * 左はホストと直接話すので、ポッドを input-listener に直結する
+ * （分割の中継は要らない）。右にも付けるなら hhkb_pod_remote も重ねる:
+ *   shield: hhkb_split_left hhkb_pod_left hhkb_pod_remote
+ */
+#include "hhkb_stick_pod.dtsi"
+
+/ {
+	pod_l_listener: pod_l_listener {
+		compatible = "zmk,input-listener";
+		device = <&pod>;
+	};
+};

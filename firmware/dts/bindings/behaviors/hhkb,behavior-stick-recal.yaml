@@ -1,0 +1,9 @@
+description: |
+  スティックポッドの中心を取り直すキー。引数なし。
+
+  左右どちらのポッドにも効く（locality が GLOBAL）。ポッドの無い側では何もしない。
+  **ノード名は 15 文字以内**（右へ送るときの名前欄が 16 バイト）。
+
+compatible: "hhkb,behavior-stick-recal"
+
+include: zero_param.yaml

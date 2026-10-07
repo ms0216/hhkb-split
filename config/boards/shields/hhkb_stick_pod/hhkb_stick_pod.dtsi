@@ -1,0 +1,78 @@
+/*
+ * スティックポッドを付ける側の配線（左右共通）。
+ *
+ *   SCL = D4 = P0.04   （circuit.py の SPARE）
+ *   SDA = D9 = P1.14   （circuit.py の SPARE2。**ボード定義では SPI2 の MISO**）
+ *
+ * やっていることは 3 つ。**どれも xiao_ble のボード定義を上書きする**ので、
+ * 相手の形を上流で確かめてある（zephyr v4.1.0+zmk-fixes・
+ * boards/seeed/xiao_ble/xiao_ble-pinctrl.dtsi と xiao_ble_common.dtsi）:
+ *
+ * 1. i2c1 を旧 TWI から TWIM へ。
+ *    ボードの既定は compatible = "nordic,nrf-twi"・status = "okay"。
+ *    仕様（K_SPEC §4）が TWIM と決めている。**旧 TWI ドライバ（i2c_nrfx_twi.c）
+ *    にも同じ形の PM ハンドラはある**ので、suspend/resume のためだけなら
+ *    替えなくてよい。替える理由は仕様に書かれていない（NOTES.md の欠陥 17）。
+ *
+ * 2. i2c1 のピンを**丸ごと**置き換える。
+ *    ボードの既定は SDA = P0.04・SCL = P0.05。**P0.05 は D5 で、行（ROW_A）。**
+ *    psels は 1 つの配列なので、ここで書いた 2 本だけになる
+ *    （P0.05 は i2c1 から外れる）。
+ *    bias-pull-up: ポッドを抜いている間、線を浮かせない（ポッドのプルアップは
+ *    ポッド側の電源に付いている）。sleep 側にも付ける（low-power-enable は
+ *    入力バッファを切るだけで、プルは残る／pinctrl_nrf.c）。
+ *
+ * 3. spi2 から MISO（P1.14）を外す。
+ *    595 は書くだけで MISO を使わない。外さないと、SPI と TWIM が
+ *    同じピンを取り合う（あとから初期化された方の設定が残る）。
+ *    旧 SPI ドライバ（spi_nrfx_spi.c）は MISO を参照しない。
+ *    **2026-08-14 まで同じ上書きがここにあった**（行 4 を D9 に置いていた頃）。
+ *
+ * ⚠️ D9 は「SCK の隣を GND に戻すための予備」でもあった
+ *    （test_daughterboard.py の SPARE2 の注記）。SDA に使うとその手は消える。
+ */
+
+&i2c1_default {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SCL, 0, 4)>,
+			<NRF_PSEL(TWIM_SDA, 1, 14)>;
+		bias-pull-up;
+	};
+};
+
+&i2c1_sleep {
+	group1 {
+		psels = <NRF_PSEL(TWIM_SCL, 0, 4)>,
+			<NRF_PSEL(TWIM_SDA, 1, 14)>;
+		bias-pull-up;
+		low-power-enable;
+	};
+};
+
+&spi2_default {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+	};
+};
+
+&spi2_sleep {
+	group1 {
+		psels = <NRF_PSEL(SPIM_SCK, 1, 13)>,
+			<NRF_PSEL(SPIM_MOSI, 1, 15)>;
+		low-power-enable;
+	};
+};
+
+&i2c1 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	/* 値は既定のまま。仮の値（不感帯・可動範囲・速さ）を詰めるときはここに書く。
+	 * 何が仮かは firmware/dts/bindings/input/hhkb,stick-pod.yaml。 */
+	pod: stick_pod@2a {
+		compatible = "hhkb,stick-pod";
+		reg = <0x2a>;
+	};
+};

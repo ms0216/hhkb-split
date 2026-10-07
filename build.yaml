@@ -28,3 +28,11 @@ include:
     shield: hhkb_split_left
   - board: xiao_ble//zmk
     shield: hhkb_split_right
+
+  # ---- 検討用（stick-pod-trial）: 右にスティックポッドを付けた組。上の 2 件は「ポッド無し」の基準として残す ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote
+    artifact-name: hhkb_split_left-podR
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right hhkb_pod_right
+    artifact-name: hhkb_split_right-pod

@@ -16,7 +16,8 @@
 zephyr_include_directories(${CMAKE_SOURCE_DIR}/include)
 
 if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
-   OR CONFIG_HHKB_STATUS_LED OR CONFIG_HHKB_PROFILE_NAME)
+   OR CONFIG_HHKB_STATUS_LED OR CONFIG_HHKB_PROFILE_NAME
+   OR CONFIG_HHKB_STICK_POD OR CONFIG_HHKB_BEHAVIOR_STICK_RECAL)
   zephyr_library()
   zephyr_library_sources_ifdef(CONFIG_HHKB_BATTERY_ALKALINE
                                drivers/battery_alkaline.c)
@@ -26,4 +27,11 @@ if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
                                src/status_led.c)
   zephyr_library_sources_ifdef(CONFIG_HHKB_PROFILE_NAME
                                src/profile_name.c)
+  # スティックポッド。**proto は Zephyr に依らない**（参照モデルとの突き合わせ用に
+  # 普通の C コンパイラでも通る）。2 つで 1 組なので必ず一緒に足す。
+  zephyr_library_sources_ifdef(CONFIG_HHKB_STICK_POD
+                               drivers/stick_pod.c
+                               drivers/stick_pod_proto.c)
+  zephyr_library_sources_ifdef(CONFIG_HHKB_BEHAVIOR_STICK_RECAL
+                               src/behavior_stick_recal.c)
 endif()

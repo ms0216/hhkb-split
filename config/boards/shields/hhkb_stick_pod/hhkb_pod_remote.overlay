@@ -1,0 +1,33 @@
+/*
+ * 右にポッドが付いているときに、**左（セントラル）のファームに重ねる受け口。**
+ *
+ * 左では zmk,input-split は「右から届いたイベントを自分の名前で出し直す」
+ * だけの仮想デバイスになる（device は書かない）。それを input-listener が
+ * 受けて HID のマウスレポートにする。
+ *
+ * reg は hhkb_pod_right.overlay と**同じ 1**。ずれると左は黙って捨てる。
+ */
+/ {
+	split_inputs {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pod_split: pod_split@1 {
+			compatible = "zmk,input-split";
+			reg = <1>;
+		};
+	};
+
+	pod_r_listener: pod_r_listener {
+		compatible = "zmk,input-listener";
+		device = <&pod_split>;
+		/*
+		 * 向き・スクロールはここで（ZMK の入力プロセッサ）。例:
+		 *   input-processors = <&zip_xy_transform INPUT_TRANSFORM_Y_INVERT>;
+		 *   scroll { layers = <2>; input-processors = <&zip_xy_to_scroll_mapper>; };
+		 * ⚠️ レイヤーは**番号で書く**（FN = 2）。名前（#define）はキーマップの
+		 *    中にしか無く、この overlay より後に読まれる。番号は
+		 *    tools/test_invariants.py が固定している。
+		 */
+	};
+};
