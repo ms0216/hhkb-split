@@ -41,9 +41,13 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
     # Microchip の ATtiny_DFP を AVR_DFP で渡す。手元の Arduino 版 avr-gcc は同梱のヘッダで通る。
     dfp = os.environ.get("AVR_DFP")
     extra = ["-B", f"{dfp}/gcc/dev/attiny1616/", "-I", f"{dfp}/include"] if dfp else []
-    r = subprocess.run([gcc, "-mmcu=attiny1616", *extra, "-Os", "-std=gnu11", "-Wall", "-Wextra", "-Werror",
-                        "-o", str(elf), str(ROOT / "firmware/pod/pod.c")], capture_output=True, text=True)
+    cmd = [gcc, "-mmcu=attiny1616", *extra, "-Os", "-std=gnu11", "-Wall", "-Wextra", "-Werror"]
+    r = subprocess.run([*cmd, "-o", str(elf), str(ROOT / "firmware/pod/pod.c")], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
+    # 逃げ道の版（上端の電圧を PA4 で測る）も通ること。PB5 自身で読めなかったときに使う
+    r2 = subprocess.run([*cmd, "-DPOD_T_MUXPOS=ADC_MUXPOS_AIN4_gc", "-o", str(tmp_path / "pod_pa4.elf"),
+                         str(ROOT / "firmware/pod/pod.c")], capture_output=True, text=True)
+    assert r2.returncode == 0, r2.stderr[-3000:]
     size = subprocess.run([shutil.which("avr-size"), str(elf)], capture_output=True, text=True).stdout
     text = int(size.splitlines()[1].split()[0])
     assert 1000 < text < 16384, size      # 空でない・16KB に収まる

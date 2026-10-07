@@ -194,6 +194,8 @@
 			&kp SPACE  &kp RGUI  &kp RALT
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&mkp LCLK
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&mkp MCLK
 			>;
 			sensor-bindings = <&scroll_enc>;
 		};
@@ -220,6 +222,8 @@
 			&kp SPACE  &kp RALT  &kp RGUI
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&mkp LCLK
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&mkp MCLK
 			>;
 			sensor-bindings = <&scroll_enc>;
 		};
@@ -245,6 +249,8 @@
 			&trans &kp C_STOP &trans
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&mkp RCLK
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&trans
 			>;
 			sensor-bindings = <&ctrl_scroll_enc>;
 		};
@@ -300,6 +306,8 @@
 			&mkp RCLK &none &none
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&none
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&none
 			>;
 		};
 
@@ -323,6 +331,8 @@
 			&trans &trans &trans
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&trans
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&trans
 			>;
 		};
 
@@ -344,6 +354,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
 			&trans
 			>;
 		};
@@ -368,6 +380,8 @@
 			&trans &trans &trans
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
 			&trans
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			&trans
 			>;
 		};
 
@@ -389,6 +403,8 @@
 			&none &none &none &none &none &none &none
 			&none &none &none
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&none
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
 			&none
 			>;
 		};
@@ -412,6 +428,8 @@
 			&trans &trans &trans &trans &trans &trans &trans
 			&trans &trans &trans
 			/* --- 左のエンコーダの押し込み（62 個目）--- */
+			&trans
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
 			&trans
 			>;
 		};

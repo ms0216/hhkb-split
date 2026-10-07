@@ -1,0 +1,30 @@
+description: |
+  止まっている間に電流を流さないロータリーエンコーダ（firmware/drivers/encoder_gated.c）。
+  a-gpios には「クリックで止まった位置で必ず開いている相」を、b-gpios には「境目の相」を置く。
+  どちらも共通端子は GND。a-gpios には GPIO_ACTIVE_LOW | GPIO_PULL_UP を、b-gpios には
+  GPIO_ACTIVE_LOW を付ける（b のプルアップはドライバが読む瞬間だけ掛ける）。
+
+compatible: "hhkb,encoder-gated"
+
+properties:
+  a-gpios:
+    type: phandle-array
+    required: true
+  b-gpios:
+    type: phandle-array
+    required: true
+  steps:
+    type: int
+    required: true
+    description: 1 回転の刻みの数（EC12PL は 24）
+  invert:
+    type: boolean
+    description: 回す向きを逆に数える
+  settle-us:
+    type: int
+    default: 50
+    description: b をプルアップしてから読むまでの待ち。内蔵 13kΩ × 配線 数十 pF なら 1µs 未満で足りる
+  debounce-ms:
+    type: int
+    default: 2
+    description: a が変わってから読むまでの待ち。規格書のチャタリングは初期 3ms・寿命後 5ms 以下

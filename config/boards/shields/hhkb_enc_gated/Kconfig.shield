@@ -1,0 +1,5 @@
+# 左のロータリーエンコーダを「止まっている間は電流ゼロ」の読み方に替える追加シールド（B 案）。
+# 左のファームに重ねる: shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+# 抵抗 100kΩ ×2 は付けない（付いていても動く）。配線は A 案と同じ。
+config SHIELD_HHKB_ENC_GATED
+	def_bool $(shields_list_contains,hhkb_enc_gated)

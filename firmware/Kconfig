@@ -143,3 +143,11 @@ config HHKB_BEHAVIOR_STICK_RECAL
 	help
 	  **ポッドの無い側にも入る**（左右どちらのポッドにも 1 つのキーで
 	  届かせるため。firmware/src/behavior_stick_recal.c の冒頭）。
+
+config HHKB_ENCODER_GATED
+	bool "止まっている間に電流を流さないロータリーエンコーダ（左手・B 案）"
+	default y
+	depends on DT_HAS_HHKB_ENCODER_GATED_ENABLED
+	select SENSOR
+	help
+	  firmware/drivers/encoder_gated.c。追加シールド hhkb_enc_gated を重ねたときだけ入る。

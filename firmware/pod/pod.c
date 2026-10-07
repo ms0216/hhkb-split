@@ -69,6 +69,15 @@ FUSES = {
 #define FRAME_LEN 11
 
 #define STICK_PWR_bm (PIN4_bm | PIN5_bm) /* PB4 | PB5 = 0x30 */
+/* Where the stick's top-of-pot voltage (T) is measured.
+ * Default: PB5 itself (AIN8) - the pin that powers the stick (R2 = 0, no sense wire).
+ * The datasheet does not state that an output pin can be sampled; if T does not read
+ * 985..1023 on real hardware, wire stick-top -> 1k -> PA4 and build with
+ *   -DPOD_T_MUXPOS=ADC_MUXPOS_AIN4_gc
+ * (PA4's digital input buffer is already disabled in pins_init). */
+#ifndef POD_T_MUXPOS
+#define POD_T_MUXPOS ADC_MUXPOS_AIN8_gc
+#endif
 #define SW_bm PIN6_bm                    /* PA6 (fully async, DS note under table 5-1) */
 
 /* PA6 PINnCTRL values used by the click state machine (DS 16.5.11) */
@@ -156,7 +165,7 @@ static void stick_measure(void)
     ADC0.CTRLA = ADC_ENABLE_bm;      /* 10 bit, single conversion.  DECISION 4: ADC is
                                         enabled only around a measurement */
     _delay_us(50);                   /* spec: 50 us settle */
-    adc_t = adc_read(ADC_MUXPOS_AIN8_gc); /* PB5 = AIN8: the supply pin itself (R2 = 0, no sense wire) */
+    adc_t = adc_read(POD_T_MUXPOS);
     adc_x = adc_read(ADC_MUXPOS_AIN5_gc); /* PA5 = AIN5 */
     adc_y = adc_read(ADC_MUXPOS_AIN7_gc); /* PA7 = AIN7 */
     PORTB.OUTCLR = STICK_PWR_bm;

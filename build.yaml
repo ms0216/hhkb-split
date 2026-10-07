@@ -36,3 +36,8 @@ include:
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
     artifact-name: hhkb_split_right-pod
+
+  # ---- 検討用: 左のエンコーダを「止まっている間は電流ゼロ」の読み方にした版（B 案） ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    artifact-name: hhkb_split_left-podR-encB
