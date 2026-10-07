@@ -68,6 +68,8 @@ LOG_MODULE_REGISTER(hhkb_stick_pod, CONFIG_INPUT_LOG_LEVEL);
 
 /* 中心を settings に持つので、1 台に 1 個だけ。左右に付けるときは
  * **左右それぞれのファーム**に 1 個ずつ入る（左右で別の XIAO）。 */
+BUILD_ASSERT(!IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME),
+	     "stick-pod: PM_DEVICE_RUNTIME とは併用しない（Kconfig では依存が輪になるのでここで止める）");
 BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1, "hhkb,stick-pod は 1 個だけ置くこと");
 
 /* タイムアウトが既定（500ms）のままだと、SCL が Low に固定されたときに
