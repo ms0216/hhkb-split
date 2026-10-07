@@ -41,3 +41,8 @@ include:
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     artifact-name: hhkb_split_left-podR-encB
+  # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right hhkb_pod_right
+    snippet: zmk-usb-logging
+    artifact-name: hhkb_split_right-pod-log
