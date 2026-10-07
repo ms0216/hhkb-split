@@ -21,6 +21,20 @@ jobs:
       - name: テスト（配列・キーマップ・プレート・ケース・基板・組み立て）
         run: pytest tools -q
 
+  # ポッドのマイコン（ATtiny1616）のファームを avr-gcc で通す。手元に avr-gcc は無いので、ここでだけ必須にする。
+  pod-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y gcc-avr avr-libc binutils-avr
+      - run: pip install pytest
+      - run: avr-gcc --version | head -1
+      - name: ポッドのファームと受け入れ規則
+        run: REQUIRE_AVR=1 pytest tools/test_stick_pod.py -q
+
   # **実形状の検査。**KiCad の 3D モデルから基板の実物を起こし、
   # 部品どうしが立体で当たらないかを厳密に見る（DRC は 2D で高さを見ない）。
   #
