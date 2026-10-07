@@ -71,7 +71,7 @@ FUSES = {
 #define STICK_PWR_bm (PIN4_bm | PIN5_bm) /* PB4 | PB5 = 0x30 */
 #define SW_bm PIN6_bm                    /* PA6 (fully async, DS note under table 5-1) */
 
-/* PA2 PINnCTRL values used by the click state machine (DS 16.5.11) */
+/* PA6 PINnCTRL values used by the click state machine (DS 16.5.11) */
 #define SW_ARMED (PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc) /* released: wake on both edges */
 #define SW_QUIET (PORT_PULLUPEN_bm | PORT_ISC_INTDISABLE_gc) /* pull-up on, buffer on, no irq */
 #define SW_OFF (PORT_ISC_INPUT_DISABLE_gc)                   /* held: pull-up off, buffer off */
@@ -421,7 +421,7 @@ ISR(RTC_PIT_vect)
 static void pins_init(void)
 {
     /* PA0 = UPDI: left alone (DS 16.3.1 "pins used to connect a debugger may be
-     * configured differently").  PA2 handled by the click code.
+     * configured differently").  PA6 handled by the click code.
      * PB0/PB1 = TWI: input buffer must stay ON, no internal pull-up (external 6.8k). */
     PORTA.PIN1CTRL = PORT_ISC_INPUT_DISABLE_gc; /* reserved */
     PORTA.PIN3CTRL = PORT_ISC_INPUT_DISABLE_gc;

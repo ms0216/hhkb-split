@@ -5,6 +5,8 @@
 #   hhkb_pod_remote  右にポッドが付いている … **左のファーム**に重ねる（受け口）
 #   hhkb_pod_left    左にポッドを付ける    … 左のファームに重ねる
 #
+# ⚠️ **hhkb_pod_left は、左にロータリーエンコーダを付けた版（encoder-trial 以降）とは併用できない。**
+#    どちらも D4・D9 を使う。重ねてもビルドは緑のまま、ピンを二重に取る。
 # ⚠️ hhkb_pod_right と hhkb_pod_remote は必ず対。片方だけだと、右は動きを
 #    送っているのに左が受け口を持たない（ビルドは両方とも緑）。
 config SHIELD_HHKB_POD_LEFT

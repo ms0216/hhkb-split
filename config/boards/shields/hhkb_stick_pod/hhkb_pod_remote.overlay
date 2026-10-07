@@ -7,7 +7,23 @@
  *
  * reg は hhkb_pod_right.overlay と**同じ 1**。ずれると左は黙って捨てる。
  */
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
 / {
+	/*
+	 * スティックの押し込みを**ホイールクリック（中ボタン）**にする。
+	 * ドライバは INPUT_BTN_0 を出し、ZMK の listener は「コード − INPUT_BTN_0」番めの
+	 * ボタンにするので、何もしなければ左クリックになる（input_listener.c）。
+	 * 利用者の割り当て: 左クリック = エンコーダの押し込み、右クリック = Fn + 押し込み、
+	 * 残り（中ボタン）= スティック。替えるときは map の右側だけ直す（BTN_1 = 右）。
+	 */
+	pod_click_map: pod_click_map {
+		compatible = "zmk,input-processor-code-mapper";
+		#input-processor-cells = <0>;
+		type = <INPUT_EV_KEY>;
+		map = <INPUT_BTN_0 INPUT_BTN_2>;
+	};
+
 	split_inputs {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -21,6 +37,7 @@
 	pod_r_listener: pod_r_listener {
 		compatible = "zmk,input-listener";
 		device = <&pod_split>;
+		input-processors = <&pod_click_map>;
 		/*
 		 * 向き・スクロールはここで（ZMK の入力プロセッサ）。例:
 		 *   input-processors = <&zip_xy_transform INPUT_TRANSFORM_Y_INVERT>;
