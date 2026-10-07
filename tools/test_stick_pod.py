@@ -37,7 +37,11 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
             pytest.fail("avr-gcc が無い（REQUIRE_AVR=1）")
         pytest.skip("avr-gcc が無い")
     elf = tmp_path / "pod.elf"
-    r = subprocess.run([gcc, "-mmcu=attiny1616", "-Os", "-std=gnu11", "-Wall", "-Wextra", "-Werror",
+    # Ubuntu の avr-libc は ATtiny1616 を知らない（CI で RSTCTRL などが未定義になった・2026-10-07）。
+    # Microchip の ATtiny_DFP を AVR_DFP で渡す。手元の Arduino 版 avr-gcc は同梱のヘッダで通る。
+    dfp = os.environ.get("AVR_DFP")
+    extra = ["-B", f"{dfp}/gcc/dev/attiny1616/", "-I", f"{dfp}/include"] if dfp else []
+    r = subprocess.run([gcc, "-mmcu=attiny1616", *extra, "-Os", "-std=gnu11", "-Wall", "-Wextra", "-Werror",
                         "-o", str(elf), str(ROOT / "firmware/pod/pod.c")], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
     size = subprocess.run([shutil.which("avr-size"), str(elf)], capture_output=True, text=True).stdout

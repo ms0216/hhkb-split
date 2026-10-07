@@ -32,8 +32,14 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y gcc-avr avr-libc binutils-avr
       - run: pip install pytest
       - run: avr-gcc --version | head -1
+      # Ubuntu の avr-libc は ATtiny1616 のヘッダを持たない。Microchip の公式パックから取る（版とハッシュを固定）
+      - name: ATtiny_DFP を取る
+        run: |
+          curl -sfL -o /tmp/dfp.zip https://packs.download.microchip.com/Microchip.ATtiny_DFP.3.4.278.atpack
+          echo "41f09d5825abaa764c9000f4488f8ba3fab152afe6229b359de4a5efe9a21eda  /tmp/dfp.zip" | sha256sum -c -
+          mkdir -p /tmp/dfp && unzip -q /tmp/dfp.zip "gcc/dev/attiny1616/*" "include/avr/iotn1616.h" -d /tmp/dfp
       - name: ポッドのファームと受け入れ規則
-        run: REQUIRE_AVR=1 pytest tools/test_stick_pod.py -q
+        run: REQUIRE_AVR=1 AVR_DFP=/tmp/dfp pytest tools/test_stick_pod.py -q
 
   # **実形状の検査。**KiCad の 3D モデルから基板の実物を起こし、
   # 部品どうしが立体で当たらないかを厳密に見る（DRC は 2D で高さを見ない）。
