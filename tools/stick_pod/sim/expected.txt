@@ -61,3 +61,5 @@ S21 tilt-stuck, then clicks at +8 min: counts emitted in the 10 min after = 0, r
 S22 release report dropped once: presses=1 releases=1 last=0
 S23 tilt-stuck, 3 s press at +8 min, real move at +9 min: counts while still stuck=0 (expect 0) click presses=1 (expect 1) counts after the move=13632 (expect >0) counts after release=0 (expect 0)
 S24 tilt-stuck, pod absent 15 s, back to centre, same full tilt for 20 s: counts=24019 (expect ~24000; 0 would mean the mute outlived the stuck)
+S25 tilt-stuck, pod absent 15 s, back still tilted, next 7 min: counts=0 (expect 0; 360000 would mean every dropout restarts 5 min of drift)
+S26 first boot with 5 LSB wobble, 60 s: saves=0 (0 = no centre adopted, so the pointer never moves; needs centre-stable-lsb >= 5)

@@ -56,7 +56,7 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
 SIM = ROOT / "tools/stick_pod/sim"
 
 
-def _run_sim(tmp_path, driver_src, scenes=range(1, 25), defs=()):
+def _run_sim(tmp_path, driver_src, scenes=range(1, 27), defs=()):
     cc = shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         pytest.skip("C コンパイラが無い")
@@ -69,11 +69,11 @@ def _run_sim(tmp_path, driver_src, scenes=range(1, 25), defs=()):
 
 
 def test_host_state_machine_reproduces_the_recorded_scenes(tmp_path):
-    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 24 場面走らせ、
+    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 26 場面走らせ、
     記録した結果（tools/stick_pod/sim/expected.txt）と 1 文字も違わないこと。
 
     場面: 初回起動・倒す・ダブルクリック・押しっぱなし 11 分・押したまま抜く・固着・スリープ・リンク断 など。
-    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9 は既知の未解決。S21 は 2026-10-08 に直した: 36 万カウント → 0。S23 はその裏返し＝本当に動かせば移動が戻る。S24 は不在を挟んでも止めたままにならないこと）。
+    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9 は既知の未解決。S21 は 2026-10-08 に直した: 36 万カウント → 0。S23 はその裏返し＝本当に動かせば移動が戻る。S24 は不在を挟んで中心へ戻れば止めたままにならないこと、S25 は倒れたまま戻ったら流さないこと。S26 は既知: 読みが 5LSB 揺れると既定の幅では中心を採用できない）。
     意図して挙動を変えたら、結果を読んでから expected.txt を更新する。"""
     got = _run_sim(tmp_path, ROOT / "firmware/drivers/stick_pod.c")
     assert got == (SIM / "expected.txt").read_text()
@@ -95,3 +95,13 @@ def test_wider_stable_band_lets_a_wobbling_stuck_stick_settle(tmp_path):
     src = ROOT / "firmware/drivers/stick_pod.c"
     assert "next 30 min=2160000" in _run_sim(tmp_path, src, scenes=[9])                      # 既定: 流れ続ける（既知）
     assert "next 30 min=0 " in _run_sim(tmp_path, src, scenes=[9], defs=["-DSTUB_stuck_stable_lsb=8"])
+
+
+def test_wider_centre_band_lets_a_wobbling_stick_adopt_its_centre(tmp_path):
+    """初回起動で読みが 5LSB 揺れる（S26）と、既定の ±3LSB では中心を採用できず、ポインタは永久に動かない。
+    devicetree の centre-stable-lsb を 8 にすれば採用できること。**固着の幅（stuck-stable-lsb）を広げても効かない**
+    ことも見る（2 つの設定の取り違えを検出する）。"""
+    src = ROOT / "firmware/drivers/stick_pod.c"
+    assert "saves=0 " in _run_sim(tmp_path, src, scenes=[26])
+    assert "saves=1 " in _run_sim(tmp_path, src, scenes=[26], defs=["-DSTUB_centre_stable_lsb=8"])
+    assert "saves=0 " in _run_sim(tmp_path, src, scenes=[26], defs=["-DSTUB_stuck_stable_lsb=8"])

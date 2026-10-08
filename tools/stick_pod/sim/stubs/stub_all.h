@@ -31,7 +31,9 @@ extern const struct device stub_dev;
 #define STUB_active_hold_ms 300
 #define STUB_replay_gap_ms 16
 #define STUB_stuck_after_seconds 300
+#ifndef STUB_centre_stable_lsb
 #define STUB_centre_stable_lsb 3
+#endif
 #ifndef STUB_stuck_stable_lsb
 #define STUB_stuck_stable_lsb 3
 #endif

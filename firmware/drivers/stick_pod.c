@@ -79,7 +79,6 @@ BUILD_ASSERT(CONFIG_I2C_NRFX_TRANSFER_TIMEOUT > 0 && CONFIG_I2C_NRFX_TRANSFER_TI
              "CONFIG_I2C_NRFX_TRANSFER_TIMEOUT を 10 前後にすること（既定の 500 のままになっている）");
 
 /* ---- 仕様で決まっている数字（devicetree に出さない） ---- */
-#define SP_STABLE_LSB 3         /* 「そろっている」「不変」の幅（±3LSB） */
 #define SP_ADOPT_FRAMES 8       /* 中心の採用に要る連続フレーム数 */
 #define SP_ADOPT_LO 19661       /* 0.5 − 0.2 */
 #define SP_ADOPT_HI 45875       /* 0.5 + 0.2 */
@@ -92,6 +91,7 @@ BUILD_ASSERT(CONFIG_I2C_NRFX_TRANSFER_TIMEOUT > 0 && CONFIG_I2C_NRFX_TRANSFER_TI
 #define SP_RECAL_TIMEOUT_MS 5000     /* キー操作の取り直しを諦めるまで */
 #define SP_MAX_PENDING 32            /* 出力待ちの押し/離し（規則 5: 32 個まで） */
 #define SP_STATS_PERIOD_MS (10 * 60 * 1000)
+#define SP_EARLY_STATS_MS 20000 /* 起動からこれだけたっても 1 フレームも受理していなければ、数字を 1 回出す */
 
 #define SP_SETTINGS_TREE "hhkb/stick"
 #define SP_SETTINGS_KEY "centre"
@@ -149,11 +149,11 @@ struct sp_data {
     int64_t active_since;  /* 「動作」に入った時刻 */
     int64_t centred_since; /* 中心かつ非押下が始まった時刻（0 = 続いていない） */
     int64_t press_since;   /* 押下が始まった時刻（0 = 押されていない） */
-    int64_t anchor_since;  /* 傾きが anchor から ±3LSB を出ていない間の起点 */
+    int64_t anchor_since;  /* 傾きが anchor から ±stuck-stable-lsb を出ていない間の起点 */
     uint16_t anchor_x, anchor_y;
     bool stuck_by_button;
     uint16_t stuck_x, stuck_y;
-    /* 傾きで固着した。**傾きが固着時の位置から ±3LSB を超えて動くまで、移動は出さない**（ボタンは通す）。
+    /* 傾きで固着した。**傾きが固着時の位置から ±stuck-stable-lsb を超えて動くまで、移動は出さない**（ボタンは通す）。
      * K_SPEC §4。これが無いと、物が載って倒れたままのスティックでクリックするたびに、固着を抜けて
      * また 5 分間ポインタが流れる（模擬の S21: 10 分で 36 万カウント。2026-10-08 に検査を入れて発覚） */
     bool tilt_muted;
@@ -177,6 +177,8 @@ struct sp_data {
     bool seen_frame;
     uint8_t seen_boot_id;
     int64_t last_stats;
+    int64_t boot_ms;
+    bool early_stats_done;
 };
 
 static struct k_work_delayable sp_save_work;
@@ -323,7 +325,7 @@ static void sp_save_work_cb(struct k_work *work) {
 }
 
 /* 中心の採用（保存値が無い初回・キー操作での取り直し）。
- * 連続 8 フレームが最初の 1 枚から ±3LSB にそろい、その平均の X/T・Y/T が
+ * 連続 8 フレームが最初の 1 枚から ±centre-stable-lsb（既定 3）にそろい、その平均の X/T・Y/T が
  * 0.5±0.2 に入ったら採用する。**倒したまま起動しても、倒した位置を
  * 中心にしないため**の窓（X/T は R2 やポットの値に依らず約 0.5）。 */
 static void sp_adopt_step(struct sp_data *data, const struct sp_frame *fr, uint16_t stable_lsb) {
@@ -418,7 +420,10 @@ static void sp_enter_absent(struct sp_data *data, const char *why) {
         sp_log_counters(data, "不在");
     }
     sp_set_state(data, SP_ST_ABSENT);
-    data->tilt_muted = false; /* 見失ったら「固着した位置」の記憶は当てにならない（下の「静止」の所も参照） */
+    /* **ここで tilt_muted を解かない。**不在は I2C の失敗だけでなく、分割リンクの変化や停止からも来る。
+     * 解くと、倒れたまま固着したスティックが「復帰のたびに 5 分流れる」（接触の悪い線・リンクの瞬断で
+     * 繰り返す。模擬で 60 分に 370 万カウント。2026-10-09 の点検で発覚）。解くのは、傾きが実際に動いたとき
+     * と、静止で中心を見たときだけ。 */
     sp_flush_edges(data); /* F4: host.pressed がすでに false でも、行列と出した押下を片付ける */
     sp_motion_reset(&data->motion);
     sp_run_reset(data);
@@ -552,7 +557,7 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
         data->centred_since = 0;
     }
 
-    /* 傾きが不変かどうか（最初の 1 枚から ±3LSB を出たら数え直し）。
+    /* 傾きが不変かどうか（最初の 1 枚から ±stuck-stable-lsb（既定 3）を出たら数え直し）。
      *
      * ⚠️ **仮の規則（F9・provisional-values.md に載せること）。**
      * 倒れたままの傾きが 3LSB を超えて揺れると（例: 7 秒ごとに 5LSB）、ここが
@@ -645,6 +650,16 @@ static void sp_poll(const struct device *dev, int64_t now) {
         sp_run_reset(data); /* 「連続 8 フレーム」は失敗で途切れる */
         if (was_synced && !data->host.synced) {
             sp_enter_absent(data, "3 回以上続けて読めず 150ms 以上たった");
+        }
+    }
+
+    /* 最初から返事が無い（配線・書き込みの誤り）と、「見失った」は出ず、定期の数字も 10 分後まで出ない。
+     * 立ち上げで一番ありそうな場面なので、起動 20 秒で 1 回だけ出す。 */
+    if (!data->early_stats_done && now - data->boot_ms >= SP_EARLY_STATS_MS) {
+        data->early_stats_done = true;
+        if (!data->seen_frame) {
+            LOG_WRN("起動から 20 秒、ポッドから正しいフレームが 1 つも届いていない");
+            sp_log_counters(data, "起動 20 秒");
         }
     }
 
@@ -933,7 +948,7 @@ static int sp_init(const struct device *dev) {
     k_work_init_delayable(&sp_save_work, sp_save_work_cb);
     sp_host_init(&data->host, sp_edge, data);
     sp_motion_reset(&data->motion);
-    data->last_poll = data->last_frame = data->last_stats = k_uptime_get();
+    data->last_poll = data->last_frame = data->last_stats = data->boot_ms = k_uptime_get();
 
 #if !IS_ENABLED(CONFIG_SETTINGS)
     atomic_set_bit(data->flags, SP_F_LOADED); /* 保存先が無い。毎回採用し直す */

@@ -45,12 +45,13 @@ include:
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
     snippet: zmk-usb-logging
-    # 起動直後の行（ポッドを見つけた・保存してあった中心）を、screen を開き直すあいだ待たせる
-    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000
+    # 起動直後の行（ポッドを見つけた・保存してあった中心）を、screen を開き直すあいだ溜めておく。
+    # 溜める場所があふれると**古い行から消える**ので、場所も広げる（既定 8KB）
+    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_right-pod-log
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     snippet: zmk-usb-logging
-    # 起動直後の行（ポッドを見つけた・保存してあった中心）を、screen を開き直すあいだ待たせる
-    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000
+    # 左にポッドのドライバは無い。見るのはエンコーダの刻み（ZMK の val1 / triggers の行）。溜めは右と同じ
+    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_left-podR-encB-log

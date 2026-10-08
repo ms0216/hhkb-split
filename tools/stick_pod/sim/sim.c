@@ -176,6 +176,10 @@ static void w_tiltstuck_click_then_move(int64_t n) { int64_t d = n - T0; pod.x =
 /* S24: 倒れたまま固着 → 7 分にポッドが 15 秒消える（固着中は 2 秒ごとにしか読まないので、不在と決まるまで約 6 秒）
  *      → 戻って中心で 5 秒 → 同じ向きへ一杯に 20 秒 */
 static void w_tiltstuck_absent_then_same_tilt(int64_t n) { int64_t d = n - T0, e = d - 7 * 60000; pod.present = !(e >= 0 && e < 15000); pod.x = d < 1000 ? 500 : e < 0 ? 800 : e < 20000 ? 500 : e < 40000 ? 800 : 500; }
+/* S25: 倒れたまま固着 → 7 分にポッドが 15 秒消える → **倒れたまま**戻る。固着の続きなので、移動を出してはいけない */
+static void w_tiltstuck_absent_still_tilted(int64_t n) { int64_t d = n - T0, e = d - 7 * 60000; pod.present = !(e >= 0 && e < 15000); pod.x = d < 1000 ? 500 : 800; }
+/* S26: 保存した中心が無い初回起動。手は離しているが、読みが 300ms ごとに 5LSB 揺れる */
+static void w_centre_wobble(int64_t n) { pod.x = 500 + (((n / 300) % 2) ? 5 : 0); }
 static void w_aligned_click(int64_t n) { int64_t d = n - T0; pod.pressed = (d >= 5 && d < 60); }
 static void dump_btn(int e0) { for (int i = e0; i < nev; i++) if (evs[i].kind == 1) SAY("     t=+%lld %s", (long long)(evs[i].t - T0), evs[i].val ? "press" : "release"); }
 static void boot(bool with_saved) {
@@ -309,6 +313,15 @@ int main(int argc, char **argv) {
         boot(true); run_for(3000); T0 = now_ms; world = w_tiltstuck_absent_then_same_tilt; run_until(T0 + 7 * 60000 + 20000);
         { int64_t a = rel_x; run_until(T0 + 7 * 60000 + 40000);
           SAY("S24 tilt-stuck, pod absent 15 s, back to centre, same full tilt for 20 s: counts=%lld (expect ~24000; 0 would mean the mute outlived the stuck)", (long long)(rel_x - a)); }
+        break;
+    case 25: /* tilt-stuck, pod vanishes and comes back STILL tilted: the stuck continues, nothing may flow */
+        boot(true); run_for(3000); T0 = now_ms; world = w_tiltstuck_absent_still_tilted; run_until(T0 + 7 * 60000);
+        { int64_t a = rel_x; run_until(T0 + 14 * 60000);
+          SAY("S25 tilt-stuck, pod absent 15 s, back still tilted, next 7 min: counts=%lld (expect 0; 360000 would mean every dropout restarts 5 min of drift)", (long long)(rel_x - a)); }
+        break;
+    case 26: /* first boot, hands off, reading wobbles 5 LSB: is a centre ever adopted? */
+        boot(false); world = w_centre_wobble; run_for(60000);
+        SAY("S26 first boot with 5 LSB wobble, 60 s: saves=%d (0 = no centre adopted, so the pointer never moves; needs centre-stable-lsb >= 5)", n_saves);
         break;
     case 22: /* the release report is dropped once */
         boot(true); run_for(3000); T0 = now_ms; world = w_aligned_click; e0 = nev; run_until(T0 + 255); fail_input = 1; run_for(3000);

@@ -12,6 +12,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -338,14 +340,47 @@ def test_the_zmk_config_validator_passes():
     assert rc == 0, buf.getvalue()
 
 
+def _low_battery_gate():
+    """low_battery_off.c の low_battery_check() の中の、USB の門の塊（#if 〜 #endif）と、その後ろの本文を返す。"""
+    src = (ROOT / "firmware/src/low_battery_off.c").read_text()
+    body = src[src.index("static void low_battery_check("):]
+    m = re.search(r"#if\s+(.+?)\n(.*?)#endif", body, re.S)
+    assert m, "low_battery_check の中に #if 〜 #endif の門が無い"
+    return m.group(1).strip(), m.group(2), body[m.end():], body[:m.start()]
+
+
 def test_low_battery_gate_also_covers_the_peripheral_half():
     """電池の打ち止めの「USB 給電中は判定しない」が、右（ペリフェラル）でも効く条件で切られていること。
 
     右は ZMK の Kconfig の依存で CONFIG_ZMK_USB が n になる。CONFIG_ZMK_USB で切ると右では門が消え、
-    USB だけで給電すると約 2 分で soft off する（2026-10-06 に CI の .config で確認）。
-    ZMK 自身（app/src/activity.c）と同じ CONFIG_USB_DEVICE_STACK で切る。"""
+    USB だけで給電すると（計算上）約 2 分で soft off する（2026-10-06 に CI の .config で確認）。
+    ZMK 自身（app/src/activity.c）と同じ CONFIG_USB_DEVICE_STACK で切る。
+
+    文字列の個数だけを数える版は、門の中身を空にしても・条件を反転しても通った（2026-10-09 の点検）。
+    門の「条件・中身・位置」を見る。"""
+    cond, inner, after, before = _low_battery_gate()
+    assert cond == "IS_ENABLED(CONFIG_USB_DEVICE_STACK)", cond            # && 0 や ZMK_USB の併記を許さない
+    code = re.sub(r"/\*.*?\*/", "", inner, flags=re.S)
+    assert re.search(r"if\s*\(\s*zmk_usb_is_powered\(\)\s*\)\s*\{", code), code   # 反転（!）していない
+    assert "consecutive = 0;" in code and "return;" in code                 # 数え直して、判定せずに戻る
+    assert "sensor_channel_get" in after and "sensor_channel_get" not in before   # 電圧を読むより前にある
     src = (ROOT / "firmware/src/low_battery_off.c").read_text()
-    code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith(("*", "/*")))
-    assert "IS_ENABLED(CONFIG_ZMK_USB)" not in code
-    assert code.count("IS_ENABLED(CONFIG_USB_DEVICE_STACK)") == 2
-    assert "zmk_usb_is_powered()" in code
+    assert re.search(r"#if IS_ENABLED\(CONFIG_USB_DEVICE_STACK\)\n#include <zmk/usb.h>", src)
+
+
+@pytest.mark.parametrize("old,new", [
+    ("if (zmk_usb_is_powered()) {", "if (!zmk_usb_is_powered()) {"),
+    ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_USB_DEVICE_STACK) && 0\n    if"),
+    ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_ZMK_USB)\n    if"),
+    ("        consecutive = 0;\n        return;\n", ""),
+])
+def test_the_gate_check_notices_a_broken_gate(old, new, monkeypatch, tmp_path):
+    """上の検査が、門を壊すと本当に落ちること。"""
+    p = ROOT / "firmware/src/low_battery_off.c"
+    src = p.read_text()
+    assert old in src
+    broken = tmp_path / "firmware/src"; broken.mkdir(parents=True)
+    (broken / "low_battery_off.c").write_text(src.replace(old, new, 1))
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    with pytest.raises(AssertionError):
+        test_low_battery_gate_also_covers_the_peripheral_half()
