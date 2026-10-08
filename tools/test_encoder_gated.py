@@ -4,6 +4,7 @@ EC12PL（24 クリック / 24 パルス）の 1 刻み（時計回り）は「a 
 ドライバは a が変わった瞬間に b を読む（その時点の b の値）。ここでは
   速く回す・途中まで回して戻す・a のチャタリング・反転・起動時に a が閉じている
 を流し、数えた刻みが「掣子を越えた正味の数」と一致することを見る。
+**符号は ZMK 標準の alps,ec11 と同じ**（図一の時計回り = −1。下の test_sign_matches_zmk_ec11 が ec11 の表と突き合わせる）。
 **実機の代わりではない。**接点の実際の位相やばたつき方は現物でしか分からない。
 """
 import ctypes as C
@@ -71,14 +72,14 @@ def walk(start, steps, settle=True):
 
 def test_full_clicks_each_direction(lib):
     core = Core(); lib.eg_start(C.byref(core), 0, 0)
-    ev, d = walk(0, [1] * 4 * 10); assert feed(lib, core, ev) == 10 and lib.eg_pulses(C.byref(core)) == 10
+    ev, d = walk(0, [1] * 4 * 10); assert feed(lib, core, ev) == -10 and lib.eg_pulses(C.byref(core)) == -10
     core = Core(); lib.eg_start(C.byref(core), 0, 0)
-    ev, d = walk(0, [-1] * 4 * 7); assert feed(lib, core, ev) == -7
+    ev, d = walk(0, [-1] * 4 * 7); assert feed(lib, core, ev) == 7
 
 
 def test_invert_flips_direction(lib):
     core = Core(); lib.eg_start(C.byref(core), 0, 0)
-    ev, _ = walk(0, [1] * 8); assert feed(lib, core, ev, invert=1) == -2
+    ev, _ = walk(0, [1] * 8); assert feed(lib, core, ev, invert=1) == 2
 
 
 def test_partial_turn_and_back_counts_nothing(lib):
@@ -92,10 +93,10 @@ def test_a_bounce_does_not_count(lib):
     core = Core(); lib.eg_start(C.byref(core), 0, 0)
     # a が閉じる所で 5 回ばたつく（b は 0 のまま）→ その後 1 刻み
     ev = [(1, 0), (0, 0)] * 5 + [(1, 0), (1, 1), (0, 1), (0, 0)]
-    assert feed(lib, core, ev) == 1
+    assert feed(lib, core, ev) == -1
     # a が開く所でばたつく（b は 1 のまま）: 最初の「開」で数え、以後の閉→開は b が同じなので数えない
     ev = [(1, 0), (1, 1), (0, 1), (1, 1), (0, 1), (1, 1), (0, 1), (0, 0)]
-    assert feed(lib, core, ev) == 1
+    assert feed(lib, core, ev) == -1
 
 
 def test_random_walk_matches_net_detents(lib):
@@ -106,7 +107,7 @@ def test_random_walk_matches_net_detents(lib):
         ev, d = walk(0, steps)
         # 読み出し（channel_get）で 0 に戻る前提なので、int8 の範囲に収める
         assert abs(d) < 120
-        assert feed(lib, core, ev) == d, (trial, steps[:20])
+        assert feed(lib, core, ev) == -d, (trial, steps[:20])
 
 
 def test_start_with_a_closed(lib):
@@ -116,4 +117,22 @@ def test_start_with_a_closed(lib):
         core = Core(); a, b = CW[start]; lib.eg_start(C.byref(core), a, b)
         ev, d = walk(start, [1] * (4 * 3))
         got = feed(lib, core, ev)
-        assert got in (d, d - 1) and got >= 0, (start, got, d)
+        assert -got in (d, d - 1) and got <= 0, (start, got, d)
+
+
+def test_sign_matches_zmk_ec11(lib):
+    """同じ配線で A 案（ZMK 標準の alps,ec11）と B 案を入れ替えても、回す向きが変わらないこと。
+    ec11.c の表（prev<<2 | new。値は (A<<1)|B の「レベル」で、プルアップなので閉 = 0）を写して、同じ波形を流す。"""
+    minus = {0b0010, 0b0100, 0b1101, 0b1011}; plus = {0b0001, 0b0111, 0b1110, 0b1000}
+    def ec11(events, start=(0, 0)):
+        lv = lambda a, b: ((0 if a else 1) << 1) | (0 if b else 1)      # noqa: E731
+        prev, pulses = lv(*start), 0
+        for a, b in events:
+            v = lv(a, b); k = (prev << 2) | v
+            pulses += -1 if k in minus else 1 if k in plus else 0
+            prev = v
+        return pulses // 4 if pulses >= 0 else -((-pulses) // 4)       # steps = 96 → 4 パルスで 1 刻み
+    for steps in ([1] * 20, [-1] * 20, [1] * 8 + [-1] * 12):
+        ev, _ = walk(0, steps)
+        core = Core(); lib.eg_start(C.byref(core), 0, 0)
+        assert feed(lib, core, ev) == ec11(ev), steps

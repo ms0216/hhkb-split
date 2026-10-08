@@ -32,8 +32,10 @@ static inline int eg_core_edge(struct eg_core *c, bool a_closed_now, bool b_now,
     if (a_closed_now) {
         c->b_at_close = b_now;
     } else if (b_now != c->b_at_close) {
-        /* 時計回り（規格書の図一: a 閉 → b 閉 → a 開 → b 開）は、a が閉じた時点で b が開いている → +1 */
-        step = (c->b_at_close == invert) ? 1 : -1;
+        /* 符号は ZMK 標準の alps,ec11 と同じにする: 規格書の図一の時計回り（a 閉 → b 閉 → a 開 → b 開）は
+         * −1（ec11.c の表で 4 回とも −1）。同じ配線のまま A 案と B 案を入れ替えても、回す向きが変わらない。
+         * 逆にしたいときは devicetree の invert。 */
+        step = (c->b_at_close != invert) ? 1 : -1;
         c->pulses += (int8_t)step;
     }
     c->a_closed = a_closed_now;

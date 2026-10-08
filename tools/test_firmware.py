@@ -336,3 +336,16 @@ def test_the_zmk_config_validator_passes():
     with contextlib.redirect_stdout(buf):
         rc = check_zmk_config.main()
     assert rc == 0, buf.getvalue()
+
+
+def test_low_battery_gate_also_covers_the_peripheral_half():
+    """電池の打ち止めの「USB 給電中は判定しない」が、右（ペリフェラル）でも効く条件で切られていること。
+
+    右は ZMK の Kconfig の依存で CONFIG_ZMK_USB が n になる。CONFIG_ZMK_USB で切ると右では門が消え、
+    USB だけで給電すると約 2 分で soft off する（2026-10-06 に CI の .config で確認）。
+    ZMK 自身（app/src/activity.c）と同じ CONFIG_USB_DEVICE_STACK で切る。"""
+    src = (ROOT / "firmware/src/low_battery_off.c").read_text()
+    code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith(("*", "/*")))
+    assert "IS_ENABLED(CONFIG_ZMK_USB)" not in code
+    assert code.count("IS_ENABLED(CONFIG_USB_DEVICE_STACK)") == 2
+    assert "zmk_usb_is_powered()" in code

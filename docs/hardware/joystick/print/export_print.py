@@ -25,11 +25,16 @@ for half in ("left", "right"):
     export_stl(inv * parts["plate"], str(OUT / f"{half}_plate.stl"))
     export_stl(inv * parts["joystick_seat"], str(OUT / f"{half}_tray.stl"))
 
-# 右手のキャップ: 円板＋軸にかぶせる筒。穴は φ4 の D カット（平らな面まで 3.0）に 0.1 の遊び
+# 右手のキャップ: 円板＋軸にかぶせる筒。
+# **軸は D カットではなく「二面取り」**: φ4±0.05 で、先端 5mm だけ向かい合う 2 面が幅 3（0/−0.1）に落としてある
+# （アルプスの図面「操作部寸法」）。穴は φ4.1 の円を幅 3.1 の帯で切った形。
+# ⚠️ 2026-10-08 まで、平らな面を作る箱の位置がずれていて**ただの丸穴**だった（キャップが空回りする）
 # 円板は下の縁を斜めに落とした円すい台（倒して押し込んだとき右スペースへ届くのは下の縁）。上面を下にして刷れば張り出さない
 disc = Location((0, 0, J.CAP_SLEEVE[1])) * Cone(J.CAP_D_BOT / 2, J.CAP_D / 2, J.CAP_T, align=CTR)
 sleeve = Cylinder(*J.CAP_SLEEVE, align=CTR)
-bore = Cylinder(J.SHAFT_D / 2 + 0.05, 6.0, align=CTR) - Location((0, 3.05 + 1.5, 0)) * Box(5, 3.0, 6.0, align=CTR)   # 軸の中心から 1.05 に平らな面（3.0 − 2.0 ＋遊び）
+# 二面取りは先端から 5mm だけ。穴は軸の先から 6mm 下まであるので、**下の 1.2mm は丸のまま**にする
+# （全部を幅 3.1 にすると、丸い所に当たって最後の 1mm が入らない）
+bore = (Cylinder(J.SHAFT_D / 2 + 0.05, 6.0, align=CTR) & Box(5, 3.1, 6.0, align=CTR)) + Cylinder(J.SHAFT_D / 2 + 0.05, 1.2, align=CTR)
 export_stl(disc + sleeve - bore, str(OUT / "right_stick_cap.stl"))
 
 # 左手のつまみ（予備。付属品 φ15×12.5 の代わり）: 穴 φ6.1・深さ 8・割り 0.8
