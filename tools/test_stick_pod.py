@@ -51,3 +51,39 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
     size = subprocess.run([shutil.which("avr-size"), str(elf)], capture_output=True, text=True).stdout
     text = int(size.splitlines()[1].split()[0])
     assert 1000 < text < 16384, size      # 空でない・16KB に収まる
+
+
+SIM = ROOT / "tools/stick_pod/sim"
+
+
+def _run_sim(tmp_path, driver_src):
+    cc = shutil.which("cc") or shutil.which("gcc")
+    if cc is None:
+        pytest.skip("C コンパイラが無い")
+    exe = tmp_path / "sim"
+    subprocess.run([cc, "-std=gnu11", "-O1", "-w", "-DCONFIG_PM_DEVICE_RUNTIME=0", "-I", str(SIM / "stubs"),
+                    "-I", str(ROOT / "firmware/drivers"), "-o", str(exe), str(SIM / "sim.c"), str(driver_src),
+                    str(ROOT / "firmware/drivers/stick_pod_proto.c")], check=True)
+    return "".join(subprocess.run([str(exe), str(i)], capture_output=True, text=True, timeout=120).stdout
+                   for i in range(1, 23))
+
+
+def test_host_state_machine_reproduces_the_22_recorded_scenes(tmp_path):
+    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 22 場面走らせ、
+    記録した結果（tools/stick_pod/sim/expected.txt）と 1 文字も違わないこと。
+
+    場面: 初回起動・倒す・ダブルクリック・押しっぱなし 11 分・押したまま抜く・固着・スリープ・リンク断 など。
+    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9・S21 は既知の未解決を含む）。
+    意図して挙動を変えたら、結果を読んでから expected.txt を更新する。"""
+    got = _run_sim(tmp_path, ROOT / "firmware/drivers/stick_pod.c")
+    assert got == (SIM / "expected.txt").read_text()
+
+
+def test_the_scene_check_notices_a_changed_driver(tmp_path):
+    """上の検査が、ドライバを変えると本当に落ちること（故意に壊す）。"""
+    src = (ROOT / "firmware/drivers/stick_pod.c").read_text()
+    assert "#define SP_MAX_PENDING" in src
+    import re
+    broken = tmp_path / "stick_pod.c"
+    broken.write_text(re.sub(r"#define SP_MAX_PENDING\s+\d+", "#define SP_MAX_PENDING 2", src))
+    assert _run_sim(tmp_path, broken) != (SIM / "expected.txt").read_text()

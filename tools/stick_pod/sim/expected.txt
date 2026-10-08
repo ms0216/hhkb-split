@@ -1,0 +1,61 @@
+S1 first boot: saves=1 stored=32768,32768 events=0 reads=32 (10 s; expect ~40 at 4 Hz + adoption)
+S1 idle 10 min: input events=0 zero-events=0 reads=2400 (expect 0 / 0 / ~2400)
+S2 tilt 2 s full: rel_x=2419 rel_y=0 rel events=167 reads=207 (expect ~2400 counts, minus up-to-250 ms entry latency)
+S3 double click at rest: presses=2 releases=2 min gap=36 ms (expect 2/2, >=16)
+S4 hold 11 min: presses=1 releases=1 last=0 reads=25184 (expect 1/1/0; 5 min*83Hz=25000 + 6min/2s=180)
+S4 after real release: new presses=0 releases=0
+S4 clicks work again: presses=2 releases=2
+S5 unplug while pressed: presses=1 releases=1 last=0 (expect 1/1/0)
+     t=+1000 press
+     t=+3148 release
+S6 burst then unplug: presses=6 releases=6 last=0
+     t=+1000 press
+     t=+1024 release
+     t=+1048 press
+     t=+1064 release
+     t=+1084 press
+     t=+1108 release
+     t=+1124 press
+     t=+1144 release
+     t=+1168 press
+     t=+1184 release
+     t=+1204 press
+     t=+1228 release
+     (pod absent from +1300; host declares absent ~+1900..2050. Edges after that = queue not dropped)
+S7 small stuck tilt: counts in first 5 min=131, in next 20 min=0 (events 0), reads 25006 then 600, saves=1 stored=35717
+S8 far stuck tilt (no noise): counts first 5 min=360014, next 30 min=0 (events 0), reads 25006 then 900
+S9 far stuck tilt + 5 LSB wobble/7 s: counts first 5 min=364824, next 30 min=2160000 (events 150000), reads 25338 then 150000
+S10 tilt-stuck then button held 32 min: presses=1 releases=1 last=0 (1/1/0 would mean the hold is cut)
+S11 tilt-stuck then 7 clicks (300 ms each): presses=6 releases=6
+S12 before SLEEP: presses=2 releases=2
+S12 after SLEEP stop: presses=2 releases=2 last=0 bus_active=0 thread=blocked
+S13 one input_report failure: presses=2 releases=2 (unbalanced => unmatched release reaches HID)
+S14 recal at x=560,y=470: saves=1 stored=36700,30801 (expect 36700,30802) events=0
+S15 frame version 2: presses=0 (spec v7: must be discarded => 0)
+S16 7 clicks queued in one rest period, pod vanishes at +262: presses=5 releases=5 last=0
+     t=+250 press
+     t=+266 release
+     t=+282 press
+     t=+298 release
+     t=+314 press
+     t=+330 release
+     t=+346 press
+     t=+362 release
+     t=+378 press
+     t=+394 release
+S17 at SLEEP (+290): presses=2 releases=1 last=1
+S17 right after stop: presses=2 releases=2 last=0 bus_active=0
+S17 3 s later: thread=blocked presses=2 releases=2 last=0
+S17 after failed-sleep resume: presses=2 releases=2 last=0
+     t=+250 press
+     t=+266 release
+     t=+282 press
+     t=+298 release
+S18 press report dropped once: presses=1 releases=1 (1 release without press => unmatched release into HID refcount)
+S19 link down while pressed: presses=2 releases=1
+S19 link up, still pressed: presses=1 releases=1
+     0 ms after link-up: release
+     2000 ms after link-up: press
+S20 parked 0.041 off-centre (1 LSB outside dead zone), 30 min: counts=0 events=0 reads=25750
+S21 tilt-stuck, then clicks at +8 min: counts emitted in the 10 min after = 360014, reads=25150
+S22 release report dropped once: presses=1 releases=1 last=0
