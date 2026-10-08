@@ -98,7 +98,8 @@ def test_wider_stable_band_lets_a_wobbling_stuck_stick_settle(tmp_path):
 
 
 def test_wider_centre_band_lets_a_wobbling_stick_adopt_its_centre(tmp_path):
-    """初回起動で読みが 5LSB 揺れる（S26）と、既定の ±3LSB では中心を採用できず、ポインタは永久に動かない。
+    """初回起動で読みが 300ms ごとに 5LSB 揺れる（S26 の波形）と、既定の ±3LSB では中心を採用できず、ポインタが動かない
+    （揺れの周期が 2 秒以上なら既定でも採用できる。「どんな揺れでも」ではない）。
     devicetree の centre-stable-lsb を 8 にすれば採用できること。**固着の幅（stuck-stable-lsb）を広げても効かない**
     ことも見る（2 つの設定の取り違えを検出する）。"""
     src = ROOT / "firmware/drivers/stick_pod.c"
