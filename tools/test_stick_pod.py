@@ -56,16 +56,16 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
 SIM = ROOT / "tools/stick_pod/sim"
 
 
-def _run_sim(tmp_path, driver_src):
+def _run_sim(tmp_path, driver_src, scenes=range(1, 24), defs=()):
     cc = shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         pytest.skip("C コンパイラが無い")
     exe = tmp_path / "sim"
-    subprocess.run([cc, "-std=gnu11", "-O1", "-w", "-DCONFIG_PM_DEVICE_RUNTIME=0", "-I", str(SIM / "stubs"),
+    subprocess.run([cc, "-std=gnu11", "-O1", "-w", "-DCONFIG_PM_DEVICE_RUNTIME=0", *defs, "-I", str(SIM / "stubs"),
                     "-I", str(ROOT / "firmware/drivers"), "-o", str(exe), str(SIM / "sim.c"), str(driver_src),
                     str(ROOT / "firmware/drivers/stick_pod_proto.c")], check=True)
     return "".join(subprocess.run([str(exe), str(i)], capture_output=True, text=True, timeout=120).stdout
-                   for i in range(1, 24))
+                   for i in scenes)
 
 
 def test_host_state_machine_reproduces_the_recorded_scenes(tmp_path):
@@ -87,3 +87,11 @@ def test_the_scene_check_notices_a_changed_driver(tmp_path):
     broken = tmp_path / "stick_pod.c"
     broken.write_text(re.sub(r"#define SP_MAX_PENDING\s+\d+", "#define SP_MAX_PENDING 2", src))
     assert _run_sim(tmp_path, broken) != (SIM / "expected.txt").read_text()
+
+
+def test_wider_stable_band_lets_a_wobbling_stuck_stick_settle(tmp_path):
+    """倒れたまま 7 秒ごとに 5LSB 揺れるスティック（S9）は、既定の ±3LSB では固着に入れず 30 分流れ続ける。
+    devicetree の stuck-stable-lsb を 8 にすれば、5 分で固着に入って止まること。"""
+    src = ROOT / "firmware/drivers/stick_pod.c"
+    assert "next 30 min=2160000" in _run_sim(tmp_path, src, scenes=[9])                      # 既定: 流れ続ける（既知）
+    assert "next 30 min=0 " in _run_sim(tmp_path, src, scenes=[9], defs=["-DSTUB_stuck_stable_lsb=8"])

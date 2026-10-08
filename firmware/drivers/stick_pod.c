@@ -120,6 +120,7 @@ struct sp_config {
     uint16_t hold_ms;       /* 中心かつ非押下がこれだけ続いたら「静止」へ */
     uint16_t replay_gap_ms; /* 押し/離しを出す間隔（規則 5） */
     uint32_t stuck_after_ms;
+    uint16_t stuck_stable_lsb; /* 固着の判定で「傾きが不変」とみなす幅（±LSB）。devicetree の stuck-stable-lsb */
     struct sp_motion_cfg motion;
 };
 
@@ -497,8 +498,8 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
 
     /* ---- 遷移 ---- */
     if (data->state == SP_ST_STUCK) {
-        bool moved = !sp_within(fr->x, data->stuck_x, SP_STABLE_LSB) ||
-                     !sp_within(fr->y, data->stuck_y, SP_STABLE_LSB);
+        bool moved = !sp_within(fr->x, data->stuck_x, cfg->stuck_stable_lsb) ||
+                     !sp_within(fr->y, data->stuck_y, cfg->stuck_stable_lsb);
 
         if (moved) {
             data->tilt_muted = false;
@@ -552,8 +553,10 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
      * まま・移動を出し続け、ZMK は眠れない）。±3 は仕様の数字だが、
      * **実物の ADC の雑音を測っていない。**
      * TODO(F9): 試験 3・7 で静止時と倒したままの揺れ幅を測り、(a) 幅を広げる、
-     * (b) 「直近 N 秒の最大−最小」で見る、のどちらかに決める。仕様も直す。 */
-    if (!sp_within(fr->x, data->anchor_x, SP_STABLE_LSB) || !sp_within(fr->y, data->anchor_y, SP_STABLE_LSB)) {
+     * (b) 「直近 N 秒の最大−最小」で見る、のどちらかに決める。仕様も直す。
+     * (a) の幅は devicetree の stuck-stable-lsb（overlay の 1 行）で変えられる。既定は 3 のまま
+     * （2026-10-08。模擬では 8 にすると、S9 の場面でも 5 分で固着に入る）。 */
+    if (!sp_within(fr->x, data->anchor_x, cfg->stuck_stable_lsb) || !sp_within(fr->y, data->anchor_y, cfg->stuck_stable_lsb)) {
         data->anchor_x = fr->x;
         data->anchor_y = fr->y;
         data->anchor_since = now;
@@ -573,7 +576,7 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
 
     /* 固着を押下で抜けたあとも、傾きが固着時の位置から動くまでは移動を止めたまま */
     if (data->tilt_muted) {
-        if (!sp_within(fr->x, data->stuck_x, SP_STABLE_LSB) || !sp_within(fr->y, data->stuck_y, SP_STABLE_LSB)) {
+        if (!sp_within(fr->x, data->stuck_x, cfg->stuck_stable_lsb) || !sp_within(fr->y, data->stuck_y, cfg->stuck_stable_lsb)) {
             data->tilt_muted = false;
         } else {
             sp_motion_reset(&data->motion);
@@ -972,6 +975,7 @@ static int sp_init(const struct device *dev) {
         .hold_ms = DT_INST_PROP(n, active_hold_ms),                                                \
         .replay_gap_ms = DT_INST_PROP(n, replay_gap_ms),                                           \
         .stuck_after_ms = DT_INST_PROP(n, stuck_after_seconds) * 1000U,                            \
+        .stuck_stable_lsb = DT_INST_PROP(n, stuck_stable_lsb),                                     \
         .motion =                                                                                  \
             {                                                                                      \
                 .dead_q16 = DT_INST_PROP(n, dead_zone_permille) * SP_Q16_ONE / 1000,               \

@@ -31,6 +31,9 @@ extern const struct device stub_dev;
 #define STUB_active_hold_ms 300
 #define STUB_replay_gap_ms 16
 #define STUB_stuck_after_seconds 300
+#ifndef STUB_stuck_stable_lsb
+#define STUB_stuck_stable_lsb 3
+#endif
 #define STUB_max_speed 1200
 #define DT_INST_FOREACH_STATUS_OKAY(fn) fn(0)
 #define POST_KERNEL 0
