@@ -65,15 +65,15 @@ def _run_sim(tmp_path, driver_src):
                     "-I", str(ROOT / "firmware/drivers"), "-o", str(exe), str(SIM / "sim.c"), str(driver_src),
                     str(ROOT / "firmware/drivers/stick_pod_proto.c")], check=True)
     return "".join(subprocess.run([str(exe), str(i)], capture_output=True, text=True, timeout=120).stdout
-                   for i in range(1, 23))
+                   for i in range(1, 24))
 
 
-def test_host_state_machine_reproduces_the_22_recorded_scenes(tmp_path):
-    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 22 場面走らせ、
+def test_host_state_machine_reproduces_the_recorded_scenes(tmp_path):
+    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 23 場面走らせ、
     記録した結果（tools/stick_pod/sim/expected.txt）と 1 文字も違わないこと。
 
     場面: 初回起動・倒す・ダブルクリック・押しっぱなし 11 分・押したまま抜く・固着・スリープ・リンク断 など。
-    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9・S21 は既知の未解決を含む）。
+    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9 は既知の未解決。S21 は 2026-10-08 に直した: 36 万カウント → 0。S23 はその裏返し＝本当に動かせば移動が戻る）。
     意図して挙動を変えたら、結果を読んでから expected.txt を更新する。"""
     got = _run_sim(tmp_path, ROOT / "firmware/drivers/stick_pod.c")
     assert got == (SIM / "expected.txt").read_text()

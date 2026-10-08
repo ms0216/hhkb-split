@@ -151,6 +151,10 @@ struct sp_data {
     uint16_t anchor_x, anchor_y;
     bool stuck_by_button;
     uint16_t stuck_x, stuck_y;
+    /* 傾きで固着した。**傾きが固着時の位置から ±3LSB を超えて動くまで、移動は出さない**（ボタンは通す）。
+     * K_SPEC §4。これが無いと、物が載って倒れたままのスティックでクリックするたびに、固着を抜けて
+     * また 5 分間ポインタが流れる（模擬の S21: 10 分で 36 万カウント。2026-10-08 に検査を入れて発覚） */
+    bool tilt_muted;
 
     /* 中心 */
     bool have_centre;
@@ -429,6 +433,9 @@ static void sp_enter_stuck(struct sp_data *data, const struct sp_frame *fr, bool
     }
     sp_flush_edges(data); /* F4: 規則 5「固着に入ったら行列を捨てる」 */
     sp_motion_reset(&data->motion);
+    if (tilt_stuck) {
+        data->tilt_muted = true;
+    }
 
     /* 傾きで入ったなら、保存済みの中心の ±0.1 以内のときだけ新しい中心にする
      * （RAM 上。保存は間引く）。外なら何もせず、変化を待つ。 */
@@ -492,6 +499,10 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
     if (data->state == SP_ST_STUCK) {
         bool moved = !sp_within(fr->x, data->stuck_x, SP_STABLE_LSB) ||
                      !sp_within(fr->y, data->stuck_y, SP_STABLE_LSB);
+
+        if (moved) {
+            data->tilt_muted = false;
+        }
         bool unmasked = data->stuck_by_button && !data->host.mask;
 
         /* 抜ける条件（K_SPEC §4）: 傾きが変わった／ボタンの無視が解けた／
@@ -556,6 +567,16 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
 
         if (tilt_stuck || btn_stuck) {
             sp_enter_stuck(data, fr, tilt_stuck, rx, ry);
+            return;
+        }
+    }
+
+    /* 固着を押下で抜けたあとも、傾きが固着時の位置から動くまでは移動を止めたまま */
+    if (data->tilt_muted) {
+        if (!sp_within(fr->x, data->stuck_x, SP_STABLE_LSB) || !sp_within(fr->y, data->stuck_y, SP_STABLE_LSB)) {
+            data->tilt_muted = false;
+        } else {
+            sp_motion_reset(&data->motion);
             return;
         }
     }

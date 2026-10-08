@@ -57,5 +57,6 @@ S19 link up, still pressed: presses=1 releases=1
      0 ms after link-up: release
      2000 ms after link-up: press
 S20 parked 0.041 off-centre (1 LSB outside dead zone), 30 min: counts=0 events=0 reads=25750
-S21 tilt-stuck, then clicks at +8 min: counts emitted in the 10 min after = 360014, reads=25150
+S21 tilt-stuck, then clicks at +8 min: counts emitted in the 10 min after = 0, reads=25150
 S22 release report dropped once: presses=1 releases=1 last=0
+S23 tilt-stuck, 3 s press at +8 min, real move at +9 min: counts while still stuck=0 (expect 0) click presses=1 (expect 1) counts after the move=13632 (expect >0) counts after release=0 (expect 0)
