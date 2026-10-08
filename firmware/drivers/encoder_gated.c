@@ -34,6 +34,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
 
+#include "encoder_gated_core.h"
+
 LOG_MODULE_REGISTER(encoder_gated, CONFIG_SENSOR_LOG_LEVEL);
 
 #define FULL_ROTATION 360
@@ -52,9 +54,7 @@ struct eg_data {
     struct k_work work;
     sensor_trigger_handler_t handler;
     const struct sensor_trigger *trigger;
-    int8_t pulses;
-    bool a_closed;
-    bool b_at_close;
+    struct eg_core core;
     bool running;
 };
 
@@ -72,7 +72,7 @@ static void eg_arm(const struct device *dev) {
     const struct eg_config *cfg = dev->config;
     struct eg_data *data = dev->data;
 
-    gpio_pin_interrupt_configure_dt(&cfg->a, data->a_closed ? GPIO_INT_LEVEL_INACTIVE
+    gpio_pin_interrupt_configure_dt(&cfg->a, data->core.a_closed ? GPIO_INT_LEVEL_INACTIVE
                                                             : GPIO_INT_LEVEL_ACTIVE);
 }
 
@@ -97,15 +97,8 @@ static void eg_a_isr(const struct device *port, struct gpio_callback *cb, uint32
 
     bool closed = gpio_pin_get_dt(&cfg->a) > 0;
     bool stepped = false;
-    if (closed != data->a_closed) {
-        bool b = eg_read_b(cfg);
-        if (closed) {
-            data->b_at_close = b;
-        } else if (b != data->b_at_close) {
-            data->pulses += (data->b_at_close != cfg->invert) ? 1 : -1;
-            stepped = true;
-        }
-        data->a_closed = closed;
+    if (closed != data->core.a_closed) {
+        stepped = eg_core_edge(&data->core, closed, eg_read_b(cfg), cfg->invert) != 0;
     }
     eg_arm(dev);
 
@@ -138,8 +131,8 @@ static int eg_channel_get(const struct device *dev, enum sensor_channel chan,
     }
 
     unsigned int key = irq_lock(); /* 割り込みの中で足している */
-    int32_t pulses = data->pulses;
-    data->pulses = 0;
+    int32_t pulses = data->core.pulses;
+    data->core.pulses = 0;
     irq_unlock(key);
 
     /* alps,ec11 と同じ単位（度）で返す。ZMK は triggers-per-rotation で刻みに戻す。 */
@@ -175,8 +168,8 @@ static int eg_start(const struct device *dev) {
         gpio_pin_configure(cfg->b.port, cfg->b.pin, GPIO_DISCONNECTED)) {
         return -EIO;
     }
-    data->a_closed = gpio_pin_get_dt(&cfg->a) > 0;
-    data->b_at_close = data->a_closed ? eg_read_b(cfg) : false;
+    bool a0 = gpio_pin_get_dt(&cfg->a) > 0;
+    eg_core_start(&data->core, a0, a0 ? eg_read_b(cfg) : false);
     data->running = true;
     eg_arm(dev);
     return 0;
