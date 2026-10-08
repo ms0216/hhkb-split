@@ -56,7 +56,7 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
 SIM = ROOT / "tools/stick_pod/sim"
 
 
-def _run_sim(tmp_path, driver_src, scenes=range(1, 24), defs=()):
+def _run_sim(tmp_path, driver_src, scenes=range(1, 25), defs=()):
     cc = shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         pytest.skip("C コンパイラが無い")
@@ -69,11 +69,11 @@ def _run_sim(tmp_path, driver_src, scenes=range(1, 24), defs=()):
 
 
 def test_host_state_machine_reproduces_the_recorded_scenes(tmp_path):
-    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 23 場面走らせ、
+    """キーボード側ドライバ（stick_pod.c）の状態機械を、代役のヘッダと仮想の時計の上で 24 場面走らせ、
     記録した結果（tools/stick_pod/sim/expected.txt）と 1 文字も違わないこと。
 
     場面: 初回起動・倒す・ダブルクリック・押しっぱなし 11 分・押したまま抜く・固着・スリープ・リンク断 など。
-    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9 は既知の未解決。S21 は 2026-10-08 に直した: 36 万カウント → 0。S23 はその裏返し＝本当に動かせば移動が戻る）。
+    **論理だけの確認**（Zephyr の API は代役）。記録そのものが正しいかは別（S9 は既知の未解決。S21 は 2026-10-08 に直した: 36 万カウント → 0。S23 はその裏返し＝本当に動かせば移動が戻る。S24 は不在を挟んでも止めたままにならないこと）。
     意図して挙動を変えたら、結果を読んでから expected.txt を更新する。"""
     got = _run_sim(tmp_path, ROOT / "firmware/drivers/stick_pod.c")
     assert got == (SIM / "expected.txt").read_text()

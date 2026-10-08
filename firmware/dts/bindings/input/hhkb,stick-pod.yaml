@@ -51,6 +51,14 @@ properties:
       CONFIG_ZMK_IDLE_SLEEP_TIMEOUT より短いこと（規則 6。ビルドで落ちる）。
       ⚠️「不変 ±3LSB」は仮の規則（揺れが 3LSB を超えると固着に入らない。実測待ち）。幅は stuck-stable-lsb。
 
+  centre-stable-lsb:
+    type: int
+    default: 3
+    description: |
+      中心を採用するとき、連続 8 フレームが「そろっている」とみなす幅（±LSB）。**仮の値。**
+      読みの揺れがこれを超えると、手を離していても中心を採用できず、ポインタが動かない
+      （ログに「中心を 1 分採用できていない」と出て、X/T・Y/T は 32768 前後）。実物の揺れを見て決める。
+
   stuck-stable-lsb:
     type: int
     default: 3

@@ -120,6 +120,7 @@ struct sp_config {
     uint16_t hold_ms;       /* 中心かつ非押下がこれだけ続いたら「静止」へ */
     uint16_t replay_gap_ms; /* 押し/離しを出す間隔（規則 5） */
     uint32_t stuck_after_ms;
+    uint16_t centre_stable_lsb; /* 中心の採用で「そろっている」とみなす幅（±LSB）。devicetree の centre-stable-lsb */
     uint16_t stuck_stable_lsb; /* 固着の判定で「傾きが不変」とみなす幅（±LSB）。devicetree の stuck-stable-lsb */
     struct sp_motion_cfg motion;
 };
@@ -325,9 +326,9 @@ static void sp_save_work_cb(struct k_work *work) {
  * 連続 8 フレームが最初の 1 枚から ±3LSB にそろい、その平均の X/T・Y/T が
  * 0.5±0.2 に入ったら採用する。**倒したまま起動しても、倒した位置を
  * 中心にしないため**の窓（X/T は R2 やポットの値に依らず約 0.5）。 */
-static void sp_adopt_step(struct sp_data *data, const struct sp_frame *fr) {
+static void sp_adopt_step(struct sp_data *data, const struct sp_frame *fr, uint16_t stable_lsb) {
     if (data->run_n > 0 &&
-        (!sp_within(fr->x, data->run_x0, SP_STABLE_LSB) || !sp_within(fr->y, data->run_y0, SP_STABLE_LSB))) {
+        (!sp_within(fr->x, data->run_x0, stable_lsb) || !sp_within(fr->y, data->run_y0, stable_lsb))) {
         data->run_n = 0;
     }
     if (data->run_n == 0) {
@@ -417,6 +418,7 @@ static void sp_enter_absent(struct sp_data *data, const char *why) {
         sp_log_counters(data, "不在");
     }
     sp_set_state(data, SP_ST_ABSENT);
+    data->tilt_muted = false; /* 見失ったら「固着した位置」の記憶は当てにならない（下の「静止」の所も参照） */
     sp_flush_edges(data); /* F4: host.pressed がすでに false でも、行列と出した押下を片付ける */
     sp_motion_reset(&data->motion);
     sp_run_reset(data);
@@ -485,7 +487,7 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
     } else if (atomic_test_bit(data->flags, SP_F_LOADED)) {
         /* 保存値の有無が確定するまで採用を始めない（読み込み前に採用すると、
          * 起動のたびに保存値を上書きする）。 */
-        sp_adopt_step(data, fr);
+        sp_adopt_step(data, fr, cfg->centre_stable_lsb);
         if (!data->have_centre && !data->no_centre_warned &&
             now - data->no_centre_since >= SP_NO_CENTRE_WARN_MS) {
             data->no_centre_warned = true;
@@ -521,6 +523,11 @@ static void sp_on_frame(struct sp_data *data, const struct sp_config *cfg, const
     }
 
     if (data->state == SP_ST_REST) {
+        if (centred && usable) {
+            /* 中心に戻った＝固着は解けている。ここで解かないと、固着 → 不在や静止を挟む → 同じ向きへ
+             * 一杯に倒す、で移動が出ない（固着時の位置と同じ読みになるため。2026-10-08 の点検で模擬して発覚） */
+            data->tilt_muted = false;
+        }
         if (!centred || pressed) {
             sp_enter_active(data, fr, now);
         } else if (usable) {
@@ -976,6 +983,7 @@ static int sp_init(const struct device *dev) {
         .replay_gap_ms = DT_INST_PROP(n, replay_gap_ms),                                           \
         .stuck_after_ms = DT_INST_PROP(n, stuck_after_seconds) * 1000U,                            \
         .stuck_stable_lsb = DT_INST_PROP(n, stuck_stable_lsb),                                     \
+        .centre_stable_lsb = DT_INST_PROP(n, centre_stable_lsb),                                   \
         .motion =                                                                                  \
             {                                                                                      \
                 .dead_q16 = DT_INST_PROP(n, dead_zone_permille) * SP_Q16_ONE / 1000,               \

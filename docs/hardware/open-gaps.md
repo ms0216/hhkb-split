@@ -1982,6 +1982,9 @@ C2-b の実測では 6 押しで 8 文字（`abcdabccdabcdabcdabcdabccd`）。
 > （ZMK が測る前はキャッシュが 0mV）。**USB 給電中は数えない**
 > （スイッチ OFF＋USB で分圧が 0mV を返し、即 soft off になるため。
 > `zmk_usb_is_powered()`・`CONFIG_ZMK_USB` があるときだけ）。
+> **⚠️ 2026-10-08 訂正: 右（ペリフェラル）は ZMK の Kconfig の依存で `CONFIG_ZMK_USB` が n になり、この門が
+> 効いていなかった**（USB だけでつなぐと約 2 分で soft off）。作業ブランチ `stick-pod-trial` で門を
+> `CONFIG_USB_DEVICE_STACK`（ZMK の activity.c と同じ条件）に替えた。ビルドのみ・実機未確認。
 > ⚠️ 手元に SDK が無いので **CI（push）でビルドが通るまでは「書いた」だけ**。
 
 BAT46W にしたので、**マイコンがマトリクスより先に落ちる**ようになった

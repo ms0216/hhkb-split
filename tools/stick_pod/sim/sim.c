@@ -173,6 +173,9 @@ static void w_aligned_burst_unplug(int64_t n) { int64_t d = n - T0; pod.pressed 
 static void w_aligned_burst(int64_t n) { int64_t d = n - T0; pod.pressed = (d >= 5 && d < 215) && (((d - 5) / 15) % 2 == 0); }
 /* S23: 倒れたまま固着 → 8 分に 3 秒押す（固着中は 2 秒ごとにしか読まないので、短いクリックは落ちる。移動は止まったまま）→ 9 分に傾きを変える（移動が戻る）→ 9 分半に離す */
 static void w_tiltstuck_click_then_move(int64_t n) { int64_t d = n - T0; pod.x = d < 1000 ? 500 : d < 9 * 60000 ? 800 : d < 9 * 60000 + 30000 ? 700 : 500; int64_t e = d - 8 * 60000; pod.pressed = e >= 0 && e < 3000; }
+/* S24: 倒れたまま固着 → 7 分にポッドが 15 秒消える（固着中は 2 秒ごとにしか読まないので、不在と決まるまで約 6 秒）
+ *      → 戻って中心で 5 秒 → 同じ向きへ一杯に 20 秒 */
+static void w_tiltstuck_absent_then_same_tilt(int64_t n) { int64_t d = n - T0, e = d - 7 * 60000; pod.present = !(e >= 0 && e < 15000); pod.x = d < 1000 ? 500 : e < 0 ? 800 : e < 20000 ? 500 : e < 40000 ? 800 : 500; }
 static void w_aligned_click(int64_t n) { int64_t d = n - T0; pod.pressed = (d >= 5 && d < 60); }
 static void dump_btn(int e0) { for (int i = e0; i < nev; i++) if (evs[i].kind == 1) SAY("     t=+%lld %s", (long long)(evs[i].t - T0), evs[i].val ? "press" : "release"); }
 static void boot(bool with_saved) {
@@ -301,6 +304,11 @@ int main(int argc, char **argv) {
         boot(true); run_for(3000); T0 = now_ms; world = w_tiltstuck_click_then_move; run_for(7 * 60000);
         { int64_t a = rel_x; int e1 = nev; run_until(T0 + 9 * 60000 - 100); int64_t b = rel_x; int pr = count_btn(e1, 1); run_until(T0 + 9 * 60000 + 30000); int64_t c = rel_x; run_for(60000);
           SAY("S23 tilt-stuck, 3 s press at +8 min, real move at +9 min: counts while still stuck=%lld (expect 0) click presses=%d (expect 1) counts after the move=%lld (expect >0) counts after release=%lld (expect 0)", (long long)(b - a), pr, (long long)(c - b), (long long)(rel_x - c)); }
+        break;
+    case 24: /* tilt-stuck, pod vanishes and returns centred, then the same full tilt again: motion must flow */
+        boot(true); run_for(3000); T0 = now_ms; world = w_tiltstuck_absent_then_same_tilt; run_until(T0 + 7 * 60000 + 20000);
+        { int64_t a = rel_x; run_until(T0 + 7 * 60000 + 40000);
+          SAY("S24 tilt-stuck, pod absent 15 s, back to centre, same full tilt for 20 s: counts=%lld (expect ~24000; 0 would mean the mute outlived the stuck)", (long long)(rel_x - a)); }
         break;
     case 22: /* the release report is dropped once */
         boot(true); run_for(3000); T0 = now_ms; world = w_aligned_click; e0 = nev; run_until(T0 + 255); fail_input = 1; run_for(3000);
