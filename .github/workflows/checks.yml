@@ -40,6 +40,19 @@ jobs:
           mkdir -p /tmp/dfp && unzip -q /tmp/dfp.zip "gcc/dev/attiny1616/*" "include/avr/iotn1616.h" -d /tmp/dfp
       - name: ポッドのファームと受け入れ規則
         run: REQUIRE_AVR=1 AVR_DFP=/tmp/dfp pytest tools/test_stick_pod.py -q
+      # 書き込む .hex は、検査と同じオプションでここで作る（手元に avr-gcc が無くても、ソースと同じ物が手に入る）
+      - name: 書き込む .hex を作る
+        run: |
+          mkdir -p /tmp/hex
+          F="-mmcu=attiny1616 -B /tmp/dfp/gcc/dev/attiny1616/ -I /tmp/dfp/include -Os -std=gnu11 -Wall -Wextra -Werror"
+          avr-gcc $F -o /tmp/hex/pod_incase.elf firmware/pod/pod.c
+          avr-gcc $F -DPOD_T_MUXPOS=ADC_MUXPOS_AIN4_gc -o /tmp/hex/pod_incase_pa4.elf firmware/pod/pod.c
+          for n in pod_incase pod_incase_pa4; do avr-objcopy -O ihex -R .eeprom -R .fuse /tmp/hex/$n.elf /tmp/hex/$n.hex; done
+          avr-size /tmp/hex/*.elf && sha256sum /tmp/hex/*.hex
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pod-firmware-hex
+          path: /tmp/hex/*.hex
 
   # **実形状の検査。**KiCad の 3D モデルから基板の実物を起こし、
   # 部品どうしが立体で当たらないかを厳密に見る（DRC は 2D で高さを見ない）。
