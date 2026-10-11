@@ -171,6 +171,37 @@ def fig_kit_and_updi():
     save(fig, "04_kit_updi.png")
 
 
+def fig_encoder_wiring():
+    """左手のエンコーダを帯なしで XIAO へ直接つなぐときの、足ごとの線の色と行き先（足の側から見た図）。
+
+    図面（EC12PSD-010「P.W.B MOUNTING DETAIL / VIEWED FROM MOUNTING SIDE」）は軸の側から見て A が左。足の側から見ると左右が返り、A は右。
+    """
+    fig, ax = plt.subplots(figsize=(11.5, 8.2))
+    ax.add_patch(FancyBboxPatch((-6.2, -6.6), 12.4, 13.2, boxstyle="round,pad=0.02,rounding_size=0.6", fc="#ececec", ec="#444", lw=2))
+    ax.text(0, 0.6, "足の側（裏）", ha="center", fontsize=13, color="#555"); ax.text(0, -1.0, "軸は向こう側", ha="center", fontsize=11, color="#888")
+    rows = [((2.5, -7.5), "#f2c200", "a", "黄", "XIAO の D4", (12.5, -9.5)),
+            ((0.0, -7.5), "#222222", "C", "黒", "XIAO の GND", (12.5, -12.0)),
+            ((-2.5, -7.5), "#2ca02c", "b", "緑", "XIAO の D9", (-12.5, -9.5)),
+            ((3.0, 7.0), "#1f77b4", "押し込み", "青", "BAT43（黒い帯を XIAO 側）\n→ XIAO の D5", (12.5, 9.5)),
+            ((-3.0, 7.0), "#ffffff", "押し込み", "白", "「5」のキーのソケット\n（T とつながっている方のパッド）", (-12.5, 9.5))]
+    for (x, y), col, name, cname, dest, (tx, ty) in rows:
+        ax.plot([x, x, tx * 0.62, tx * 0.62], [y, ty, ty, ty], color=col if col != "#ffffff" else "#999", lw=4, solid_capstyle="round", zorder=2)
+        if col == "#ffffff": ax.plot([x, x, tx * 0.62], [y, ty, ty], color="#fff", lw=2.2, zorder=3)
+        ax.add_patch(Circle((x, y), 0.6, fc=col, ec="#111", lw=1.6, zorder=4))
+        ax.text(tx * 0.66, ty, f"{name}: {cname}の線\n→ {dest}", ha="left" if tx > 0 else "right", va="center", fontsize=12, linespacing=1.4, fontweight="bold")
+    for x in (-1.0, 1.0):
+        ax.add_patch(Circle((x, 7.0), 0.5, fc="#ddd", ec="#888", lw=1.2, zorder=4)); ax.text(x, 6.75, "×", ha="center", fontsize=9, color="#666", zorder=5)
+    ax.text(0, 5.0, "内側 2 本（×）は使わない", ha="center", fontsize=10.5, color="#777")
+    for px, py in ENC_LUGS:
+        ax.add_patch(Rectangle((px - 0.2, py - 1.0), 0.4, 2.0, fc="#666", ec="#222"))
+    ax.text(0, -15.6, "★ 置き方: 足を自分に向け、3 本の列を手前（下）、4 本の列を奥（上）にする。このとき 3 本の列の右が a\n"
+            "   （軸の側から見る図面では、3 本の列を下にして A が左。裏返すので左右が逆になる）\n"
+            "   確かめ方: この置き方で、足が 4 本ある列が奥にあること。逆さ（4 本が手前）だと a と b が入れ替わる", ha="center", va="top", fontsize=11.5, linespacing=1.6)
+    ax.set_xlim(-22, 22); ax.set_ylim(-21.5, 12.5); ax.set_aspect("equal"); ax.axis("off")
+    ax.set_title("左手のエンコーダ: 足ごとの線の色と行き先（帯なし・XIAO へ直接）", fontsize=14, loc="left")
+    save(fig, "13_encoder_wiring.png")
+
+
 # ------------------------------------------------------------------ 3. 帯
 def nets_and_reps():
     errs, _, find = L.check()
@@ -361,6 +392,6 @@ def fig_slot():
 if __name__ == "__main__":
     check_coords()
     print("図:")
-    fig_overview(); fig_stick_pins(); fig_encoder_pins(); fig_kit_and_updi()
+    fig_overview(); fig_stick_pins(); fig_encoder_pins(); fig_kit_and_updi(); fig_encoder_wiring()
     fig_right_strip(); fig_xiao(); fig_tray_section(); fig_slot()
     fig_left_strip()          # 最後（L の中身を左に差し替えるため）
