@@ -309,7 +309,7 @@ def fig_xiao():
                 if hot and ha == "right":
                     ax.text(tx - 1.0, y, use[n] + " →", ha="right", va="center", fontsize=11, linespacing=1.2)
         ax.set_xlim(-4.2, 10.2); ax.set_ylim(-0.6, 9.2); ax.set_aspect("equal"); ax.axis("off"); ax.set_title(title, fontsize=13)
-    fig.suptitle("XIAO を部品の面を上・USB を奥にして見た図。黄色のピンの頭（はんだの山）に線を付ける\n⚠ 裏のシルク（D0〜D10）で、左右の列を必ず確かめる", fontsize=12.5, y=0.86)
+    fig.suptitle("XIAO を部品の面を上・USB を奥にして見た図。黄色のピンの頭（はんだの山）に線を付ける\nSeeed の公式のピン配置図と一致を確認済み（XIAO にピン名のシルクは無い）", fontsize=12.5, y=0.86)
     save(fig, "10_xiao_pins.png")
 
 
