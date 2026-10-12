@@ -152,23 +152,30 @@ def stick_head_wide():
 # つばの外端をキーの上面 +3.8 まで下げる（広い皿は +5.2）。**広さと低さは両立しない**: 倒すと縁は「半径 × sin(倒れ角)」だけ下がるので、
 # 低い縁は径を大きくできない。径 17 で、較正した条件の隙間が 1.12 / 1.01mm（相手はスティック自身の本体と右スペース）。径 18 だと 0.96 / 0.55。
 # 上面は、皿の縁から外へ向かって下がり、**外端でほぼ水平になる**曲面（鐘の裾の形）。低い所に親指を置く棚ができ、内側の立ち上がりを押せる。
-SKIRT_R, SKIRT_NECK, SKIRT_ANG, SKIRT_EDGE = 8.5, -4.0, 20.0, 0.8
+SKIRT_ANG, SKIRT_EDGE = 20.0, 0.8
+# 名前: (径の半分, 首の上端, 皿の縁の半径)。**どこまで下げられるかを決めるのは径ではなく「首の上端」**（下面の内側が本体の VR1 に近づく）:
+#   首 -4.0 … 隙間 1.12（較正A）  -4.5 … 0.65  -5.0 … 0.18  -5.5 … 当たる。径 13〜17 でほぼ同じ（scripts/cap_clear.py・2026-10-12）
+# lower / lowest は「実物でどこまで行けるか」を確かめる用。lowest は計算上ほぼ余裕が無い（倒しきれなければ、それが限界）。
+# 低い所に棚を作る幅が要るので、lower / lowest は皿を少し小さくしてある（縁の半径 5.4 → 4.6）。
+SKIRTS = {"skirt": (8.5, -4.0, LOW_RIM_R), "skirt_lower": (7.5, -4.5, 4.6), "skirt_lowest": (7.5, -5.0, 4.6)}
 
 
-def skirt_profile():
-    ze = SKIRT_NECK + (SKIRT_R - NECK_R) * math.tan(math.radians(SKIRT_ANG))
-    return [(-BORE, NECK_R), (SKIRT_NECK, NECK_R), (ze, SKIRT_R), (ze + SKIRT_EDGE, SKIRT_R), (LOW_RIM_Z, LOW_RIM_R), (LOW_RIM_Z, 0.0)]
+def skirt_profile(kind="skirt"):
+    R, neck, rim_r = SKIRTS[kind]
+    ze = neck + (R - NECK_R) * math.tan(math.radians(SKIRT_ANG))
+    return [(-BORE, NECK_R), (neck, NECK_R), (ze, R), (ze + SKIRT_EDGE, R), (LOW_RIM_Z, rim_r), (LOW_RIM_Z, 0.0)]
 
 
-def stick_head_skirt():
-    prof = skirt_profile(); ze = prof[2][0]; top_e = ze + SKIRT_EDGE
+def stick_head_skirt(kind="skirt"):
+    R, neck, rim_r = SKIRTS[kind]
+    prof = skirt_profile(kind); ze = prof[2][0]; top_e = ze + SKIRT_EDGE
     pts = [(0, -BORE)] + [(r, z) for z, r in prof[:3]]
-    pts += arc(SKIRT_R - 0.4, top_e - 0.4, 0.4, 0, 90)                         # 外端の丸み
+    pts += arc(R - 0.4, top_e - 0.4, 0.4, 0, 90)                               # 外端の丸み
     n = 12                                                                     # 外端から皿の縁へ: 高さ = 外端 + (縁 − 外端) × t²（外端で水平）
-    r0, r1 = SKIRT_R - 0.4, LOW_RIM_R
+    r0, r1 = R - 0.4, rim_r
     pts += [(r0 + (r1 - r0) * i / n, top_e + (LOW_RIM_Z - 0.15 - top_e) * (i / n) ** 2) for i in range(1, n + 1)]
-    pts += arc(LOW_RIM_R - 0.3, LOW_RIM_Z - 0.3, 0.3, 30, 90)[1:]              # 皿の縁の丸み
-    pts += cap_arc(LOW_RIM_R - 0.3, LOW_RIM_Z, -LOW_DISH)[1:]
+    pts += arc(rim_r - 0.3, LOW_RIM_Z - 0.3, 0.3, 30, 90)[1:]                  # 皿の縁の丸み
+    pts += cap_arc(rim_r - 0.3, LOW_RIM_Z, -LOW_DISH)[1:]
     return Location((0, 0, BORE)) * lathe(pts) - stick_bore()
 
 
@@ -200,6 +207,7 @@ if __name__ == "__main__":
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(stick_head_low(), str(OUT / "right_stick_head_low.stl"))
     export_stl(stick_head_wide(), str(OUT / "right_stick_head_wide.stl"))
-    export_stl(stick_head_skirt(), str(OUT / "right_stick_head_skirt.stl"))
+    for k in SKIRTS:
+        export_stl(stick_head_skirt(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
     print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d"))))
