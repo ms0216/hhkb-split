@@ -106,12 +106,12 @@ def low_profile():
     return [(-BORE, NECK_R), (LOW_CONE0, NECK_R), (ze, LOW_R), (ze + LOW_EDGE, LOW_R), (LOW_RIM_Z, LOW_RIM_R), (LOW_RIM_Z, 0.0)]
 
 
-def stick_bore():
+def stick_bore(depth=BORE):
     """軸の穴（z=0 が口）。丸い入口 1.2mm → 二面取り。**立てて刷るので、丸から二面取りへは 45° でつなぐ**:
     段のままだと、二面取りの始まりが宙に浮いた棚になって垂れ、丸い所を狭める（最初の皿の頭が奥まで入らなかった原因と見ている・推定）。"""
     hw = FLAT_W / 2
-    slab = extrude(make_face(Plane.YZ * Polyline((-SHAFT_R, 1.2), (SHAFT_R, 1.2), (hw, 1.2 + SHAFT_R - hw), (hw, BORE), (-hw, BORE), (-hw, 1.2 + SHAFT_R - hw), close=True)), 2.5, both=True)
-    return Cylinder(SHAFT_R, 1.2, align=CTR) + (Cylinder(SHAFT_R, BORE, align=CTR) & slab) + Cone(SHAFT_R + 0.4, SHAFT_R, 0.4, align=CTR)
+    slab = extrude(make_face(Plane.YZ * Polyline((-SHAFT_R, 1.2), (SHAFT_R, 1.2), (hw, 1.2 + SHAFT_R - hw), (hw, depth), (-hw, depth), (-hw, 1.2 + SHAFT_R - hw), close=True)), 2.5, both=True)
+    return Cylinder(SHAFT_R, 1.2, align=CTR) + (Cylinder(SHAFT_R, depth, align=CTR) & slab) + Cone(SHAFT_R + 0.4, SHAFT_R, 0.4, align=CTR)
 
 
 def stick_head_low():
@@ -162,20 +162,26 @@ SKIRT_ANG = 20.0
 # drop1 / drop2: 丸みも直す:「つばの付け根と先が尖っている」→ 皿の縁の丸み 0.3 → 0.8、外端は上下とも丸める。
 #   drop1 … 首なし（下面が筒の下端からすぐ 20° で広がる）。外端の上面はキーの上面 +1.6
 #   drop2 … 底を半径 5.0 まで平らにしてから広げる。外端 +1.1。**筒の下端より下へは作れない**（その 0.45mm 下が本体の軸受けの山）
-SKIRTS = {"skirt": (8.5, -4.0, LOW_RIM_R, NECK_R, 0.8, 0.3), "skirt_lower": (7.5, -4.5, 4.6, NECK_R, 0.8, 0.3), "skirt_lowest": (7.5, -5.0, 4.6, NECK_R, 0.8, 0.3),
-          "skirt_drop1": (7.5, -BORE, 4.6, NECK_R, 1.0, 0.8), "skirt_drop2": (7.5, -BORE, 4.6, 5.0, 1.0, 0.8)}
+# ⚠️ 2026-10-12 追記: lower / lowest は「どの向きへ倒しても、中心に戻らず止まる」（利用者）。最初の山（dome）は戻る。
+#    アルプスの図面（操作部寸法・外形図）を読み直した: 軸は先端 5mm が二面取り、**先から 6.5mm の所に、ひと回り太いつば（軸の根元の部品）がある**。
+#    筒の下端はそのつばの 0.5mm 上まで来る設計だった。山の頭は穴の段の垂れで奥まで入らず、高い位置で止まっていた → 当たらない。
+#    穴を直して奥まで入るようにした頭だけが戻らない → **筒の下端が根元の部品に触れている疑い**（推定。利用者に頭を 1mm 浮かせて確かめてもらう）。
+#    *_s は、形は同じで筒だけ 1mm 短くした物（下端は軸の先から 5.0＝つばの 1.5mm 上。穴の深さ 5.0 で、軸の先が屋根に当たって止まる）。
+SKIRTS = {"skirt": (8.5, -4.0, LOW_RIM_R, NECK_R, 0.8, 0.3, 6.0), "skirt_lower": (7.5, -4.5, 4.6, NECK_R, 0.8, 0.3, 6.0), "skirt_lowest": (7.5, -5.0, 4.6, NECK_R, 0.8, 0.3, 6.0),
+          "skirt_drop1": (7.5, -BORE, 4.6, NECK_R, 1.0, 0.8, 6.0), "skirt_drop2": (7.5, -BORE, 4.6, 5.0, 1.0, 0.8, 6.0),
+          "skirt_lower_s": (7.5, -4.5, 4.6, NECK_R, 1.0, 0.8, 5.0)}
 
 
 def skirt_profile(kind="skirt"):
-    R, neck, rim_r, base_r, edge, _ = SKIRTS[kind]
+    R, neck, rim_r, base_r, edge, _, bore = SKIRTS[kind]
     ze = neck + (R - base_r) * math.tan(math.radians(SKIRT_ANG))
-    return [(-BORE, NECK_R), (neck, NECK_R), (neck, base_r), (ze, R), (ze + edge, R), (LOW_RIM_Z, rim_r), (LOW_RIM_Z, 0.0)]
+    return [(-bore, NECK_R), (neck, NECK_R), (neck, base_r), (ze, R), (ze + edge, R), (LOW_RIM_Z, rim_r), (LOW_RIM_Z, 0.0)]
 
 
 def stick_head_skirt(kind="skirt"):
-    R, neck, rim_r, base_r, edge, rnd = SKIRTS[kind]
+    R, neck, rim_r, base_r, edge, rnd, bore = SKIRTS[kind]
     prof = skirt_profile(kind); ze = prof[3][0]; top_e = ze + edge
-    pts = [(0, -BORE)] + [(r, z) for i, (z, r) in enumerate(prof[:3]) if i == 0 or (r, z) != (prof[i - 1][1], prof[i - 1][0])]
+    pts = [(0, -bore)] + [(r, z) for i, (z, r) in enumerate(prof[:3]) if i == 0 or (r, z) != (prof[i - 1][1], prof[i - 1][0])]
     if rnd > 0.3:                                                              # 外端: 上下とも丸める（指に当たる所）
         h = edge / 2
         pts += arc(R - h, ze + h, h, -70, 90)
@@ -187,7 +193,7 @@ def stick_head_skirt(kind="skirt"):
     pts += [(r0 + (r1 - r0) * i / n, top_e + (z1 - top_e) * (i / n) ** 2) for i in range(1, n + 1)]
     pts += arc(rim_r - rnd * 0.37, LOW_RIM_Z - rnd, rnd, 30, 90)[1:]           # 皿の縁の丸み
     pts += cap_arc(rim_r - rnd * 0.37, LOW_RIM_Z, -LOW_DISH)[1:]
-    return Location((0, 0, BORE)) * lathe(pts) - stick_bore()
+    return Location((0, 0, bore)) * lathe(pts) - stick_bore(bore)
 
 
 # ---- エンコーダのつまみ。高さは取付面から。刷る向きでは −KNOB_BOT ----
@@ -218,7 +224,7 @@ if __name__ == "__main__":
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(stick_head_low(), str(OUT / "right_stick_head_low.stl"))
     export_stl(stick_head_wide(), str(OUT / "right_stick_head_wide.stl"))
-    for k in SKIRTS:
+    for k in ("skirt_lower_s",):          # ほかの形は、刷った物の STL をそのまま残してある（作り直すと丸みの式の変更ぶんだけ変わる）
         export_stl(stick_head_skirt(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
     print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d"))))
