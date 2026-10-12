@@ -196,6 +196,40 @@ def stick_head_skirt(kind="skirt"):
     return Location((0, 0, bore)) * lathe(pts) - stick_bore(bore)
 
 
+# ---- 丸い頭（2026-10-12・利用者「角を可能な限り丸く」「つばを外へ反らせる意図が分からない。親指はそれに沿うほど小さくない」）----
+# 親指は頭より大きい。細かい棚や反りは指に合わないので、やめる。**外へふくらむ丸い肩**だけにする（角はどこにも無い）:
+#   真ん中: なめらかなくぼみ（深さ 0.8。縁で傾き 0 になる形なので、肩とのつなぎ目に折れ目ができない）
+#   肩    : くぼみの縁から外端まで、4 分の 1 のだ円（縁で水平・外端で垂直）
+#   外端  : 半径 0.8 の丸みで下面へ回り込む。下面は 20°
+# 筒は短い版（下端は軸の先から 5.0。穴の深さ 5.0 で、軸の先が屋根に当たって止まる）。
+ROUNDS = {"round": (7.5, -4.5), "round_low": (7.5, -5.0)}        # (径の半分, 下面が筒に届く高さ)。round_low は首なしで、いちばん下げた形
+ROUND_BORE, ROUND_NOSE, ROUND_DISH_R = 5.0, 0.8, 4.6
+
+
+def round_edge_z(kind):
+    """外端（肩が垂直になる点）の高さ。下面の 20° と丸みから逆算する。"""
+    R, neck = ROUNDS[kind]
+    t = math.radians(SKIRT_ANG)
+    r_end = R - ROUND_NOSE + ROUND_NOSE * math.cos(math.radians(-70))
+    return neck + (r_end - NECK_R) * math.tan(t) + ROUND_NOSE * math.sin(math.radians(70))
+
+
+def round_profile(kind):
+    """隙間の検査に渡す輪郭（上面は平らで表す）。"""
+    R, neck = ROUNDS[kind]; ze = round_edge_z(kind)
+    return [(-ROUND_BORE, NECK_R), (neck, NECK_R), (ze - ROUND_NOSE, R - 0.5), (ze, R), (LOW_RIM_Z, ROUND_DISH_R), (LOW_RIM_Z, 0.0)]
+
+
+def stick_head_round(kind):
+    R, neck = ROUNDS[kind]; ze = round_edge_z(kind); n = 16
+    pts = [(0, -ROUND_BORE), (NECK_R, -ROUND_BORE)] + ([(NECK_R, neck)] if neck > -ROUND_BORE else [])
+    pts += arc(R - ROUND_NOSE, ze, ROUND_NOSE, -70, 0)                        # 外端の下の丸み
+    pts += [(ROUND_DISH_R + (R - ROUND_DISH_R) * math.cos(math.radians(90 * i / n)), ze + (LOW_RIM_Z - ze) * math.sin(math.radians(90 * i / n))) for i in range(1, n + 1)]   # 肩（だ円）
+    pts += [(ROUND_DISH_R * (1 - i / n), LOW_RIM_Z - LOW_DISH * (1 - math.cos(math.pi * i / n)) / 2) for i in range(1, n)]            # くぼみ
+    pts += [(0.3, LOW_RIM_Z - LOW_DISH), (0, LOW_RIM_Z - LOW_DISH)]
+    return Location((0, 0, ROUND_BORE)) * lathe(pts) - stick_bore(ROUND_BORE)
+
+
 # ---- エンコーダのつまみ。高さは取付面から。刷る向きでは −KNOB_BOT ----
 SHAFT_TIP, BUSH_TOP = 25.0, 12.0
 KNOB_BOT, KNOB_TOP = 13.0, 27.2             # 下端は軸受けの 1.0 上（押し込み 0.5 ぶんを空ける）／屋根 2.2
@@ -224,6 +258,8 @@ if __name__ == "__main__":
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(stick_head_low(), str(OUT / "right_stick_head_low.stl"))
     export_stl(stick_head_wide(), str(OUT / "right_stick_head_wide.stl"))
+    for k in ROUNDS:
+        export_stl(stick_head_round(k), str(OUT / f"right_stick_head_{k}.stl"))
     for k in ("skirt_lower_s",):          # ほかの形は、刷った物の STL をそのまま残してある（作り直すと丸みの式の変更ぶんだけ変わる）
         export_stl(stick_head_skirt(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
