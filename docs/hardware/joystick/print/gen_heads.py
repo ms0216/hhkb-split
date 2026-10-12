@@ -125,6 +125,29 @@ def stick_head_low():
     return body - stick_bore()
 
 
+# ---- つばの広い皿の頭（2026-10-12・利用者「真ん中の皿は良い。つばが狭くて斜めから押しにくい。もっと大きく」）----
+# 径 18（つばの幅 3.6。低い皿は 2.1）。**これ以上は右スペースのキーキャップに当たる**（手前右・倒して押し込んだとき）:
+#   径 18 … 較正した条件で 1.15 / 0.73mm、径 19 … 0.74 / 0.33、径 20 … 0.29 / 当たる（scripts/cap_clear.py・BODY=True）
+# 下面は 20° の浅い円すい。45° だと縁が高くなるか、内側が本体に近づく。**層 0.08mm で刷る**（1 層の張り出し 0.22mm = 線幅の半分）。
+WIDE_R, WIDE_NECK, WIDE_ANG, WIDE_EDGE_TOP = 9.0, -3.5, 20.0, 0.0     # 縁の上面は軸の先の高さ（キーの上面 +5.2）
+
+
+def wide_profile():
+    ze = WIDE_NECK + (WIDE_R - NECK_R) * math.tan(math.radians(WIDE_ANG))
+    return [(-BORE, NECK_R), (WIDE_NECK, NECK_R), (ze, WIDE_R), (WIDE_EDGE_TOP, WIDE_R), (LOW_RIM_Z, LOW_RIM_R), (LOW_RIM_Z, 0.0)]
+
+
+def stick_head_wide():
+    prof = wide_profile()
+    pts = [(0, -BORE)] + [(r, z) for z, r in prof[:-3]]
+    pts += arc(WIDE_R - 0.6, WIDE_EDGE_TOP - 0.6, 0.6, 0, 70)                 # 縁の丸み
+    pts += arc(LOW_RIM_R, LOW_RIM_Z - 0.4, 0.4, 20, 90)[1:]                   # 皿の縁の丸み
+    pts += cap_arc(LOW_RIM_R - 0.4, LOW_RIM_Z, -LOW_DISH)[1:]
+    body = Location((0, 0, BORE)) * lathe(pts)
+    # つばの上面に溝は付けない（層 0.08 の段がそのまま輪の筋になる。溝を斜面に合わせて切ろうとして、中に空洞を作ってしまった）
+    return body - stick_bore()
+
+
 # ---- エンコーダのつまみ。高さは取付面から。刷る向きでは −KNOB_BOT ----
 SHAFT_TIP, BUSH_TOP = 25.0, 12.0
 KNOB_BOT, KNOB_TOP = 13.0, 27.2             # 下端は軸受けの 1.0 上（押し込み 0.5 ぶんを空ける）／屋根 2.2
@@ -152,5 +175,6 @@ if __name__ == "__main__":
     for k in SIDE:
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(stick_head_low(), str(OUT / "right_stick_head_low.stl"))
+    export_stl(stick_head_wide(), str(OUT / "right_stick_head_wide.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
     print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d"))))
