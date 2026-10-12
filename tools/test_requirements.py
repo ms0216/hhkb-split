@@ -34,7 +34,9 @@ BUNDLED = {"OCP"}
 
 def external_imports():
     std = set(sys.stdlib_module_names)
-    local = {p.stem for p in TOOLS.glob("*.py")}
+    # **下で rglob で読むのと同じ範囲で数える。**直下だけだと、サブディレクトリの中どうしの import
+    # （tools/stick_pod/ の参照モデル）が外部の依存に見える（2026-10-07 に CI で赤）
+    local = {p.stem for p in TOOLS.rglob("*.py")}
     mods = set()
     for f in TOOLS.rglob("*.py"):
         for n in ast.walk(ast.parse(f.read_text())):

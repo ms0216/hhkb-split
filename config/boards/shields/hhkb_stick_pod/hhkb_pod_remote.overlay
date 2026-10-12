@@ -1,0 +1,78 @@
+/*
+ * 右にポッドが付いているときに、**左（セントラル）のファームに重ねる受け口。**
+ *
+ * 左では zmk,input-split は「右から届いたイベントを自分の名前で出し直す」
+ * だけの仮想デバイスになる（device は書かない）。それを input-listener が
+ * 受けて HID のマウスレポートにする。
+ *
+ * reg は hhkb_pod_right.overlay と**同じ 1**。ずれると左は黙って捨てる。
+ */
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <dt-bindings/zmk/input_transform.h>
+#include <input/processors.dtsi>
+
+/ {
+	/*
+	 * スティックの押し込みの割り当て（2026-10-12 に利用者と決めた）:
+	 *   押し込み                     … 左クリック（ドライバが出す INPUT_BTN_0 のまま。listener は「コード − BTN_0」番めのボタンにする）
+	 *   左 Ctrl ＋ 押し込み          … 右クリック（レイヤー 9 = STK_SLOW。Ctrl は A の隣で、左手が空いている）
+	 *   Fn ＋ 押し込み               … 右クリック（レイヤー 2 = FN。遠いが残してある）
+	 * 中クリックはエンコーダの押し込み（キーマップの 62 個目）。
+	 * **レイヤーの上書き（listener の子ノード）では作らない**: Ctrl を先に離すと、離しが左ボタンとして出て
+	 * 右ボタンが押されたままになる。押したときに決めたボタンで離す専用のプロセッサを使う。
+	 */
+	pod_click_right: pod_click_right {
+		compatible = "hhkb,input-processor-button-latch";
+		#input-processor-cells = <0>;
+		from = <INPUT_BTN_0>;
+		to = <INPUT_BTN_1>;
+		layers = <2 9>;
+	};
+	split_inputs {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pod_split: pod_split@1 {
+			compatible = "zmk,input-split";
+			reg = <1>;
+		};
+	};
+
+	pod_r_listener: pod_r_listener {
+		compatible = "zmk,input-listener";
+		device = <&pod_split>;
+		/*
+		 * 向き（2026-10-12 に実機で合わせた）: そのままだと「左へ倒すと上・上へ倒すと右」だった。
+		 * X と Y を入れ替え、入れ替えた後の Y を反転する（transform は入れ替え → 反転の順に効く）。
+		 */
+		input-processors = <&pod_click_right
+		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>;
+		/*
+		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/8（最初は 1/4。利用者「もっと遅く」・2026-10-12）。scaler は余りを持ち越すので、
+		 * ゆっくり倒しても 0 に潰れない。process-next で、上の向きとクリックの処理も続けて通す。
+		 * ⚠️ レイヤーは**番号で書く**。名前（#define）はキーマップの中にしか無く、この overlay より後に読まれる。
+		 */
+		/*
+		 * Fn を押している間（レイヤー 2 = FN）は、倒すとスクロール（上下・左右）。2026-10-12・利用者の案
+		 * （Nape Pro の「キーを押している間はボールがスクロールになる」と同じ使い方）。
+		 *   - 向き: 奥へ倒すと上へスクロール（ホイールを奥へ回すのと同じ）、左へ倒すと左へ。
+		 *     そのままだと「奥へ倒す = X が正」なので、X と Y を入れ替えるだけでよい（ポインタと違って Y は反転しない）
+		 *   - 速さ: いっぱいに倒して 3600 カウント/秒 → 1/100 で 36 段/秒。小さく倒せば 1 段ずつ（scaler は余りを持ち越す）
+		 *   - process-next は付けない（下の「向き」をもう一度通すと、スクロールにした後では効かず、付ける意味が無い）。
+		 *     右クリックの置き換えは、ここにも入れておく（Fn ＋ 押し込み = 右クリック）
+		 * **slow より先に書く**: 上書きは書いた順に見て、process-next の無い所で止まる。
+		 */
+		scroll {
+			layers = <2>;
+			input-processors = <&pod_click_right
+			                    &zip_xy_transform INPUT_TRANSFORM_XY_SWAP
+			                    &zip_xy_scaler 1 100
+			                    &zip_xy_to_scroll_mapper>;
+		};
+		slow {
+			layers = <9>;
+			input-processors = <&zip_xy_scaler 1 8>;
+			process-next;
+		};
+	};
+};

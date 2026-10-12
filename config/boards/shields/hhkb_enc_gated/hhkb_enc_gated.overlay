@@ -1,0 +1,23 @@
+/*
+ * 左のエンコーダを hhkb,encoder-gated で読む（B 案）。標準の alps,ec11 は止める。
+ *
+ * ⚠️ **a と b の割り当ては仮。**「クリックで止まった位置で必ず開いている相」を a に置く。
+ *    規格書の図では A 相（D4）がそう読めるが、反時計回りの図は逆に見える。
+ *    現物をテスターで確かめ、違っていたら 2 行の 4 と 9 を入れ替える。向きが逆なら invert; を足す。
+ */
+&left_encoder {
+	status = "disabled";
+};
+
+/ {
+	left_encoder_gated: left_encoder_gated {
+		compatible = "hhkb,encoder-gated";
+		a-gpios = <&xiao_d 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+		b-gpios = <&xiao_d 9 GPIO_ACTIVE_LOW>;
+		steps = <24>;
+	};
+};
+
+&sensors {
+	sensors = <&left_encoder_gated>;
+};

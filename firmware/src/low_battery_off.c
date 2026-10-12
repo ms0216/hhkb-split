@@ -44,7 +44,13 @@
 
 #include <zmk/pm.h>
 #include <zmk/workqueue.h>
-#if IS_ENABLED(CONFIG_ZMK_USB)
+/* **門は CONFIG_USB_DEVICE_STACK で切る（CONFIG_ZMK_USB ではない）。**
+ * 分割の右（ペリフェラル）は ZMK の Kconfig の依存で ZMK_USB が n になる（HID を出さないため）。
+ * ZMK_USB で切っていた間、右は USB 給電中でもここを素通りし、電池なし・スイッチ OFF で USB だけ
+ * つなぐと約 2 分で soft off した（2026-10-06 に CI の .config で発覚・10-08 に修正）。
+ * zmk_usb_is_powered() の実体（usb.c）は USB_DEVICE_STACK でビルドされ、ZMK 自身の activity.c も
+ * 同じ条件で切っている。 */
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
 #include <zmk/usb.h>
 #endif
 
@@ -63,7 +69,7 @@ static const struct device *const battery = DEVICE_DT_GET(BATTERY_NODE);
 static void low_battery_check(struct k_work *work) {
     static uint8_t consecutive;
 
-#if IS_ENABLED(CONFIG_ZMK_USB)
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
     if (zmk_usb_is_powered()) {
         consecutive = 0;
         return;

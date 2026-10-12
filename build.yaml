@@ -28,3 +28,35 @@ include:
     shield: hhkb_split_left
   - board: xiao_ble//zmk
     shield: hhkb_split_right
+
+  # ---- 検討用（stick-pod-trial）: 右にスティックポッドを付けた組。上の 2 件は「ポッド無し」の基準として残す ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote
+    artifact-name: hhkb_split_left-podR
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right hhkb_pod_right
+    artifact-name: hhkb_split_right-pod
+
+  # ---- 検討用: 左のエンコーダを「止まっている間は電流ゼロ」の読み方にした版（B 案） ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    artifact-name: hhkb_split_left-podR-encB
+  # ---- 同じ物を Windows 面で起動する版（利用者・2026-10-12）。違いは起動時のレイヤーだけ。右は共通 ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y
+    artifact-name: hhkb_split_left-podR-encB-win
+  # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right hhkb_pod_right
+    snippet: zmk-usb-logging
+    # 起動直後の行（ポッドを見つけた・保存してあった中心）を、screen を開き直すあいだ溜めておく。
+    # 溜める場所があふれると**古い行から消える**ので、場所も広げる（既定 8KB）
+    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_right-pod-log
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    snippet: zmk-usb-logging
+    # 左にポッドのドライバは無い。見るのはエンコーダの刻み（ZMK の val1 / triggers の行）。溜めは右と同じ
+    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_left-podR-encB-log

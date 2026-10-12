@@ -1,0 +1,27 @@
+/*
+ * 右（ペリフェラル）にポッドを付ける。**右のファームに重ねる。**
+ *
+ * 右はホストと話さないので、動きとクリックは zmk,input-split で左へ送る。
+ * **左のファームには hhkb_pod_remote を重ねること**（同じ reg の受け口）。
+ *
+ * reg は 1。**0 を避けている**: ZMK の左側（app/src/split/bluetooth/central.c
+ * の input_slot_is_pending）は「reg が 0 の枠」を「まだ読めていない枠」と
+ * 見分けられない。
+ *
+ * ペリフェラル側の zmk,input-split は device が必須（input_split.c の
+ * BUILD_ASSERT）。
+ */
+#include "hhkb_stick_pod.dtsi"
+
+/ {
+	split_inputs {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pod_split: pod_split@1 {
+			compatible = "zmk,input-split";
+			reg = <1>;
+			device = <&pod>;
+		};
+	};
+};
