@@ -275,7 +275,8 @@ KNOB2_TOP, KNOB2_ROOF = 26.0, 1.0
 
 # 穴（つまみ本体で実物合わせ・2026-10-12）: 6.05 = きつすぎる、6.15 = ゆるすぎる → 6.10。
 # 試し輪（高さ 6mm の薄い輪）では 6.15 が「入るが抜けにくい」だったが、**つまみ本体では同じ径でゆるい**。輪の結果は本体に当てはまらなかった。
-def knob_straight(bore_d=6.10):
+# → 6.08（利用者の指定・2026-10-12。「完全にガバガバで、エンコーダが回らない」）
+def knob_straight(bore_d=6.08):
     z = lambda h: h - KNOB_BOT              # noqa: E731
     top = z(KNOB2_TOP)
     pts = [(0, 0), (KNOB_R - 0.5, 0), (KNOB_R, 0.5)] + arc(KNOB_R - KNOB_F, top - KNOB_F, KNOB_F, 0, 90) + [(0, top)]
