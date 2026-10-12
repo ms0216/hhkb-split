@@ -74,5 +74,8 @@
 	pod: stick_pod@2a {
 		compatible = "hhkb,stick-pod";
 		reg = <0x2a>;
+		/* いっぱいに倒したときの速さ。既定の 1200 は実機で「遅すぎる」（利用者・2026-10-12）→ 3 倍。
+		 * 細かく動かしたいときは左 Ctrl を押しながら（左の listener が 1/4 にする） */
+		max-speed = <3600>;
 	};
 };

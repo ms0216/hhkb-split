@@ -8,6 +8,8 @@
  * reg は hhkb_pod_right.overlay と**同じ 1**。ずれると左は黙って捨てる。
  */
 #include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <dt-bindings/zmk/input_transform.h>
+#include <input/processors.dtsi>
 
 / {
 	/*
@@ -37,14 +39,21 @@
 	pod_r_listener: pod_r_listener {
 		compatible = "zmk,input-listener";
 		device = <&pod_split>;
-		input-processors = <&pod_click_map>;
 		/*
-		 * 向き・スクロールはここで（ZMK の入力プロセッサ）。例:
-		 *   input-processors = <&zip_xy_transform INPUT_TRANSFORM_Y_INVERT>;
-		 *   scroll { layers = <2>; input-processors = <&zip_xy_to_scroll_mapper>; };
-		 * ⚠️ レイヤーは**番号で書く**（FN = 2）。名前（#define）はキーマップの
-		 *    中にしか無く、この overlay より後に読まれる。番号は
-		 *    tools/test_invariants.py が固定している。
+		 * 向き（2026-10-12 に実機で合わせた）: そのままだと「左へ倒すと上・上へ倒すと右」だった。
+		 * X と Y を入れ替え、入れ替えた後の Y を反転する（transform は入れ替え → 反転の順に効く）。
 		 */
+		input-processors = <&pod_click_map
+		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>;
+		/*
+		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/4。scaler は余りを持ち越すので、
+		 * ゆっくり倒しても 0 に潰れない。process-next で、上の向きとクリックの処理も続けて通す。
+		 * ⚠️ レイヤーは**番号で書く**。名前（#define）はキーマップの中にしか無く、この overlay より後に読まれる。
+		 */
+		slow {
+			layers = <9>;
+			input-processors = <&zip_xy_scaler 1 4>;
+			process-next;
+		};
 	};
 };

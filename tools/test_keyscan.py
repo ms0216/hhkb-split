@@ -240,6 +240,11 @@ def _base_bindings():
     text = _strip(KEYMAP.read_text())
     body = re.search(r"base_mac\s*\{[^{}]*?bindings\s*=\s*<(.*?)>\s*;",
                      text, re.S).group(1)
+    # 左 Ctrl は &ctrl_slow（LCTRL を押したまま、スティック低速の印のレイヤーも立てるマクロ）。
+    # 中身が本当に LCTRL を押していることを見たうえで、LCTRL として数える
+    assert re.search(r"ctrl_slow\s*\{[^{}]*&macro_press\s+&kp LCTRL\b[^{}]*&macro_release[^{}]*&kp LCTRL\b", text, re.S), \
+        "ctrl_slow が LCTRL を押して離すマクロになっていない"
+    body = body.replace("&ctrl_slow", "&kp LCTRL")
     found = re.findall(r"&kp (\w+)|&(\w+)\s+(\w+)", body)
     binds = [a or f"{b} {c}" for a, b, c in found]
     assert len(binds) == BOARD_KEYS + len(OFFBOARD)
