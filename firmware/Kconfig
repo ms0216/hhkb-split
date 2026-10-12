@@ -144,6 +144,28 @@ config HHKB_BEHAVIOR_STICK_RECAL
 	  **ポッドの無い側にも入る**（左右どちらのポッドにも 1 つのキーで
 	  届かせるため。firmware/src/behavior_stick_recal.c の冒頭）。
 
+config HHKB_INPUT_BUTTON_LATCH
+	bool "レイヤーが立っている間の押下を別のボタンにする入力プロセッサ（離しも同じボタンで）"
+	default y
+	depends on DT_HAS_HHKB_INPUT_PROCESSOR_BUTTON_LATCH_ENABLED
+	help
+	  firmware/src/input_button_latch.c。スティックの押し込みを、左 Ctrl か Fn の間だけ右クリックにする。
+
+config HHKB_BOOT_LAYER
+	bool "起動したときの土台のレイヤーを選ぶ（Windows 面で起動する版）"
+	default n
+	depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
+	help
+	  firmware/src/boot_layer.c。build.yaml の「-win」の版だけが y にする。
+
+config HHKB_BOOT_LAYER_ID
+	int "起動したときのレイヤーの番号"
+	default 1
+	range 0 31
+	depends on HHKB_BOOT_LAYER
+	help
+	  1 = BASE_WIN（config/boards/shields/hhkb_split/hhkb_split.keymap）。
+
 config HHKB_ENCODER_GATED
 	bool "止まっている間に電流を流さないロータリーエンコーダ（左手・B 案）"
 	default y

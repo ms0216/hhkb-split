@@ -1,0 +1,22 @@
+description: |
+  指定したレイヤーのどれかが立っている間に押されたボタン（from）を、別のボタン（to）として出す。
+  離しは、押したときに決めたボタンで出す（firmware/src/input_button_latch.c）。
+
+compatible: "hhkb,input-processor-button-latch"
+
+include: ip_zero_param.yaml
+
+properties:
+  from:
+    type: int
+    required: true
+    description: 置き換える前のコード（INPUT_BTN_0 など）
+  to:
+    type: int
+    required: true
+    description: 置き換えた後のコード
+  layers:
+    type: array
+    required: true
+    description: |
+      このどれかが立っている間の押下を置き換える。**番号で書く**（名前はキーマップの中にしか無い）。

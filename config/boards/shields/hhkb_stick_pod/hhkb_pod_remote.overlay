@@ -13,19 +13,21 @@
 
 / {
 	/*
-	 * スティックの押し込みを**ホイールクリック（中ボタン）**にする。
-	 * ドライバは INPUT_BTN_0 を出し、ZMK の listener は「コード − INPUT_BTN_0」番めの
-	 * ボタンにするので、何もしなければ左クリックになる（input_listener.c）。
-	 * 利用者の割り当て: 左クリック = エンコーダの押し込み、右クリック = Fn + 押し込み、
-	 * 残り（中ボタン）= スティック。替えるときは map の右側だけ直す（BTN_1 = 右）。
+	 * スティックの押し込みの割り当て（2026-10-12 に利用者と決めた）:
+	 *   押し込み                     … 左クリック（ドライバが出す INPUT_BTN_0 のまま。listener は「コード − BTN_0」番めのボタンにする）
+	 *   左 Ctrl ＋ 押し込み          … 右クリック（レイヤー 9 = STK_SLOW。Ctrl は A の隣で、左手が空いている）
+	 *   Fn ＋ 押し込み               … 右クリック（レイヤー 2 = FN。遠いが残してある）
+	 * 中クリックはエンコーダの押し込み（キーマップの 62 個目）。
+	 * **レイヤーの上書き（listener の子ノード）では作らない**: Ctrl を先に離すと、離しが左ボタンとして出て
+	 * 右ボタンが押されたままになる。押したときに決めたボタンで離す専用のプロセッサを使う。
 	 */
-	pod_click_map: pod_click_map {
-		compatible = "zmk,input-processor-code-mapper";
+	pod_click_right: pod_click_right {
+		compatible = "hhkb,input-processor-button-latch";
 		#input-processor-cells = <0>;
-		type = <INPUT_EV_KEY>;
-		map = <INPUT_BTN_0 INPUT_BTN_2>;
+		from = <INPUT_BTN_0>;
+		to = <INPUT_BTN_1>;
+		layers = <2 9>;
 	};
-
 	split_inputs {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -43,7 +45,7 @@
 		 * 向き（2026-10-12 に実機で合わせた）: そのままだと「左へ倒すと上・上へ倒すと右」だった。
 		 * X と Y を入れ替え、入れ替えた後の Y を反転する（transform は入れ替え → 反転の順に効く）。
 		 */
-		input-processors = <&pod_click_map
+		input-processors = <&pod_click_right
 		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>;
 		/*
 		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/4。scaler は余りを持ち越すので、

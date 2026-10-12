@@ -96,7 +96,8 @@
 		 * 検討用: 左のロータリーエンコーダ（encoder-trial・2026-10-06）
 		 *   回す          : マウスホイール
 		 *   Fn + 回す     : Ctrl + ホイール（拡大縮小。Ctrl がつまみから遠いため）
-		 *   押す          : 左クリック     Fn + 押す : 右クリック
+		 *   押す          : 中クリック     Fn + 押す : 右クリック
+		 *   （2026-10-12 から。左クリックは右のスティックの押し込みへ移した: hhkb_pod_remote.overlay）
 		 *
 		 * sensor-rotate は「割り当てを押す → tap-ms 待つ → 離す」。&msc は
 		 * 押している間 16ms ごとに「速さ × 16 / 1000」を出し、**整数に満たない
@@ -209,10 +210,10 @@
 			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
 			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
 			&kp SPACE  &kp RGUI  &kp RALT
-			/* --- 左のエンコーダの押し込み（62 個目）--- */
-			&mkp LCLK
-			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			/* --- 左のエンコーダの押し込み（62 個目）: 中クリック（ホイールを押す）--- */
 			&mkp MCLK
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10。キーとして配線したとき）: 左クリック --- */
+			&mkp LCLK
 			>;
 			sensor-bindings = <&scroll_enc>;
 		};
@@ -237,10 +238,10 @@
 			&kp H  &kp J  &kp K  &kp L  &kp SEMI  &kp SQT   &kp RET
 			&kp N  &kp M  &kp COMMA &kp DOT &kp SLASH &kp RSHFT &mo FN
 			&kp SPACE  &kp RALT  &kp RGUI
-			/* --- 左のエンコーダの押し込み（62 個目）--- */
-			&mkp LCLK
-			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10）--- */
+			/* --- 左のエンコーダの押し込み（62 個目）: 中クリック（ホイールを押す）--- */
 			&mkp MCLK
+			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10。キーとして配線したとき）: 左クリック --- */
+			&mkp LCLK
 			>;
 			sensor-bindings = <&scroll_enc>;
 		};

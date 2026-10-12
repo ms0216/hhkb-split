@@ -41,6 +41,11 @@ include:
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     artifact-name: hhkb_split_left-podR-encB
+  # ---- 同じ物を Windows 面で起動する版（利用者・2026-10-12）。違いは起動時のレイヤーだけ。右は共通 ----
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y
+    artifact-name: hhkb_split_left-podR-encB-win
   # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
