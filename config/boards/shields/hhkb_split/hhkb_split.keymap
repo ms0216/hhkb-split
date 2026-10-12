@@ -34,6 +34,9 @@
 #define ZMK_POINTING_DEFAULT_SCRL_VAL 30
 /* エンコーダ 1 刻みぶんの速さ。16ms × ENC_SCRL / 1000 ≧ 1 でなければ何も出ない。 */
 #define ENC_SCRL 70
+/* Mac の面だけ 1 刻み = 4 段（16ms × 260 / 1000 = 4.16 → 4）。macOS はホイール 1 段を数ピクセルしか動かさず、
+ * 実機で「1 刻みで 1/4 行くらい」だった（利用者・2026-10-12）。Windows は 1 段 = 3 行なので、Windows の面は 1 段のまま。 */
+#define ENC_SCRL_MAC 260
 #include <dt-bindings/zmk/pointing.h>
 #include <input/processors.dtsi>
 
@@ -111,6 +114,13 @@
 			compatible = "zmk,behavior-sensor-rotate";
 			#sensor-binding-cells = <0>;
 			bindings = <&msc MOVE_Y(ENC_SCRL)>, <&msc MOVE_Y(-ENC_SCRL)>;
+			tap-ms = <24>;
+		};
+		/* Mac の面用。違いは量だけ（ENC_SCRL_MAC）。 */
+		scroll_enc_mac: scroll_enc_mac {
+			compatible = "zmk,behavior-sensor-rotate";
+			#sensor-binding-cells = <0>;
+			bindings = <&msc MOVE_Y(ENC_SCRL_MAC)>, <&msc MOVE_Y(-ENC_SCRL_MAC)>;
 			tap-ms = <24>;
 		};
 		ctrl_scroll_enc: ctrl_scroll_enc {
@@ -215,7 +225,7 @@
 			/* --- 右のスティックの押し込み（63 個目・K_SPEC §10。キーとして配線したとき）: 左クリック --- */
 			&mkp LCLK
 			>;
-			sensor-bindings = <&scroll_enc>;
+			sensor-bindings = <&scroll_enc_mac>;
 		};
 
 		/* ------------------------------------------------------------
