@@ -1,16 +1,24 @@
-"""キャップとつまみを 1 枚の 3MF に。設定は 9/29 のプレートの 3MF（A1 mini 0.4・Bambu PLA Basic）を元に、小物向けに 4 項目だけ変える。STL は刷る向きで出ているので裏返さない。"""
+"""スティックの頭 2 種・つまみ・穴の試し輪 3 個を 1 枚の 3MF に。
+
+  .venv/bin/python3 docs/hardware/joystick/print/make_heads_3mf.py <リポジトリ> <STL の場所> <出力先>
+
+設定は利用者の 3MF（build/print_3mf_20260929/right_3_plate.3mf: A1 mini 0.4・Bambu PLA Basic）を元に、小物向けに OVERRIDE だけ変える。
+STL は刷る向き（軸を挿す口が下）で出ているので、向きは変えない。
+"""
 import json, sys, zipfile
 from pathlib import Path
 import trimesh
 R = Path(sys.argv[1]); SRC = Path(sys.argv[2]); OUT = Path(sys.argv[3])
 TPL = R / "build/print_3mf_20260929/right_3_plate.3mf"
-OVERRIDE = {"layer_height": "0.12", "wall_loops": "6", "sparse_infill_density": "100%", "sparse_infill_pattern": "zig-zag"}
-parts = ["right_stick_cap_d16", "left_knob_d18_b1", "left_knob_d18_b2", "left_knob_d18_b3"]
+# 足もとが細い（スティックの頭は φ6.8 の輪）ので、つばを付ける
+OVERRIDE = {"layer_height": "0.12", "wall_loops": "6", "sparse_infill_density": "100%", "sparse_infill_pattern": "zig-zag",
+            "brim_type": "outer_only", "brim_width": "4"}
+parts = ["right_stick_head_concave", "right_stick_head_dome", "left_knob_d20", "bore_ring_1", "bore_ring_2", "bore_ring_3"]
 ms = []
 for s in parts:
     m = trimesh.load(SRC / f"{s}.stl"); assert m.is_watertight, s
     m.apply_translation([-m.bounds[:, 0].mean(), -m.bounds[:, 1].mean(), -m.bounds[0][2]]); ms.append((s, m))
-gap = 8.0; w = sum(m.extents[0] for _, m in ms) + gap * (len(ms) - 1); x = 90 - w / 2
+gap = 12.0; w = sum(m.extents[0] for _, m in ms) + gap * (len(ms) - 1); x = 90 - w / 2
 objs, items, cfg = [], [], []
 for i, (s, m) in enumerate(ms, 1):
     v = "".join(f'<vertex x="{a:.5f}" y="{b:.5f}" z="{c:.5f}"/>' for a, b, c in m.vertices)
@@ -30,7 +38,7 @@ c = json.loads(files["Metadata/project_settings.config"])
 for k, val in OVERRIDE.items():
     assert k in c, k; print("  ", k, c[k], "→", val); c[k] = val
 files["Metadata/project_settings.config"] = json.dumps(c, indent=4).encode()
-out = OUT / "joystick_4_cap_d16+knobs.3mf"
+out = OUT / "joystick_4_heads+knob.3mf"
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
     for n, b in files.items(): z.writestr(n, b)
-print(out.name, [(s, m.extents.round(1).tolist()) for s, m in ms])
+print(out.name, "幅", round(w, 1), [(s, m.extents.round(1).tolist()) for s, m in ms])

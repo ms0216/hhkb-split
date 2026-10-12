@@ -2,7 +2,12 @@
 joystick_rkjxv.tilt_report と同じ姿勢の式（軸の位置・倒れの中心・押し込みの沈み）を使う。
 
 器の筐体の tools（main）が要る: main の作業ツリーにこのファイルと joystick_rkjxv.py を置き、PYTHONPATH=.:tools で回す。
-2026-10-12 の結果: いまの φ10 は 1.27mm（tilt_report は 1.30）。φ16・覆い 2.0・下面の円すい 2.0 で 1.14mm（相手は右スペース）。"""
+2026-10-12 の結果と較正:
+  真四角の箱で数えると、いまの φ10 は 1.27mm（tilt_report は 1.30）。**利用者の実測は約 4mm。**
+  キーキャップの上面のすぼまりを片側 2.85（DSA の公称）にすると 3.45mm（倒すだけなら 4.08）で、実測と合う → CAP_TAPER=2.85 で数える。
+  その条件で、print/gen_heads.py の頭（φ14・側面 3.2）は 1.33mm（相手は右スペース）。箱のままだと食い込む。
+  使い方: CAP_TAPER=2.85 PYTHONPATH=.:tools python3 -c "import cap_clear as C, gen_heads as G; ..."（gen_heads.stick_profile を渡す）
+"""
 import sys, math, os
 sys.argv = ["x", "--dry"]
 import numpy as np
@@ -23,9 +28,24 @@ def axis_right():
     sx = (bx0 + bx1) / 2 - (b0 + b1) / 2 + s * c["dt"]; sy = (by0 + by1) / 2 - (ax0 + ax1) / 2
     return sx, sy, zm, J.cap_boxes(positions, keys)
 
+TAPER = float(os.environ.get("CAP_TAPER", 0))   # キーキャップの上面のすぼまり（片側 mm）。0 なら真四角の箱（joystick_rkjxv と同じ）。DSA は 18.4 → 12.7 で 2.85
+
+
+def tapered(boxes, taper, n=8):
+    """箱を n 枚に輪切りにして、上へ行くほど片側 taper までまっすぐすぼめる。"""
+    out = []
+    for name, lo, hi in boxes:
+        for i in range(n):
+            t = (i + 1) / n * taper; z0 = lo[2] + (hi[2] - lo[2]) * i / n; z1 = lo[2] + (hi[2] - lo[2]) * (i + 1) / n
+            out.append((name, np.array([lo[0] + t, lo[1] + t, z0]), np.array([hi[0] - t, hi[1] - t, z1])))
+    return out
+
+
 def clearance(profile, tilt=J.TILT, sink=J.PUSH_SINK, pivot=J.PIVOT):
     """profile: [(取付面からの高さ z, 半径 r), ...] の折れ線。戻り値: (最小の隙間, 相手, 向き)"""
     sx, sy, zm, boxes = axis_right()
+    if TAPER:
+        boxes = tapered(boxes, TAPER)
     piv = np.array([sx, sy, zm + pivot - sink])
     pts = []
     for (z0, r0), (z1, r1) in zip(profile, profile[1:]):
