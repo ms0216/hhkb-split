@@ -273,7 +273,8 @@ def knob(bore_d=6.05):
 KNOB2_TOP, KNOB2_ROOF = 26.0, 1.0
 
 
-def knob_straight(bore_d=6.05):
+# 穴: 6.05 は「きつすぎる」（利用者・2026-10-12）→ 6.15。試し輪では 6.15 が「入るが、一度はめるとなかなか抜けない」だった。
+def knob_straight(bore_d=6.15):
     z = lambda h: h - KNOB_BOT              # noqa: E731
     top = z(KNOB2_TOP)
     pts = [(0, 0), (KNOB_R - 0.5, 0), (KNOB_R, 0.5)] + arc(KNOB_R - KNOB_F, top - KNOB_F, KNOB_F, 0, 90) + [(0, top)]
