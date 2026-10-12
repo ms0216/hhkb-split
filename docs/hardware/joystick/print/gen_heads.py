@@ -233,7 +233,8 @@ def round_profile(kind):
 def stick_head_round(kind):
     R, neck, bore, root = ROUNDS[kind]; ze = round_edge_z(kind); n = 16
     z_root = neck + (root - NECK_R) * math.tan(math.radians(SKIRT_ANG))      # 根元の筒が下面（20°）と交わる高さ
-    pts = [(0, -bore), (root - 0.3, -bore), (root, -bore + 0.3)] + ([(root, z_root)] if z_root > -bore + 0.3 else [])
+    # 根元の筒の下の角は**面取りしない**（山の頭と同じ。この角が本体に当たって止めになるので、削ると止まるのが遅れる）
+    pts = [(0, -bore), (root, -bore)] + ([(root, z_root)] if z_root > -bore else [])
     pts += arc(R - ROUND_NOSE, ze, ROUND_NOSE, -70, 0)                        # 外端の下の丸み
     pts += [(ROUND_DISH_R + (R - ROUND_DISH_R) * math.cos(math.radians(90 * i / n)), ze + (LOW_RIM_Z - ze) * math.sin(math.radians(90 * i / n))) for i in range(1, n + 1)]   # 肩（だ円）
     pts += [(ROUND_DISH_R * (1 - i / n), LOW_RIM_Z - LOW_DISH * (1 - math.cos(math.pi * i / n)) / 2) for i in range(1, n)]            # くぼみ
