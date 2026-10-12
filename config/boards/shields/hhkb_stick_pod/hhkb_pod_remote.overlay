@@ -48,7 +48,7 @@
 		input-processors = <&pod_click_right
 		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>;
 		/*
-		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/4。scaler は余りを持ち越すので、
+		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/8（最初は 1/4。利用者「もっと遅く」・2026-10-12）。scaler は余りを持ち越すので、
 		 * ゆっくり倒しても 0 に潰れない。process-next で、上の向きとクリックの処理も続けて通す。
 		 * ⚠️ レイヤーは**番号で書く**。名前（#define）はキーマップの中にしか無く、この overlay より後に読まれる。
 		 */
@@ -71,7 +71,7 @@
 		};
 		slow {
 			layers = <9>;
-			input-processors = <&zip_xy_scaler 1 4>;
+			input-processors = <&zip_xy_scaler 1 8>;
 			process-next;
 		};
 	};
