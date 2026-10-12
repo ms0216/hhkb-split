@@ -27,7 +27,7 @@ import math
 import sys
 from pathlib import Path
 
-from build123d import Align, Axis, Box, Cone, Cylinder, Location, Plane, Polyline, make_face, revolve, export_stl
+from build123d import Align, Axis, Box, Cone, Cylinder, Location, Plane, Polyline, extrude, make_face, revolve, export_stl
 
 CTR = (Align.CENTER, Align.CENTER, Align.MIN)
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent
@@ -92,6 +92,39 @@ def stick_head(kind):
     return body - bore
 
 
+# ---- 低い皿の頭（2026-10-12・利用者「キーより高くて、指を高くあげないといけない」「クリックは皿のほうがよい」）----
+# 下げられる量は小さい: 軸の先がキーの上面より 5.15 高く、真上に置く面はそれ＋屋根より下がらない。
+# まわりへ低く広げる案（つば）は、倒したときに**スティック自身の本体の上面**（キーの上面より 2.6 低い）に当たる
+# （scripts/cap_clear.py の BODY。つばの下面をキーの上面 +0.8 まで下げると、較正した条件でも食い込む）。
+# だから: 屋根を 0.8 に薄く・皿を 0.8 に浅く・側面の壁をやめて斜めの肩に。皿の縁 7.9 → 6.8、肩の下端 5.0（キーの上面から）。
+LOW_R, LOW_CONE0, LOW_EDGE, LOW_RIM_R, LOW_RIM_Z, LOW_DISH = 7.5, -4.7, 0.5, 5.4, 1.6, 0.8
+
+
+def low_profile():
+    """隙間の検査に渡す輪郭（上面は平らで表す）。"""
+    ze = LOW_CONE0 + (LOW_R - NECK_R)
+    return [(-BORE, NECK_R), (LOW_CONE0, NECK_R), (ze, LOW_R), (ze + LOW_EDGE, LOW_R), (LOW_RIM_Z, LOW_RIM_R), (LOW_RIM_Z, 0.0)]
+
+
+def stick_bore():
+    """軸の穴（z=0 が口）。丸い入口 1.2mm → 二面取り。**立てて刷るので、丸から二面取りへは 45° でつなぐ**:
+    段のままだと、二面取りの始まりが宙に浮いた棚になって垂れ、丸い所を狭める（最初の皿の頭が奥まで入らなかった原因と見ている・推定）。"""
+    hw = FLAT_W / 2
+    slab = extrude(make_face(Plane.YZ * Polyline((-SHAFT_R, 1.2), (SHAFT_R, 1.2), (hw, 1.2 + SHAFT_R - hw), (hw, BORE), (-hw, BORE), (-hw, 1.2 + SHAFT_R - hw), close=True)), 2.5, both=True)
+    return Cylinder(SHAFT_R, 1.2, align=CTR) + (Cylinder(SHAFT_R, BORE, align=CTR) & slab) + Cone(SHAFT_R + 0.4, SHAFT_R, 0.4, align=CTR)
+
+
+def stick_head_low():
+    prof = low_profile()
+    pts = [(0, -BORE)] + [(r, z) for z, r in prof[:-2]]
+    pts += arc(LOW_RIM_R - 0.0, LOW_RIM_Z - 0.4, 0.4, 20, 90)[1:]            # 皿の縁の丸み
+    pts += cap_arc(LOW_RIM_R - 0.4, LOW_RIM_Z, -LOW_DISH)[1:]
+    body = Location((0, 0, BORE)) * lathe(pts)
+    ze = LOW_CONE0 + (LOW_R - NECK_R)
+    body -= flutes(LOW_R, ze + BORE - 0.6, LOW_RIM_Z + BORE, 30, 0.5, 0.3)   # 肩の縦溝（手前から押すときの掛かり）
+    return body - stick_bore()
+
+
 # ---- エンコーダのつまみ。高さは取付面から。刷る向きでは −KNOB_BOT ----
 SHAFT_TIP, BUSH_TOP = 25.0, 12.0
 KNOB_BOT, KNOB_TOP = 13.0, 27.2             # 下端は軸受けの 1.0 上（押し込み 0.5 ぶんを空ける）／屋根 2.2
@@ -118,5 +151,6 @@ if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     for k in SIDE:
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
+    export_stl(stick_head_low(), str(OUT / "right_stick_head_low.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
     print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d"))))
