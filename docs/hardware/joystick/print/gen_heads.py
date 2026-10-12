@@ -19,13 +19,14 @@
   軸: φ6.0・先端 7.3mm がローレット 18 山・軸の先は取付面から 25.0・軸受け（φ6.8）の上は 12.0（TOP-UP EC12PSD-010）。
   径 20・つまむ側面の高さ 7.7（縦溝 24 本）。キーの上面より上で広がる（下は 45° で細い）。上面に放射の筋 12 本。
   （指を入れて回すくぼみも試したが、STL が閉じず、頼まれてもいないのでやめた）
-  穴は 6.05。**合う径は bore_ring_*.stl（穴 5.95 / 6.05 / 6.15・切り欠きの数 1 / 2 / 3）で先に確かめる。**
+  穴は丸穴 6.05 のまま（**これは挿さない**: 0.4mm ノズルの丸穴は、一番ゆるい 6.15 の輪でも抜けにくかった）。
+  歯に合わせた穴に作り直す。筋の出は spline_ring_*.stl（0.2mm ノズル）で先に確かめる。
 """
 import math
 import sys
 from pathlib import Path
 
-from build123d import Align, Axis, Box, Cone, Cylinder, Location, Plane, Polyline, make_face, revolve, export_stl
+from build123d import Align, Axis, Box, Cone, Cylinder, Location, Plane, Polyline, extrude, make_face, revolve, export_stl
 
 CTR = (Align.CENTER, Align.CENTER, Align.MIN)
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent
@@ -112,11 +113,40 @@ def knob(bore_d=6.05):
     return body
 
 
-def bore_ring(bore_d, notches):
-    ring = Cylinder(5.5, 6.0, align=CTR) - Cylinder(bore_d / 2, 6.0, align=CTR) - Cone(bore_d / 2 + 0.3, bore_d / 2, 0.3, align=CTR)
+# ---- 歯に合わせた穴（スプライン）。軸のローレットは 18 山・山の先 φ6.0（図面）。谷の深さは図面に無いので、筋の出を 3 通り試す ----
+# 丸穴に山を食い込ませる留め方は、一番ゆるい 6.15 でも「一度はめるとなかなか抜けない」（利用者・2026-10-12）。
+# 回す力は形（筋が谷に入る）で伝え、穴そのものは山の先より大きくして、抜き差しを軽くする。
+# 筋の間隔は約 1.1mm なので、0.4mm ノズルでは潰れる。**0.2mm ノズルで刷る。**
+SPLINE_MAJOR = 6.25                          # 筋と筋の間の径（山の先 6.0 に触れない）
+
+
+def spline_bore(tip_d, height, n=18, major=SPLINE_MAJOR):
+    """筋つきの穴の「抜く形」: 径 major の円柱から、内向きの三角の筋 n 本を引いたもの。"""
+    rm, rt = major / 2 + 0.05, tip_d / 2
+    hw = math.pi * major / n * 0.30          # 筋の根元の半幅（間隔の 6 割を筋に）
+    rib = extrude(make_face(Polyline((rm, -hw), (rm, hw), (rt, 0.07), (rt, -0.07), close=True)), height)
+    cut = Cylinder(major / 2, height, align=CTR)
+    for i in range(n):
+        cut -= Location((0, 0, 0), (0, 0, 360 / n * i)) * rib
+    return cut
+
+
+RING_H, RING_R = 4.0, 5.0                    # 試し輪は低く小さく（刷る時間を縮める）。本番の掛かりは 7.3mm なので、抜く力は約 2 倍になる
+
+
+def _ring(cut, notches):
+    ring = Cylinder(RING_R, RING_H, align=CTR) - cut
     for i in range(notches):
-        ring -= Location((0, 0, 0), (0, 0, 25 * i)) * (Location((5.5, 0, 0)) * Cylinder(0.8, 6.0, align=CTR))
+        ring -= Location((0, 0, 0), (0, 0, 25 * i)) * (Location((RING_R, 0, 0)) * Cylinder(0.7, RING_H, align=CTR))
     return ring
+
+
+def spline_ring(tip_d, notches):
+    return _ring(spline_bore(tip_d, RING_H) + Cone(SPLINE_MAJOR / 2 + 0.3, SPLINE_MAJOR / 2, 0.3, align=CTR), notches)
+
+
+def round_ring(bore_d, notches):
+    return _ring(Cylinder(bore_d / 2, RING_H, align=CTR) + Cone(bore_d / 2 + 0.3, bore_d / 2, 0.3, align=CTR), notches)
 
 
 if __name__ == "__main__":
@@ -124,6 +154,8 @@ if __name__ == "__main__":
     for k in SIDE:
         export_stl(stick_head(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
-    for n, d in enumerate((5.95, 6.05, 6.15), 1):
-        export_stl(bore_ring(d, n), str(OUT / f"bore_ring_{n}.stl"))
-    print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_", "bore_ring"))))
+    for n, d in enumerate((5.85, 5.70, 5.55), 1):          # 筋の先の径: 浅い → 深い（切り欠き 1 / 2 / 3）
+        export_stl(spline_ring(d, n), str(OUT / f"spline_ring_{n}.stl"))
+    for n, d in ((4, 6.25), (5, 6.35)):                    # 比べる用の丸穴（切り欠き 4 / 5）。0.2mm ノズルでの出来を見る
+        export_stl(round_ring(d, n), str(OUT / f"spline_ring_{n}_round.stl"))
+    print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d", "spline_ring"))))
