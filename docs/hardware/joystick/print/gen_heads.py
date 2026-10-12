@@ -106,12 +106,12 @@ def low_profile():
     return [(-BORE, NECK_R), (LOW_CONE0, NECK_R), (ze, LOW_R), (ze + LOW_EDGE, LOW_R), (LOW_RIM_Z, LOW_RIM_R), (LOW_RIM_Z, 0.0)]
 
 
-def stick_bore(depth=BORE):
+def stick_bore(depth=BORE, r=SHAFT_R, flat=FLAT_W):
     """軸の穴（z=0 が口）。丸い入口 1.2mm → 二面取り。**立てて刷るので、丸から二面取りへは 45° でつなぐ**:
-    段のままだと、二面取りの始まりが宙に浮いた棚になって垂れ、丸い所を狭める（最初の皿の頭が奥まで入らなかった原因と見ている・推定）。"""
-    hw = FLAT_W / 2
-    slab = extrude(make_face(Plane.YZ * Polyline((-SHAFT_R, 1.2), (SHAFT_R, 1.2), (hw, 1.2 + SHAFT_R - hw), (hw, depth), (-hw, depth), (-hw, 1.2 + SHAFT_R - hw), close=True)), 2.5, both=True)
-    return Cylinder(SHAFT_R, 1.2, align=CTR) + (Cylinder(SHAFT_R, depth, align=CTR) & slab) + Cone(SHAFT_R + 0.4, SHAFT_R, 0.4, align=CTR)
+    段のままだと、二面取りの始まりが宙に浮いた棚になって垂れ、丸い所を狭める。"""
+    hw = flat / 2
+    slab = extrude(make_face(Plane.YZ * Polyline((-r, 1.2), (r, 1.2), (hw, 1.2 + r - hw), (hw, depth), (-hw, depth), (-hw, 1.2 + r - hw), close=True)), 2.5, both=True)
+    return Cylinder(r, 1.2, align=CTR) + (Cylinder(r, depth, align=CTR) & slab) + Cone(r + 0.4, r, 0.4, align=CTR)
 
 
 def stick_head_low():
@@ -202,13 +202,23 @@ def stick_head_skirt(kind="skirt"):
 #   肩    : くぼみの縁から外端まで、4 分の 1 のだ円（縁で水平・外端で垂直）
 #   外端  : 半径 0.8 の丸みで下面へ回り込む。下面は 20°
 # 筒は短い版（下端は軸の先から 5.0。穴の深さ 5.0 で、軸の先が屋根に当たって止まる）。
-ROUNDS = {"round": (7.5, -4.5), "round_low": (7.5, -5.0)}        # (径の半分, 下面が筒に届く高さ)。round_low は首なしで、いちばん下げた形
-ROUND_BORE, ROUND_NOSE, ROUND_DISH_R = 5.0, 0.8, 4.6
+# (径の半分, 下面が筒に届く高さ, 筒の下端（軸の先から）, 根元の半径)。round_low は首なしで、いちばん下げた形
+# ⚠️ round / round_low（筒が短い）は「いっぱいに倒すと戻らない」（利用者・2026-10-12）。操作性は round_low が「非常にいい」。
+#    利用者の見立て: **最初の山の頭は、軸のまわりの筒が本体に当たって、倒れきる手前で止めていた。だから離すと戻る。**
+#    数えると合う: 半径 3.4・下端 6.0 の筒の角は、約 21° で本体の枠の上面に届く（データシートの最大は 23°）。筒を 5.0 に縮めると届かない。
+#    私は逆に「筒が根元に触れて戻らない」と見て筒を縮めていた（外れ）。
+#    *_stop は、上の形は round_low のまま、根元を山の頭と同じ（下端 6.0）に戻した物。_stop_thick は根元を太くして、もっと手前（約 18°）で止める。
+ROUNDS = {"round": (7.5, -4.5, 5.0, NECK_R), "round_low": (7.5, -5.0, 5.0, NECK_R),
+          "round_low_stop": (7.5, -5.0, 6.0, NECK_R), "round_low_stop_thick": (7.5, -5.0, 6.0, 4.2)}
+ROUND_NOSE, ROUND_DISH_R = 0.8, 4.6
+# 穴: φ4.1×幅 3.1 は「ちょっときつすぎる」（利用者・2026-10-12。立てて刷った頭で）→ *_stop は φ4.2×幅 3.2。
+# **奥まで入らないと、根元の筒が止めの位置に来ない**ので、きつさは形と同じくらい効く。
+ROUND_BORE_R, ROUND_FLAT = {"round_low_stop": 2.10, "round_low_stop_thick": 2.10}, 3.2
 
 
 def round_edge_z(kind):
     """外端（肩が垂直になる点）の高さ。下面の 20° と丸みから逆算する。"""
-    R, neck = ROUNDS[kind]
+    R, neck, _, _ = ROUNDS[kind]
     t = math.radians(SKIRT_ANG)
     r_end = R - ROUND_NOSE + ROUND_NOSE * math.cos(math.radians(-70))
     return neck + (r_end - NECK_R) * math.tan(t) + ROUND_NOSE * math.sin(math.radians(70))
@@ -216,18 +226,20 @@ def round_edge_z(kind):
 
 def round_profile(kind):
     """隙間の検査に渡す輪郭（上面は平らで表す）。"""
-    R, neck = ROUNDS[kind]; ze = round_edge_z(kind)
-    return [(-ROUND_BORE, NECK_R), (neck, NECK_R), (ze - ROUND_NOSE, R - 0.5), (ze, R), (LOW_RIM_Z, ROUND_DISH_R), (LOW_RIM_Z, 0.0)]
+    R, neck, bore, root = ROUNDS[kind]; ze = round_edge_z(kind)
+    return [(-bore, root), (neck + (root - NECK_R) * math.tan(math.radians(SKIRT_ANG)), root), (ze - ROUND_NOSE, R - 0.5), (ze, R), (LOW_RIM_Z, ROUND_DISH_R), (LOW_RIM_Z, 0.0)]
 
 
 def stick_head_round(kind):
-    R, neck = ROUNDS[kind]; ze = round_edge_z(kind); n = 16
-    pts = [(0, -ROUND_BORE), (NECK_R, -ROUND_BORE)] + ([(NECK_R, neck)] if neck > -ROUND_BORE else [])
+    R, neck, bore, root = ROUNDS[kind]; ze = round_edge_z(kind); n = 16
+    z_root = neck + (root - NECK_R) * math.tan(math.radians(SKIRT_ANG))      # 根元の筒が下面（20°）と交わる高さ
+    pts = [(0, -bore), (root - 0.3, -bore), (root, -bore + 0.3)] + ([(root, z_root)] if z_root > -bore + 0.3 else [])
     pts += arc(R - ROUND_NOSE, ze, ROUND_NOSE, -70, 0)                        # 外端の下の丸み
     pts += [(ROUND_DISH_R + (R - ROUND_DISH_R) * math.cos(math.radians(90 * i / n)), ze + (LOW_RIM_Z - ze) * math.sin(math.radians(90 * i / n))) for i in range(1, n + 1)]   # 肩（だ円）
     pts += [(ROUND_DISH_R * (1 - i / n), LOW_RIM_Z - LOW_DISH * (1 - math.cos(math.pi * i / n)) / 2) for i in range(1, n)]            # くぼみ
     pts += [(0.3, LOW_RIM_Z - LOW_DISH), (0, LOW_RIM_Z - LOW_DISH)]
-    return Location((0, 0, ROUND_BORE)) * lathe(pts) - stick_bore(ROUND_BORE)
+    loose = kind in ROUND_BORE_R
+    return Location((0, 0, bore)) * lathe(pts) - (stick_bore(bore, ROUND_BORE_R[kind], ROUND_FLAT) if loose else stick_bore(bore))
 
 
 # ---- エンコーダのつまみ。高さは取付面から。刷る向きでは −KNOB_BOT ----
