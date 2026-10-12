@@ -265,6 +265,28 @@ def knob(bore_d=6.05):
     return body
 
 
+# ---- まっすぐなつまみ（2026-10-12・利用者「基本はこれでよいが位置が高すぎる。斜めの部分は要らないのでは」）----
+# 斜めに広がる部分をやめ、径 20 の円柱を下端（取付面 +13.0）まで下ろす。つまむ面が 5.5mm 下へ伸びる（18.5 → 13.0）。
+# 上面は 27.2 → 26.0（屋根 2.2 → 1.0）。**これより下げられない**: 軸の先が取付面 +25.0（図面）で、軸は切らない方針。
+# 斜めにしていた理由は「太い所を隣のキーの上面より上に置く」ため。まっすぐにすると、太い胴が T と 5 のキーキャップの横に来る:
+#   軸から T のキーキャップの縁まで 10.66（箱で数えて隙間 0.66。上面のすぼまりを入れると、下端の高さで約 2.6）、5 まで 12.59、開口の縁まで 12.27
+KNOB2_TOP, KNOB2_ROOF = 26.0, 1.0
+
+
+def knob_straight(bore_d=6.05):
+    z = lambda h: h - KNOB_BOT              # noqa: E731
+    top = z(KNOB2_TOP)
+    pts = [(0, 0), (KNOB_R - 0.5, 0), (KNOB_R, 0.5)] + arc(KNOB_R - KNOB_F, top - KNOB_F, KNOB_F, 0, 90) + [(0, top)]
+    body = lathe(pts)
+    body -= flutes(KNOB_R, 0.8, top - KNOB_F, 24, 1.0, 0.6)
+    for i in range(12):                     # 上面の放射の筋（高さ 0.5・幅 0.9）
+        rib = Location((0, 0, top)) * Box(5.0, 0.9, 0.5, align=(Align.MIN, Align.CENTER, Align.MIN))
+        body += Location((0, 0, 0), (0, 0, 30 * i)) * (Location((3.6, 0, 0)) * rib)
+    body -= Cylinder(3.25, z(GRIP_FROM), align=CTR) + Cone(3.55, 3.25, 0.3, align=CTR)       # 軸（φ6）に触れない所
+    body -= Location((0, 0, z(GRIP_FROM))) * Cylinder(bore_d / 2, SHAFT_TIP - GRIP_FROM, align=CTR)
+    return body
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     for k in SIDE:
@@ -276,4 +298,5 @@ if __name__ == "__main__":
     for k in ("skirt_lower_s",):          # ほかの形は、刷った物の STL をそのまま残してある（作り直すと丸みの式の変更ぶんだけ変わる）
         export_stl(stick_head_skirt(k), str(OUT / f"right_stick_head_{k}.stl"))
     export_stl(knob(), str(OUT / "left_knob_d20.stl"))
+    export_stl(knob_straight(), str(OUT / "left_knob_d20_straight.stl"))
     print("出した:", sorted(p.name for p in OUT.glob("*.stl") if p.name.startswith(("right_stick_head", "left_knob_d"))))
