@@ -46,7 +46,8 @@
 		 * X と Y を入れ替え、入れ替えた後の Y を反転する（transform は入れ替え → 反転の順に効く）。
 		 */
 		input-processors = <&pod_click_right
-		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)>;
+		                    &zip_xy_transform (INPUT_TRANSFORM_XY_SWAP | INPUT_TRANSFORM_Y_INVERT)
+		                    &pointer_pace>;   /* いちばん最後。ラベルはキーマップにある */
 		/*
 		 * 左 Ctrl を押している間（レイヤー 9 = STK_SLOW）は 1/8（最初は 1/4。利用者「もっと遅く」・2026-10-12）。scaler は余りを持ち越すので、
 		 * ゆっくり倒しても 0 に潰れない。process-next で、上の向きとクリックの処理も続けて通す。

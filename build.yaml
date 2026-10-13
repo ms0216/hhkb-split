@@ -71,6 +71,16 @@ include:
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_PERIPHERAL_PREF_MAX_INT=6
     artifact-name: hhkb_split_left-win-trialD
+  #      E: 動きを「溜めない・捨てない」で送る（firmware/src/input_ble_pointer_pace.c）。回数は増えないが、遅れと取りこぼしを無くす
+  #      F: E と D の両方
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_HHKB_BLE_POINTER_PACE_ACTIVE=y
+    artifact-name: hhkb_split_left-win-trialE
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_HHKB_BLE_POINTER_PACE_ACTIVE=y -DCONFIG_BT_PERIPHERAL_PREF_MAX_INT=6
+    artifact-name: hhkb_split_left-win-trialF
   # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right

@@ -76,6 +76,13 @@
  */
 
 / {
+	/* ポインタの動きを BLE で 1 個ずつ送る入力プロセッサ（firmware/src/input_ble_pointer_pace.c）。
+	 * マウスキー（下の &mmv_input_listener）と、右のスティック（hhkb_pod_remote.overlay）の両方が使う。 */
+	pointer_pace: pointer_pace {
+		compatible = "hhkb,input-processor-ble-pace";
+		#input-processor-cells = <0>;
+	};
+
 	behaviors {
 		tog_on: tog_on {
 			compatible = "zmk,behavior-toggle-layer";
@@ -496,9 +503,12 @@
 
 /* SLOW の間だけ 1/4。scaler は余りを持ち越すので小さな値でも 0 に潰れない。 */
 &mmv_input_listener {
+	/* 動きの送り方（BLE で溜めない・捨てない）。いちばん最後に置く。既定では素通し（CONFIG_HHKB_BLE_POINTER_PACE_ACTIVE） */
+	input-processors = <&pointer_pace>;
 	slow {
 		layers = <SLOW>;
 		input-processors = <&zip_xy_scaler 1 4>;
+		process-next;   /* 上の pointer_pace まで通す（上書きの中の STOP は process-next が無いと効かない） */
 	};
 };
 

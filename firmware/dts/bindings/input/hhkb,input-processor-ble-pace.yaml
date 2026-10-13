@@ -1,0 +1,8 @@
+description: |
+  ポインタの動きを、BLE では「1 個送って、届いてから次。その間の動きは足し算」で送る
+  （firmware/src/input_ble_pointer_pace.c）。listener のいちばん最後に置く。
+  CONFIG_HHKB_BLE_POINTER_PACE_ACTIVE=n（既定）では何もしない。
+
+compatible: "hhkb,input-processor-ble-pace"
+
+include: ip_zero_param.yaml

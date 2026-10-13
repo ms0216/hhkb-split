@@ -19,7 +19,7 @@ if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
    OR CONFIG_HHKB_STATUS_LED OR CONFIG_HHKB_PROFILE_NAME
    OR CONFIG_HHKB_STICK_POD OR CONFIG_HHKB_BEHAVIOR_STICK_RECAL
    OR CONFIG_HHKB_ENCODER_GATED OR CONFIG_HHKB_INPUT_BUTTON_LATCH
-   OR CONFIG_HHKB_BOOT_LAYER)
+   OR CONFIG_HHKB_BOOT_LAYER OR CONFIG_HHKB_INPUT_BLE_POINTER_PACE)
   zephyr_library()
   zephyr_library_sources_ifdef(CONFIG_HHKB_BATTERY_ALKALINE
                                drivers/battery_alkaline.c)
@@ -42,4 +42,6 @@ if(CONFIG_HHKB_BATTERY_ALKALINE OR CONFIG_HHKB_LOW_BATTERY_SOFT_OFF
                                src/input_button_latch.c)
   zephyr_library_sources_ifdef(CONFIG_HHKB_BOOT_LAYER
                                src/boot_layer.c)
+  zephyr_library_sources_ifdef(CONFIG_HHKB_INPUT_BLE_POINTER_PACE
+                               src/input_ble_pointer_pace.c)
 endif()

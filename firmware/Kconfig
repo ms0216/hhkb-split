@@ -166,6 +166,21 @@ config HHKB_BOOT_LAYER_ID
 	help
 	  1 = BASE_WIN（config/boards/shields/hhkb_split/hhkb_split.keymap）。
 
+config HHKB_INPUT_BLE_POINTER_PACE
+	bool "ポインタの動きを BLE で 1 個ずつ送る入力プロセッサ（器だけ。効かせるのは下の ACTIVE）"
+	default y
+	depends on DT_HAS_HHKB_INPUT_PROCESSOR_BLE_PACE_ENABLED
+	help
+	  firmware/src/input_ble_pointer_pace.c。キーマップは左右共通なので、右にも入る（右では素通し）。
+
+config HHKB_BLE_POINTER_PACE_ACTIVE
+	bool "上を実際に効かせる（溜めない・捨てない送り方）"
+	default n
+	depends on HHKB_INPUT_BLE_POINTER_PACE
+	help
+	  相手の通信が遅いとき（ある Windows PC で 1 秒に約 27 個）、ZMK の標準の送り方は列が溜まって遅れ、あふれて捨てる。
+	  y にすると、動きは足し算して、前の 1 個が届いてからまとめて送る。実機で確かめるまでは試す版だけ y。
+
 config HHKB_ENCODER_GATED
 	bool "止まっている間に電流を流さないロータリーエンコーダ（左手・B 案）"
 	default y
