@@ -51,9 +51,11 @@ include:
   #      A: PC 側のリンクで、無線の時間を「最大のパケットぶん」先取りするのをやめる（重なったときに譲り合う方式に）
   #      B: 左右の間の接続間隔を 7.5ms → 15ms に（PC 側の 15ms と重なる回数を減らす）
   #      C: A と B の両方
+  #      ⚠️ A の設定は「Advanced features」の中にあり、BT_CTLR_ADVANCED_FEATURES=y を付けないと**黙って無視される**
+  #         （最初のビルドは A がふつうの版と 1 バイトも違わなかった。ハッシュを比べて気づいた）
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
-    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_ADVANCED_FEATURES=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n
     artifact-name: hhkb_split_left-win-trialA
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
@@ -61,7 +63,7 @@ include:
     artifact-name: hhkb_split_left-win-trialB
   - board: xiao_ble//zmk
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
-    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n -DCONFIG_ZMK_SPLIT_BLE_PREF_INT=12
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_ADVANCED_FEATURES=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n -DCONFIG_ZMK_SPLIT_BLE_PREF_INT=12
     artifact-name: hhkb_split_left-win-trialC
   # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
   - board: xiao_ble//zmk
