@@ -46,6 +46,23 @@ include:
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y
     artifact-name: hhkb_split_left-podR-encB-win
+  # ---- 切り分け用（ble-jitter-trial）: Windows に BLE でつなぐとポインタの更新が約 27Hz に落ちる件（2026-10-13）。
+  #      左→PC の送出で約 6 割が届かない、という測定（利用者）。左は「左右の通信の親」と「PC の子」を同時にやっている。
+  #      A: PC 側のリンクで、無線の時間を「最大のパケットぶん」先取りするのをやめる（重なったときに譲り合う方式に）
+  #      B: 左右の間の接続間隔を 7.5ms → 15ms に（PC 側の 15ms と重なる回数を減らす）
+  #      C: A と B の両方
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n
+    artifact-name: hhkb_split_left-win-trialA
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_ZMK_SPLIT_BLE_PREF_INT=12
+    artifact-name: hhkb_split_left-win-trialB
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n -DCONFIG_ZMK_SPLIT_BLE_PREF_INT=12
+    artifact-name: hhkb_split_left-win-trialC
   # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
