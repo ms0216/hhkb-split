@@ -65,6 +65,12 @@ include:
     shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
     cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_CTLR_ADVANCED_FEATURES=y -DCONFIG_BT_CTLR_PERIPHERAL_RESERVE_MAX=n -DCONFIG_ZMK_SPLIT_BLE_PREF_INT=12
     artifact-name: hhkb_split_left-win-trialC
+  #      D: PC へ希望する接続間隔を 7.5〜15ms → 7.5ms だけに（通信の回数を倍にする。PC が受け入れるかは PC しだい。
+  #         Apple の機器は 15ms 未満を断ることがあるので、Mac では逆効果になりうる。Windows 専用の試し）
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_HHKB_BOOT_LAYER=y -DCONFIG_BT_PERIPHERAL_PREF_MAX_INT=6
+    artifact-name: hhkb_split_left-win-trialD
   # ---- 検討用: 右のスティックの立ち上げ用。USB のシリアルにログを出す版（電池では使わない。電流が増える） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
