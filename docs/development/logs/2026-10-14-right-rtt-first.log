@@ -1,0 +1,42 @@
+ WARN probe_rs::rtt: Buffer for up channel 1 not initialized
+ WARN probe_rs::rtt: Buffer for up channel 2 not initialized
+ WARN probe_rs::rtt: Buffer for down channel 1 not initialized
+ WARN probe_rs::rtt: Buffer for down channel 2 not initialized
+Failed to create readline
+*** Booting Zephyr OS build 10ba6d0cb38b ***
+23:45:02.430: [00:00:00.285,430] <inf> fs_nvs: 8 Sectors of 4096 bytes
+23:45:02.430: [00:00:00.285,461] <inf> fs_nvs: alloc wra: 0, f78
+23:45:02.430: [00:00:00.285,461] <inf> fs_nvs: data wra: 0, b8
+23:45:02.430: [00:00:00.288,391] <inf> bt_hci_core: HW Platform: Nordic Semiconductor (0x0002)
+23:45:02.430: [00:00:00.288,421] <inf> bt_hci_core: HW Variant: nRF52x (0x0002)
+23:45:02.430: [00:00:00.288,452] <inf> bt_hci_core: Firmware: Standard Bluetooth controller (0x00) Version 4.1 Build 0
+23:45:02.430: [00:00:00.288,940] <inf> bt_hci_core: No ID address. App must call settings_load()
+23:45:02.430: [00:00:00.289,062] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 11 on gpio@50000300 for input
+23:45:02.430: [00:00:00.289,123] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 29 on gpio@50000000 for input
+23:45:02.430: [00:00:00.289,184] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 5 on gpio@50000000 for input
+23:45:02.430: [00:00:00.289,245] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 28 on gpio@50000000 for input
+23:45:02.430: [00:00:00.289,306] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 3 on gpio@50000000 for input
+23:45:02.430: [00:00:00.289,337] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 0 on 595@0 for output
+23:45:02.430: [00:00:00.289,367] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 1 on 595@0 for output
+23:45:02.430: [00:00:00.289,428] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 2 on 595@0 for output
+23:45:02.430: [00:00:00.289,459] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 3 on 595@0 for output
+23:45:02.430: [00:00:00.289,520] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 4 on 595@0 for output
+23:45:02.430: [00:00:00.289,550] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 5 on 595@0 for output
+23:45:02.430: [00:00:00.289,581] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 6 on 595@0 for output
+23:45:02.430: [00:00:00.289,642] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 7 on 595@0 for output
+23:45:02.430: [00:00:00.289,672] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 8 on 595@0 for output
+23:45:02.430: [00:00:00.293,609] <dbg> zmk: zmk_sensors_init_item: Init sensor at index 0
+23:45:02.430: [00:00:00.293,640] <dbg> zmk: zmk_sensors_init_item: No local device for 0
+23:45:02.430: [00:00:00.294,006] <inf> zmk: Welcome to ZMK!
+23:45:02.430: 
+23:45:02.430: [00:00:00.295,166] <inf> bt_hci_core: Identity: CD:F7:76:0C:8F:4F (random)
+23:45:02.430: [00:00:00.295,227] <inf> bt_hci_core: HCI: version 5.4 (0x0d) revision 0x0000, manufacturer 0x05f1
+23:45:02.430: [00:00:00.295,257] <inf> bt_hci_core: LMP: version 5.4 (0x0d) subver 0xffff
+23:45:02.430: [00:00:01.065,612] <dbg> zmk: split_peripheral_listener: 
+23:45:02.430: [00:00:01.065,612] <dbg> zmk: zmk_battery_update: Setting BAS GATT battery level to 84.
+23:45:02.430: [00:00:01.576,843] <err> zmk: Failed to start advertising (-120)
+23:45:02.430: [00:00:18.588,775] <err> zmk: Failed to set output 0 to 0: -11
+23:45:02.430: [00:00:18.593,902] <dbg> zmk: kscan_matrix_read: Sending event at 3,5 state on
+23:45:02.430: [00:00:18.594,024] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 3, col: 5, position: 56, pressed: true
+
+[exited with code 0]

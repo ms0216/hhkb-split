@@ -218,7 +218,24 @@ Pico H のピンに挿さる。線を自作しなくてよい。
 cargo install probe-rs-tools --locked
 
 probe-rs list                         # ① プローブが見えるか
-probe-rs attach --chip nRF52840_xxAA  # ② RTT に繋ぐ
+
+# ② RTT に繋ぐ。**--scan-region ram を必ず付ける**
+probe-rs attach --chip nRF52840_xxAA --scan-region ram
+```
+
+> ⚠️ **`--scan-region` を省くと、無言で何も出ない。**エラーにもならないので
+> 「RTT が動いていない」と誤解する。`attach --help` にこう書いてある:
+>
+> > If no region is specified, probe-rs will **not scan and will not poll RTT**.
+>
+> **2026-10-14 に実際に踏んだ。**付けずに繋いで、沈黙を「ログが無い」と
+> 読み違えた。
+
+**書き込みも同じ線からできる**（リセット 2 度押しが要らない）:
+
+```bash
+probe-rs download --chip nRF52840_xxAA --binary-format uf2 --verify <file>.uf2
+probe-rs reset    --chip nRF52840_xxAA
 ```
 
 **ここまでは手元で実行して確かめた**（2026-10-14・probe-rs 0.32.0）:
@@ -228,8 +245,8 @@ probe-rs attach --chip nRF52840_xxAA  # ② RTT に繋ぐ
 - `probe-rs list` → `No debug probes were found.`（まだ何も繋いでいないので正しい）
 
 > ⚠️ **`--rtt-scan-memory` は 0.32.0 に無い**（一度そう書いていたが、
-> `attach --help` に存在しなかった）。`attach` は既定で RTT を探す。
-> ELF を渡すと制御ブロックの位置が確実になる（任意・`attach [PATH]`）。
+> `attach --help` に存在しなかった）。ELF を渡すと制御ブロックの位置が
+> 確実になる（任意・`attach [PATH]`）。
 >
 > ⚠️ **rustc 1.89 以上が要る。**1.88 では
 > `requires rustc 1.89 or newer` で失敗する。**しかも `cargo install` は
@@ -290,9 +307,28 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
 - [x] debugprobe の配布物に `debugprobe.uf2` と `debugprobe_on_pico.uf2` の
       **2 つがある**ことを API で確認（買い間違い・焼き間違いの元）
 
-**残っているもの（実機が要る）:**
+### ✅ 2026-10-14: 実機で通った（右手）
 
-- [ ] 焼いた実機から実際に RTT が読めるか ← **次の一手**
-- [ ] 自分の基板の SWDIO/SWCLK の並びが、公式図と同じか
+**電池で動いたまま、右手の中が読めた。**記録: [logs/2026-10-14-right-rtt-first.log](logs/2026-10-14-right-rtt-first.log)
+
+- [x] Pico H に `debugprobe_on_pico.uf2` → `Debugprobe on Pico (CMSIS-DAP)` として認識
+- [x] SWD の配線が通った
+- [x] **SWD から書き込み: 24 秒・`--verify` で読み返し一致。
+      リセット 2 度押しも `.uf2` のコピーも無し**
+- [x] **RTT でログが読めた**（USB 未接続・電池駆動のまま）
+
+初回に読めた事実:
+
+| ログ | 分かること |
+|---|---|
+| `zmk_battery_update: Setting BAS GATT battery level to 84.` | **乾電池の残量計が実際に動いている**（#13 の `hhkb,battery-alkaline`） |
+| `kscan_matrix_read: Sending event at 3,5 state on` | マトリクスと 595 が生きている |
+| `<err> Failed to start advertising (-120)` | 広告の開始に失敗（左が居ない状態なら想定内かは要確認） |
+| **`<err> Failed to set output 0 to 0: -11`** | **595 の出力設定が EAGAIN。走査は続くが、今まで誰も見ていなかった** |
+
+**残っているもの:**
+
+- [ ] 上の 2 つの `<err>` を追う（**RTT を入れたから見つかった**）
+- [ ] 左手にも同じ加工をする（右で通ったので手順は確定）
 - [ ] `DEBUG`/`ASSERT` で BLE のタイミングが変わらないか
-- [ ] 2.0mm の隙間に線を逃がして、挿抜に耐えるか
+- [ ] 線が挿抜に耐えるか（長期）
