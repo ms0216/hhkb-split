@@ -118,13 +118,29 @@ select LOG / DEBUG / ASSERT / USE_SEGGER_RTT / CONSOLE / RTT_CONSOLE
 2. Pico の BOOTSEL を押しながら USB に挿す → `RPI-RP2` がマウントされる
 3. `.uf2` をコピー
 
-**Pico 側の配線**（debugprobe の既定）:
+**Pico 側の配線**。出典は debugprobe の
+[`include/board_pico_config.h`](https://github.com/raspberrypi/debugprobe/blob/master/include/board_pico_config.h)
+（ソースで確認。wiki ではなく定義そのもの）:
 
-| Pico | → | XIAO |
-|---|---|---|
-| GP2 | → | SWCLK |
-| GP3 | → | SWDIO |
-| GND | → | GND |
+| Pico | → | XIAO | 要るか |
+|---|---|---|---|
+| **GP2** | → | **SWCLK** | 必須 |
+| **GP3** | → | **SWDIO** | 必須 |
+| **GND** | → | **GND** | 必須 |
+| GP1 | → | RST | 任意。**あると「リセット 2 度押し」が完全に消える** |
+| GP4 (TX) | → | — | 任意。UART を使うなら（RTT を使うので今回は不要） |
+
+```c
+/* board_pico_config.h より */
+#define PROBE_PIN_SWCLK (PROBE_PIN_OFFSET + 0) // 2
+#define PROBE_PIN_SWDIO (PROBE_PIN_OFFSET + 1) // 3
+#define PROBE_PIN_RESET 1
+```
+
+> **GP1 → RST は付けておくことを勧める。**XIAO のリセットボタンは
+> 組むと押せない（上を向いており、真上に本体基板が来る。だから
+> `Fn+Ctrl+Esc` をブートローダ用に割り当ててある）。
+> **プローブからリセットできれば、その物理作業ごと無くなる。**
 
 > **Nucleo F401RE でも代用できる**（オンボードの ST-LINK）。ただし RTT は
 > `probe-rs` + CMSIS-DAP の組み合わせがいちばん素直なので、Pico を勧める。
@@ -136,10 +152,18 @@ select LOG / DEBUG / ASSERT / USE_SEGGER_RTT / CONSOLE / RTT_CONSOLE
 
 ```bash
 # probe-rs（CMSIS-DAP を直接しゃべる。J-Link のソフトは要らない）
+# debugprobe は CMSIS-DAP なので、probe-rs がそのまま認識する
+# （probe.rs「All probes implementing this standard are supported」）。
+# macOS はドライバ不要。
 cargo install probe-rs-tools        # もしくは公式のインストーラ
 
-probe-rs attach --chip nRF52840_xxAA --rtt-scan-memory
+probe-rs list                        # ① プローブが見えるか
+probe-rs chip list | grep -i 52840   # ② 正しいチップ名を確かめる
+probe-rs attach --chip <①②で確かめた名前> --rtt-scan-memory
 ```
+
+> ⚠️ **チップ名は実行して確かめること。**`nRF52840_xxAA` のはずだが、
+> **手元に probe-rs を入れていないので未確認**。`chip list` の出力が正。
 
 焼くのは `build.yaml` の RTT 版:
 
@@ -174,12 +198,25 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
 
 ---
 
-## 7. まだ確かめていないこと
+## 7. どこまで確かめたか
 
-**この文書は「調べて書いた」段階で、実機では 1 度も通していない。**
+**実機では 1 度も通していない。**機械で確かめられたのはここまで:
 
-- [ ] `CONFIG_ZMK_RTT_LOGGING=y` で CI のビルドが通るか
-- [ ] 焼いた実機から実際に RTT が読めるか
-- [ ] `DEBUG`/`ASSERT` が付くことで、普段の版と挙動が変わらないか
-      （特に BLE のタイミング）
+- [x] **`CONFIG_ZMK_RTT_LOGGING=y` で CI のビルドが通る**
+      （2026-10-14・run 38574345395・左右とも success）
+- [x] **`.uf2` が実際に出来ている**（`hhkb_split_right-pod-rtt.uf2` /
+      `hhkb_split_left-podR-encB-rtt.uf2`。出来た物を見て確認）
+- [x] **DEBUG/ASSERT のぶん太っている**——右の中身が
+      **213,504 → 349,952 バイト（+64%）**。「常用ファームにしない」は
+      推測ではなく実測。
+- [x] debugprobe のピン（GP2=SWCLK / GP3=SWDIO / GP1=RESET）を
+      [ソースの定義](https://github.com/raspberrypi/debugprobe/blob/master/include/board_pico_config.h)で確認
+- [x] 裏面パッドの位置を Seeed の公式図で確認（ただし版の差あり→[2](#2-配線xiao-裏面の-4-つのパッド)）
+
+**残っているもの（実機が要る）:**
+
+- [ ] 焼いた実機から実際に RTT が読めるか ← **次の一手**
+- [ ] probe-rs のチップ名（`nRF52840_xxAA` のはず・未検証）
+- [ ] 自分の基板の SWDIO/SWCLK の並びが、公式図と同じか
+- [ ] `DEBUG`/`ASSERT` で BLE のタイミングが変わらないか
 - [ ] 2.0mm の隙間に線を逃がして、挿抜に耐えるか
