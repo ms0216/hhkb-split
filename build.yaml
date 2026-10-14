@@ -96,6 +96,33 @@ include:
     cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_left-rtt
 
+  # ---- RTT「静かな版」。**BLE で落ちるのを避けるためのもの** ----
+  #
+  # ⚠️ **2026-10-15 に実機で踏んだ。**上の `-rtt` を焼いたら、起動 5.9 秒で
+  # BLE コントローラのアサートが発火して**停止した**:
+  #
+  #     ASSERTION FAIL @ .../lll_peripheral.c:342
+  #         prepare_cb: Actual EVENT_OVERHEAD_START_US = 2105
+  #     >>> ZEPHYR FATAL ERROR 3: Kernel oops / Halting system
+  #
+  # `LL_ASSERT_OVERHEAD` は**無線イベントの準備が長引いた**ときに落ちる門。
+  # RTT のデバッグ出力（落ちるまでの内訳は dbg 24 / inf 12）と SWD の読み出しが、
+  # まさにその時間を食う。**タイミング次第なので、出る日と出ない日がある**
+  # （前日は同じ構成で 3 分 48 秒持った）。
+  #
+  # 2 つとも効かせる:
+  #   CONFIG_ASSERT=n       … ZMK_RTT_LOGGING が select ASSERT で付けた門を外す。
+  #                           **アサートは本来有用なので、これは調査用の割り切り**
+  #   CONFIG_ZMK_LOG_LEVEL=3 … 既定の 4（dbg 全部）→ 3（inf 以上）。出力量を減らす
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_ASSERT=n -DCONFIG_ZMK_LOG_LEVEL=3
+    artifact-name: hhkb_split_right-rtt-quiet
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_ASSERT=n -DCONFIG_ZMK_LOG_LEVEL=3
+    artifact-name: hhkb_split_left-rtt-quiet
+
   # ---- ポッド・エンコーダを付けた実機用（付けてから焼くこと） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
