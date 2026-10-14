@@ -111,8 +111,15 @@ include:
   # （前日は同じ構成で 3 分 48 秒持った）。
   #
   # 2 つとも効かせる:
-  #   CONFIG_ASSERT=n        … ZMK_RTT_LOGGING が select ASSERT で付けた門を外す。
-  #                            **アサートは本来有用なので、これは調査用の割り切り**
+  #   CONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n
+  #                          … **落ちていた当の門だけ**を切る。Zephyr の help に
+  #                            「遅れた無線イベントを穏当に飛ばせるようになる」とある。
+  #                            ⚠️ 連続して飛ばし続けると supervision timeout になる
+  #                            （help の但し書き）。調査用であって常用の設定ではない。
+  #
+  # ⚠️ **`CONFIG_ASSERT=n` では効かなかった**（2026-10-15 実機）。
+  # ZMK_RTT_LOGGING が `select ASSERT` しているので、**Kconfig の select は
+  # コマンドラインの代入に勝つ。**アサートは発火したままだった。
   #   CONFIG_LOG_MAX_LEVEL=3 … dbg を**コンパイルごと落とす**（実行時の絞りではない）。
   #                            出力量が減る＝無線イベントを邪魔する時間が減る
   #
@@ -125,11 +132,11 @@ include:
   # ZMK が自分で入れる `ZMK_LOG_LEVEL=4` の上から効く。
   - board: xiao_ble//zmk
     shield: hhkb_split_right
-    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_ASSERT=n -DCONFIG_LOG_MAX_LEVEL=3
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n -DCONFIG_LOG_MAX_LEVEL=3
     artifact-name: hhkb_split_right-rtt-quiet
   - board: xiao_ble//zmk
     shield: hhkb_split_left
-    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_ASSERT=n -DCONFIG_LOG_MAX_LEVEL=3
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n -DCONFIG_LOG_MAX_LEVEL=3
     artifact-name: hhkb_split_left-rtt-quiet
 
   # ---- ポッド・エンコーダを付けた実機用（付けてから焼くこと） ----
