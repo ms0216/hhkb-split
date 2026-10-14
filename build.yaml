@@ -82,6 +82,21 @@ include:
   # ⚠️ **読むには XIAO 裏面の SWDIO/SWCLK/GND に線が要る**（RTT は RAM 上の
   #    バッファで、デバッガが SWD で吸い出す仕組み）。配線は docs/development/
   #    rtt-debugging.md。
+  # **ポッド・エンコーダ無しの素の組**。⚠️ **まずこちらを焼くこと。**
+  # 2026-10-14 に、ポッドを付けていない実機へ `-pod-rtt`（ポッド付きの版）を
+  # 焼いてしまい、**居ないポッドを探す NACK がログに溢れた**
+  # （`受理 0 / NACK 11`）。不具合に見えるが、ハードが無いだけ。
+  # 実機の構成と版を合わせる。
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_right-rtt
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_left-rtt
+
+  # ---- ポッド・エンコーダを付けた実機用（付けてから焼くこと） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
     cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
