@@ -60,3 +60,33 @@ include:
     # 左にポッドのドライバは無い。見るのはエンコーダの刻み（ZMK の val1 / triggers の行）。溜めは右と同じ
     cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_left-podR-encB-log
+
+  # ---- 開発環境（devtools-rtt）: SWD 経由の RTT でログを出す版 --------------
+  #
+  # **USB のログ版（上の 2 件）との違いは「USB を塞がないこと」。**
+  #
+  #   USB CDC   … USB ケーブルが要る。電池だけで動かしているときは見えない。
+  #                右（ペリフェラル）でも snippet で出せるが、USB に挿した
+  #                状態でしか読めないので「無線で動いている最中」は見えない
+  #   RTT       … SWD の 2 本（+GND）で読む。**USB は空いたまま。**
+  #                電池駆動・BLE 接続中の、実際に使っている状態のログが取れる
+  #
+  # ZMK_RTT_LOGGING は ZMK_USB に依存しない（app/Kconfig）。
+  # USB_DEVICE_STACK も引かないので、**左右どちらでも同じ条件で出せる。**
+  #
+  # ⚠️ **常用のファームではない。**ZMK_RTT_LOGGING は `select DEBUG` と
+  #    `select ASSERT` を引く（app/Kconfig:598-602）ので、最適化とアサートの
+  #    挙動が普段の版と変わる。**タイミングに関わる調査（BLE の間隔など）では、
+  #    この差そのものが結果を動かしうる。**比較するときは RTT 版どうしで。
+  #
+  # ⚠️ **読むには XIAO 裏面の SWDIO/SWCLK/GND に線が要る**（RTT は RAM 上の
+  #    バッファで、デバッガが SWD で吸い出す仕組み）。配線は docs/development/
+  #    rtt-debugging.md。
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right hhkb_pod_right
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_right-pod-rtt
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left hhkb_pod_remote hhkb_enc_gated
+    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_left-podR-encB-rtt
