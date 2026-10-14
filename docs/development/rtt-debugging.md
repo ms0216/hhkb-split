@@ -215,15 +215,27 @@ Pico H のピンに挿さる。線を自作しなくてよい。
 # debugprobe は CMSIS-DAP なので、probe-rs がそのまま認識する
 # （probe.rs「All probes implementing this standard are supported」）。
 # macOS はドライバ不要。
-cargo install probe-rs-tools        # もしくは公式のインストーラ
+cargo install probe-rs-tools --locked
 
-probe-rs list                        # ① プローブが見えるか
-probe-rs chip list | grep -i 52840   # ② 正しいチップ名を確かめる
-probe-rs attach --chip <①②で確かめた名前> --rtt-scan-memory
+probe-rs list                         # ① プローブが見えるか
+probe-rs attach --chip nRF52840_xxAA  # ② RTT に繋ぐ
 ```
 
-> ⚠️ **チップ名は実行して確かめること。**`nRF52840_xxAA` のはずだが、
-> **手元に probe-rs を入れていないので未確認**。`chip list` の出力が正。
+**ここまでは手元で実行して確かめた**（2026-10-14・probe-rs 0.32.0）:
+
+- `probe-rs --version` → `probe-rs 0.32.0`
+- `probe-rs chip list | grep 52840` → **`nRF52840_xxAA`**（チップ名はこれで確定）
+- `probe-rs list` → `No debug probes were found.`（まだ何も繋いでいないので正しい）
+
+> ⚠️ **`--rtt-scan-memory` は 0.32.0 に無い**（一度そう書いていたが、
+> `attach --help` に存在しなかった）。`attach` は既定で RTT を探す。
+> ELF を渡すと制御ブロックの位置が確実になる（任意・`attach [PATH]`）。
+>
+> ⚠️ **rustc 1.89 以上が要る。**1.88 では
+> `requires rustc 1.89 or newer` で失敗する。**しかも `cargo install` は
+> その失敗で終了コード 0 を返した**ので、`ls ~/.cargo/bin/probe-rs` で
+> 実体を見ること（この案件の「戻り値を信用しない」そのもの）。
+> `rustup update stable` で解決した。
 
 焼くのは `build.yaml` の RTT 版:
 
@@ -273,10 +285,14 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
       [ソースの定義](https://github.com/raspberrypi/debugprobe/blob/master/include/board_pico_config.h)で確認
 - [x] 裏面パッドの位置を Seeed の公式図で確認（ただし版の差あり→[2](#2-配線xiao-裏面の-4-つのパッド)）
 
+- [x] **probe-rs が入って動く**（0.32.0）。チップ名は **`nRF52840_xxAA`** で確定
+      （`chip list` の出力。推測ではない）
+- [x] debugprobe の配布物に `debugprobe.uf2` と `debugprobe_on_pico.uf2` の
+      **2 つがある**ことを API で確認（買い間違い・焼き間違いの元）
+
 **残っているもの（実機が要る）:**
 
 - [ ] 焼いた実機から実際に RTT が読めるか ← **次の一手**
-- [ ] probe-rs のチップ名（`nRF52840_xxAA` のはず・未検証）
 - [ ] 自分の基板の SWDIO/SWCLK の並びが、公式図と同じか
 - [ ] `DEBUG`/`ASSERT` で BLE のタイミングが変わらないか
 - [ ] 2.0mm の隙間に線を逃がして、挿抜に耐えるか
