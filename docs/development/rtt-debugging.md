@@ -326,9 +326,38 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
 | `<err> Failed to start advertising (-120)` | 広告の開始に失敗（左が居ない状態なら想定内かは要確認） |
 | **`<err> Failed to set output 0 to 0: -11`** | **595 の出力設定が EAGAIN。走査は続くが、今まで誰も見ていなかった** |
 
+### ✅ 2026-10-14: #25b の修正が実機で効いていることを確認
+
+記録: [logs/2026-10-14-right-usb-softoff-check.log](logs/2026-10-14-right-usb-softoff-check.log)
+
+**9/26 に不具合を踏んだのと同じ条件**（USB 給電・電源スイッチ OFF・
+分圧の読みが 0）で **3 分 48 秒、soft off しなかった。**
+
+| | |
+|---|---|
+| 条件 | USB 給電のみ。ログに `battery level to 0`（＝分圧 0mV を確認） |
+| 判定が走る時刻 | 65 秒・125 秒（`REPORT_INTERVAL` + `SAMPLES=2`） |
+| 結果 | **`soft off` も `打ち止め` も 0 件**。通過した |
+
+→ `c97f5f7` の `CONFIG_USB_DEVICE_STACK` による門が**実機で効いている**。
+コミットには「実機未確認」とあったので、ここで確認できたことになる。
+
+**ついでに分かったこと:**
+
+- `<err> Failed to start advertising (-120)` は**無害**。4.1 秒時点で
+  `security_changed: ... level 2` が出ており、**左と既に繋がっている**。
+  繋がっているので広告するものが無い、というだけ
+- **`Failed to set output 0 to 0: -11` は起動時だけではない。**
+  この回は 3:47 と 3:48 に 2 回続けて出た（前の回は 0:18）。断続的
+- **スティックポッドが 1 フレームも通っていない**:
+  `受理 0 / NACK 11`。ポッドは応答しているが全部拒否されている
+
 **残っているもの:**
 
-- [ ] 上の 2 つの `<err>` を追う（**RTT を入れたから見つかった**）
+- [ ] **595 の `-EAGAIN`**（断続的に出る。手がかり: 595 ドライバには PM が
+      無く、kscan には有る＝`pm_device_init_suspended`。PM の遷移中に
+      SPI が使えない瞬間がある可能性）
+- [ ] **スティックポッドの NACK 11**（別件。`hhkb_stick_pod` の自前ログ）
 - [ ] 左手にも同じ加工をする（右で通ったので手順は確定）
 - [ ] `DEBUG`/`ASSERT` で BLE のタイミングが変わらないか
 - [ ] 線が挿抜に耐えるか（長期）
