@@ -119,7 +119,20 @@
    上端の電圧が読めていないときの逃げ道は、上端 → 1kΩ → キットの A4 に線を 1 本足し、別の版を書く（こちらでビルドして渡します）
 
 ### 2-5b. ログの見方（動かなかったとき）
-1. ログの出る版を焼く: 右 `hhkb_split_right-pod-log`、左 `hhkb_split_left-podR-encB-log`（電池で常用しない）
+1. ログの出る版を焼く（電池で常用しない）。**実機の構成と版を合わせること**:
+
+   | 実機 | 右 | 左 |
+   |---|---|---|
+   | **ポッド・エンコーダを付けている** | `hhkb_split_right-pod-log` | `hhkb_split_left-podR-encB-log` |
+   | **付けていない** | `hhkb_split_right-rtt-quiet`（※SWD が要る） | **`hhkb_split_left-log`** |
+
+   ⚠️ **付けていない実機にポッド付きの版を焼くと、居ないポッドを探して
+   `受理 0 / NACK 11` がログに溢れる**（2026-10-14 に実際にやった）。
+   不具合に見えるが、ハードが無いだけ。
+
+   ⚠️ **右（ペリフェラル）は USB の CDC ログが出せない**（`ZMK_USB` は
+   セントラル専用）。右の中を見るには **SWD + RTT** が要る
+   → [docs/development/rtt-debugging.md](../../development/rtt-debugging.md)
 2. 見たい側だけを USB でつなぎ、Mac で `ls /dev/cu.usbmodem*` → 出た名前で `screen -U /dev/cu.usbmodemXXXX 115200`
    （`-U` を付けないと日本語が化ける。終わるときは Ctrl-A → K → y）
 3. **大事な行は起動直後に 1 回しか出ない。**ログ版は起動から 8 秒ログを溜めてから出すので、リセット → 切れたらすぐ同じ `screen` を打ち直す、で拾える。
