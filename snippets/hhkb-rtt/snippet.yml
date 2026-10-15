@@ -1,0 +1,10 @@
+# SWD 経由の RTT でログを読むための設定一式。
+#
+# **snippet にした理由**: `build.yaml` の `cmake-args` で
+# `-DCONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n` を渡しても**効かなかった**
+# （2026-10-15・CI の Kconfig が
+#  "was assigned the value 'n' but got the value 'y'" と警告した）。
+# EXTRA_CONF_FILE で混ぜる普通の .conf なら、他の .conf と同じ経路で効く。
+name: hhkb-rtt
+append:
+  EXTRA_CONF_FILE: hhkb-rtt.conf

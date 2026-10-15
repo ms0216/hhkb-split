@@ -96,47 +96,32 @@ include:
     cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_left-rtt
 
-  # ---- RTT「静かな版」。**BLE で落ちるのを避けるためのもの** ----
+  # ---- RTT「静かな版」。**BLE で落ちるのを避けた版。まずこれを焼く** ----
   #
-  # ⚠️ **2026-10-15 に実機で踏んだ。**上の `-rtt` を焼いたら、起動 5.9 秒で
-  # BLE コントローラのアサートが発火して**停止した**:
-  #
-  #     ASSERTION FAIL @ .../lll_peripheral.c:342
+  # ⚠️ **素の `-rtt` は BLE のアサートで停止する**（2026-10-15 に実機で 2 回）:
+  #     ASSERTION FAIL @ .../lll_peripheral.c
   #         prepare_cb: Actual EVENT_OVERHEAD_START_US = 2105
   #     >>> ZEPHYR FATAL ERROR 3: Kernel oops / Halting system
+  # タイミング次第なので、持つ日と落ちる日がある（前日は 3 分 48 秒持った）。
   #
-  # `LL_ASSERT_OVERHEAD` は**無線イベントの準備が長引いた**ときに落ちる門。
-  # RTT のデバッグ出力（落ちるまでの内訳は dbg 24 / inf 12）と SWD の読み出しが、
-  # まさにその時間を食う。**タイミング次第なので、出る日と出ない日がある**
-  # （前日は同じ構成で 3 分 48 秒持った）。
+  # **中身と理由は snippets/hhkb-rtt/hhkb-rtt.conf に書いた。**
   #
-  # 2 つとも効かせる:
-  #   CONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n
-  #                          … **落ちていた当の門だけ**を切る。Zephyr の help に
-  #                            「遅れた無線イベントを穏当に飛ばせるようになる」とある。
-  #                            ⚠️ 連続して飛ばし続けると supervision timeout になる
-  #                            （help の但し書き）。調査用であって常用の設定ではない。
-  #
-  # ⚠️ **`CONFIG_ASSERT=n` では効かなかった**（2026-10-15 実機）。
-  # ZMK_RTT_LOGGING が `select ASSERT` しているので、**Kconfig の select は
-  # コマンドラインの代入に勝つ。**アサートは発火したままだった。
-  #   CONFIG_LOG_MAX_LEVEL=3 … dbg を**コンパイルごと落とす**（実行時の絞りではない）。
-  #                            出力量が減る＝無線イベントを邪魔する時間が減る
-  #
-  # ⚠️ **`CONFIG_ZMK_LOG_LEVEL=3` では駄目だった**（2026-10-15）。あれは
-  # `if !ZMK_LOGGING_MINIMAL` の中の prompt 無し（default だけ）の記号なので、
-  # コマンドラインから与えると
-  #   `error: ZMK_LOG_LEVEL ... is assigned in a configuration file, but is not`
-  # でビルドが落ちる。**Zephyr 側の `LOG_MAX_LEVEL` を使う。**こちらは
-  # 「モジュールが指定した level がこれより大きければ飽和させる」ので、
-  # ZMK が自分で入れる `ZMK_LOG_LEVEL=4` の上から効く。
+  # ⚠️ **cmake-args では効かない設定がある。**この 2 件を実機とビルドで踏んだ:
+  #   `CONFIG_ASSERT=n`        … ZMK_RTT_LOGGING の `select ASSERT` に負ける
+  #                              （Kconfig の select は代入に勝つ）
+  #   `CONFIG_ZMK_LOG_LEVEL=3` … prompt 無しの記号なのでビルドが落ちる
+  #   `CONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n`
+  #                            … CI の Kconfig が
+  #                              "was assigned the value 'n' but got the value 'y'"
+  #                              と警告して**効かなかった**
+  # → **snippet（EXTRA_CONF_FILE で普通の .conf を混ぜる）に移した。**
   - board: xiao_ble//zmk
     shield: hhkb_split_right
-    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n -DCONFIG_LOG_MAX_LEVEL=3
+    snippet: hhkb-rtt
     artifact-name: hhkb_split_right-rtt-quiet
   - board: xiao_ble//zmk
     shield: hhkb_split_left
-    cmake-args: -DCONFIG_ZMK_RTT_LOGGING=y -DCONFIG_LOG_BUFFER_SIZE=32768 -DCONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n -DCONFIG_LOG_MAX_LEVEL=3
+    snippet: hhkb-rtt
     artifact-name: hhkb_split_left-rtt-quiet
 
   # ---- ポッド・エンコーダを付けた実機用（付けてから焼くこと） ----

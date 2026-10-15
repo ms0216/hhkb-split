@@ -12,3 +12,8 @@ build:
   kconfig: firmware/Kconfig
   settings:
     dts_root: firmware
+    # snippets/ を Zephyr に見つけさせる（`snippet: hhkb-rtt` が使えるようになる）。
+    # 出典: Zephyr doc/build/snippets/writing.rst
+    #   「module.yml が snippet_root を持てば、<module>/snippets の
+    #     snippet.yml が自動で見つかる」
+    snippet_root: .
