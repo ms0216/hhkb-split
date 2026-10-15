@@ -254,10 +254,22 @@ probe-rs reset    --chip nRF52840_xxAA
 > 実体を見ること（この案件の「戻り値を信用しない」そのもの）。
 > `rustup update stable` で解決した。
 
-焼くのは `build.yaml` の RTT 版:
+### どの版を焼くか（**間違えると数秒で落ちる**）
 
-- `hhkb_split_right-pod-rtt`
-- `hhkb_split_left-podR-encB-rtt`
+| 版 | 使いどころ |
+|---|---|
+| **`hhkb_split_right-rtt-quiet`** / **`hhkb_split_left-rtt-quiet`** | **ふだんはこれ。**BLE で動き続ける（実測 4 分・アサート 0 件） |
+| `hhkb_split_*-rtt` | `<dbg>` まで見たいとき**だけ**。⚠️ **BLE のアサートで数秒で停止する**（実測 4.8 秒・5.9 秒）。起動直後だけを見る用 |
+| `hhkb_split_*-pod-rtt` / `-podR-encB-rtt` | **スティックポッド／エンコーダを実際に付けている**ときだけ。付けずに焼くと、居ないポッドを探して `受理 0 / NACK 11` がログに溢れる |
+
+`-rtt-quiet` の中身は [`snippets/hhkb-rtt/hhkb-rtt.conf`](../../snippets/hhkb-rtt/hhkb-rtt.conf)
+（`build.yaml` では `snippet: hhkb-rtt` の 1 行）。
+
+> ⚠️ **`-rtt-quiet` は常用ファームではない。**
+> `BT_CTLR_ASSERT_OVERHEAD_START=n` は「遅れた無線イベントを飛ばす」設定で、
+> Zephyr の help に**連続して飛ばし続けると supervision timeout になる**と
+> 但し書きがある。調査が終わったら通常版に戻すこと。
+> また `<dbg>` が出ない（`LOG_MAX_LEVEL=3`）。
 
 ### 何が読めるか
 
@@ -349,15 +361,61 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
   繋がっているので広告するものが無い、というだけ
 - **`Failed to set output 0 to 0: -11` は起動時だけではない。**
   この回は 3:47 と 3:48 に 2 回続けて出た（前の回は 0:18）。断続的
-- **スティックポッドが 1 フレームも通っていない**:
-  `受理 0 / NACK 11`。ポッドは応答しているが全部拒否されている
+- ~~**スティックポッドが 1 フレームも通っていない**~~
+  → **誤り。私の焼き間違いだった**（2026-10-15 に利用者の指摘で判明）。
+  ポッドを**付けていない**実機に `-pod-rtt`（ポッド付きの版）を焼いたため、
+  居ないポッドを探していただけ。ポッド無しの版では NACK は **0 件**。
+
+### ✅ 2026-10-15: RTT が BLE 下で安定した（`-rtt-quiet`）
+
+**素の `-rtt` は BLE のアサートで数秒で停止する**ことが分かり、対策した。
+
+| 版 | 持った時間 |
+|---|---|
+| `-rtt`（dbg あり） | **5.9 秒**で停止 |
+| `-rtt-quiet`（設定が効いていなかった） | **4.8 秒**で停止 |
+| **`-rtt-quiet`（設定が効いた）** | **4 分・アサート 0 件** |
+
+落ちていたのは `LL_ASSERT_OVERHEAD`（無線イベントの準備が長引くと落ちる門）。
+RTT の出力と SWD の読み出しがその時間を食う。
+
+**効かせるのに手間取った。`cmake-args` では効かない設定がある:**
+
+| 試した設定 | 結果 |
+|---|---|
+| `CONFIG_ASSERT=n` | **効かない。**`ZMK_RTT_LOGGING` の `select ASSERT` に負ける（Kconfig の `select` は代入に勝つ） |
+| `CONFIG_ZMK_LOG_LEVEL=3` | **ビルドが落ちる。**prompt 無しの記号 |
+| `CONFIG_LOG_MAX_LEVEL=3` | **効いた。**`EVENT_OVERHEAD_START_US` が 2105 → **1220** に（実測） |
+| `CONFIG_BT_CTLR_ASSERT_OVERHEAD_START=n` | **単体では効かない**（下記） |
+| **＋ `CONFIG_BT_CTLR_ADVANCED_FEATURES=y`** | **これで効いた** |
+
+> ⚠️⚠️ **`BT_CTLR_ADVANCED_FEATURES=y` が先に要る。**
+> `BT_CTLR_ASSERT_OVERHEAD_START` は `menu "Advanced features"`
+> （`visible if BT_CTLR_ADVANCED_FEATURES`）の**中**にあるので、
+> 親が無効だと**代入が黙って無視される**。CI は
+> `was assigned the value 'n' but got the value 'y'` と警告するだけで、
+> **ビルドは成功する。**
+>
+> **この罠は 2 回目。**`BT_CTLR_PERIPHERAL_RESERVE_MAX` でも同じことを踏んだ
+> （BLE ジッタの調査・「ビルドが同一ハッシュで気づいた」）。
+
+**焼く前に CI の Kconfig を読むこと。**この確認を入れたおかげで、
+設定が効いていない版を焼かずに済んだ（2 回分の書き込みを節約）。
+読むのは実行ログの `CONFIG_...=` の行と `warning: ... was assigned` の有無。
 
 **残っているもの:**
 
-- [ ] **595 の `-EAGAIN`**（断続的に出る。手がかり: 595 ドライバには PM が
-      無く、kscan には有る＝`pm_device_init_suspended`。PM の遷移中に
-      SPI が使えない瞬間がある可能性）
-- [ ] **スティックポッドの NACK 11**（別件。`hhkb_stick_pod` の自前ログ）
-- [ ] 左手にも同じ加工をする（右で通ったので手順は確定）
-- [ ] `DEBUG`/`ASSERT` で BLE のタイミングが変わらないか
+- [x] ~~595 の `-EAGAIN`~~ → **決着。実害なし。**
+      [595-eagain.md](595-eagain.md)（Zephyr では `EWOULDBLOCK == EAGAIN == 11`。
+      595 は「SPI を ISR から叩けない」と正しく拒否している。走査自体は
+      ワークキューで走るので機能は落ちない）
+- [x] ~~スティックポッドの NACK 11~~ → **不具合ではなかった。**ポッドを
+      付けていない実機にポッド付きの版を焼いていただけ
+- [x] ~~`DEBUG`/`ASSERT` で BLE のタイミングが変わらないか~~ →
+      **変わる。落ちる。**それが `-rtt-quiet` を作った理由（上記）
+- [ ] **左手にも同じ加工**（右で通ったので手順は確定。2 台目の debugprobe と
+      組み合わせれば**左右同時に見られる**）
+- [ ] **27Hz のジッタ**（Windows の一部 PC で BLE のときだけポインタが約 27Hz に落ちる件）。
+      左→PC の送出が疑いなので、**左手の RTT が本丸**
 - [ ] 線が挿抜に耐えるか（長期）
+- [ ] `-rtt-quiet` が**何時間**持つか（確かめたのは 4 分）
