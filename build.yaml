@@ -61,6 +61,20 @@ include:
     cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
     artifact-name: hhkb_split_left-podR-encB-log
 
+  # ---- ポッド・エンコーダ無しの素の左手を USB のログで見る ----
+  #
+  # **左はセントラルなので USB CDC でログが出せる**（`ZMK_USB` が有効にできる）。
+  # 右（ペリフェラル）にはこれができないので RTT が要ったが、左は要らない。
+  #
+  # ⚠️ **2026-10-15、左手の SWDIO のランドを剥がしてしまった**（半田付けの失敗）。
+  # 左の RTT は使えない。**だが左は元々こちらで足りる。**
+  # 失うのは「電池だけで動いている状態を見る」ことだけ。
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left
+    snippet: zmk-usb-logging
+    cmake-args: -DCONFIG_LOG_PROCESS_THREAD_STARTUP_DELAY_MS=8000 -DCONFIG_LOG_BUFFER_SIZE=32768
+    artifact-name: hhkb_split_left-log
+
   # ---- 開発環境（devtools-rtt）: SWD 経由の RTT でログを出す版 --------------
   #
   # **USB のログ版（上の 2 件）との違いは「USB を塞がないこと」。**
