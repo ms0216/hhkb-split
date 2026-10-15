@@ -51,8 +51,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/pm/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -490,7 +492,8 @@ static void refresh(void) {
     k_work_reschedule(&blink_work, K_NO_WAIT);
 }
 
-static int status_led_init(void) {
+static int status_led_init(const struct device *dev) {
+    ARG_UNUSED(dev);
     if (!gpio_is_ready_dt(&led_r) || !gpio_is_ready_dt(&led_g) || !gpio_is_ready_dt(&led_b)) {
         LOG_ERR("LED の GPIO が使えない");
         return -ENODEV;
@@ -506,7 +509,68 @@ static int status_led_init(void) {
     return 0;
 }
 
-SYS_INIT(status_led_init, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY);
+/*
+ * ⚠️ **SYS_INIT ではなく「デバイス」にしてある。**PM のフックが要るため。
+ *
+ * **2026-10-15 の監査で見つかった実害:**
+ * 消灯は `status_led_listener` の `ZMK_ACTIVITY_SLEEP` 分岐にしか無かった。
+ * だが `zmk_pm_soft_off()`（ZMK 本体 app/src/pm.c）は**その事象を上げない。**
+ * `ZMK_ACTIVITY_SLEEP` を raise するのは app/src/activity.c:80 の 1 箇所だけ
+ * （ZMK のソースを grep して確認）。
+ *
+ * nRF52840 の GPIO は System OFF を越えて状態を保持するので、点灯中に
+ * soft off が走ると **LED が点いたまま固定される。**
+ * provisional-values.md によれば LED 点灯は 1〜2mA、待機は 20µA
+ * ——**50〜100 倍**を、既に空の電池から舐め続けることになる。
+ * soft off を呼ぶのは low_battery_off.c（打ち止めで止まる機能）なので、
+ * **「電池が尽きたので消費を止める」機能そのものが台無しになっていた。**
+ *
+ * `zmk_pm_soft_off()` は全デバイスに `PM_DEVICE_ACTION_SUSPEND` を掛ける
+ * （pm.c の z_device_get_all_static ループ）ので、ここで受ければ確実に消える。
+ * **将来 soft off をキーに割り当てても同じ穴が開かない。**
+ * 作りは firmware/drivers/encoder_gated.c:190-201 と同じ。
+ */
+#if IS_ENABLED(CONFIG_PM_DEVICE)
+static int status_led_pm_action(const struct device *dev, enum pm_device_action action) {
+    ARG_UNUSED(dev);
+    switch (action) {
+    case PM_DEVICE_ACTION_SUSPEND:
+        k_work_cancel_delayable(&blink_work);
+        set_color(COLOR_OFF);
+        return 0;
+    case PM_DEVICE_ACTION_RESUME:
+        k_work_reschedule(&blink_work, K_NO_WAIT);
+        return 0;
+    default:
+        return -ENOTSUP;
+    }
+}
+#endif
+
+/* ⚠️ **PM_DEVICE は常に有効とは限らない。**
+ * firmware/Kconfig で `select PM_DEVICE` しているのは HHKB_STICK_POD だけ
+ * （ポッドを付ける側のみ）。ポッド無しの版では PM_DEVICE=n になるので、
+ * 囲わないとビルドが落ちる。
+ * **PM が無い構成では soft off での消灯も効かない**——その場合に備えて
+ * low_battery_off.c 側にも保険を置いてある（hhkb_status_led_off）。 */
+#if IS_ENABLED(CONFIG_PM_DEVICE)
+PM_DEVICE_DEFINE(status_led, status_led_pm_action);
+#define STATUS_LED_PM PM_DEVICE_GET(status_led)
+#else
+#define STATUS_LED_PM NULL
+#endif
+
+/* devicetree のノードを持たないので DEVICE_DEFINE。
+ * 優先度は SYS_INIT のときと同じ APPLICATION。 */
+DEVICE_DEFINE(status_led, "hhkb_status_led", status_led_init, STATUS_LED_PM, NULL,
+              NULL, APPLICATION, CONFIG_APPLICATION_INIT_PRIORITY, NULL);
+
+/* **PM が無い構成のための保険。**low_battery_off.c が soft off の直前に呼ぶ。
+ * PM があるときは PM_DEVICE_ACTION_SUSPEND が先に効くので二重でも害は無い。 */
+void hhkb_status_led_off(void) {
+    k_work_cancel_delayable(&blink_work);
+    set_color(COLOR_OFF);
+}
 
 static int status_led_listener(const zmk_event_t *eh) {
     if (as_zmk_activity_state_changed(eh) != NULL) {

@@ -43,6 +43,10 @@
 #include <zephyr/init.h>
 
 #include <zmk/pm.h>
+
+#if IS_ENABLED(CONFIG_HHKB_STATUS_LED)
+#include "status_led.h"
+#endif
 #include <zmk/workqueue.h>
 /* **門は CONFIG_USB_DEVICE_STACK で切る（CONFIG_ZMK_USB ではない）。**
  * 分割の右（ペリフェラル）は ZMK の Kconfig の依存で ZMK_USB が n になる（HID を出さないため）。
@@ -101,6 +105,17 @@ static void low_battery_check(struct k_work *work) {
     }
 
     LOG_ERR("電池が尽きた。soft off に入る（電池を替えて電源を入れ直すこと）");
+
+    /* **LED を先に消す。**点いたまま System OFF に入ると、nRF52840 の GPIO は
+     * 状態を保持するので 1〜2mA を舐め続ける（待機 20µA の 50〜100 倍）。
+     * 「電池が尽きたので消費を止める」というこの機能自体が台無しになる。
+     * 2026-10-15 の監査で見つかった。
+     * PM がある構成では zmk_pm_soft_off() の SUSPEND でも消えるが、
+     * **PM_DEVICE はポッド無しの版では n** なので、ここでも消す。 */
+#if IS_ENABLED(CONFIG_HHKB_STATUS_LED)
+    hhkb_status_led_off();
+#endif
+
     zmk_pm_soft_off();
 }
 

@@ -21,6 +21,16 @@ SHIELD = ROOT / "config/boards/shields/hhkb_split"
 DTSI = SHIELD / "hhkb_split.dtsi"
 
 
+def _strip_c_comments(text):
+    """C のコメントを消す。**注釈の中の語に検査が当たらないようにする。**
+
+    「なぜ直したか」を本文に書くと、その説明文が grep に引っかかる。
+    見たいのは実際のコード。
+    """
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.S)
+    return re.sub(r"//[^\n]*", " ", text)
+
+
 def _dt_prop(name):
     m = re.search(rf"^\s*{re.escape(name)}\s*=\s*<(\d+)>", DTSI.read_text(), re.M)
     assert m, f"{DTSI.name} に {name} が無い"
@@ -91,6 +101,40 @@ def test_the_soft_off_is_enabled_on_both_halves():
         text = (SHIELD / name).read_text()
         assert "CONFIG_ZMK_PM_SOFT_OFF=y" in text, \
             f"{name} に CONFIG_ZMK_PM_SOFT_OFF=y が無い（#25b が消える）"
+
+
+def test_the_led_goes_out_before_soft_off():
+    """**soft off で LED を消す。**点いたまま寝ると空の電池を舐め続ける。
+
+    2026-10-15 の監査で見つかった実害:
+    消灯は `status_led_listener` の `ZMK_ACTIVITY_SLEEP` 分岐にしか無かった。
+    だが `zmk_pm_soft_off()` は**その事象を上げない**（ZMK 本体の
+    app/src/pm.c。SLEEP を raise するのは app/src/activity.c の 1 箇所だけ）。
+
+    nRF52840 の GPIO は System OFF を越えて状態を保持するので、点灯中に
+    soft off が走ると **LED が点いたまま固定される。**
+    LED 点灯 1〜2mA に対し待機は 20µA——**50〜100 倍**を、既に空の電池から
+    舐め続ける。**soft off を呼ぶのは打ち止め機能（low_battery_off.c）**
+    なので、「電池が尽きたので消費を止める」機能そのものが台無しになる。
+
+    経路は 2 つあり、**どちらも要る**:
+      - PM のフック（PM_DEVICE があるとき。soft off が全デバイスを suspend する）
+      - low_battery_off.c からの直接呼び出し（**PM_DEVICE はポッド無しの版では n**）
+    """
+    led = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
+    assert "PM_DEVICE_ACTION_SUSPEND" in led, (
+        "status_led.c に PM の SUSPEND フックが無い。"
+        "soft off（全デバイスを suspend する）で消えない")
+    assert "hhkb_status_led_off" in led, (
+        "消灯を外から呼ぶ口が無い。PM_DEVICE=n の構成で消せない")
+
+    off = _strip_c_comments((ROOT / "firmware/src/low_battery_off.c").read_text())
+    i_off = off.find("hhkb_status_led_off")
+    i_soft = off.find("zmk_pm_soft_off()")
+    assert i_off != -1, "low_battery_off.c が LED を消していない"
+    assert i_soft != -1, "zmk_pm_soft_off() の呼び出しが見つからない"
+    assert i_off < i_soft, (
+        "LED を消すのが soft off より後ろにある。**消す前に寝てしまう**")
 
 
 def test_this_repository_is_registered_as_a_zmk_module():
@@ -211,6 +255,13 @@ def test_the_warning_survives_idle():
 
     sleep で消すのは正当（GPIO は状態を保持するので点けたまま寝ると
     垂れ流す）。**idle と sleep を区別すること。**
+
+    ⚠️ **2026-10-15、この検査は一度「数えるだけ」になって検出力を失った。**
+    判断が status_led_core.h へ移ったのに、`== ZMK_ACTIVITY_SLEEP` の
+    **個数**を数える形のままだった。core を `!= SLC_ACTIVE` に戻す
+    （＝まさにこの退行）を入れても 19 件すべて緑で通った。
+    **「検査対象に入っていない部品は、検査していないのと同じ」**（CLAUDE.md）。
+    → 判断が実際に在る場所（core）を名指しで見る形に直した。
     """
     src = (ROOT / "firmware/src/status_led.c").read_text()
     code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
@@ -219,9 +270,20 @@ def test_the_warning_survives_idle():
     assert "!= ZMK_ACTIVITY_ACTIVE" not in code, (
         "activity != ACTIVE で消している。**idle（30 秒）でも消えてしまう。**"
         "消すのは ZMK_ACTIVITY_SLEEP のときだけ")
-    assert code.count("== ZMK_ACTIVITY_SLEEP") >= 2, (
-        "sleep の判定が足りない。リスナ側と current_state 側の両方に要る"
-        "（片方だけだと、もう片方が idle で消す）")
+
+    # **判断が在る場所を見る。**切り出しで core へ移った。
+    core = (ROOT / "firmware/src/status_led_core.h").read_text()
+    core = re.sub(r"/\*.*?\*/", "", core, flags=re.S)
+    core = re.sub(r"//[^\n]*", "", core)
+    assert "activity == SLC_SLEEP" in core, (
+        "core が sleep 以外でも消している。**idle（30 秒）で警告が消える。**"
+        "2026-08-16 に利用者の指摘で直した退行")
+    assert "!= SLC_ACTIVE" not in core, (
+        "core が `!= SLC_ACTIVE` で消している。idle も含んでしまう")
+
+    # リスナ側（GPIO を実際に消す所）も sleep だけであること
+    assert code.count("== ZMK_ACTIVITY_SLEEP") >= 1, (
+        "リスナ側の sleep 判定が無い")
 
 
 def test_the_peripheral_never_reports_a_host_connection():
