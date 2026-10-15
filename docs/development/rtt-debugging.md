@@ -259,11 +259,32 @@ probe-rs reset    --chip nRF52840_xxAA
 | 版 | 使いどころ |
 |---|---|
 | **`hhkb_split_right-rtt-quiet`** / **`hhkb_split_left-rtt-quiet`** | **ふだんはこれ。**BLE で動き続ける（実測 4 分・アサート 0 件） |
-| `hhkb_split_*-rtt` | `<dbg>` まで見たいとき**だけ**。⚠️ **BLE のアサートで数秒で停止する**（実測 4.8 秒・5.9 秒）。起動直後だけを見る用 |
+| **`hhkb_split_*-rtt-shell`** | **`<dbg>` も見たいとき。**実機へコマンドも打てる（`rtt:~$`）。チャンネルを分けてあるので**ログとシェルが同時に動く** |
+| `hhkb_split_*-rtt` | ⚠️ **BLE のアサートで数秒で停止する**（実測 4.8 秒・5.9 秒）。`-rtt-shell` が使えるので**出番は無い** |
 | `hhkb_split_*-pod-rtt` / `-podR-encB-rtt` | **スティックポッド／エンコーダを実際に付けている**ときだけ。付けずに焼くと、居ないポッドを探して `受理 0 / NACK 11` がログに溢れる |
 
-`-rtt-quiet` の中身は [`snippets/hhkb-rtt/hhkb-rtt.conf`](../../snippets/hhkb-rtt/hhkb-rtt.conf)
-（`build.yaml` では `snippet: hhkb-rtt` の 1 行）。
+中身は [`snippets/hhkb-rtt/`](../../snippets/hhkb-rtt/hhkb-rtt.conf) と
+[`snippets/hhkb-rtt-shell/`](../../snippets/hhkb-rtt-shell/hhkb-rtt-shell.conf)
+（`build.yaml` では `snippet:` の 1 行）。
+
+### `-rtt-shell` で使えるコマンド（2026-10-15 実機確認）
+
+**利用者のターミナルから** `probe-rs attach --chip nRF52840_xxAA --scan-region ram`。
+`[Terminal]`（チャンネル 0 ＝ shell）と `[Logger]`（チャンネル 1 ＝ ログ）が
+**同時に出る。**
+
+| 打てる | 使いどころ |
+|---|---|
+| `device list` | **595 や kscan が READY か。**初期化の失敗がここで分かる |
+| `kernel thread` | スタック使用量（**単数形**。`threads` ではヘルプが出る） |
+| `kernel uptime` | 落ちていないことの確認 |
+| `kernel log_level <module> <0-4>` | **焼き直さずにログの level を変える** |
+
+> ⚠️⚠️ **`bt info` は打たないこと。**2026-10-15 に**ファームが停止した**
+> （リセットで復帰・ハードは無事）。Zephyr の `bt` は「shell が BLE を
+> 初期化して所有する」前提で、ZMK の自前管理と競合する。
+> `CONFIG_BT_SHELL` は snippet から外してあるが、**別の経路で入ると同じことが起きる。**
+> BLE の状態はログで読む（`security_changed` / `split_peripheral_listener`）。
 
 > ⚠️ **`-rtt-quiet` は常用ファームではない。**
 > `BT_CTLR_ASSERT_OVERHEAD_START=n` は「遅れた無線イベントを飛ばす」設定で、
