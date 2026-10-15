@@ -387,6 +387,25 @@ probe-rs download --chip nRF52840_xxAA --binary-format uf2 <file>.uf2
   ポッドを**付けていない**実機に `-pod-rtt`（ポッド付きの版）を焼いたため、
   居ないポッドを探していただけ。ポッド無しの版では NACK は **0 件**。
 
+### ✅ 2026-10-15: リファクタリングの同一性を実機で示した
+
+**`status_led.c` の状態判定を `status_led_core.h` へ切り出した**ときに使った手。
+
+```bash
+# ① 切り出す前の挙動を記録（基準）
+probe-rs attach --chip nRF52840_xxAA --scan-region ram > before.log
+# ② 切り出して焼いたあと、同じ条件で記録
+probe-rs attach --chip nRF52840_xxAA --scan-region ram > after.log
+# ③ ログの行種別を集計して比べる
+diff <(集計 before.log) <(集計 after.log)   # → **差分なし**
+```
+
+**CI は「ビルドが通る」しか見ない。挙動が同じかは実機でしか言えない。**
+これまで「たぶん大丈夫」で済ませていたところを機械で示せる。
+
+> ⚠️ **リファクタリングの前に必ず基準を取る。**
+> 取らずに変えると、あとで「元がどうだったか」を誰も言えない。
+
 ### ✅ 2026-10-15: RTT が BLE 下で安定した（`-rtt-quiet`）
 
 **素の `-rtt` は BLE のアサートで数秒で停止する**ことが分かり、対策した。
