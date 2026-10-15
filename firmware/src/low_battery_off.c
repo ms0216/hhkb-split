@@ -43,6 +43,9 @@
 #include <zephyr/init.h>
 
 #include <zmk/pm.h>
+#include <zmk/activity.h>
+#include <zmk/event_manager.h>
+#include <zmk/events/activity_state_changed.h>
 
 #if IS_ENABLED(CONFIG_HHKB_STATUS_LED)
 #include "status_led.h"
@@ -142,10 +145,59 @@ static void low_battery_tick(struct k_timer *timer) {
 
 K_TIMER_DEFINE(low_battery_timer, low_battery_tick, NULL);
 
+/* 周期は 1 か所だけに書く（init と再開の両方から使う）。 */
+#define TICK_PERIOD K_SECONDS(CONFIG_ZMK_BATTERY_REPORT_INTERVAL)
+
+/*
+ * **ZMK が電池を測るのをやめたら、こちらの判定もやめる**（案 A・2026-10-15）。
+ *
+ * ZMK の app/src/battery.c:171-173 は `ZMK_ACTIVITY_IDLE`（既定 30 秒の
+ * 無操作）で `k_timer_stop(&battery_timer)` を呼び、**測定を止める。**
+ * こちらのタイマーだけ回し続けると、**止まったあとの古いキャッシュを
+ * 読んで数え続ける**ことになる（alk_channel_get は measured 値をそのまま
+ * 返すだけで、測り直さない）。それは「古い値で電源を落とすか決める」
+ * ということで、判定として成立しない。
+ *
+ * → ZMK と歩調を合わせる。ACTIVE で動かし、IDLE/SLEEP で止める。
+ *   **止めている間は判定しない。**キーに触れば ACTIVE に戻り、
+ *   ZMK が測り直し、こちらも数え直す。
+ *
+ * ⚠️ **この窓では打ち止めを見逃す**（30 秒〜30 分の無操作中に電池が尽きる場合）。
+ * 30 分を超えると ZMK 自身が deep sleep に入るので、どちらにせよ判定は止まる。
+ * **見逃しが問題になるなら案 B**（自分で `sensor_sample_fetch()` を呼ぶ）に
+ * 変えること。消費は見積もりで **+0.002µA**＝分圧抵抗 1.5µA の 0.13% で、
+ * 実質ゼロ（ZMK も起きている間は同じ ADC 読み取りを 60 秒ごとにしている）。
+ * **切り替えるのはこの関数 1 つ。**
+ */
+static int low_battery_activity_listener(const zmk_event_t *eh) {
+    if (as_zmk_activity_state_changed(eh) == NULL) {
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+
+    switch (zmk_activity_get_state()) {
+    case ZMK_ACTIVITY_ACTIVE:
+        /* ZMK は K_NO_WAIT で測り直すが、こちらは**1 周期待つ**。
+         * 起こした直後はまだ ZMK の新しい値が入っていないため
+         * （init と同じ理由。下の low_battery_init の注記）。 */
+        k_timer_start(&low_battery_timer, TICK_PERIOD, TICK_PERIOD);
+        break;
+    case ZMK_ACTIVITY_IDLE:
+    case ZMK_ACTIVITY_SLEEP:
+        k_timer_stop(&low_battery_timer);
+        break;
+    default:
+        break;
+    }
+    return ZMK_EV_EVENT_BUBBLE;
+}
+
+ZMK_LISTENER(low_battery_off, low_battery_activity_listener);
+ZMK_SUBSCRIPTION(low_battery_off, zmk_activity_state_changed);
+
 static int low_battery_init(void) {
     /* 最初の 1 周は待つ。ZMK がまだ一度も測っていないと、キャッシュは 0mV。 */
     k_timer_start(&low_battery_timer, K_SECONDS(CONFIG_ZMK_BATTERY_REPORT_INTERVAL + 5),
-                  K_SECONDS(CONFIG_ZMK_BATTERY_REPORT_INTERVAL));
+                  TICK_PERIOD);
     return 0;
 }
 

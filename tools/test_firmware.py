@@ -136,6 +136,40 @@ def test_the_led_goes_out_before_soft_off():
         "LED を消すのが soft off より後ろにある。**消す前に寝てしまう**")
 
 
+def test_the_cutoff_timer_follows_zmk_sampling():
+    """**ZMK が電池を測るのをやめたら、打ち止めの判定もやめる**（案 A）。
+
+    2026-10-15 の監査で見つかった。ZMK の app/src/battery.c は
+    `ZMK_ACTIVITY_IDLE`（既定 30 秒の無操作）で
+    `k_timer_stop(&battery_timer)` を呼び、**測定を止める**
+    （ZMK のソースで確認）。
+
+    こちらのタイマーだけ回し続けると、**止まったあとの古いキャッシュを
+    読んで数え続ける**。`alk_channel_get` は保持している値をそのまま返す
+    だけで測り直さないので、**古い値で電源を落とすか決める**ことになる。
+
+    → activity を購読して、ACTIVE で動かし IDLE/SLEEP で止める。
+
+    ⚠️ **案 B（自分で sensor_sample_fetch を呼ぶ）に変えるなら、
+    この検査も一緒に変えること。**消費は +0.002µA 程度（分圧 1.5µA の 0.13%）
+    と見積もったので、見逃しが問題になれば乗り換えてよい。
+    """
+    src = _strip_c_comments((ROOT / "firmware/src/low_battery_off.c").read_text())
+
+    # ⚠️ **購読の行を名指しで見る。**文字列 "zmk_activity_state_changed" は
+    # include の行にも出るので、それだけ数えると ZMK_SUBSCRIPTION を
+    # 消しても通ってしまった（変異検査で実際に生き残った）。
+    assert re.search(r"ZMK_SUBSCRIPTION\s*\(\s*\w+\s*,\s*zmk_activity_state_changed\s*\)", src), (
+        "activity の事象を購読していない。**ZMK が測定を止めても数え続ける**")
+    assert re.search(r"ZMK_LISTENER\s*\(", src), "リスナが登録されていない"
+    assert "k_timer_stop" in src, (
+        "タイマーを止めていない。idle で古いキャッシュを読み続ける")
+    assert "ZMK_ACTIVITY_IDLE" in src and "ZMK_ACTIVITY_SLEEP" in src, (
+        "IDLE と SLEEP の両方で止めること（ZMK はどちらでも測定を止める）")
+    assert "ZMK_ACTIVITY_ACTIVE" in src, (
+        "ACTIVE で動かし直していない。**一度止まると二度と判定しない**")
+
+
 def test_this_repository_is_registered_as_a_zmk_module():
     """`zephyr/module.yml` が無いと、firmware/ は**まるごとビルドされない**。
 
