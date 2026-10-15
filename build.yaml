@@ -124,6 +124,24 @@ include:
     snippet: hhkb-rtt
     artifact-name: hhkb_split_left-rtt-quiet
 
+  # ---- RTT 越しに**コマンドを打てる**版（Zephyr shell）----
+  #
+  # `rtt:~$ ` のプロンプトが出て、`kernel threads` / `bt info` /
+  # `log_level set ...` などが打てる。**27Hz の調査で、実機の BLE の状態を
+  # その場で見るため**に用意した。
+  #
+  # ⚠️ **shell は CPU 時間を食う。**RTT のログだけでも BLE のアサートに
+  # 引っかかった（2026-10-15）ので、**焼いたら安定性を測り直すこと。**
+  # 落ちるようなら `-rtt-quiet` に戻す。
+  - board: xiao_ble//zmk
+    shield: hhkb_split_right
+    snippet: hhkb-rtt-shell
+    artifact-name: hhkb_split_right-rtt-shell
+  - board: xiao_ble//zmk
+    shield: hhkb_split_left
+    snippet: hhkb-rtt-shell
+    artifact-name: hhkb_split_left-rtt-shell
+
   # ---- ポッド・エンコーダを付けた実機用（付けてから焼くこと） ----
   - board: xiao_ble//zmk
     shield: hhkb_split_right hhkb_pod_right
