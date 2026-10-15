@@ -117,16 +117,15 @@ def test_the_led_goes_out_before_soft_off():
     舐め続ける。**soft off を呼ぶのは打ち止め機能（low_battery_off.c）**
     なので、「電池が尽きたので消費を止める」機能そのものが台無しになる。
 
-    経路は 2 つあり、**どちらも要る**:
-      - PM のフック（PM_DEVICE があるとき。soft off が全デバイスを suspend する）
-      - low_battery_off.c からの直接呼び出し（**PM_DEVICE はポッド無しの版では n**）
+    ⚠️ **PM デバイス化（DEVICE_DEFINE + PM_DEVICE_DEFINE）は見送った。**
+    そちらなら soft off の SUSPEND で自動的に消えるが、**ポッド無しの版
+    （`PM_DEVICE=n`）でマクロ展開が壊れてビルドが落ちた**（CI で確認）。
+    `PM_DEVICE` を select しているのは `HHKB_STICK_POD` だけ。
+    → **直接呼び出しで確実にする。**この検査が「soft off の前に消す」を守る。
     """
     led = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
-    assert "PM_DEVICE_ACTION_SUSPEND" in led, (
-        "status_led.c に PM の SUSPEND フックが無い。"
-        "soft off（全デバイスを suspend する）で消えない")
     assert "hhkb_status_led_off" in led, (
-        "消灯を外から呼ぶ口が無い。PM_DEVICE=n の構成で消せない")
+        "消灯を外から呼ぶ口が無い。soft off の前に消せない")
 
     off = _strip_c_comments((ROOT / "firmware/src/low_battery_off.c").read_text())
     i_off = off.find("hhkb_status_led_off")
