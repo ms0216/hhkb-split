@@ -57,6 +57,10 @@
 #include <zephyr/logging/log.h>
 
 #include <zmk/activity.h>
+/* 状態の決め方だけを切り出したもの。**机の上で検査できる**
+ * （tools/test_status_led_core.py）。Zephyr に依存しない。 */
+#include "status_led_core.h"
+
 #include <zmk/event_manager.h>
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/battery_state_changed.h>
@@ -139,9 +143,10 @@ enum link_state {
 
 /* 電池の 2 段階。ZMK の % は zmk_battery_state_changed で降ってくる。
  * **打ち止め電圧の判定は low_battery_off.c の担当**で、こちらは表示だけ。
- * 同じ数字を 2 か所に書かないため、ここは % の閾値のみを持つ。 */
-#define BATT_LOW_PCT     15
-#define BATT_REPLACE_PCT  5
+ * 同じ数字を 2 か所に書かないため、ここは % の閾値のみを持つ。
+ * **出所は status_led_core.h**（机の上の検査と同じ値を使う）。 */
+#define BATT_LOW_PCT     SLC_BATT_LOW_PCT
+#define BATT_REPLACE_PCT SLC_BATT_REPLACE_PCT
 
 /* **左（セントラル）と、分割でない構成だけが持つ。**
  * 右にホストとの接続は無いので、変数ごと存在させない
@@ -280,41 +285,47 @@ static enum link_state read_split_link(void) {
 }
 #endif
 
+/*
+ * 状態の決め方は **status_led_core.h が唯一の出所**。
+ * ここは「いまの値を集めて渡す」だけにする。
+ *
+ * **2 つ実装を持たない。**同じ規則を 2 か所に書くと必ずずれる
+ * （この案件が繰り返し踏んできた型）。机の上の検査
+ * （tools/test_status_led_core.py・13 件）は core を直接動かしているので、
+ * ここが core を呼んでいる限り、検査は実機のコードを守っている。
+ */
 static enum led_state current_state(void) {
-    /* **sleep のときだけ消す。idle では消さない。**
-     * idle は 30 秒無操作で入るので、ここで消すと未接続の警告が
-     * 30 秒で勝手に消える（2026-08-16 に利用者の指摘で直した）。 */
-    if (activity == ZMK_ACTIVITY_SLEEP) {
-        return STATE_IDLE;
-    }
-    if (booting) {
-        return STATE_BOOT;
-    }
-    if (battery_pct <= BATT_REPLACE_PCT) {
-        return STATE_BATT_REPLACE;
-    }
-    if (battery_pct <= BATT_LOW_PCT) {
-        return STATE_BATT_LOW;
-    }
-    /* 分割・ホストのどちらかが繋がっていなければ知らせる。
-     * **どちらを出すかは blink_work_cb 側で交互に決める**
-     * （両方未接続のとき、片方だけ出すともう片方の異常が見えない）。
-     *
-     * ⚠️ ホストの判定はセントラル（左）だけ。右にホストとの接続は無い。
-     * 2026-08-16 に、この囲いを忘れて**右で青が点滅し続けた。** */
+    struct slc_in in = {
+        .activity = (activity == ZMK_ACTIVITY_SLEEP)  ? SLC_SLEEP
+                    : (activity == ZMK_ACTIVITY_IDLE) ? SLC_IDLE_ACT
+                                                      : SLC_ACTIVE,
+        .booting = booting,
+        .battery_pct = battery_pct,
 #if HAS_SPLIT_LINK
-    if (split_link != LINK_CONNECTED) {
-        return STATE_LINK_LOST;
-    }
+        .has_split_link = true,
+        .split = (enum slc_link)split_link,
 #endif
 #if HAS_HOST_LINK
-    if (host_link != LINK_CONNECTED) {
-        return STATE_LINK_LOST;
-    }
+        .has_host_link = true,
+        .host = (enum slc_link)host_link,
 #endif
-
-    return STATE_IDLE; /* 接続中は消灯。実機どおり */
+    };
+    return (enum led_state)slc_state(&in);
 }
+
+/* **並びが同じであることを機械で縛る。**上の current_state() は
+ * enum をそのまま cast しているので、どちらかを並べ替えると**黙って壊れる。** */
+BUILD_ASSERT((int)STATE_BOOT == (int)SLC_BOOT &&
+                 (int)STATE_RECOVERED == (int)SLC_RECOVERED &&
+                 (int)STATE_BATT_REPLACE == (int)SLC_BATT_REPLACE &&
+                 (int)STATE_BATT_LOW == (int)SLC_BATT_LOW &&
+                 (int)STATE_LINK_LOST == (int)SLC_LINK_LOST &&
+                 (int)STATE_IDLE == (int)SLC_IDLE,
+             "led_state と slc_state の並びがずれている");
+BUILD_ASSERT((int)LINK_UNBONDED == (int)SLC_LINK_UNBONDED &&
+                 (int)LINK_DISCONNECTED == (int)SLC_LINK_DISCONNECTED &&
+                 (int)LINK_CONNECTED == (int)SLC_LINK_CONNECTED,
+             "link_state と slc_link の並びがずれている");
 
 static void blink_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(blink_work, blink_work_cb);
