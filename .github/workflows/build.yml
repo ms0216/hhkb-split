@@ -21,6 +21,9 @@ on:
       - "firmware/**"
       - "build.yaml"
       - "zephyr/**"
+      # snippet（RTT の設定一式）。**2026-10-15 に抜けていて、直したのに
+      # ビルドされなかった。**上の「一覧が足りないとビルドされない」そのもの。
+      - "snippets/**"
       - ".github/workflows/build.yml"
   pull_request:
   workflow_dispatch:
