@@ -81,7 +81,21 @@ static void low_battery_check(struct k_work *work) {
 #endif
 
     /* **測り直さない。**ZMK が同じ周期で fetch 済みなので、driver の
-     * キャッシュを読むだけでよい。ADC をもう一度回すと電池を余分に使う。 */
+     * キャッシュを読むだけでよい。ADC をもう一度回すと電池を余分に使う。
+     *
+     * ⚠️⚠️ **この前提は idle では崩れる**（2026-10-15 の監査で判明・未修正）。
+     * ZMK の app/src/battery.c:171-173 は `ZMK_ACTIVITY_IDLE`（既定 30 秒の
+     * 無操作）で `k_timer_stop(&battery_timer)` を呼び、**測定を止める。**
+     * だがこちらのタイマーは回り続けるので、**止まったあとの古いキャッシュを
+     * 読んで数え続ける**（alk_channel_get は data->millivolts をそのまま返す）。
+     *
+     * 実害の向き: 電池が減って idle に入ると、その時点の電圧が凍る。
+     *   - 凍った値が打ち止めより上 … **いつまでも soft off しない**（撃ち漏らし）
+     *   - 凍った値が打ち止め以下 … 数回で soft off する（早すぎはしない）
+     * **どちらも「古い値で決めている」点が問題。**
+     * 直すなら activity の事象を受けて自分のタイマーも止める／起こすか、
+     * ここで `sensor_sample_fetch()` を自分で呼ぶ（ADC を余分に回す代償）。
+     * open-gaps #25b に追記すること。 */
     struct sensor_value voltage;
     int rc = sensor_channel_get(battery, SENSOR_CHAN_GAUGE_VOLTAGE, &voltage);
     if (rc != 0) {
@@ -110,8 +124,9 @@ static void low_battery_check(struct k_work *work) {
      * 状態を保持するので 1〜2mA を舐め続ける（待機 20µA の 50〜100 倍）。
      * 「電池が尽きたので消費を止める」というこの機能自体が台無しになる。
      * 2026-10-15 の監査で見つかった。
-     * PM がある構成では zmk_pm_soft_off() の SUSPEND でも消えるが、
-     * **PM_DEVICE はポッド無しの版では n** なので、ここでも消す。 */
+     * ⚠️ **ここが唯一の消灯経路。**PM デバイス化（soft off の SUSPEND で
+     * 自動的に消える形）はビルドが落ちて見送った（status_led.c の注記）。
+     * **soft off を他の場所からも呼ぶようになったら、そこでも消すこと。** */
 #if IS_ENABLED(CONFIG_HHKB_STATUS_LED)
     hhkb_status_led_off();
 #endif
