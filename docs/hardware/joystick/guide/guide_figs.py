@@ -206,6 +206,46 @@ def fig_encoder_wiring():
     save(fig, "13_encoder_wiring.png")
 
 
+def fig_stick_wiring():
+    """スティックの足ごとの線の色・役・帯の穴（足の側から見た図）。役と穴は pod_layout の WIRES から引く（手で写さない）。"""
+    hole = {n: h for h, (to, n) in L.WIRES.items() if to == "スティック"}
+    M = lambda q: (-q[0], q[1])   # noqa: E731  裏から見るので左右を返す（fig_stick_pins と同じ）
+    legs = [  # (足の名, 図面の座標, 線の色名, 描く色, 役 = WIRES の名前)
+        ("P1", STICK_VR2[2], "橙", "#ff8c00", "X の抵抗の上端"), ("P2", STICK_VR2[1], "白", "#ffffff", "X の中点"),
+        ("P3", STICK_VR2[0], "茶", "#8b4513", "X の抵抗の下端"), ("Q1", STICK_VR1[0], "紫", "#8e44ad", "Y の抵抗の上端"),
+        ("Q2", STICK_VR1[1], "灰", "#999999", "Y の中点"), ("Q3", STICK_VR1[2], "青", "#1f77b4", "Y の抵抗の下端"),
+        ("S1", STICK_SW[0], "黄", "#f2c200", "スイッチ"), ("S3", STICK_SW[2], "緑", "#2ca02c", "スイッチの片側")]
+    fig, ax = plt.subplots(figsize=(14, 9.5))
+    a0, a1 = -STICK_A[1], -STICK_A[0]
+    ax.add_patch(Rectangle((a0, STICK_B[0]), a1 - a0, STICK_B[1] - STICK_B[0], fc="#ececec", ec="#444", lw=2))
+    ax.text(-1.8, 2.0, "足の側（裏）\n軸は向こう側", ha="center", fontsize=11, color="#777")
+    for q in STICK_SW[1::2]:
+        x, y = M(q); ax.add_patch(Circle((x, y), 0.45, fc="#ddd", ec="#888")); ax.text(x, y - 1.25, "使わない", ha="center", fontsize=8.5, color="#888")
+    for q in STICK_LUGS:
+        x, y = M(q); ax.add_patch(Rectangle((x - 0.25, y - 0.7), 0.5, 1.4, fc="#666", ec="#222"))
+    # 線の引き出し先（左右の欄）
+    right_slots = iter(range(6)); left_slots = iter(range(6))
+    legs.sort(key=lambda g: -M(g[1])[1])         # 上の足から順に欄へ（線が交差しない）
+    for name, q, cname, col, role in legs:
+        x, y = M(q); r, c = hole[role]
+        side = 1 if x > -1.0 else -1
+        k = next(right_slots) if side > 0 else next(left_slots)
+        tx, ty = (12.5, 11 - k * 4.2) if side > 0 else (-16.5, 11 - k * 4.2)
+        ax.plot([x, tx - 0.4 * side], [y, ty], color=col if col != "#ffffff" else "#bbb", lw=3.2, zorder=2)
+        if col == "#ffffff": ax.plot([x, tx - 0.4 * side], [y, ty], color="#fff", lw=1.6, zorder=3)
+        ax.add_patch(Circle((x, y), 0.6, fc=col, ec="#111", lw=1.5, zorder=4))
+        ax.text(x, y + 0.95, name, ha="center", fontsize=11, fontweight="bold", zorder=5)
+        ax.text(tx, ty, f"{name}: {cname}\n{role}\n→ 帯の穴（行 {r}, 列 {c}）", ha="left" if side > 0 else "right", va="center", fontsize=11.5, linespacing=1.35)
+    x, y = M(STICK_LUGS[3]); r, c = hole["金属の枠（爪）"]
+    ax.plot([x, -16.1], [y, -14.6], color="#111", lw=3.2)
+    ax.text(-16.5, -14.6, f"爪: 黒\n金属の枠（台座の縁まで切り欠いた側の爪のどちらか）\n→ 帯の穴（行 {r}, 列 {c}）", ha="right", va="center", fontsize=11.5, linespacing=1.35)
+    ax.text(-30, 16.5, "スティックを裏返して、足の側から見た図（押し込みの足 4 本を手前に）。線は各 15cm", fontsize=14)
+    ax.text(-30, -20.5, "押し込みの足は、S1 と S2、S3 と S4 が中でつながっている。線は S1（か S2）と S3（か S4）に 1 本ずつ。\n"
+            "役の名前（上端・中点・下端）は帯の配置図（pod_layout.py）と同じ。帯の穴の位置は「線を挿す穴」の図を見る", fontsize=11, va="top", linespacing=1.5)
+    ax.set_xlim(-31, 31); ax.set_ylim(-23.5, 18); ax.set_aspect("equal"); ax.axis("off")
+    save(fig, "15_stick_wiring.png")
+
+
 # ------------------------------------------------------------------ 3. 帯
 def nets_and_reps():
     errs, _, find = L.check()
@@ -397,5 +437,5 @@ if __name__ == "__main__":
     check_coords()
     print("図:")
     fig_overview(); fig_stick_pins(); fig_encoder_pins(); fig_kit_and_updi(); fig_encoder_wiring()
-    fig_right_strip(); fig_xiao(); fig_tray_section(); fig_slot()
+    fig_right_strip(); fig_xiao(); fig_tray_section(); fig_slot(); fig_stick_wiring()
     fig_left_strip()          # 最後（L の中身を左に差し替えるため）
