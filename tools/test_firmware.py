@@ -202,6 +202,63 @@ def test_no_usable_transport_counts_as_disconnected():
         "右: transport を 1 つも見なかったときに LINK_CONNECTED を返している")
 
 
+def test_the_boot_layer_number_matches_the_keymap():
+    """**起動レイヤーの番号が、keymap の定義と一致していること。**
+
+    2026-10-15 の監査で見つかった（`boot_layer` は tools/ にも .github/ にも
+    一度も登場せず、**`-win` の版が本当に Windows 面で起動するかを
+    誰も見ていなかった**）。
+
+    `firmware/Kconfig` は「1 = BASE_WIN」と主張している。だが番号は
+    keymap の `#define` 側にあるので、**レイヤーを並べ替えると黙ってずれる。**
+    ずれても ZMK はその番号のレイヤーへ行くだけなので、ビルドも CI も緑のまま
+    「Windows 面で起動するはずが別の面だった」になる。
+    """
+    kc = (ROOT / "firmware/Kconfig").read_text()
+    m = re.search(r"config HHKB_BOOT_LAYER_ID.*?default\s+(\d+)", kc, re.S)
+    assert m, "HHKB_BOOT_LAYER_ID の既定値が読めない"
+    default_id = int(m.group(1))
+
+    km = (ROOT / "config/boards/shields/hhkb_split/hhkb_split.keymap").read_text()
+    m2 = re.search(r"#define\s+BASE_WIN\s+(\d+)", km)
+    assert m2, "keymap に BASE_WIN の定義が無い"
+    base_win = int(m2.group(1))
+
+    assert default_id == base_win, (
+        f"Kconfig の既定 {default_id} と keymap の BASE_WIN {base_win} がずれている。"
+        "**-win の版が別のレイヤーで起動する**")
+
+    # Kconfig の help が主張している中身も、実際と合っていること
+    assert re.search(rf"{base_win}\s*=\s*BASE_WIN", kc), (
+        "Kconfig の help が「N = BASE_WIN」と書いている番号が実際と違う")
+
+
+def test_split_behavior_node_names_fit_the_wire_format():
+    """**分割で右へ送る behavior のノード名が 16 バイトに収まること。**
+
+    2026-10-15 の監査で見つかった。`behavior_stick_recal.c` の冒頭が
+    「ノード名は 15 文字以内にすること」を**命綱**として挙げているのに、
+    機械で見ていなかった。
+
+    根拠（ZMK のソースで確認）: `app/include/zmk/split/transport/types.h` の
+    `char behavior_dev[16]`。**NUL 込みなので実質 15 文字**。
+    超えると切り詰められ、**右で behavior が見つからず黙って動かない。**
+    ビルドも CI も緑のまま。
+    """
+    km = (ROOT / "config/boards/shields/hhkb_split/hhkb_split.keymap").read_text()
+
+    # keymap の behaviors ブロックで定義しているノード（label: name { ... }）
+    names = set(re.findall(r"^\s*(\w+)\s*:\s*(\w+)\s*\{", km, re.M))
+    assert names, "keymap からノード名が 1 つも読めない"
+
+    LIMIT = 15  # behavior_dev[16] の NUL ぶんを引く
+    too_long = sorted({n for _, n in names if len(n) > LIMIT})
+    assert not too_long, (
+        f"ノード名が {LIMIT} 文字を超えている: {too_long}。"
+        "**分割で右へ送るとき切り詰められ、右で見つからない**"
+        "（behavior_dev[16]）")
+
+
 def test_this_repository_is_registered_as_a_zmk_module():
     """`zephyr/module.yml` が無いと、firmware/ は**まるごとビルドされない**。
 
