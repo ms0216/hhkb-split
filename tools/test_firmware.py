@@ -546,7 +546,12 @@ def test_low_battery_gate_also_covers_the_peripheral_half():
     assert cond == "IS_ENABLED(CONFIG_USB_DEVICE_STACK)", cond            # && 0 や ZMK_USB の併記を許さない
     code = re.sub(r"/\*.*?\*/", "", inner, flags=re.S)
     assert re.search(r"if\s*\(\s*zmk_usb_is_powered\(\)\s*\)\s*\{", code), code   # 反転（!）していない
-    assert "consecutive = 0;" in code and "return;" in code                 # 数え直して、判定せずに戻る
+    # **数え直して、判定せずに戻る。**
+    # ⚠️ 2026-10-15 に判定を low_battery_core.h へ切り出したので、
+    # リセットは `consecutive = 0;` ではなく **core の呼び出し**になった
+    # （usb_powered=true を渡すと core が数えを 0 に戻す）。
+    assert re.search(r"lbc_step\s*\(\s*&\w+\s*,\s*true\s*,", code), code
+    assert "return;" in code
     assert "sensor_channel_get" in after and "sensor_channel_get" not in before   # 電圧を読むより前にある
     src = (ROOT / "firmware/src/low_battery_off.c").read_text()
     assert re.search(r"#if IS_ENABLED\(CONFIG_USB_DEVICE_STACK\)\n#include <zmk/usb.h>", src)
@@ -556,7 +561,8 @@ def test_low_battery_gate_also_covers_the_peripheral_half():
     ("if (zmk_usb_is_powered()) {", "if (!zmk_usb_is_powered()) {"),
     ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_USB_DEVICE_STACK) && 0\n    if"),
     ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_ZMK_USB)\n    if"),
-    ("        consecutive = 0;\n        return;\n", ""),
+    # 門の中身を空にする（core を呼ばずに素通り）
+    ("(void)lbc_step(&lbc, true, false, 0, EMPTY_MV,\n                       CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES);\n        return;\n", ""),
 ])
 def test_the_gate_check_notices_a_broken_gate(old, new, monkeypatch, tmp_path):
     """上の検査が、門を壊すと本当に落ちること。"""
