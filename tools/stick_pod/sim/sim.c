@@ -44,6 +44,7 @@ static int n_reads, bus_active = 1, max_bus_active_outside;
 static int64_t rel_x, rel_y;
 static int zero_events;
 static int fail_input; /* make input_report_key fail N times */
+static int fail_save;  /* make settings_save_one fail N times（F14 の検査用・2026-10-15） */
 
 /* ---- stubs ---- */
 int stub_log;
@@ -111,7 +112,12 @@ int input_report_rel(const struct device *d, uint16_t code, int32_t v, bool sync
     return 0;
 }
 static struct { uint16_t x, y; } stored; static int have_stored;
-int settings_save_one(const char *name, const void *v, size_t n) { memcpy(&stored, v, n); have_stored = 1; n_saves++; return 0; }
+int settings_save_one(const char *name, const void *v, size_t n) {
+    /* **失敗も作れるようにする**（2026-10-15 の監査）。常に成功していたので、
+     * F14（保存に失敗しても saved を動かさない）が一度も走っていなかった。 */
+    if (fail_save > 0) { fail_save--; return -5; }
+    memcpy(&stored, v, n); have_stored = 1; n_saves++; return 0;
+}
 int settings_name_steq(const char *name, const char *key, const char **next) { if (next) *next = NULL; return strcmp(name, key) == 0; }
 static struct zmk_activity_state_changed *act_ev; static struct zmk_split_peripheral_status_changed *link_ev;
 struct zmk_activity_state_changed *as_zmk_activity_state_changed(const zmk_event_t *eh) { return act_ev; }
@@ -326,6 +332,22 @@ int main(int argc, char **argv) {
     case 22: /* the release report is dropped once */
         boot(true); run_for(3000); T0 = now_ms; world = w_aligned_click; e0 = nev; run_until(T0 + 255); fail_input = 1; run_for(3000);
         SAY("S22 release report dropped once: presses=%d releases=%d last=%d", count_btn(e0, 1), count_btn(e0, 0), last_btn());
+        break;
+    case 27: /* F14: 保存に失敗したら saved を進めない（＝次のずれでまた予約される） */
+        /* ⚠️ **n_saves / stored だけでは足りない**（2026-10-15）。F14 が守るのは
+         * 内部の `data->saved` で、進めてしまうと「もう保存済み」と見なして
+         * **二度と再予約されない**。そこで「失敗のあと、追従だけで
+         * もう一度保存まで辿り着くか」で間接的に見る。 */
+        boot(true); run_for(3000);
+        { pod.x = 560; pod.y = 470;
+          fail_save = 1;                       /* この保存を失敗させる */
+          hhkb_stick_pod_recalibrate(); run_for(3000);
+          int after_fail = n_saves;            /* 失敗したので増えない */
+          /* ここで saved が進んでいなければ、ずれは残ったままなので
+           * 追従が**また保存を予約する**（10 分後に 1 回書く）。 */
+          run_for(11 * 60000);
+          SAY("S27 save fails once: saves after-fail=%d then-after-11min=%d (expect 0 then 1: 失敗で saved を進めないので再予約される。進めてしまうと 0 のまま)",
+              after_fail, n_saves); }
         break;
     case 15: /* version mismatch */
         pod.version = 2; boot(true); run_for(3000); T0 = now_ms; world = w_click_at_rest; e0 = nev; run_for(5000);

@@ -151,6 +151,24 @@ static int eg_trigger_set(const struct device *dev, const struct sensor_trigger 
 
     data->trigger = trig;
     data->handler = handler;
+
+    /* ⚠️ **登録より前に回された刻みを取りこぼさない**（2026-10-15 の監査）。
+     *
+     * `eg_init` が `eg_start()` で割り込みを有効にするのは、ZMK が
+     * ここを呼ぶ**前**。起動直後につまみを回すと `eg_work` が
+     * `handler == NULL` で素通りする。
+     *
+     * **刻み自体は失われない**（割り込みが core.pulses に積む）が、
+     * 次に回すまで反映が遅れる。溜まっているなら、登録した時点で
+     * 1 回知らせて拾わせる。 */
+    if (handler != NULL && data->running) {
+        unsigned int key = irq_lock();
+        bool pending = (data->core.pulses != 0);
+        irq_unlock(key);
+        if (pending) {
+            k_work_submit(&data->work);
+        }
+    }
     return 0;
 }
 
