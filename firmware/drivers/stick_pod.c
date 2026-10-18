@@ -714,8 +714,15 @@ static void sp_stop(const struct device *dev, enum sp_flag why) {
     sp_enter_absent(data, "止める"); /* 行列を捨て、出した押下があれば離す（規則 6・F4） */
 
     /* **resume → suspend をやり直して、ピンを確実に sleep 状態へ戻す**（F8）。
-     * zmk_pm_soft_off() は全デバイスを**前から順に** suspend するので、i2c は
-     * このデバイスより先に止められる（転送の途中でも）。そのとき読み出しは
+     *
+     * ⚠️ **順序は経路で違う**（2026-10-15 に ZMK のソースで確認）:
+     *   `zmk_pm_soft_off()` 内のループ … **前から順**（app/src/pm.c の
+     *                                     `for (i = 0; i < device_count; i++)`）
+     *   `zmk_pm_suspend_devices()`（SLEEP）… **逆順**（同 `devs + devc - 1` から減算）
+     * **どちらの順でも同じ終わり方になるよう**に、この resume → suspend を置いている。
+     * 以下は soft off（前から順）のときの説明:
+     *
+     * i2c はこのデバイスより先に止められる（転送の途中でも）。そのとき読み出しは
      * タイムアウトし、TWIM ドライバのバス復旧が SCL を GPIO で叩いたあと、
      * PM 上は SUSPENDED なのでピンを戻さない（i2c_nrfx_twim_common.c の
      * i2c_nrfx_twim_recover_bus）。こちらの SUSPEND は -EALREADY で何もしない。

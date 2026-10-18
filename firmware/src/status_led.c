@@ -166,14 +166,12 @@ static enum link_state split_link = LINK_DISCONNECTED;
 #define HAS_SPLIT_LINK 0
 #endif
 
-/*
- * 「相手と繋がっているか」。左では右手、右では左（セントラル）を指す。
- *
- * ⚠️ **初期値は左右で違う。**
- *   左（セントラル）… 毎 tick に transport の get_status() で読み直すので
- *                      初期値は事実上使われない。true でよい。
- */
+/* 電池の残量（%）。ZMK の zmk_battery_state_changed で降ってくる。
+ * **初期値 100 は「まだ知らない」の意味。**0 にすると起動直後に
+ * 「要交換」の橙が出てしまう。 */
 static uint8_t battery_pct = 100;
+
+/* 起動直後の青点灯（BOOT_ON_MS）を出している間だけ true。 */
 static bool booting = true;
 
 /*
