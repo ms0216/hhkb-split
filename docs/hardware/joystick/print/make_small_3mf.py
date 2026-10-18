@@ -16,7 +16,7 @@ for s in parts:
     m = trimesh.load(src / f"{s}.stl"); assert m.is_watertight, f"{s} が閉じていない"
     m.apply_translation([-m.bounds[:, 0].mean(), -m.bounds[:, 1].mean(), -m.bounds[0][2]]); ms.append((s, m))
 gap = 12.0; w = sum(m.extents[0] for _, m in ms) + gap * (len(ms) - 1); x = 90 - w / 2
-assert w < 170, f"並べた幅 {w:.0f}mm がベッドに入らない"
+assert w < 179, f"並べた幅 {w:.0f}mm がベッド（180mm）に入らない"
 objs, items, cfg = [], [], []
 for n, (s, m) in enumerate(ms, 1):
     v = "".join(f'<vertex x="{a:.5f}" y="{b:.5f}" z="{c:.5f}"/>' for a, b, c in m.vertices)

@@ -140,7 +140,8 @@ def tray_solid(box, rect, slots, pins, flange=None, notch="b1", rounds=None):
     foot_h = PLATE_T + zr - (-PLATE_TO_PCB + 0.1)
     feet = [box(2.6, 2.6, foot_h, a, b, zr - foot_h)
             for a in (oa0 + 1.3, oa1 - 1.3) for b in (ob0 + 1.3, ob1 - 1.3)]
-    return reduce(lambda p_, q: p_ + q, [floor, ring] + feet), foot_h
+    # 穴も返す: 台座をプレートと一体にするとき（plate_seat）、同じ穴をプレートに開け直すため
+    return reduce(lambda p_, q: p_ + q, [floor, ring] + feet), foot_h, holes
 
 
 def cap_boxes(positions, keys):
@@ -252,7 +253,7 @@ def build_encoder(half):
     slots = [(-2.5 - hs, 2.5 + hs, ENC_PINS_ABC[0][1] - hs, ENC_PINS_ABC[0][1] + hs),
              (-3.0 - hs, 3.0 + hs, ENC_PINS_SW[0][1] - hs, ENC_PINS_SW[0][1] + hs)]
     slots += [(x - 0.35, x + 0.35, y - 1.1, y + 1.1) for x, y in ENC_LUGS]
-    tray, foot_h = tray_solid(Bx, (-cw / 2, cw / 2, -0.25 - cd / 2, -0.25 + cd / 2), slots, ENC_PINS_ABC + ENC_PINS_SW + ENC_LUGS, notch="b1")   # 線は奥（XIAO の側）へ出す
+    tray, foot_h, tray_holes = tray_solid(Bx, (-cw / 2, cw / 2, -0.25 - cd / 2, -0.25 + cd / 2), slots, ENC_PINS_ABC + ENC_PINS_SW + ENC_LUGS, notch="b1")   # 線は奥（XIAO の側）へ出す
     # 線: **XIAO はエンコーダのすぐ奥・主基板の上面とほぼ同じ高さにある**（STL に線を当てて確かめた。間に壁は無い）。
     # 5 本（A・B・GND・3.3V・行）は受け皿の下から奥へ約 13mm、主基板の上をそのまま XIAO のピンソケットへ。
     # 1 本（列）だけ、主基板の奥の縁を回り込んで裏へ入り、5 のキーのソケットへ。**縁の溝も、底板の上の線も要らない。**
@@ -286,13 +287,16 @@ def build_encoder(half):
         near.append((math.hypot(dx, dy) - KNOB_D / 2, name, hi[2] - z0))
     for g, n, top in sorted(near)[:3]:
         print(f"      つまみ φ{KNOB_D:.0f} ↔ {n} のキーキャップ: {g:.2f} mm（そのキートップ +{top:.2f}）")
+    # 量産用（2026-10-18・利用者「プレートに台座を作ればいいのでは」）: くり抜かずに、受け皿の床・つば・脚をプレートと一体にし、
+    # 受け皿と同じ穴を開ける。床の高さはプレートと同じ（FLOOR_T = PLATE_T）なので、上面は平らにつながる。受け皿とくり抜きの隙間（がたつきの元）が無くなる
+    plate_seat = pl * (build_plate(keys, half)[0] + tray - tray_holes)
     return {
         "joystick": pl * enc, "joystick_cap": pl * knob, "joystick_seat": pl * tray,
         "joystick_wire": Compound(children=wires),
         # 左の帯（6×4 穴・100kΩ×2 とダイオード。build/joystick/pod_layout/left_layout.py）: 主基板の下・底板の上（エンコーダの左 約 20mm）。部品は高さ 6.0 の箱 [推定]
         "pod_board": Compound(children=[Location((LEFT_STRIP_AT[0], LEFT_STRIP_AT[1], FLOOR + BUMP)) * Box(6 * 2.54, 4 * 2.54, UB_T, align=CTR),
                                         Location((LEFT_STRIP_AT[0], LEFT_STRIP_AT[1], FLOOR + BUMP + UB_T)) * Box(6 * 2.54, 4 * 2.54, 6.0, align=CTR)]),
-        "plate": plate, "topcase": build_topcase(keys, half)[0], "case": case,
+        "plate": plate, "plate_seat": plate_seat, "topcase": build_topcase(keys, half)[0], "case": case,
     }
 
 
@@ -375,7 +379,7 @@ def build(half):
     wall_b1 = fb * s > 0
     WALL_IN = -0.6                                 # 壁ぎわは輪をくり抜きより 0.6 内へ引く（プレートの下は底側の部品の縁）
     fl = (TRAY_FLANGE, TRAY_FLANGE, WALL_IN if not wall_b1 else TRAY_FLANGE, WALL_IN if wall_b1 else TRAY_FLANGE)
-    tray, foot_h = tray_solid(Bx, (ca0, ca1, cb0, cb1), slots, PINS + PINS_SW + LUGS + BOSS, flange=fl, notch="b1" if wall_b1 else "b1", rounds=rounds)
+    tray, foot_h, tray_holes = tray_solid(Bx, (ca0, ca1, cb0, cb1), slots, PINS + PINS_SW + LUGS + BOSS, flange=fl, notch="b1" if wall_b1 else "b1", rounds=rounds)
 
     # 帯（穴 13×7）とマイコンの基板。穴ごとの配置は build/joystick/pod_layout/pod_layout.py（キットは列 1〜10・行 0 と 3）: 主基板の下の空洞・机の座標（案 X と同じ）
     c0 = Vector(*STRIP_AT[half], 0)
@@ -455,10 +459,13 @@ def build(half):
           f"  ／ 隣の段のキートップ {row_top:.2f} → 差 {z_tip + CAP_OVER - row_top:+.2f}")
     worst = tilt_report(half, sx, sy, zm, cap_boxes(positions, keys), CAP_D)
     print(f"   → 倒したときの最小の隙間 {worst:.2f} mm")
+    # 量産用（2026-10-18・利用者「プレートに台座を作ればいいのでは」）: くり抜かずに、受け皿の床・つば・脚をプレートと一体にし、
+    # 受け皿と同じ穴を開ける。床の高さはプレートと同じ（FLOOR_T = PLATE_T）なので、上面は平らにつながる。受け皿とくり抜きの隙間（がたつきの元）が無くなる
+    plate_seat = pl * (build_plate(keys, half)[0] + tray - tray_holes)
     return {
         "joystick": pl * stick, "joystick_cap": pl * cap, "joystick_tilt": pl * Compound(children=tilts),
         "joystick_wire": wire, "joystick_seat": pl * tray,
-        "plate": plate, "topcase": build_topcase(keys, half)[0], "case": case,
+        "plate": plate, "plate_seat": plate_seat, "topcase": build_topcase(keys, half)[0], "case": case,
         "pod_board": Compound(children=[board] + smalls), "pod_mcu": Compound(children=mcu),
     }
 

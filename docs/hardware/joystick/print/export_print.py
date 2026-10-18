@@ -24,6 +24,7 @@ for half in ("left", "right"):
     parts = J.build(half)
     export_stl(inv * parts["plate"], str(OUT / f"{half}_plate.stl"))
     export_stl(inv * parts["joystick_seat"], str(OUT / f"{half}_tray.stl"))
+    export_stl(inv * parts["plate_seat"], str(OUT / f"{half}_plate_seat.stl"))   # 量産用: 台座一体のプレート（受け皿が要らない）
 
 # 右手のキャップ: 円板＋軸にかぶせる筒。
 # **軸は D カットではなく「二面取り」**: φ4±0.05 で、先端 5mm だけ向かい合う 2 面が幅 3（0/−0.1）に落としてある
