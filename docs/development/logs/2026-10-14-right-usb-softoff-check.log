@@ -1,0 +1,66 @@
+ WARN probe_rs::rtt: Buffer for up channel 1 not initialized
+ WARN probe_rs::rtt: Buffer for up channel 2 not initialized
+ WARN probe_rs::rtt: Buffer for down channel 1 not initialized
+ WARN probe_rs::rtt: Buffer for down channel 2 not initialized
+Failed to create readline
+[00:01:05.322,631] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:49:43.495: *** Booting Zephyr OS build 10ba6d0cb38b ***
+23:49:43.495: [00:00:00.287,139] <inf> fs_nvs: 8 Sectors of 4096 bytes
+23:49:43.495: [00:00:00.287,170] <inf> fs_nvs: alloc wra: 0, f78
+23:49:43.495: [00:00:00.287,170] <inf> fs_nvs: data wra: 0, b8
+23:49:43.495: [00:00:00.290,069] <inf> bt_hci_core: HW Platform: Nordic Semiconductor (0x0002)
+23:49:43.495: [00:00:00.290,130] <inf> bt_hci_core: HW Variant: nRF52x (0x0002)
+23:49:43.495: [00:00:00.290,161] <inf> bt_hci_core: Firmware: Standard Bluetooth controller (0x00) Version 4.1 Build 0
+23:49:43.495: [00:00:00.290,618] <inf> bt_hci_core: No ID address. App must call settings_load()
+23:49:43.495: [00:00:00.290,740] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 11 on gpio@50000300 for input
+23:49:43.495: [00:00:00.290,802] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 29 on gpio@50000000 for input
+23:49:43.495: [00:00:00.290,863] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 5 on gpio@50000000 for input
+23:49:43.495: [00:00:00.290,924] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 28 on gpio@50000000 for input
+23:49:43.495: [00:00:00.290,985] <dbg> zmk: kscan_matrix_init_input_inst: Configured pin 3 on gpio@50000000 for input
+23:49:43.495: [00:00:00.291,046] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 0 on 595@0 for output
+23:49:43.495: [00:00:00.291,076] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 1 on 595@0 for output
+23:49:43.495: [00:00:00.291,107] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 2 on 595@0 for output
+23:49:43.495: [00:00:00.291,168] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 3 on 595@0 for output
+23:49:43.495: [00:00:00.291,198] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 4 on 595@0 for output
+23:49:43.495: [00:00:00.291,259] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 5 on 595@0 for output
+23:49:43.495: [00:00:00.291,290] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 6 on 595@0 for output
+23:49:43.495: [00:00:00.291,320] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 7 on 595@0 for output
+23:49:43.495: [00:00:00.291,381] <dbg> zmk: kscan_matrix_init_output_inst: Configured pin 8 on 595@0 for output
+23:49:43.495: [00:00:00.295,288] <dbg> zmk: zmk_sensors_init_item: Init sensor at index 0
+23:49:43.495: [00:00:00.295,318] <dbg> zmk: zmk_sensors_init_item: No local device for 0
+23:49:43.495: [00:00:00.295,867] <inf> zmk: Welcome to ZMK!
+23:49:43.495: 
+23:49:43.495: [00:00:00.296,783] <dbg> zmk: zmk_usb_get_conn_state: state: 2
+23:49:43.495: [00:00:00.296,875] <dbg> zmk: zmk_usb_get_conn_state: state: 2
+23:49:43.495: [00:00:00.297,241] <inf> bt_hci_core: Identity: CD:F7:76:0C:8F:4F (random)
+23:49:43.495: [00:00:00.297,271] <inf> bt_hci_core: HCI: version 5.4 (0x0d) revision 0x0000, manufacturer 0x05f1
+23:49:43.495: [00:00:00.297,332] <inf> bt_hci_core: LMP: version 5.4 (0x0d) subver 0xffff
+23:49:43.495: [00:00:00.299,896] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:49:43.495: [00:00:00.299,957] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:49:43.495: [00:00:01.067,718] <dbg> zmk: zmk_battery_update: Setting BAS GATT battery level to 0.
+23:49:43.495: [00:00:01.578,887] <err> zmk: Failed to start advertising (-120)
+23:49:43.495: [00:00:03.461,517] <inf> bas: BAS Notifications enabled
+23:49:43.495: [00:00:04.151,977] <dbg> zmk: split_svc_pos_state_ccc: value 1
+23:49:43.495: [00:00:04.152,130] <dbg> zmk: security_changed: Security changed: F7:75:07:4D:21:A6 (random) level 2
+23:49:43.495: [00:00:04.242,218] <dbg> zmk: split_svc_select_phys_layout_callback: Selecting physical layout after GATT write of 0
+23:50:00.132: [00:00:21.464,935] <wrn> hhkb_stick_pod: 起動から 20 秒、ポッドから正しいフレームが 1 つも届いていない
+23:50:00.132: [00:00:21.464,996] <inf> hhkb_stick_pod: 起動 20 秒: 受理 0 / NACK 11 / タイムアウト 0 / マジック 0 / 長さ 0 / CRC 0 / 版 0
+23:50:00.132: [00:00:21.465,026] <inf> hhkb_stick_pod: 起動 20 秒: 範囲 0 / 使い回し 0 / 再同期 0 / 再起動 0 / 出力落ち 0
+23:50:43.943: [00:01:05.295,471] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:51:43.952: [00:02:05.295,471] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:52:43.971: [00:03:05.295,471] <dbg> zmk: zmk_usb_get_conn_state: state: 5
+23:53:26.069: [00:03:47.354,766] <err> zmk: Failed to set output 0 to 0: -11
+23:53:26.069: [00:03:47.359,954] <dbg> zmk: kscan_matrix_read: Sending event at 3,0 state on
+23:53:26.069: [00:03:47.360,076] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 3, col: 0, position: 51, pressed: true
+23:53:26.069: [00:03:47.360,229] <dbg> zmk: split_peripheral_listener: 
+23:53:26.069: [00:03:47.505,920] <dbg> zmk: kscan_matrix_read: Sending event at 3,0 state off
+23:53:26.069: [00:03:47.506,591] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 3, col: 0, position: 51, pressed: false
+23:53:26.069: [00:03:47.506,622] <dbg> zmk: split_peripheral_listener: 
+23:53:27.366: [00:03:48.628,784] <err> zmk: Failed to set output 0 to 0: -11
+23:53:27.366: [00:03:48.633,941] <dbg> zmk: kscan_matrix_read: Sending event at 1,7 state on
+23:53:27.366: [00:03:48.634,124] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 1, col: 7, position: 43, pressed: true
+23:53:27.366: [00:03:48.634,155] <dbg> zmk: split_peripheral_listener: 
+23:53:27.366: [00:03:48.736,785] <dbg> zmk: kscan_matrix_read: Sending event at 1,7 state off
+23:53:27.366: [00:03:48.737,487] <dbg> zmk: zmk_physical_layouts_kscan_process_msgq: Row: 1, col: 7, position: 43, pressed: false
+23:53:27.366: [00:03:48.737,518] <dbg> zmk: split_peripheral_listener: 
+23:53:44.007: [00:04:05.295,471] <dbg> zmk: zmk_usb_get_conn_state: state: 5

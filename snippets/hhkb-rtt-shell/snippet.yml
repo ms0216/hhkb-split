@@ -1,0 +1,8 @@
+# RTT 越しに**実機へコマンドを打つ**（Zephyr の shell）。
+#
+# hhkb-rtt（ログを読むだけ）とは別にしてある。shell は
+# SEGGER_RTT_CUSTOM_LOCKING を select するなど RTT の使い方が変わるので、
+# **動いている `-rtt-quiet` を壊さないよう、別の版として分けた。**
+name: hhkb-rtt-shell
+append:
+  EXTRA_CONF_FILE: hhkb-rtt-shell.conf
