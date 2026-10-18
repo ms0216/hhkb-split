@@ -19,7 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class Core(C.Structure):
-    _fields_ = [("a_closed", C.c_bool), ("b_at_close", C.c_bool), ("pulses", C.c_int8)]
+    # ⚠️ **C 側（encoder_gated_core.h）と型を合わせること。**
+    # ずれるとメモリ配置が食い違い、読める値が壊れる。
+    # 2026-10-15 に int8_t → int16_t（溢れで向きが反転するため）。
+    _fields_ = [("a_closed", C.c_bool), ("b_at_close", C.c_bool), ("pulses", C.c_int16)]
 
 
 @pytest.fixture(scope="module")
@@ -136,3 +139,87 @@ def test_sign_matches_zmk_ec11(lib):
         ev, _ = walk(0, steps)
         core = Core(); lib.eg_start(C.byref(core), 0, 0)
         assert feed(lib, core, ev) == ec11(ev), steps
+
+def test_pulses_saturate_instead_of_wrapping(lib):
+    """**溜まりすぎても向きが反転しないこと。**
+
+    2026-10-15 の監査で見つかった。`int8_t pulses` に `+=` していたので、
+    読み出しが遅れて 127 刻み溜まると **−128 に折り返して逆回転**になった。
+    ZMK は普通トリガで即座に読む（1〜2 刻み）が、スリープ中や
+    ワークキューが詰まったときは溜まりうる。
+
+    **型を広げても限界が遠のくだけ**なので飽和させた。
+    溢れるほど溜まったら刻み数はもう意味を持たない——
+    **向きだけは絶対に間違えない**方を採る。
+    """
+    core = Core()
+    lib.eg_start(C.byref(core), 0, 0)
+
+    # 同じ向きに 300 刻み（旧実装なら int8_t を 2 回以上まわる）。
+    # CW は ec11 と符号を合わせてあるので **−1 が正**（eg_core_edge の注記）。
+    n = 0
+    for _ in range(300):
+        n += feed(lib, core, CW)
+    assert n == -300, f"刻みの数が合わない: {n}"
+
+    total = lib.eg_pulses(C.byref(core))
+    assert total < 0, (
+        f"溜めた向きと符号が逆（{total}）。**折り返して逆回転している**")
+    assert total == -300, f"飽和の手前なのに値が違う: {total}"
+
+
+def test_pulses_do_not_flip_sign_at_the_limit(lib):
+    """**限界まで溜めても符号が変わらない。**"""
+    core = Core()
+    lib.eg_start(C.byref(core), 0, 0)
+    for _ in range(5000):          # EG_PULSES_MAX(4096) を越える
+        feed(lib, core, CW)
+    total = lib.eg_pulses(C.byref(core))
+    assert total < 0, f"限界を越えたら符号が反転した（{total}）"
+    assert total == -4096, f"飽和していない: {total}"
+
+def test_the_python_struct_matches_the_c_struct(lib):
+    """**Python 側の型が C 側とずれていないこと。**
+
+    ずれるとメモリ配置が食い違い、読める値が静かに壊れる。
+    2026-10-15 に C 側を int8_t → int16_t にしたとき、ここも直す必要があった。
+    """
+    src = (ROOT / "firmware/drivers/encoder_gated_core.h").read_text()
+    import re
+    m = re.search(r"(int\d+_t)\s+pulses\s*;", src)
+    assert m, "C 側の pulses の型が読めない"
+    c_type = m.group(1)
+    py_type = dict(Core._fields_)["pulses"]
+    want = {"int8_t": C.c_int8, "int16_t": C.c_int16, "int32_t": C.c_int32}[c_type]
+    assert py_type is want, (
+        f"C 側は {c_type} なのに Python 側が {py_type.__name__}。**配置がずれる**")
+
+def test_trigger_set_flushes_pending_pulses():
+    """**登録より前に回した刻みを取りこぼさないこと。**
+
+    2026-10-15 の監査で見つかった。`eg_init` が `eg_start()` で割り込みを
+    有効にするのは、ZMK が `trigger_set` を呼ぶ**前**。起動直後につまみを
+    回すと `eg_work` が `handler == NULL` で素通りする。
+
+    **刻み自体は失われない**（割り込みが core.pulses に積む）が、
+    次に回すまで反映が遅れる。登録した時点で溜まっていれば 1 回知らせる。
+
+    ⚠️ ここは Zephyr の API を使う側なので、ctypes では動かせない。
+    **「その処理が在るか」を見る**（在れば CI のビルドが通ることまでは確かめられる）。
+    """
+    import re
+    src = (ROOT / "firmware/drivers/encoder_gated.c").read_text()
+    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    m = re.search(r"static int eg_trigger_set\(.*?\n\}", code, re.S)
+    assert m, "eg_trigger_set が見つからない"
+    body = m.group(0)
+
+    assert "k_work_submit" in body, (
+        "登録時に溜まりを知らせていない。**起動直後の 1 刻みが次まで遅れる**")
+    assert "core.pulses" in body, (
+        "溜まっているかを見ていない。**毎回 submit すると空振りする**")
+    assert "handler != NULL" in body, (
+        "handler が未登録のときにも submit している")
+

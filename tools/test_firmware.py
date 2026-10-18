@@ -170,6 +170,95 @@ def test_the_cutoff_timer_follows_zmk_sampling():
         "ACTIVE で動かし直していない。**一度止まると二度と判定しない**")
 
 
+def test_no_usable_transport_counts_as_disconnected():
+    """**判定材料が 1 つも無いとき、「繋がっている」に倒さない。**
+
+    2026-10-15 の監査で見つかった。`available` / `enabled` については
+    2026-08-16 に潰してあり、コメントもそう書いてあるが、
+    **`api == NULL || get_status == NULL` の分岐だけ `continue` のままだった。**
+
+    get_status を持つ transport が 0 個だと、ループ本体が一度も回らず
+    最後の `return LINK_CONNECTED`（右は `connected = true`）に素通りする。
+    **右の電源を切っても左の緑が出ない**——2026-08-16 に一度潰したのと
+    同じ状態に戻る。ビルドも DRC も CI も緑なので誰も気づけない。
+
+    いま上流（ZMK）はどちらの transport も get_status を実装しているので
+    顕在化しないが、**「安全側＝未接続に倒す」という方針が片方の分岐にしか
+    適用されていない**のは直し残し。
+    """
+    src = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
+
+    # get_status が無いときに continue していないこと
+    assert not re.search(
+        r"get_status\s*==\s*NULL\s*\)\s*\{\s*continue\s*;", src), (
+        "get_status が無いときに continue している。**1 つも無ければ"
+        "『繋がっている』に倒れる**（2026-08-16 と同じ落ち方）")
+
+    # ⚠️ **使われ方まで見る。**個数を数えるだけでは、判定から外しても通った
+    # （変異検査で 2 つ生き残った）。
+    assert re.search(r"return\s+saw_any\s*\?\s*LINK_CONNECTED\s*:", src), (
+        "左: transport を 1 つも見なかったときに LINK_CONNECTED を返している")
+    assert re.search(r"if\s*\(\s*connected\s*&&\s*saw_any\s*\)", src), (
+        "右: transport を 1 つも見なかったときに LINK_CONNECTED を返している")
+
+
+def test_the_boot_layer_number_matches_the_keymap():
+    """**起動レイヤーの番号が、keymap の定義と一致していること。**
+
+    2026-10-15 の監査で見つかった（`boot_layer` は tools/ にも .github/ にも
+    一度も登場せず、**`-win` の版が本当に Windows 面で起動するかを
+    誰も見ていなかった**）。
+
+    `firmware/Kconfig` は「1 = BASE_WIN」と主張している。だが番号は
+    keymap の `#define` 側にあるので、**レイヤーを並べ替えると黙ってずれる。**
+    ずれても ZMK はその番号のレイヤーへ行くだけなので、ビルドも CI も緑のまま
+    「Windows 面で起動するはずが別の面だった」になる。
+    """
+    kc = (ROOT / "firmware/Kconfig").read_text()
+    m = re.search(r"config HHKB_BOOT_LAYER_ID.*?default\s+(\d+)", kc, re.S)
+    assert m, "HHKB_BOOT_LAYER_ID の既定値が読めない"
+    default_id = int(m.group(1))
+
+    km = (ROOT / "config/boards/shields/hhkb_split/hhkb_split.keymap").read_text()
+    m2 = re.search(r"#define\s+BASE_WIN\s+(\d+)", km)
+    assert m2, "keymap に BASE_WIN の定義が無い"
+    base_win = int(m2.group(1))
+
+    assert default_id == base_win, (
+        f"Kconfig の既定 {default_id} と keymap の BASE_WIN {base_win} がずれている。"
+        "**-win の版が別のレイヤーで起動する**")
+
+    # Kconfig の help が主張している中身も、実際と合っていること
+    assert re.search(rf"{base_win}\s*=\s*BASE_WIN", kc), (
+        "Kconfig の help が「N = BASE_WIN」と書いている番号が実際と違う")
+
+
+def test_split_behavior_node_names_fit_the_wire_format():
+    """**分割で右へ送る behavior のノード名が 16 バイトに収まること。**
+
+    2026-10-15 の監査で見つかった。`behavior_stick_recal.c` の冒頭が
+    「ノード名は 15 文字以内にすること」を**命綱**として挙げているのに、
+    機械で見ていなかった。
+
+    根拠（ZMK のソースで確認）: `app/include/zmk/split/transport/types.h` の
+    `char behavior_dev[16]`。**NUL 込みなので実質 15 文字**。
+    超えると切り詰められ、**右で behavior が見つからず黙って動かない。**
+    ビルドも CI も緑のまま。
+    """
+    km = (ROOT / "config/boards/shields/hhkb_split/hhkb_split.keymap").read_text()
+
+    # keymap の behaviors ブロックで定義しているノード（label: name { ... }）
+    names = set(re.findall(r"^\s*(\w+)\s*:\s*(\w+)\s*\{", km, re.M))
+    assert names, "keymap からノード名が 1 つも読めない"
+
+    LIMIT = 15  # behavior_dev[16] の NUL ぶんを引く
+    too_long = sorted({n for _, n in names if len(n) > LIMIT})
+    assert not too_long, (
+        f"ノード名が {LIMIT} 文字を超えている: {too_long}。"
+        "**分割で右へ送るとき切り詰められ、右で見つからない**"
+        "（behavior_dev[16]）")
+
+
 def test_this_repository_is_registered_as_a_zmk_module():
     """`zephyr/module.yml` が無いと、firmware/ は**まるごとビルドされない**。
 
@@ -260,21 +349,23 @@ def test_the_recovery_flash_uses_the_colour_of_the_link_that_recovered():
 
     決定表: docs/hardware/decisions/2026-08-16-led-state-table.md
     """
-    src = (ROOT / "firmware/src/status_led.c").read_text()
-    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    code = re.sub(r"//[^\n]*", "", code)
+    code = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
 
-    # 合図は「復帰した系統の色」を変数で持つこと。決め打ちの色は使わない。
-    m = re.search(r"case STATE_RECOVERED:(.*?)break;", code, re.S)
-    assert m, "STATE_RECOVERED の描画が無い"
-    body = m.group(1)
-    assert "set_color(announce_color)" in body, (
-        "復帰の合図が『復帰した系統の色』になっていない。"
-        "COLOR_BLUE などの決め打ちは、緑＝左右間という取り決めを壊す")
-
-    # 分割の復帰は緑、ホストの復帰は青を積むこと
+    # ⚠️ **描画は 2026-10-15 に status_led_core.h へ移した。**
+    # 「どちらの系統が復帰したか」を積むのは .c 側（Zephyr の事象を見るので）、
+    # 「積まれた色で出す」のは core 側。**両方を見る。**
     assert "announce_color = COLOR_GREEN" in code, "分割の復帰に緑を積んでいない"
     assert "announce_color = COLOR_BLUE" in code, "ホストの復帰に青を積んでいない"
+
+    core = _strip_c_comments((ROOT / "firmware/src/status_led_core.h").read_text())
+    m = re.search(r"case SLC_RECOVERED:(.*?)break;", core, re.S)
+    assert m, "core に SLC_RECOVERED の描画が無い"
+    body = m.group(1)
+    assert "o.color = r->announce" in body, (
+        "復帰の合図が『復帰した系統の色』になっていない。"
+        "決め打ちの色は、緑＝左右間という取り決めを壊す")
+    assert "r->announce = SLC_COLOR_OFF" in body, (
+        "合図を出したあと消していない。**次の tick でも出続ける**")
 
 
 def test_the_warning_survives_idle():
@@ -457,7 +548,12 @@ def test_low_battery_gate_also_covers_the_peripheral_half():
     assert cond == "IS_ENABLED(CONFIG_USB_DEVICE_STACK)", cond            # && 0 や ZMK_USB の併記を許さない
     code = re.sub(r"/\*.*?\*/", "", inner, flags=re.S)
     assert re.search(r"if\s*\(\s*zmk_usb_is_powered\(\)\s*\)\s*\{", code), code   # 反転（!）していない
-    assert "consecutive = 0;" in code and "return;" in code                 # 数え直して、判定せずに戻る
+    # **数え直して、判定せずに戻る。**
+    # ⚠️ 2026-10-15 に判定を low_battery_core.h へ切り出したので、
+    # リセットは `consecutive = 0;` ではなく **core の呼び出し**になった
+    # （usb_powered=true を渡すと core が数えを 0 に戻す）。
+    assert re.search(r"lbc_step\s*\(\s*&\w+\s*,\s*true\s*,", code), code
+    assert "return;" in code
     assert "sensor_channel_get" in after and "sensor_channel_get" not in before   # 電圧を読むより前にある
     src = (ROOT / "firmware/src/low_battery_off.c").read_text()
     assert re.search(r"#if IS_ENABLED\(CONFIG_USB_DEVICE_STACK\)\n#include <zmk/usb.h>", src)
@@ -467,7 +563,8 @@ def test_low_battery_gate_also_covers_the_peripheral_half():
     ("if (zmk_usb_is_powered()) {", "if (!zmk_usb_is_powered()) {"),
     ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_USB_DEVICE_STACK) && 0\n    if"),
     ("#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)\n    if", "#if IS_ENABLED(CONFIG_ZMK_USB)\n    if"),
-    ("        consecutive = 0;\n        return;\n", ""),
+    # 門の中身を空にする（core を呼ばずに素通り）
+    ("(void)lbc_step(&lbc, true, false, 0, EMPTY_MV,\n                       CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES);\n        return;\n", ""),
 ])
 def test_the_gate_check_notices_a_broken_gate(old, new, monkeypatch, tmp_path):
     """上の検査が、門を壊すと本当に落ちること。"""

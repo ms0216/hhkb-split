@@ -13,6 +13,7 @@
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 
 #include <drivers/input_processor.h>
 #include <zmk/keymap.h>
@@ -32,19 +33,26 @@ struct bl_data {
     bool held_alt;
 };
 
+#define BL_MAX_LAYERS 8
+
 static int bl_handle_event(const struct device *dev, struct input_event *event, uint32_t param1,
                            uint32_t param2, struct zmk_input_processor_state *state) {
     const struct bl_config *cfg = dev->config;
     struct bl_data *data = dev->data;
 
-    if (event->type != INPUT_EV_KEY || event->code != cfg->from) {
+    /* **判断は core が唯一の出所**（2026-10-15）。ここは集めて渡すだけ。 */
+    if (!bl_applies(event->type, INPUT_EV_KEY, event->code, cfg->from)) {
         return ZMK_INPUT_PROC_CONTINUE;
     }
 
-    bool alt_now = false;
-    for (size_t i = 0; i < cfg->layers_len; i++) {
-        alt_now = alt_now || zmk_keymap_layer_active(cfg->layers[i]);
+    /* レイヤーは devicetree で数個。スタックに取る上限を決め打つ
+     * （足りなければ先頭から見る。**OR なので取りこぼしても誤爆しない**）。 */
+    bool active[BL_MAX_LAYERS];
+    size_t n = cfg->layers_len < ARRAY_SIZE(active) ? cfg->layers_len : ARRAY_SIZE(active);
+    for (size_t i = 0; i < n; i++) {
+        active[i] = zmk_keymap_layer_active(cfg->layers[i]);
     }
+    bool alt_now = bl_any_layer_active(active, n);
     event->code = bl_code(&data->held_alt, event->value != 0, alt_now, cfg->from, cfg->to);
     return ZMK_INPUT_PROC_CONTINUE;
 }

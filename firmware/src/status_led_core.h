@@ -112,4 +112,130 @@ static inline enum slc_state slc_announce(enum slc_state st, enum slc_color *ann
     return st;
 }
 
+/* --- 時定数（実機の表から来る）。**ここが唯一の出所** -------------------
+ * status_led.c はこれを #define で引く。 */
+#define SLC_BOOT_ON_MS 3000      /* 「青色に点灯したあと、消灯」 */
+#define SLC_RECOVERED_ON_MS 1000 /* 復帰の合図 */
+#define SLC_SLOW_BLINK_MS 250    /* 1 秒に 2 回。ボンド済み・未接続 */
+#define SLC_FAST_BLINK_MS 125    /* 1 秒に 4 回。未ボンド */
+#define SLC_PULSE_MS 120         /* 橙 1 回ぶんの点灯 */
+#define SLC_PULSE_GAP_MS 280     /* 橙 2 回点滅の間隔 */
+#define SLC_BATT_LOW_MS 30000    /* 橙 1 回点滅を 30 秒間隔 */
+#define SLC_BATT_REPLACE_MS 15000 /* 橙 2 回点滅を 15 秒間隔 */
+
+/* 表示を進めるための状態（work をまたいで持ち越す）。 */
+struct slc_render {
+    enum slc_state shown;
+    uint8_t step;
+    bool booting;            /* 起動直後の青を出し終えたら false */
+    enum slc_color announce; /* 復帰の合図。出したら OFF に戻る */
+};
+
+/* 1 tick ぶんの出力。 */
+struct slc_out {
+    enum slc_color color;
+    uint32_t next_ms;
+};
+
+/*
+ * 3 段目: 状態から「何色を、次は何 ms 後か」を決める（元は `blink_work_cb`
+ * の switch 文）。**Zephyr に依存しない。**
+ *
+ * 2026-10-15 の監査で、**この switch が自動検査でまったく実行されていない**
+ * ことが分かった（3 つの表示退行を故意に入れて 32 件すべて緑だった）。
+ */
+static inline struct slc_out slc_tick(struct slc_render *r, enum slc_state st,
+                                      const struct slc_in *in) {
+    struct slc_out o = {SLC_COLOR_OFF, SLC_FAST_BLINK_MS * 4};
+
+    if (st != r->shown) {
+        r->shown = st;
+        r->step = 0;
+    }
+
+    switch (st) {
+    case SLC_BOOT:
+        /* 実機の「青色に点灯したあと、消灯」。
+         * **点灯しきるまで booting を降ろさない。** */
+        o.color = SLC_COLOR_BLUE;
+        if (r->step == 0) {
+            r->step = 1;
+            o.next_ms = SLC_BOOT_ON_MS;
+        } else {
+            r->booting = false;
+            o.next_ms = 0; /* 次の tick で本来の状態を描く */
+        }
+        break;
+
+    case SLC_RECOVERED:
+        /* **色は復帰した系統**（分割＝緑・ホスト＝青）。 */
+        o.color = r->announce;
+        r->announce = SLC_COLOR_OFF;
+        o.next_ms = SLC_RECOVERED_ON_MS;
+        break;
+
+    case SLC_IDLE:
+        o.color = SLC_COLOR_OFF;
+        o.next_ms = SLC_FAST_BLINK_MS * 4; /* 消えていても接続は見張る */
+        break;
+
+    case SLC_LINK_LOST: {
+        /* **両方未接続なら交互に出す**（片方だけだと、もう片方の異常が
+         * 見えない。2026-08-16 の利用者の判断）。 */
+        enum slc_color c = SLC_COLOR_OFF;
+        enum slc_link ls = SLC_LINK_CONNECTED;
+
+        if (in->has_split_link && in->has_host_link) {
+            bool split_bad = (in->split != SLC_LINK_CONNECTED);
+            bool host_bad = (in->host != SLC_LINK_CONNECTED);
+            bool show_split = split_bad && (!host_bad || ((r->step >> 1) & 1) == 0);
+            c = show_split ? SLC_COLOR_GREEN : SLC_COLOR_BLUE;
+            ls = show_split ? in->split : in->host;
+        } else if (in->has_split_link) {
+            c = SLC_COLOR_GREEN;
+            ls = in->split;
+        } else if (in->has_host_link) {
+            c = SLC_COLOR_BLUE;
+            ls = in->host;
+        }
+
+        bool on = (r->step & 1) == 0;
+        o.color = on ? c : SLC_COLOR_OFF;
+        /* **4 回/秒＝未ボンド / 2 回/秒＝ボンド済み・未接続。** */
+        o.next_ms = (ls == SLC_LINK_UNBONDED) ? SLC_FAST_BLINK_MS : SLC_SLOW_BLINK_MS;
+        r->step = (uint8_t)((r->step + 1) & 3);
+        break;
+    }
+
+    case SLC_BATT_LOW:
+    case SLC_BATT_REPLACE: {
+        /* 橙 1 回（低下）／2 回（要交換）点滅して、長く休む。 */
+        const uint8_t pulses = (st == SLC_BATT_REPLACE) ? 2 : 1;
+        const uint32_t rest = (st == SLC_BATT_REPLACE) ? SLC_BATT_REPLACE_MS : SLC_BATT_LOW_MS;
+
+        if (r->step >= pulses * 2) {
+            r->step = 0;
+        }
+        bool on = (r->step % 2) == 0;
+        o.color = on ? SLC_COLOR_AMBER : SLC_COLOR_OFF;
+        r->step++;
+
+        if (r->step >= pulses * 2) {
+            o.next_ms = rest; /* 最後の消灯ぶんを休みに充てる */
+            r->step = 0;
+        } else {
+            o.next_ms = on ? SLC_PULSE_MS : SLC_PULSE_GAP_MS;
+        }
+        break;
+    }
+
+    default:
+        o.color = SLC_COLOR_OFF;
+        o.next_ms = SLC_FAST_BLINK_MS * 4;
+        break;
+    }
+
+    return o;
+}
+
 #endif /* HHKB_STATUS_LED_CORE_H */

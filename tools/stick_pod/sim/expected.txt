@@ -63,3 +63,4 @@ S23 tilt-stuck, 3 s press at +8 min, real move at +9 min: counts while still stu
 S24 tilt-stuck, pod absent 15 s, back to centre, same full tilt for 20 s: counts=24019 (expect ~24000; 0 would mean the mute outlived the stuck)
 S25 tilt-stuck, pod absent 15 s, back still tilted, next 7 min: counts=0 (expect 0; 360000 would mean every dropout restarts 5 min of drift)
 S26 first boot with 5 LSB wobble, 60 s: saves=0 (0 = no centre adopted, so the pointer never moves; needs centre-stable-lsb >= 5)
+S27 save fails once: saves after-fail=0 then-after-11min=1 (expect 0 then 1: 失敗で saved を進めないので再予約される。進めてしまうと 0 のまま)

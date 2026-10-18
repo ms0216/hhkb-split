@@ -131,15 +131,9 @@ enum link_state {
     LINK_CONNECTED,
 };
 
-/* --- 実機の表から来る時定数 ------------------------------------------- */
-#define BOOT_ON_MS       3000  /* 「青色に点灯したあと、消灯」 */
-#define RECOVERED_ON_MS  1000  /* 復帰の合図。実機も機器切替で「点灯 → 消灯」 */
-#define SLOW_BLINK_MS     250  /* **1 秒に 2 回** = 250ms on/off。ボンド済み・未接続 */
-#define FAST_BLINK_MS     125  /* **1 秒に 4 回** = 125ms on/off。未ボンド */
-#define PULSE_MS          120  /* 橙の 1 回ぶんの点灯 */
-#define PULSE_GAP_MS      280  /* 橙 2 回点滅の間隔 */
-#define BATT_LOW_MS     30000  /* 橙 1 回点滅を 30 秒間隔 */
-#define BATT_REPLACE_MS 15000  /* 橙 2 回点滅を 15 秒間隔 */
+/* 時定数（BOOT_ON_MS など）は **status_led_core.h が持つ**。
+ * 切り出しで、このファイルからは使われなくなったので #define を消した
+ * （2026-10-15。**置き換えたら古い方を消す**）。 */
 
 /* 電池の 2 段階。ZMK の % は zmk_battery_state_changed で降ってくる。
  * **打ち止め電圧の判定は low_battery_off.c の担当**で、こちらは表示だけ。
@@ -166,14 +160,12 @@ static enum link_state split_link = LINK_DISCONNECTED;
 #define HAS_SPLIT_LINK 0
 #endif
 
-/*
- * 「相手と繋がっているか」。左では右手、右では左（セントラル）を指す。
- *
- * ⚠️ **初期値は左右で違う。**
- *   左（セントラル）… 毎 tick に transport の get_status() で読み直すので
- *                      初期値は事実上使われない。true でよい。
- */
+/* 電池の残量（%）。ZMK の zmk_battery_state_changed で降ってくる。
+ * **初期値 100 は「まだ知らない」の意味。**0 にすると起動直後に
+ * 「要交換」の橙が出てしまう。 */
 static uint8_t battery_pct = 100;
+
+/* 起動直後の青点灯（BOOT_ON_MS）を出している間だけ true。 */
 static bool booting = true;
 
 /*
@@ -213,11 +205,20 @@ static void set_color(enum led_color c) {
  */
 static enum link_state read_split_link(void) {
     bool connected = true;
+    /* ⚠️ **1 つも見なかったら「繋がっている」にしない**（2026-10-15 の監査）。
+     * 下の continue だけだと、get_status を持つ transport が 0 個のとき
+     * ループ本体が一度も回らず、`connected = true` のまま返っていた。
+     * 2026-08-16 に available/enabled で潰したのと**同じ落ち方**が、
+     * この分岐にだけ残っていた。 */
+    bool saw_any = false;
 
     STRUCT_SECTION_FOREACH(zmk_split_transport_peripheral, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
-            continue;
+            /* **判定材料が無い＝未接続に倒す。**continue で素通りしない。 */
+            connected = false;
+            break;
         }
+        saw_any = true;
         struct zmk_split_transport_status st = t->api->get_status();
 
         /* 左と同じ理由で、available / enabled が偽なら「未接続」に倒す。
@@ -229,7 +230,7 @@ static enum link_state read_split_link(void) {
         }
     }
 
-    if (connected) {
+    if (connected && saw_any) {
         return LINK_CONNECTED;
     }
     /* **右はボンドの有無が分かる**（peripheral.h の公開 API）。
@@ -249,10 +250,20 @@ static enum link_state read_split_link(void) {
  * **列挙して api->get_status() を呼べる。内部 static には触らない。**
  */
 static enum link_state read_split_link(void) {
+    /* ⚠️ **1 つも見なかったら「繋がっている」にしない**（2026-10-15 の監査）。
+     * 下の continue だけだと、get_status を持つ transport が 0 個のとき
+     * ループ本体が一度も回らず、最後の `return LINK_CONNECTED` に素通りした。
+     * 2026-08-16 に available/enabled で潰したのと**同じ落ち方**が、
+     * この分岐にだけ残っていた（コメントは「塞いだ」と書いてあったが、
+     * 塞がっていたのは available/enabled の方だけだった）。 */
+    bool saw_any = false;
+
     STRUCT_SECTION_FOREACH(zmk_split_transport_central, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
-            continue;
+            /* **判定材料が無い＝未接続に倒す。**continue で素通りしない。 */
+            return LINK_DISCONNECTED;
         }
+        saw_any = true;
         struct zmk_split_transport_status st = t->api->get_status();
 
         /* ⚠️ **available / enabled で continue しないこと。**
@@ -281,7 +292,8 @@ static enum link_state read_split_link(void) {
         }
     }
 
-    return LINK_CONNECTED;
+    /* **transport が 1 つも登録されていなければ未接続。** */
+    return saw_any ? LINK_CONNECTED : LINK_DISCONNECTED;
 }
 #endif
 
@@ -327,6 +339,8 @@ BUILD_ASSERT((int)LINK_UNBONDED == (int)SLC_LINK_UNBONDED &&
                  (int)LINK_CONNECTED == (int)SLC_LINK_CONNECTED,
              "link_state と slc_link の並びがずれている");
 
+static struct slc_render render;
+
 static void blink_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(blink_work, blink_work_cb);
 
@@ -365,117 +379,42 @@ static void blink_work_cb(struct k_work *work) {
 
     enum led_state st = current_state();
 
-    /* 合図は「全部繋がって消灯に落ちる」ときだけ出す。
-     * まだ他が未接続なら、そちらの点滅を優先する。 */
-    if (announce_color != COLOR_OFF && st == STATE_IDLE) {
-        st = STATE_RECOVERED;
-    } else if (st != STATE_IDLE && st != STATE_RECOVERED) {
-        announce_color = COLOR_OFF; /* 出しそびれたら捨てる */
-    }
+    /*
+     * **表示の決め方も core が唯一の出所**（2026-10-15）。
+     * 元はここに 90 行の switch があったが、**自動検査でまったく
+     * 実行されていなかった**（3 つの表示退行を入れて 32 件すべて緑だった）。
+     * `slc_announce` と `slc_tick` に出して、机の上で時系列に流せるようにした
+     * （tools/test_status_led_core.py・24 件）。
+     */
+    enum slc_color ann = (enum slc_color)announce_color;
+    st = (enum led_state)slc_announce((enum slc_state)st, &ann);
 
-    if (st != shown) {
-        shown = st;
-        step = 0;
-    }
+    render.booting = booting;
+    render.announce = ann;
 
-    uint32_t next_ms;
-
-    switch (st) {
-    case STATE_BOOT:
-        /* 実機の「青色に点灯したあと、消灯」。
-         * **点灯しきるまで booting を降ろさない。**降ろしてしまうと、
-         * この 3 秒の間に来た事象の refresh() が青を途中で切る。 */
-        set_color(COLOR_BLUE);
-        if (step == 0) {
-            step = 1;
-            next_ms = BOOT_ON_MS;
-        } else {
-            booting = false;
-            next_ms = 0; /* 次の tick で本来の状態を描く */
-        }
-        break;
-
-    case STATE_RECOVERED:
-        /* **復帰の合図。**1 秒点けてから消灯に落ちる。
-         * **色は復帰した系統**（分割＝緑・ホスト＝青）。
-         * 実機も機器切替で「点灯したあと、消灯」とする。 */
-        set_color(announce_color);
-        announce_color = COLOR_OFF;
-        next_ms = RECOVERED_ON_MS;
-        break;
-
-    case STATE_IDLE:
-        set_color(COLOR_OFF);
-        /* 消えている間も接続状態は見張る（分割は落ちうる）。 */
-        next_ms = FAST_BLINK_MS * 4;
-        break;
-
-    case STATE_LINK_LOST: {
-        /*
-         * 未接続のリンクを知らせる。**両方未接続なら交互に出す**
-         * （利用者の判断。片方だけ出すと、もう片方の異常が見えない）。
-         *
-         *   色     … 緑＝左右間 / 青＝ホスト
-         *   速さ   … 4 回/秒＝未ボンド（ペアリング待ち）
-         *            2 回/秒＝ボンド済み・未接続（探している）
-         *
-         * step の下位ビットで点灯／消灯、上位で「いまどちらの系統か」。
-         */
-        enum led_color c = COLOR_OFF;
-        enum link_state ls = LINK_CONNECTED;
-
-#if HAS_SPLIT_LINK && HAS_HOST_LINK
-        bool split_bad = (split_link != LINK_CONNECTED);
-        bool host_bad = (host_link != LINK_CONNECTED);
-        /* 1 周（点灯＋消灯）ごとに系統を入れ替える。 */
-        bool show_split = split_bad && (!host_bad || ((step >> 1) & 1) == 0);
-        c = show_split ? COLOR_GREEN : COLOR_BLUE;
-        ls = show_split ? split_link : host_link;
-#elif HAS_SPLIT_LINK
-        c = COLOR_GREEN;
-        ls = split_link;
-#elif HAS_HOST_LINK
-        c = COLOR_BLUE;
-        ls = host_link;
+    struct slc_in in = {
+        .activity = (activity == ZMK_ACTIVITY_SLEEP)  ? SLC_SLEEP
+                    : (activity == ZMK_ACTIVITY_IDLE) ? SLC_IDLE_ACT
+                                                      : SLC_ACTIVE,
+        .booting = booting,
+        .battery_pct = battery_pct,
+#if HAS_SPLIT_LINK
+        .has_split_link = true,
+        .split = (enum slc_link)split_link,
 #endif
+#if HAS_HOST_LINK
+        .has_host_link = true,
+        .host = (enum slc_link)host_link,
+#endif
+    };
 
-        bool on = (step & 1) == 0;
-        set_color(on ? c : COLOR_OFF);
-        next_ms = (ls == LINK_UNBONDED) ? FAST_BLINK_MS : SLOW_BLINK_MS;
+    struct slc_out o = slc_tick(&render, (enum slc_state)st, &in);
 
-        step = (step + 1) & 3; /* 0..3 で 2 周ぶん。上位ビットが系統の切替 */
-        break;
-    }
+    booting = render.booting;
+    announce_color = (enum led_color)render.announce;
+    set_color((enum led_color)o.color);
 
-    case STATE_BATT_LOW:
-    case STATE_BATT_REPLACE: {
-        /* 橙 1 回（低下）または 2 回（要交換）点滅して、長く休む。 */
-        const uint8_t pulses = (st == STATE_BATT_REPLACE) ? 2 : 1;
-        const uint32_t rest = (st == STATE_BATT_REPLACE) ? BATT_REPLACE_MS : BATT_LOW_MS;
-
-        if (step >= pulses * 2) {
-            step = 0;
-        }
-        bool on = (step % 2) == 0;
-        set_color(on ? COLOR_AMBER : COLOR_OFF);
-        step++;
-
-        if (step >= pulses * 2) {
-            next_ms = rest;   /* 最後の消灯ぶんを、そのまま休みに充てる */
-            step = 0;
-        } else {
-            next_ms = on ? PULSE_MS : PULSE_GAP_MS;
-        }
-        break;
-    }
-
-    default:
-        set_color(COLOR_OFF);
-        next_ms = FAST_BLINK_MS * 4;
-        break;
-    }
-
-    k_work_reschedule(&blink_work, K_MSEC(next_ms));
+    k_work_reschedule(&blink_work, K_MSEC(o.next_ms));
 }
 
 /* 状態が変わったので、待たずに描き直す。

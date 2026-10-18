@@ -14,8 +14,20 @@
 struct eg_core {
     bool a_closed;
     bool b_at_close;
-    int8_t pulses;
+    /* ⚠️ **足し算が溢れると、向きが反転する。**
+     * 2026-10-15 の監査で見つかった。`int8_t` に `+=` していたので、
+     * 読み出しが遅れて 127 刻み溜まると **−128 に折り返して逆回転**になる。
+     * ZMK は普通トリガで即座に読む（1〜2 刻み）が、スリープ中や
+     * ワークキューが詰まったときは溜まりうる。
+     * **型を広げても限界が遠のくだけ**なので、下限・上限で飽和させる
+     * （EG_PULSES_MAX）。溢れるほど溜まったら、何刻みだったかはもう
+     * 意味を持たない——**向きだけは絶対に間違えない**方を採る。 */
+    int16_t pulses;
 };
+
+/* 飽和の限界。1 回転 20〜30 刻みのつまみで、これだけ溜まるのは
+ * 読み出しが完全に止まっているとき。 */
+#define EG_PULSES_MAX 4096
 
 static inline void eg_core_start(struct eg_core *c, bool a_closed, bool b_now) {
     c->a_closed = a_closed;
@@ -36,7 +48,16 @@ static inline int eg_core_edge(struct eg_core *c, bool a_closed_now, bool b_now,
          * −1（ec11.c の表で 4 回とも −1）。同じ配線のまま A 案と B 案を入れ替えても、回す向きが変わらない。
          * 逆にしたいときは devicetree の invert。 */
         step = (c->b_at_close != invert) ? 1 : -1;
-        c->pulses += (int8_t)step;
+        /* **飽和させる。**溢れて符号が反転するより、頭打ちのほうが害が小さい。 */
+        if (step > 0) {
+            if (c->pulses < EG_PULSES_MAX) {
+                c->pulses++;
+            }
+        } else {
+            if (c->pulses > -EG_PULSES_MAX) {
+                c->pulses--;
+            }
+        }
     }
     c->a_closed = a_closed_now;
     return step;

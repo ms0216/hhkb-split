@@ -56,7 +56,7 @@ def test_pod_firmware_compiles_without_warnings(tmp_path):
 SIM = ROOT / "tools/stick_pod/sim"
 
 
-def _run_sim(tmp_path, driver_src, scenes=range(1, 27), defs=()):
+def _run_sim(tmp_path, driver_src, scenes=range(1, 28), defs=()):
     cc = shutil.which("cc") or shutil.which("gcc")
     if cc is None:
         pytest.skip("C コンパイラが無い")

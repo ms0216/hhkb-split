@@ -23,3 +23,22 @@ int slc_announce_of(int st, int announce, int *out_announce) {
     *out_announce = (int)a;
     return r;
 }
+
+/* --- 表示側（slc_tick） --- */
+int slc_tick_of(struct slc_render *r, int st,
+                int activity, int booting, int pct,
+                int has_split, int split, int has_host, int host,
+                unsigned *out_next_ms) {
+    struct slc_in in = {
+        .activity = (enum slc_activity)activity,
+        .booting = booting != 0,
+        .battery_pct = (uint8_t)pct,
+        .has_split_link = has_split != 0,
+        .split = (enum slc_link)split,
+        .has_host_link = has_host != 0,
+        .host = (enum slc_link)host,
+    };
+    struct slc_out o = slc_tick(r, (enum slc_state)st, &in);
+    *out_next_ms = o.next_ms;
+    return (int)o.color;
+}
