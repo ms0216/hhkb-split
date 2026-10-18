@@ -156,9 +156,13 @@ def fig_kit_and_updi():
     ax.text(5.5, 3.0, "マイコンのキット（シルクの面を上に見た図）", ha="center", fontsize=12, color="#1b5e2f")
     # 変換器（線は直角に引き、キットの上を横切らせない）
     box(ax, 4.6, -3.6, 3.6, 2.6, "USB シリアル\n変換器\n（FT232R）", fc="#dfeeff")
-    for n, x, y, ha in (("電源", 4.4, -1.6, "right"), ("GND", 4.4, -3.0, "right"), ("TX", 8.4, -1.6, "left"), ("RX", 8.4, -3.0, "left")):
+    # 電源は変換器の VCC（5V）ではなく、単 3 × 2 本（約 3V）。5V だと書き込みピンが 3.3V の信号を High と認めない（2026-10-10 に実機で書いた方法）
+    for n, x, y, ha in (("GND", 4.4, -3.0, "right"), ("TX", 8.4, -1.6, "left"), ("RX", 8.4, -3.0, "left")):
         ax.text(x, y + 0.28, n, fontsize=11, va="bottom", ha=ha, fontweight="bold")
-    ax.plot([4.6, 1.0, 1.0], [-1.6, -1.6, 1.38], color="#d62728", lw=2.4); ax.text(1.2, -0.3, "電源 → VDD", color="#d62728", fontsize=11)
+    box(ax, 0.3, -2.3, 2.2, 1.3, "単 3 × 2 本\n（約 3V）", fc="#fff3d6", fs=10.5)
+    ax.plot([1.0, 1.0], [-1.0, 1.38], color="#d62728", lw=2.4); ax.text(1.2, -0.4, "＋ → VDD", color="#d62728", fontsize=11)
+    ax.plot([1.8, 1.8, 4.6], [-2.3, -3.0, -3.0], color="#444", lw=2.4); ax.text(2.0, -2.75, "−", color="#444", fontsize=12)
+    ax.text(-0.9, -4.2, "変換器の VCC（5V）は\nつながない", fontsize=10.5, color="#d62728", va="top")
     ax.plot([4.6, -0.6, -0.6, 1.0, 1.0], [-3.0, -3.0, 5.6, 5.6, 4.62], color="#444", lw=2.4); ax.text(-0.4, 5.85, "GND → GND", color="#444", fontsize=11)
     ax.plot([8.2, 11.6, 11.6, 5.0, 5.0], [-3.0, -3.0, 5.6, 5.6, 4.62], color="#1f77b4", lw=2.4); ax.text(6.0, 5.85, "RX → RST（これが書き込みの線）", color="#1f77b4", fontsize=11)
     ax.plot([8.2, 9.3], [-1.6, -1.6], color="#2ca02c", lw=2.4); ax.plot([10.3, 11.6], [-1.6, -1.6], color="#2ca02c", lw=2.4)
