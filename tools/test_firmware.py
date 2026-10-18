@@ -170,6 +170,38 @@ def test_the_cutoff_timer_follows_zmk_sampling():
         "ACTIVE で動かし直していない。**一度止まると二度と判定しない**")
 
 
+def test_no_usable_transport_counts_as_disconnected():
+    """**判定材料が 1 つも無いとき、「繋がっている」に倒さない。**
+
+    2026-10-15 の監査で見つかった。`available` / `enabled` については
+    2026-08-16 に潰してあり、コメントもそう書いてあるが、
+    **`api == NULL || get_status == NULL` の分岐だけ `continue` のままだった。**
+
+    get_status を持つ transport が 0 個だと、ループ本体が一度も回らず
+    最後の `return LINK_CONNECTED`（右は `connected = true`）に素通りする。
+    **右の電源を切っても左の緑が出ない**——2026-08-16 に一度潰したのと
+    同じ状態に戻る。ビルドも DRC も CI も緑なので誰も気づけない。
+
+    いま上流（ZMK）はどちらの transport も get_status を実装しているので
+    顕在化しないが、**「安全側＝未接続に倒す」という方針が片方の分岐にしか
+    適用されていない**のは直し残し。
+    """
+    src = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
+
+    # get_status が無いときに continue していないこと
+    assert not re.search(
+        r"get_status\s*==\s*NULL\s*\)\s*\{\s*continue\s*;", src), (
+        "get_status が無いときに continue している。**1 つも無ければ"
+        "『繋がっている』に倒れる**（2026-08-16 と同じ落ち方）")
+
+    # ⚠️ **使われ方まで見る。**個数を数えるだけでは、判定から外しても通った
+    # （変異検査で 2 つ生き残った）。
+    assert re.search(r"return\s+saw_any\s*\?\s*LINK_CONNECTED\s*:", src), (
+        "左: transport を 1 つも見なかったときに LINK_CONNECTED を返している")
+    assert re.search(r"if\s*\(\s*connected\s*&&\s*saw_any\s*\)", src), (
+        "右: transport を 1 つも見なかったときに LINK_CONNECTED を返している")
+
+
 def test_this_repository_is_registered_as_a_zmk_module():
     """`zephyr/module.yml` が無いと、firmware/ は**まるごとビルドされない**。
 

@@ -213,11 +213,20 @@ static void set_color(enum led_color c) {
  */
 static enum link_state read_split_link(void) {
     bool connected = true;
+    /* ⚠️ **1 つも見なかったら「繋がっている」にしない**（2026-10-15 の監査）。
+     * 下の continue だけだと、get_status を持つ transport が 0 個のとき
+     * ループ本体が一度も回らず、`connected = true` のまま返っていた。
+     * 2026-08-16 に available/enabled で潰したのと**同じ落ち方**が、
+     * この分岐にだけ残っていた。 */
+    bool saw_any = false;
 
     STRUCT_SECTION_FOREACH(zmk_split_transport_peripheral, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
-            continue;
+            /* **判定材料が無い＝未接続に倒す。**continue で素通りしない。 */
+            connected = false;
+            break;
         }
+        saw_any = true;
         struct zmk_split_transport_status st = t->api->get_status();
 
         /* 左と同じ理由で、available / enabled が偽なら「未接続」に倒す。
@@ -229,7 +238,7 @@ static enum link_state read_split_link(void) {
         }
     }
 
-    if (connected) {
+    if (connected && saw_any) {
         return LINK_CONNECTED;
     }
     /* **右はボンドの有無が分かる**（peripheral.h の公開 API）。
@@ -249,10 +258,20 @@ static enum link_state read_split_link(void) {
  * **列挙して api->get_status() を呼べる。内部 static には触らない。**
  */
 static enum link_state read_split_link(void) {
+    /* ⚠️ **1 つも見なかったら「繋がっている」にしない**（2026-10-15 の監査）。
+     * 下の continue だけだと、get_status を持つ transport が 0 個のとき
+     * ループ本体が一度も回らず、最後の `return LINK_CONNECTED` に素通りした。
+     * 2026-08-16 に available/enabled で潰したのと**同じ落ち方**が、
+     * この分岐にだけ残っていた（コメントは「塞いだ」と書いてあったが、
+     * 塞がっていたのは available/enabled の方だけだった）。 */
+    bool saw_any = false;
+
     STRUCT_SECTION_FOREACH(zmk_split_transport_central, t) {
         if (t->api == NULL || t->api->get_status == NULL) {
-            continue;
+            /* **判定材料が無い＝未接続に倒す。**continue で素通りしない。 */
+            return LINK_DISCONNECTED;
         }
+        saw_any = true;
         struct zmk_split_transport_status st = t->api->get_status();
 
         /* ⚠️ **available / enabled で continue しないこと。**
@@ -281,7 +300,8 @@ static enum link_state read_split_link(void) {
         }
     }
 
-    return LINK_CONNECTED;
+    /* **transport が 1 つも登録されていなければ未接続。** */
+    return saw_any ? LINK_CONNECTED : LINK_DISCONNECTED;
 }
 #endif
 
