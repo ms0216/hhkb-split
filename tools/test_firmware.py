@@ -349,21 +349,23 @@ def test_the_recovery_flash_uses_the_colour_of_the_link_that_recovered():
 
     決定表: docs/hardware/decisions/2026-08-16-led-state-table.md
     """
-    src = (ROOT / "firmware/src/status_led.c").read_text()
-    code = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    code = re.sub(r"//[^\n]*", "", code)
+    code = _strip_c_comments((ROOT / "firmware/src/status_led.c").read_text())
 
-    # 合図は「復帰した系統の色」を変数で持つこと。決め打ちの色は使わない。
-    m = re.search(r"case STATE_RECOVERED:(.*?)break;", code, re.S)
-    assert m, "STATE_RECOVERED の描画が無い"
-    body = m.group(1)
-    assert "set_color(announce_color)" in body, (
-        "復帰の合図が『復帰した系統の色』になっていない。"
-        "COLOR_BLUE などの決め打ちは、緑＝左右間という取り決めを壊す")
-
-    # 分割の復帰は緑、ホストの復帰は青を積むこと
+    # ⚠️ **描画は 2026-10-15 に status_led_core.h へ移した。**
+    # 「どちらの系統が復帰したか」を積むのは .c 側（Zephyr の事象を見るので）、
+    # 「積まれた色で出す」のは core 側。**両方を見る。**
     assert "announce_color = COLOR_GREEN" in code, "分割の復帰に緑を積んでいない"
     assert "announce_color = COLOR_BLUE" in code, "ホストの復帰に青を積んでいない"
+
+    core = _strip_c_comments((ROOT / "firmware/src/status_led_core.h").read_text())
+    m = re.search(r"case SLC_RECOVERED:(.*?)break;", core, re.S)
+    assert m, "core に SLC_RECOVERED の描画が無い"
+    body = m.group(1)
+    assert "o.color = r->announce" in body, (
+        "復帰の合図が『復帰した系統の色』になっていない。"
+        "決め打ちの色は、緑＝左右間という取り決めを壊す")
+    assert "r->announce = SLC_COLOR_OFF" in body, (
+        "合図を出したあと消していない。**次の tick でも出続ける**")
 
 
 def test_the_warning_survives_idle():
