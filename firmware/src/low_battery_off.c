@@ -43,6 +43,10 @@
 #include <zephyr/init.h>
 
 #include <zmk/pm.h>
+
+/* 判定の中身だけを切り出したもの。**机の上で検査できる**
+ * （tools/test_low_battery_core.py）。Zephyr に依存しない。 */
+#include "low_battery_core.h"
 #include <zmk/activity.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/activity_state_changed.h>
@@ -73,12 +77,14 @@ BUILD_ASSERT(DT_NODE_HAS_PROP(BATTERY_NODE, empty_millivolts),
 
 static const struct device *const battery = DEVICE_DT_GET(BATTERY_NODE);
 
+static struct lbc_state lbc;
+
 static void low_battery_check(struct k_work *work) {
-    static uint8_t consecutive;
 
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
     if (zmk_usb_is_powered()) {
-        consecutive = 0;
+        (void)lbc_step(&lbc, true, false, 0, EMPTY_MV,
+                       CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES);
         return;
     }
 #endif
@@ -86,7 +92,8 @@ static void low_battery_check(struct k_work *work) {
     /* **測り直さない。**ZMK が同じ周期で fetch 済みなので、driver の
      * キャッシュを読むだけでよい。ADC をもう一度回すと電池を余分に使う。
      *
-     * ⚠️⚠️ **この前提は idle では崩れる**（2026-10-15 の監査で判明・未修正）。
+     * ⚠️⚠️ **この前提は idle では崩れる**（2026-10-15 の監査で判明。**下記の
+     * activity リスナで対処済み**——ZMK が測定を止めたらこちらも止める）。
      * ZMK の app/src/battery.c:171-173 は `ZMK_ACTIVITY_IDLE`（既定 30 秒の
      * 無操作）で `k_timer_stop(&battery_timer)` を呼び、**測定を止める。**
      * だがこちらのタイマーは回り続けるので、**止まったあとの古いキャッシュを
@@ -96,9 +103,10 @@ static void low_battery_check(struct k_work *work) {
      *   - 凍った値が打ち止めより上 … **いつまでも soft off しない**（撃ち漏らし）
      *   - 凍った値が打ち止め以下 … 数回で soft off する（早すぎはしない）
      * **どちらも「古い値で決めている」点が問題。**
-     * 直すなら activity の事象を受けて自分のタイマーも止める／起こすか、
-     * ここで `sensor_sample_fetch()` を自分で呼ぶ（ADC を余分に回す代償）。
-     * open-gaps #25b に追記すること。 */
+     * → **案 A を採った**（利用者の判断・2026-10-15）: activity を購読し、
+     *   ZMK が止めたらこちらも止める。**30 秒〜30 分の無操作中は判定しない。**
+     *   案 B（ここで `sensor_sample_fetch()` を呼ぶ）への乗り換えは関数 1 つ。
+     *   消費は +0.002µA ＝ 分圧 1.5µA の 0.13% で実質ゼロ。 */
     struct sensor_value voltage;
     int rc = sensor_channel_get(battery, SENSOR_CHAN_GAUGE_VOLTAGE, &voltage);
     if (rc != 0) {
@@ -107,17 +115,15 @@ static void low_battery_check(struct k_work *work) {
     }
 
     uint32_t mv = voltage.val1 * 1000U + voltage.val2 / 1000U;
-    if (mv > EMPTY_MV) {
-        consecutive = 0;
-        return;
-    }
 
-    consecutive++;
-    LOG_WRN("電池が打ち止め %u mV を下回った（%u mV・%u 回目）", (unsigned)EMPTY_MV,
-            (unsigned)mv, (unsigned)consecutive);
-
-    /* 1 回では止めない。BLE 送信中は電池の内部抵抗ぶん一時的に下がる。 */
-    if (consecutive < CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES) {
+    /* **判定は status_led と同じく core が唯一の出所。**
+     * ここは「集めて渡す」だけにする（2 つ実装を持たない）。 */
+    if (lbc_step(&lbc, false, true, mv, EMPTY_MV,
+                 CONFIG_HHKB_LOW_BATTERY_SOFT_OFF_SAMPLES) != LBC_POWER_OFF) {
+        if (mv <= EMPTY_MV) {
+            LOG_WRN("電池が打ち止め %u mV を下回った（%u mV・%u 回目）", (unsigned)EMPTY_MV,
+                    (unsigned)mv, (unsigned)lbc.consecutive);
+        }
         return;
     }
 
