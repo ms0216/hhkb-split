@@ -1,0 +1,9 @@
+# 左のロータリーエンコーダ（EC11・A 案）を外す。
+#
+# ⚠️ **素の `hhkb_split_left` にもエンコーダが入っている**（2026-11-08 に判明）。
+# hhkb_split_left.overlay が `&left_encoder { status = "okay"; }` にしているので、
+# CI の .config は CONFIG_EC11=y。**エンコーダを付けていない実機に焼くと、
+# D4/D9 が浮いたまま EC11 として読まれる**（外付けの 100kΩ も無い）。
+name: hhkb-no-encoder
+append:
+  EXTRA_DTC_OVERLAY_FILE: hhkb-no-encoder.overlay

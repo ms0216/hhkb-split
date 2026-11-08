@@ -1,0 +1,5 @@
+/* エンコーダを付けていない左手用。left_encoder を無効にする。
+ * 定義は config/boards/shields/hhkb_split/hhkb_split.dtsi（右手と同じ扱い）。 */
+&left_encoder {
+	status = "disabled";
+};
